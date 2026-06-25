@@ -1,0 +1,307 @@
+'use strict';
+
+const bcrypt = require('bcrypt');
+const userRepository = require('../repositories/userRepository');
+const employeeRepository = require('../repositories/employeeRepository');
+const roleRepository = require('../repositories/roleRepository');
+const { createAuditLog } = require('../middlewares/auditLog');
+const { getPaginationParams, getPaginationMeta } = require('../utils/pagination');
+const logger = require('../utils/logger');
+
+const BCRYPT_ROUNDS = 12;
+
+/**
+ * User Service
+ * All business logic for user management.
+ */
+
+/**
+ * Return a paginated, filtered list of users.
+ * @param {object} query - Express req.query
+ * @returns {Promise<{ data: User[], meta: object }>}
+ */
+const getAll = async (query = {}) => {
+  const { page, limit, offset } = getPaginationParams(query);
+
+  const filters = {
+    search: query.search || '',
+    status: query.status || 'active',
+    role_id: query.role_id || null,
+  };
+
+  const sort = {
+    sortBy: query.sort_by || 'created_at',
+    sortOrder: query.sort_order || 'DESC',
+  };
+
+  const { rows, count } = await userRepository.findAll(filters, { limit, offset }, sort);
+  const meta = getPaginationMeta(count, page, limit);
+
+  return { data: rows, meta };
+};
+
+/**
+ * Return a single user by ID including employee and role data.
+ * Throws 404 if not found.
+ * @param {number} id
+ * @returns {Promise<User>}
+ */
+const getById = async (id) => {
+  const user = await userRepository.findById(id);
+  if (!user) {
+    const err = new Error(`User with ID ${id} not found.`);
+    err.statusCode = 404;
+    throw err;
+  }
+  return user;
+};
+
+/**
+ * Create a new portal user.
+ * Validates: email uniqueness, role existence, employee existence (if provided).
+ *
+ * @param {object} data           - Validated user fields (email, password, role_id, employee_id, status)
+ * @param {number} currentUserId  - ID of the creating user
+ * @param {string} ipAddress      - Client IP
+ * @returns {Promise<User>}
+ */
+const create = async (data, currentUserId, ipAddress = null) => {
+  // Uniqueness check
+  const existing = await userRepository.findByEmail(data.email);
+  if (existing) {
+    const err = new Error(`Email "${data.email}" is already registered.`);
+    err.statusCode = 409;
+    throw err;
+  }
+
+  // Role must exist
+  const role = await roleRepository.findById(data.role_id);
+  if (!role) {
+    const err = new Error(`Role with ID ${data.role_id} not found.`);
+    err.statusCode = 404;
+    throw err;
+  }
+
+  if (role.status !== 'active') {
+    const err = new Error(`Role "${role.role_name}" is inactive and cannot be assigned.`);
+    err.statusCode = 409;
+    throw err;
+  }
+
+  // Employee must exist and be active (if provided)
+  if (data.employee_id) {
+    const employee = await employeeRepository.findById(data.employee_id);
+    if (!employee) {
+      const err = new Error(`Employee with ID ${data.employee_id} not found.`);
+      err.statusCode = 404;
+      throw err;
+    }
+    if (employee.status !== 'active') {
+      const err = new Error(`Employee "${employee.full_name}" is inactive.`);
+      err.statusCode = 409;
+      throw err;
+    }
+  }
+
+  // Strip confirm_password — not a DB field
+  const { confirm_password, ...createData } = data;
+
+  const user = await userRepository.create({
+    ...createData,
+    created_by: currentUserId,
+    updated_by: currentUserId,
+  });
+
+  // Reload with associations for the response
+  const userWithRelations = await userRepository.findById(user.id);
+
+  await createAuditLog(
+    currentUserId,
+    'CREATE',
+    'users',
+    user.id,
+    null,
+    { id: user.id, email: user.email, role_id: user.role_id, status: user.status },
+    ipAddress
+  );
+
+  logger.info('User created', { userId: user.id, email: user.email, createdBy: currentUserId });
+
+  return userWithRelations;
+};
+
+/**
+ * Update a user record.
+ * Guards against email conflicts with other users.
+ *
+ * @param {number} id
+ * @param {object} data
+ * @param {number} currentUserId
+ * @param {string} ipAddress
+ * @returns {Promise<User>}
+ */
+const update = async (id, data, currentUserId, ipAddress = null) => {
+  const existing = await getById(id); // throws 404 if not found
+
+  // Email uniqueness check (against other users)
+  if (data.email && data.email !== existing.email) {
+    const taken = await userRepository.findByEmail(data.email);
+    if (taken && taken.id !== id) {
+      const err = new Error(`Email "${data.email}" is already registered to another user.`);
+      err.statusCode = 409;
+      throw err;
+    }
+  }
+
+  // Validate new role if changing
+  if (data.role_id && data.role_id !== existing.role_id) {
+    const role = await roleRepository.findById(data.role_id);
+    if (!role) {
+      const err = new Error(`Role with ID ${data.role_id} not found.`);
+      err.statusCode = 404;
+      throw err;
+    }
+    if (role.status !== 'active') {
+      const err = new Error(`Role "${role.role_name}" is inactive and cannot be assigned.`);
+      err.statusCode = 409;
+      throw err;
+    }
+  }
+
+  // Validate new employee if changing
+  if (data.employee_id !== undefined && data.employee_id !== existing.employee_id) {
+    if (data.employee_id) {
+      const employee = await employeeRepository.findById(data.employee_id);
+      if (!employee) {
+        const err = new Error(`Employee with ID ${data.employee_id} not found.`);
+        err.statusCode = 404;
+        throw err;
+      }
+    }
+  }
+
+  const oldValues = {
+    id: existing.id,
+    email: existing.email,
+    role_id: existing.role_id,
+    employee_id: existing.employee_id,
+    status: existing.status,
+  };
+
+  const updated = await userRepository.update(id, { ...data, updated_by: currentUserId });
+  const updatedWithRelations = await userRepository.findById(id);
+
+  await createAuditLog(
+    currentUserId,
+    'UPDATE',
+    'users',
+    id,
+    oldValues,
+    { id, email: updated.email, role_id: updated.role_id, status: updated.status },
+    ipAddress
+  );
+
+  logger.info('User updated', { userId: id, updatedBy: currentUserId });
+
+  return updatedWithRelations;
+};
+
+/**
+ * Soft-delete a user (set status = inactive).
+ * A user cannot delete their own account via this endpoint.
+ *
+ * @param {number} id
+ * @param {number} currentUserId
+ * @param {string} ipAddress
+ * @returns {Promise<User>}
+ */
+const deleteUser = async (id, currentUserId, ipAddress = null) => {
+  if (id === currentUserId) {
+    const err = new Error('You cannot deactivate your own account.');
+    err.statusCode = 403;
+    throw err;
+  }
+
+  const existing = await getById(id); // throws 404 if not found
+  const oldValues = { id: existing.id, email: existing.email, status: existing.status };
+
+  const deleted = await userRepository.softDelete(id, currentUserId);
+
+  await createAuditLog(
+    currentUserId,
+    'DELETE',
+    'users',
+    id,
+    oldValues,
+    { id, status: 'inactive' },
+    ipAddress
+  );
+
+  logger.info('User soft-deleted', { userId: id, deletedBy: currentUserId });
+
+  return deleted;
+};
+
+/**
+ * Change the password for the authenticated user.
+ * Verifies the old password before updating.
+ *
+ * @param {number} userId        - ID of the user changing their password
+ * @param {string} oldPassword   - Current plain-text password
+ * @param {string} newPassword   - New plain-text password
+ * @param {string} ipAddress
+ * @returns {Promise<void>}
+ */
+const changePassword = async (userId, oldPassword, newPassword, ipAddress = null) => {
+  // Must load with password hash for comparison
+  const { User } = require('../models');
+  const user = await User.scope('withPassword').findByPk(userId);
+
+  if (!user) {
+    const err = new Error('User not found.');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const isMatch = await bcrypt.compare(oldPassword, user.password);
+  if (!isMatch) {
+    const err = new Error('Current password is incorrect.');
+    err.statusCode = 401;
+    throw err;
+  }
+
+  if (oldPassword === newPassword) {
+    const err = new Error('New password must be different from the current password.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const hashed = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+
+  // Use raw update to bypass the model hook (we are already hashing here)
+  await User.update(
+    { password: hashed, updated_by: userId },
+    { where: { id: userId }, individualHooks: false }
+  );
+
+  await createAuditLog(
+    userId,
+    'CHANGE_PASSWORD',
+    'users',
+    userId,
+    null,
+    null,
+    ipAddress
+  );
+
+  logger.info('Password changed', { userId });
+};
+
+module.exports = {
+  getAll,
+  getById,
+  create,
+  update,
+  delete: deleteUser,
+  changePassword,
+};
