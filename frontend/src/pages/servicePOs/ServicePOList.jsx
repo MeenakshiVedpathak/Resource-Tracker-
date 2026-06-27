@@ -3,10 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
 import { Plus, Pencil, Eye } from 'lucide-react';
 import { useServicePOs } from '@/hooks/useServicePOs';
+import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
 import { useAuth } from '@/hooks/useAuth';
 import { useDebounce } from '@/hooks/useDebounce';
 import { buildPath, ROUTES } from '@/constants/routes';
-import { SERVICE_TYPES } from '@/constants/serviceTypes';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
@@ -16,8 +16,6 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const columnHelper = createColumnHelper();
-
-const serviceTypeMap = Object.fromEntries(SERVICE_TYPES.map((t) => [t.id, t.name]));
 
 const ServicePOList = () => {
   const navigate = useNavigate();
@@ -43,6 +41,8 @@ const ServicePOList = () => {
   };
 
   const { data, isPending } = useServicePOs(params);
+  const { data: serviceCategories = [] } = useActiveServiceCategories();
+  const serviceTypeMap = Object.fromEntries(serviceCategories.map((c) => [c.id, c.name]));
 
   const servicePOs = data?.data ?? [];
   const meta = data?.meta ?? {};

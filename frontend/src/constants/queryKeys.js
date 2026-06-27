@@ -34,6 +34,14 @@ export const QUERY_KEYS = {
   SUB_PROJECTS_BY_PO: (poId) => ['sub-projects', 'by-po', poId],
   SUB_PROJECT: (id) => ['sub-projects', id],
 
+  // Service Types
+  SERVICE_TYPES: (params) => ['service-types', params],
+  SERVICE_TYPE: (id) => ['service-types', id],
+
+  // Service Categories
+  SERVICE_CATEGORIES: (params) => ['service-categories', params],
+  SERVICE_CATEGORY: (id) => ['service-categories', id],
+
   // Monthly Costs
   MONTHLY_COSTS: (params) => ['monthly-costs', params],
   MONTHLY_COST: (id) => ['monthly-costs', id],

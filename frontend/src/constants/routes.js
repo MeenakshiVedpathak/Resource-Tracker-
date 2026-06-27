@@ -31,6 +31,14 @@ export const ROUTES = {
   SUB_PROJECT_NEW: '/sub-projects/new',
   SUB_PROJECT_EDIT: '/sub-projects/:id/edit',
 
+  SERVICE_TYPES: '/service-types',
+  SERVICE_TYPE_NEW: '/service-types/new',
+  SERVICE_TYPE_EDIT: '/service-types/:id/edit',
+
+  SERVICE_CATEGORIES: '/service-categories',
+  SERVICE_CATEGORY_NEW: '/service-categories/new',
+  SERVICE_CATEGORY_EDIT: '/service-categories/:id/edit',
+
   // Resources
   RESOURCE_ALLOCATION: '/resource-allocation',
   TIMESHEETS: '/timesheets',

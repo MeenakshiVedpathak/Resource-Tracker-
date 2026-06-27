@@ -7,7 +7,7 @@ import { ROUTES } from '@/constants/routes';
 import {
   LayoutDashboard, Users, UserCog, Shield, Building2,
   FileText, FolderOpen, Clock, DollarSign, BarChart3,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, Tag, Layers,
 } from 'lucide-react';
 
 const NAV_GROUPS = [
@@ -28,9 +28,13 @@ const NAV_GROUPS = [
   {
     label: 'Business',
     items: [
+        { label: 'Service Categories', icon: Tag, to: ROUTES.SERVICE_CATEGORIES },
+      { label: 'Service Types', icon: Layers, to: ROUTES.SERVICE_TYPES },
+    
       { label: 'Clients', icon: Building2, to: ROUTES.CLIENTS },
       { label: 'Service POs', icon: FileText, to: ROUTES.SERVICE_POS },
       { label: 'Sub-Projects', icon: FolderOpen, to: ROUTES.SUB_PROJECTS },
+      
     ],
   },
   {

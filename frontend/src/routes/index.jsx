@@ -27,6 +27,10 @@ const ServicePOForm = lazy(() => import('@/pages/servicePOs/ServicePOForm'));
 const ServicePODetail = lazy(() => import('@/pages/servicePOs/ServicePODetail'));
 const SubProjectList = lazy(() => import('@/pages/subProjects/SubProjectList'));
 const SubProjectForm = lazy(() => import('@/pages/subProjects/SubProjectForm'));
+const ServiceTypeList = lazy(() => import('@/pages/serviceTypes/ServiceTypeList'));
+const ServiceTypeForm = lazy(() => import('@/pages/serviceTypes/ServiceTypeForm'));
+const ServiceCategoryList = lazy(() => import('@/pages/serviceCategories/ServiceCategoryList'));
+const ServiceCategoryForm = lazy(() => import('@/pages/serviceCategories/ServiceCategoryForm'));
 
 // ── Resources ──
 const TimesheetList = lazy(() => import('@/pages/timesheets/TimesheetList'));
@@ -101,6 +105,16 @@ const AppRoutes = () => (
         <Route path={ROUTES.SUB_PROJECTS} element={<SubProjectList />} />
         <Route path={ROUTES.SUB_PROJECT_NEW} element={<SubProjectForm />} />
         <Route path={ROUTES.SUB_PROJECT_EDIT} element={<SubProjectForm />} />
+
+        {/* Service Types */}
+        <Route path={ROUTES.SERVICE_TYPES} element={<ServiceTypeList />} />
+        <Route path={ROUTES.SERVICE_TYPE_NEW} element={<ServiceTypeForm />} />
+        <Route path={ROUTES.SERVICE_TYPE_EDIT} element={<ServiceTypeForm />} />
+
+        {/* Service Categories */}
+        <Route path={ROUTES.SERVICE_CATEGORIES} element={<ServiceCategoryList />} />
+        <Route path={ROUTES.SERVICE_CATEGORY_NEW} element={<ServiceCategoryForm />} />
+        <Route path={ROUTES.SERVICE_CATEGORY_EDIT} element={<ServiceCategoryForm />} />
 
         {/* Resources */}
         <Route path={ROUTES.TIMESHEETS} element={<TimesheetList />} />

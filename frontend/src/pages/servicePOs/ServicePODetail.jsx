@@ -13,7 +13,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import { buildPath, ROUTES } from '@/constants/routes';
-import { SERVICE_TYPES } from '@/constants/serviceTypes';
+import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
 import { formatCurrency, formatDate, formatHours, formatPercentage } from '@/utils/formatters';
 import PageHeader from '@/components/common/PageHeader';
 import StatusBadge from '@/components/common/StatusBadge';
@@ -25,8 +25,6 @@ import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { Checkbox } from '@/components/ui/checkbox';
-
-const serviceTypeMap = Object.fromEntries(SERVICE_TYPES.map((t) => [t.id, t.name]));
 
 const DetailSkeleton = () => (
   <div className="space-y-4">
@@ -62,6 +60,8 @@ const ServicePODetail = () => {
   const { data: po, isPending: isLoadingPO } = useServicePO(id);
   const { data: utilisation } = useServicePOUtilisation(id);
   const { data: activeEmployees = [] } = useActiveEmployees();
+  const { data: serviceCategories = [] } = useActiveServiceCategories();
+  const serviceTypeMap = Object.fromEntries(serviceCategories.map((c) => [c.id, c.name]));
 
   const closeMutation = useCloseServicePO();
   const allocateMutation = useAllocateResources(id);

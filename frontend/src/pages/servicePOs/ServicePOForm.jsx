@@ -7,10 +7,10 @@ import { motion } from 'framer-motion';
 import { ArrowLeft, Save } from 'lucide-react';
 import { useServicePO, useCreateServicePO, useUpdateServicePO } from '@/hooks/useServicePOs';
 import { useActiveClients } from '@/hooks/useClients';
+import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import { ROUTES } from '@/constants/routes';
-import { SERVICE_TYPES } from '@/constants/serviceTypes';
 import {
   Form, FormField, FormItem, FormLabel, FormControl, FormMessage, FormDescription,
 } from '@/components/ui/form';
@@ -88,6 +88,7 @@ const ServicePOForm = () => {
 
   const { data: po, isPending: isLoadingPO } = useServicePO(id);
   const { data: activeClients = [], isPending: isLoadingClients } = useActiveClients();
+  const { data: serviceCategories = [], isPending: isLoadingCategories } = useActiveServiceCategories();
   const createMutation = useCreateServicePO();
   const updateMutation = useUpdateServicePO(id);
 
@@ -261,6 +262,7 @@ const ServicePOForm = () => {
                     <Select
                       value={field.value ? String(field.value) : ''}
                       onValueChange={(v) => field.onChange(Number(v))}
+                      disabled={isLoadingCategories}
                     >
                       <FormControl>
                         <SelectTrigger>
@@ -268,9 +270,9 @@ const ServicePOForm = () => {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {SERVICE_TYPES.map((t) => (
-                          <SelectItem key={t.id} value={String(t.id)}>
-                            {t.name}
+                        {serviceCategories.map((c) => (
+                          <SelectItem key={c.id} value={String(c.id)}>
+                            {c.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
