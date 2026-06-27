@@ -1,345 +1,237 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  Box,
-  Chip,
-  Stack,
-  Alert,
-  Snackbar,
-  Typography,
-  Tooltip,
-} from '@mui/material';
-import AddIcon from '@mui/icons-material/Add';
-import EditIcon from '@mui/icons-material/Edit';
-import DeleteIcon from '@mui/icons-material/Delete';
+import { createColumnHelper } from '@tanstack/react-table';
+import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { useUsers, useDeleteUser } from '@/hooks/useUsers';
+import { useRoles } from '@/hooks/useRoles';
+import { useAuth } from '@/hooks/useAuth';
+import { useNotification } from '@/hooks/useNotification';
+import { useDebounce } from '@/hooks/useDebounce';
+import { extractApiError } from '@/services/apiClient';
+import { buildPath, ROUTES } from '@/constants/routes';
+import { formatDate } from '@/utils/formatters';
+import DataTable from '@/components/common/DataTable';
+import PageHeader from '@/components/common/PageHeader';
+import StatusBadge from '@/components/common/StatusBadge';
+import ConfirmDialog from '@/components/common/ConfirmDialog';
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
 
-import PageHeader from '../../components/PageHeader';
-import DataTable from '../../components/DataTable';
-import StatusChip from '../../components/StatusChip';
-import ConfirmDialog from '../../components/ConfirmDialog';
-
-import {
-  fetchUsers,
-  deleteUser,
-  setFilters,
-  selectUsers,
-  selectUserTotal,
-  selectUserLoading,
-  selectUserError,
-  selectUserFilters,
-} from '../../redux/slices/userSlice';
-import { selectUserRole } from '../../redux/slices/authSlice';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-const formatLastLogin = (dateStr) => {
-  if (!dateStr) return 'Never';
-  try {
-    const date = new Date(dateStr);
-    const now = new Date();
-    const diffMs = now - date;
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-    if (diffDays === 0) {
-      return new Intl.DateTimeFormat('en-IN', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true,
-      }).format(date);
-    }
-    if (diffDays === 1) return 'Yesterday';
-    if (diffDays < 7) return `${diffDays}d ago`;
-    return new Intl.DateTimeFormat('en-IN', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    }).format(date);
-  } catch {
-    return dateStr;
-  }
-};
-
-const STATUS_FILTER_OPTIONS = [
-  { label: 'All', value: '' },
-  { label: 'Active', value: 'active' },
-  { label: 'Inactive', value: 'inactive' },
-];
-
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
+const columnHelper = createColumnHelper();
 
 const UserList = () => {
-  const dispatch = useDispatch();
   const navigate = useNavigate();
+  const { hasRole } = useAuth();
+  const { success, error: showError } = useNotification();
 
-  const users = useSelector(selectUsers);
-  const total = useSelector(selectUserTotal);
-  const loading = useSelector(selectUserLoading);
-  const error = useSelector(selectUserError);
-  const filters = useSelector(selectUserFilters);
-  const userRole = useSelector(selectUserRole);
-
-  const isHR = userRole === 'HR' || userRole === 'Admin';
-
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [roleFilter, setRoleFilter] = useState('all');
   const [deleteTarget, setDeleteTarget] = useState(null);
-  const [deleteLoading, setDeleteLoading] = useState(false);
-  const [successMsg, setSuccessMsg] = useState('');
-  const [sortBy, setSortBy] = useState('email');
-  const [sortDir, setSortDir] = useState('asc');
 
-  // ---------------------------------------------------------------------------
-  // Data fetching
-  // ---------------------------------------------------------------------------
+  const debouncedSearch = useDebounce(search, 400);
+  const isHR = hasRole('HR', 'Management');
 
-  const loadUsers = useCallback(() => {
-    dispatch(
-      fetchUsers({
-        page: filters.page,
-        limit: filters.limit,
-        search: filters.search,
-        status: filters.status,
-        role_id: filters.role_id,
-        sort_by: sortBy,
-        sort_dir: sortDir,
-      })
-    );
-  }, [dispatch, filters, sortBy, sortDir]);
-
-  useEffect(() => {
-    loadUsers();
-  }, [loadUsers]);
-
-  // ---------------------------------------------------------------------------
-  // Handlers
-  // ---------------------------------------------------------------------------
-
-  const handleSearchChange = (value) => {
-    dispatch(setFilters({ search: value, page: 1 }));
+  const params = {
+    page,
+    limit,
+    ...(statusFilter !== 'all' && { status: statusFilter }),
+    ...(roleFilter !== 'all' && { role_id: roleFilter }),
+    ...(debouncedSearch && { search: debouncedSearch }),
   };
 
-  const handlePageChange = (_, newPage) => {
-    dispatch(setFilters({ page: newPage + 1 }));
-  };
+  const { data, isPending } = useUsers(params);
+  const { data: rolesData } = useRoles({ limit: 100 });
+  const deleteMutation = useDeleteUser();
 
-  const handleRowsPerPageChange = (e) => {
-    dispatch(setFilters({ limit: parseInt(e.target.value, 10), page: 1 }));
-  };
-
-  const handleSort = (columnId) => {
-    const newDir = sortBy === columnId && sortDir === 'asc' ? 'desc' : 'asc';
-    setSortBy(columnId);
-    setSortDir(newDir);
-  };
-
-  const handleStatusFilter = (value) => {
-    dispatch(setFilters({ status: value, page: 1 }));
-  };
-
-  const handleEdit = (row) => {
-    navigate(`/users/${row.id}/edit`);
-  };
-
-  const handleDeleteClick = (row) => {
-    setDeleteTarget(row);
-  };
-
-  const handleDeleteConfirm = async () => {
-    if (!deleteTarget) return;
-    setDeleteLoading(true);
-    try {
-      await dispatch(deleteUser(deleteTarget.id)).unwrap();
-      setSuccessMsg(`User "${deleteTarget.email}" deleted successfully.`);
-      setDeleteTarget(null);
-    } catch {
-      // error handled via redux state
-    } finally {
-      setDeleteLoading(false);
-    }
-  };
-
-  // ---------------------------------------------------------------------------
-  // Table columns
-  // ---------------------------------------------------------------------------
+  const users = data?.data ?? [];
+  const meta = data?.meta ?? {};
+  const roles = rolesData?.data ?? [];
 
   const columns = [
-    {
-      id: 'email',
-      label: 'Email',
-      minWidth: 200,
-      sortable: true,
-      render: (val) => (
-        <Typography
-          variant="body2"
-          sx={{ fontWeight: 500, color: 'primary.main', fontFamily: 'monospace', fontSize: '0.85rem' }}
-        >
-          {val || '—'}
-        </Typography>
-      ),
-    },
-    {
-      id: 'full_name',
-      label: 'Full Name',
-      minWidth: 150,
-      sortable: true,
-      render: (val, row) => {
-        const name = val || row.employee?.full_name || '—';
-        return <Box sx={{ fontWeight: 500 }}>{name}</Box>;
-      },
-    },
-    {
-      id: 'role_name',
-      label: 'Role',
-      minWidth: 120,
-      sortable: true,
-      render: (val, row) => {
-        const roleName = val || row.role?.role_name || '—';
+    columnHelper.accessor('email', {
+      header: 'Email',
+      cell: (info) => <span className="font-medium">{info.getValue()}</span>,
+    }),
+    columnHelper.accessor('roles', {
+      header: 'Roles',
+      cell: (info) => {
+        // backend may return roles (array) or role (single object)
+        const raw = info.getValue();
+        const row = info.row.original;
+        const list = Array.isArray(raw) ? raw
+          : Array.isArray(row.role) ? row.role
+          : row.role ? [row.role]
+          : [];
+        if (!list.length) return <span className="text-muted-foreground">—</span>;
         return (
-          <Chip
-            label={roleName}
-            size="small"
-            variant="outlined"
-            sx={{ fontWeight: 500, fontSize: '0.72rem' }}
-          />
+          <div className="flex flex-wrap gap-1">
+            {list.map((r) => (
+              <Badge key={r.id ?? r} variant="secondary" className="text-xs">
+                {r.role_name ?? r.name ?? '—'}
+              </Badge>
+            ))}
+          </div>
         );
       },
-    },
-    {
-      id: 'status',
-      label: 'Status',
-      minWidth: 90,
-      sortable: true,
-      render: (val) => <StatusChip status={val} />,
-    },
-    {
-      id: 'last_login',
-      label: 'Last Login',
-      minWidth: 120,
-      sortable: true,
-      render: (val) => (
-        <Tooltip title={val ? new Date(val).toLocaleString('en-IN') : 'Never logged in'}>
-          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8rem' }}>
-            {formatLastLogin(val)}
-          </Typography>
-        </Tooltip>
+    }),
+    columnHelper.accessor('employee', {
+      header: 'Employee',
+      cell: (info) => {
+        const emp = info.getValue();
+        if (!emp) return <span className="text-muted-foreground">—</span>;
+        const name = emp.full_name ?? emp;
+        return (
+          <button
+            className="text-sm text-primary underline-offset-2 hover:underline"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (emp.id) navigate(buildPath(ROUTES.EMPLOYEE_EDIT, { id: emp.id }));
+            }}
+          >
+            {name}
+          </button>
+        );
+      },
+    }),
+    columnHelper.accessor('status', {
+      header: 'Status',
+      size: 100,
+      cell: (info) => <StatusBadge status={info.getValue()} />,
+    }),
+    columnHelper.accessor('last_login', {
+      header: 'Last Login',
+      size: 140,
+      cell: (info) => (
+        <span className="text-xs text-muted-foreground">{formatDate(info.getValue())}</span>
       ),
-    },
+    }),
+    columnHelper.display({
+      id: 'actions',
+      size: 88,
+      cell: ({ row }) =>
+        isHR ? (
+          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              title="Edit"
+              onClick={() => navigate(buildPath(ROUTES.USER_EDIT, { id: row.original.id }))}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+              title="Deactivate"
+              onClick={() => setDeleteTarget(row.original)}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              title="Edit"
+              onClick={() => navigate(buildPath(ROUTES.USER_EDIT, { id: row.original.id }))}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        ),
+    }),
   ];
 
-  const tableActions = [
-    {
-      label: 'Edit',
-      icon: <EditIcon fontSize="small" />,
-      onClick: handleEdit,
-      color: 'primary',
-      tooltip: 'Edit user',
-      visible: () => isHR,
-    },
-    {
-      label: 'Delete',
-      icon: <DeleteIcon fontSize="small" />,
-      onClick: handleDeleteClick,
-      color: 'error',
-      tooltip: 'Delete user',
-      visible: () => isHR,
-    },
-  ];
-
-  // ---------------------------------------------------------------------------
-  // Render
-  // ---------------------------------------------------------------------------
+  const handleDelete = () => {
+    deleteMutation.mutate(deleteTarget.id, {
+      onSuccess: () => {
+        success(`${deleteTarget.email} will be deactivated.`);
+        setDeleteTarget(null);
+      },
+      onError: (err) => {
+        showError(extractApiError(err));
+        setDeleteTarget(null);
+      },
+    });
+  };
 
   return (
-    <Box sx={{ p: { xs: 2, sm: 3 } }}>
+    <div>
       <PageHeader
         title="Users"
-        subtitle="Portal accounts and access management."
-        breadcrumbs={[
-          { label: 'Home', to: '/' },
-          { label: 'Users' },
-        ]}
-        action={
-          isHR
-            ? {
-                label: 'Add User',
-                icon: <AddIcon />,
-                component: 'RouterLink',
-                to: '/users/new',
-              }
-            : null
+        description="Manage portal user accounts"
+        actions={
+          isHR && (
+            <Button size="sm" onClick={() => navigate(ROUTES.USER_NEW)}>
+              <Plus className="mr-1.5 h-4 w-4" />
+              Add User
+            </Button>
+          )
         }
       />
-
-      {/* Status filter chips */}
-      <Stack direction="row" spacing={1} sx={{ mt: 2.5, mb: 2, flexWrap: 'wrap', gap: 1 }}>
-        {STATUS_FILTER_OPTIONS.map((opt) => (
-          <Chip
-            key={opt.value}
-            label={opt.label}
-            variant={filters.status === opt.value ? 'filled' : 'outlined'}
-            color={filters.status === opt.value ? 'primary' : 'default'}
-            size="small"
-            onClick={() => handleStatusFilter(opt.value)}
-            sx={{ fontWeight: 500, cursor: 'pointer', transition: 'all 0.15s' }}
-          />
-        ))}
-      </Stack>
-
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => dispatch({ type: 'users/clearError' })}>
-          {error}
-        </Alert>
-      )}
 
       <DataTable
         columns={columns}
-        rows={users}
-        total={total}
-        page={Math.max(0, (filters.page || 1) - 1)}
-        rowsPerPage={filters.limit || 10}
-        onPageChange={handlePageChange}
-        onRowsPerPageChange={handleRowsPerPageChange}
-        loading={loading}
-        sortBy={sortBy}
-        sortDir={sortDir}
-        onSort={handleSort}
-        searchValue={filters.search || ''}
-        onSearchChange={handleSearchChange}
-        searchPlaceholder="Search by email or name…"
-        actions={tableActions}
-        rowKey="id"
+        data={users}
+        isLoading={isPending}
+        searchValue={search}
+        onSearchChange={(v) => { setSearch(v); setPage(1); }}
+        searchPlaceholder="Search by email…"
+        toolbar={
+          <>
+            <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
+              <SelectTrigger className="h-9 w-32 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All status</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="inactive">Inactive</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={roleFilter} onValueChange={(v) => { setRoleFilter(v); setPage(1); }}>
+              <SelectTrigger className="h-9 w-36 text-sm">
+                <SelectValue placeholder="All roles" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All roles</SelectItem>
+                {roles.map((r) => (
+                  <SelectItem key={r.id} value={String(r.id)}>{r.role_name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </>
+        }
+        pagination={
+          meta.total != null
+            ? {
+                page: meta.current_page ?? page,
+                limit: meta.per_page ?? limit,
+                total: meta.total,
+              }
+            : undefined
+        }
+        onPageChange={setPage}
+        onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
+        onRowClick={(row) => navigate(buildPath(ROUTES.USER_EDIT, { id: row.id }))}
       />
 
       <ConfirmDialog
-        open={Boolean(deleteTarget)}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={handleDeleteConfirm}
-        loading={deleteLoading}
-        title="Delete User"
-        message={
-          deleteTarget
-            ? `Delete the account for "${deleteTarget.email}"? This will revoke their portal access immediately.`
-            : ''
-        }
-        confirmLabel="Delete"
-        confirmColor="error"
-        severity="error"
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title="Deactivate user?"
+        description={`${deleteTarget?.email} will be deactivated.`}
+        confirmLabel="Deactivate"
+        onConfirm={handleDelete}
+        isLoading={deleteMutation.isPending}
       />
-
-      <Snackbar
-        open={Boolean(successMsg)}
-        autoHideDuration={4000}
-        onClose={() => setSuccessMsg('')}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert severity="success" onClose={() => setSuccessMsg('')} sx={{ width: '100%' }}>
-          {successMsg}
-        </Alert>
-      </Snackbar>
-    </Box>
+    </div>
   );
 };
 

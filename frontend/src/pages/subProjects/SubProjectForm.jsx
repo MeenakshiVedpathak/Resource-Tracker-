@@ -1,361 +1,279 @@
-import React, { useEffect, useState } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
+import { useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { motion } from 'framer-motion';
+import { ArrowLeft, Save } from 'lucide-react';
+import { useSubProject, useCreateSubProject, useUpdateSubProject } from '@/hooks/useSubProjects';
+import { useActiveServicePOs } from '@/hooks/useServicePOs';
+import { useNotification } from '@/hooks/useNotification';
+import { extractApiError } from '@/services/apiClient';
+import { ROUTES } from '@/constants/routes';
 import {
-  Box,
-  Grid,
-  Card,
-  CardContent,
-  CardHeader,
-  Button,
-  TextField,
+  Form,
+  FormField,
+  FormItem,
+  FormLabel,
   FormControl,
-  InputLabel,
+  FormMessage,
+} from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
   Select,
-  MenuItem,
-  FormHelperText,
-  Divider,
-  Alert,
-  Stack,
-  CircularProgress,
-  InputAdornment,
-  Tooltip,
-} from '@mui/material';
-import SaveIcon from '@mui/icons-material/SaveOutlined';
-import ArrowBackIcon from '@mui/icons-material/ArrowBackOutlined';
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import PageHeader from '@/components/common/PageHeader';
+import { Skeleton } from '@/components/ui/skeleton';
 
-import PageHeader from '../../components/PageHeader';
+const subProjectSchema = z.object({
+  sub_project_name: z
+    .string()
+    .min(1, 'Sub-project name is required')
+    .max(150, 'Name cannot exceed 150 characters'),
+  service_po_id: z
+    .string()
+    .min(1, 'Service PO is required'),
+  description: z.string().max(1000, 'Description cannot exceed 1000 characters').optional().or(z.literal('')),
+  start_date: z.string().optional().or(z.literal('')),
+  end_date: z.string().optional().or(z.literal('')),
+  status: z.enum(['active', 'inactive']).default('active'),
+}).refine(
+  (d) => {
+    if (d.start_date && d.end_date) return d.end_date >= d.start_date;
+    return true;
+  },
+  { message: 'End date cannot be before start date', path: ['end_date'] }
+);
 
-import {
-  createSubProject,
-  updateSubProject,
-  fetchSubProject,
-  clearCurrentSubProject,
-  selectCurrentSubProject,
-  selectSubProjectLoading,
-  selectSubProjectError,
-} from '../../redux/slices/subProjectSlice';
-
-import {
-  fetchServicePOs,
-  selectServicePOs,
-} from '../../redux/slices/servicePOSlice';
-
-const STATUS_OPTIONS = [
-  { value: 'active', label: 'Active' },
-  { value: 'inactive', label: 'Inactive' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'cancelled', label: 'Cancelled' },
-];
-
-const EMPTY_FORM = {
-  service_po_id: '',
-  sub_project_name: '',
-  description: '',
-  start_date: '',
-  end_date: '',
-  status: 'active',
-};
-
-const validate = (values) => {
-  const errors = {};
-  if (!values.service_po_id) errors.service_po_id = 'Service PO is required';
-  if (!values.sub_project_name?.trim()) errors.sub_project_name = 'Name is required';
-  if (values.sub_project_name?.trim().length > 150)
-    errors.sub_project_name = 'Name must be 150 characters or fewer';
-  if (!values.start_date) errors.start_date = 'Start date is required';
-  if (!values.end_date) errors.end_date = 'End date is required';
-  if (values.start_date && values.end_date && values.end_date < values.start_date)
-    errors.end_date = 'End date must be on or after the start date';
-  if (!values.status) errors.status = 'Status is required';
-  return errors;
-};
+const FormSkeleton = () => (
+  <Card>
+    <CardContent className="p-6 space-y-4">
+      {Array.from({ length: 4 }).map((_, i) => (
+        <div key={i} className="space-y-2">
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-9 w-full" />
+        </div>
+      ))}
+    </CardContent>
+  </Card>
+);
 
 const SubProjectForm = () => {
-  const dispatch = useDispatch();
   const navigate = useNavigate();
   const { id } = useParams();
-  const isEdit = Boolean(id);
+  const isEdit = !!id;
+  const { success, error: showError } = useNotification();
 
-  const currentSubProject = useSelector(selectCurrentSubProject);
-  const loading = useSelector(selectSubProjectLoading);
-  const apiError = useSelector(selectSubProjectError);
-  const servicePOs = useSelector(selectServicePOs);
+  const { data: subProject, isPending: isLoadingSubProject } = useSubProject(id);
+  const { data: activePOs = [] } = useActiveServicePOs();
+  const createMutation = useCreateSubProject();
+  const updateMutation = useUpdateSubProject(id);
 
-  const [values, setValues] = useState(EMPTY_FORM);
-  const [errors, setErrors] = useState({});
-  const [submitError, setSubmitError] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+  const form = useForm({
+    resolver: zodResolver(subProjectSchema),
+    defaultValues: {
+      sub_project_name: '',
+      service_po_id: '',
+      description: '',
+      start_date: '',
+      end_date: '',
+      status: 'active',
+    },
+  });
 
-  // Load PO list
   useEffect(() => {
-    dispatch(fetchServicePOs({ limit: 200 }));
-  }, [dispatch]);
-
-  // Load sub-project for edit mode
-  useEffect(() => {
-    if (isEdit) {
-      dispatch(fetchSubProject(id));
-    }
-    return () => {
-      dispatch(clearCurrentSubProject());
-    };
-  }, [dispatch, id, isEdit]);
-
-  // Populate form when record loads
-  useEffect(() => {
-    if (isEdit && currentSubProject) {
-      setValues({
-        service_po_id: currentSubProject.service_po_id ?? '',
-        sub_project_name: currentSubProject.sub_project_name ?? '',
-        description: currentSubProject.description ?? '',
-        start_date: currentSubProject.start_date
-          ? currentSubProject.start_date.substring(0, 10)
-          : '',
-        end_date: currentSubProject.end_date
-          ? currentSubProject.end_date.substring(0, 10)
-          : '',
-        status: currentSubProject.status ?? 'active',
+    if (subProject && isEdit) {
+      form.reset({
+        sub_project_name: subProject.sub_project_name ?? '',
+        service_po_id: subProject.service_po_id ? String(subProject.service_po_id) : '',
+        description: subProject.description ?? '',
+        start_date: subProject.start_date?.split('T')[0] ?? '',
+        end_date: subProject.end_date?.split('T')[0] ?? '',
+        status: subProject.status ?? 'active',
       });
     }
-  }, [currentSubProject, isEdit]);
+  }, [subProject, isEdit, form]);
 
-  const handleChange = (field) => (e) => {
-    const val = e.target.value;
-    setValues((prev) => ({ ...prev, [field]: val }));
-    if (errors[field]) {
-      setErrors((prev) => ({ ...prev, [field]: '' }));
-    }
+  const onSubmit = (values) => {
+    const payload = {
+      sub_project_name: values.sub_project_name,
+      service_po_id: Number(values.service_po_id),
+      status: values.status,
+      ...(values.description && { description: values.description }),
+      ...(values.start_date && { start_date: values.start_date }),
+      ...(values.end_date && { end_date: values.end_date }),
+    };
+
+    const mutation = isEdit ? updateMutation : createMutation;
+    mutation.mutate(payload, {
+      onSuccess: () => {
+        success(isEdit ? 'Sub-project updated successfully.' : 'Sub-project created successfully.');
+        navigate(ROUTES.SUB_PROJECTS);
+      },
+      onError: (err) => showError(extractApiError(err)),
+    });
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setSubmitError('');
+  const isSubmitting = createMutation.isPending || updateMutation.isPending;
 
-    const validationErrors = validate(values);
-    if (Object.keys(validationErrors).length > 0) {
-      setErrors(validationErrors);
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      if (isEdit) {
-        await dispatch(updateSubProject({ id, data: values })).unwrap();
-      } else {
-        await dispatch(createSubProject(values)).unwrap();
-      }
-      navigate('/sub-projects');
-    } catch (err) {
-      setSubmitError(
-        typeof err === 'string' ? err : err?.message || 'Failed to save sub-project'
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleCancel = () => navigate('/sub-projects');
-
-  if (isEdit && loading && !currentSubProject) {
-    return (
-      <Box sx={{ p: 3, display: 'flex', justifyContent: 'center', pt: 10 }}>
-        <CircularProgress />
-      </Box>
-    );
-  }
+  if (isEdit && isLoadingSubProject) return <FormSkeleton />;
 
   return (
-    <Box sx={{ p: { xs: 2, md: 3 } }}>
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="w-full"
+    >
       <PageHeader
-        title={isEdit ? 'Edit Sub-Project' : 'New Sub-Project'}
-        subtitle={
+        title={isEdit ? 'Edit Sub-Project' : 'Add Sub-Project'}
+        description={
           isEdit
-            ? 'Update the details of an existing sub-project'
-            : 'Create a new sub-project under a service PO'
+            ? `Updating "${subProject?.sub_project_name ?? ''}"`
+            : 'Create a new sub-project under a Service PO'
         }
-        breadcrumbs={[
-          { label: 'Dashboard', to: '/' },
-          { label: 'Sub-Projects', to: '/sub-projects' },
-          { label: isEdit ? 'Edit' : 'New' },
-        ]}
+        actions={
+          <Button variant="outline" size="sm" onClick={() => navigate(ROUTES.SUB_PROJECTS)}>
+            <ArrowLeft className="mr-1.5 h-4 w-4" />
+            Back
+          </Button>
+        }
       />
 
-      <Box
-        component="form"
-        onSubmit={handleSubmit}
-        noValidate
-        sx={{ mt: 3 }}
-      >
-        {submitError && (
-          <Alert severity="error" sx={{ mb: 3 }} onClose={() => setSubmitError('')}>
-            {submitError}
-          </Alert>
-        )}
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm">Sub-Project Details</CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <FormField
+                control={form.control}
+                name="sub_project_name"
+                render={({ field }) => (
+                  <FormItem className="sm:col-span-2 lg:col-span-3">
+                    <FormLabel>
+                      Sub-Project Name <span className="text-destructive">*</span>
+                    </FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g. Phase 1 – Discovery" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-        <Card>
-          <CardHeader
-            title="Sub-Project Details"
-            subheader="Fields marked * are required"
-          />
-          <Divider />
-          <CardContent>
-            <Grid container spacing={3}>
-              {/* Service PO */}
-              <Grid item xs={12} md={6}>
-                <FormControl
-                  fullWidth
-                  size="small"
-                  error={Boolean(errors.service_po_id)}
-                  required
-                >
-                  <InputLabel id="service-po-label">Service PO</InputLabel>
-                  <Select
-                    labelId="service-po-label"
-                    value={values.service_po_id}
-                    label="Service PO"
-                    onChange={handleChange('service_po_id')}
-                  >
-                    <MenuItem value="" disabled>
-                      <em>Select a service PO</em>
-                    </MenuItem>
-                    {(servicePOs || []).map((po) => (
-                      <MenuItem key={po.id} value={po.id}>
-                        {po.po_number}
-                        {po.po_name ? ` — ${po.po_name}` : ''}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                  {errors.service_po_id && (
-                    <FormHelperText>{errors.service_po_id}</FormHelperText>
-                  )}
-                </FormControl>
-              </Grid>
+              <FormField
+                control={form.control}
+                name="service_po_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>
+                      Service PO <span className="text-destructive">*</span>
+                    </FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a Service PO" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {activePOs.map((po) => (
+                          <SelectItem key={po.id} value={String(po.id)}>
+                            {po.po_number ?? po.service_po_name ?? po.id}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-              {/* Sub-Project Name */}
-              <Grid item xs={12} md={6}>
-                <TextField
-                  label="Sub-Project Name"
-                  value={values.sub_project_name}
-                  onChange={handleChange('sub_project_name')}
-                  error={Boolean(errors.sub_project_name)}
-                  helperText={errors.sub_project_name || `${values.sub_project_name.length}/150`}
-                  fullWidth
-                  required
-                  inputProps={{ maxLength: 150 }}
-                />
-              </Grid>
+              <FormField
+                control={form.control}
+                name="status"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Status</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="inactive">Inactive</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-              {/* Description */}
-              <Grid item xs={12}>
-                <TextField
-                  label="Description"
-                  value={values.description}
-                  onChange={handleChange('description')}
-                  fullWidth
-                  multiline
-                  rows={3}
-                  placeholder="Optional: describe the scope or purpose of this sub-project"
-                  inputProps={{ maxLength: 500 }}
-                  helperText={`${values.description.length}/500`}
-                />
-              </Grid>
+              <FormField
+                control={form.control}
+                name="start_date"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Start Date</FormLabel>
+                    <FormControl><Input type="date" {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-              {/* Start Date */}
-              <Grid item xs={12} sm={6} md={4}>
-                <TextField
-                  label="Start Date"
-                  type="date"
-                  value={values.start_date}
-                  onChange={handleChange('start_date')}
-                  error={Boolean(errors.start_date)}
-                  helperText={errors.start_date}
-                  fullWidth
-                  required
-                  InputLabelProps={{ shrink: true }}
-                />
-              </Grid>
+              <FormField
+                control={form.control}
+                name="end_date"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>End Date</FormLabel>
+                    <FormControl><Input type="date" {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-              {/* End Date */}
-              <Grid item xs={12} sm={6} md={4}>
-                <TextField
-                  label="End Date"
-                  type="date"
-                  value={values.end_date}
-                  onChange={handleChange('end_date')}
-                  error={Boolean(errors.end_date)}
-                  helperText={errors.end_date}
-                  fullWidth
-                  required
-                  InputLabelProps={{ shrink: true }}
-                  inputProps={{ min: values.start_date || undefined }}
-                />
-              </Grid>
+              <FormField
+                control={form.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem className="sm:col-span-2 lg:col-span-3">
+                    <FormLabel>Description</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder="Optional description of this sub-project…"
+                        className="min-h-24 resize-y"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </CardContent>
+          </Card>
 
-              {/* Status */}
-              <Grid item xs={12} sm={6} md={4}>
-                <FormControl
-                  fullWidth
-                  size="small"
-                  error={Boolean(errors.status)}
-                  required
-                >
-                  <InputLabel id="status-label">Status</InputLabel>
-                  <Select
-                    labelId="status-label"
-                    value={values.status}
-                    label="Status"
-                    onChange={handleChange('status')}
-                  >
-                    {STATUS_OPTIONS.map((opt) => (
-                      <MenuItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                  {errors.status && (
-                    <FormHelperText>{errors.status}</FormHelperText>
-                  )}
-                </FormControl>
-              </Grid>
-            </Grid>
-          </CardContent>
-        </Card>
-
-        {/* Actions */}
-        <Stack
-          direction="row"
-          spacing={2}
-          justifyContent="flex-end"
-          sx={{ mt: 3 }}
-        >
-          <Button
-            variant="outlined"
-            color="inherit"
-            startIcon={<ArrowBackIcon />}
-            onClick={handleCancel}
-            disabled={submitting}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            variant="contained"
-            startIcon={
-              submitting ? (
-                <CircularProgress size={16} color="inherit" />
-              ) : (
-                <SaveIcon />
-              )
-            }
-            disabled={submitting}
-          >
-            {isEdit ? 'Save Changes' : 'Create Sub-Project'}
-          </Button>
-        </Stack>
-      </Box>
-    </Box>
+          <div className="sticky bottom-0 z-10 -mx-6 flex items-center justify-end gap-3 border-t bg-background px-6 py-4">
+            <Button type="button" variant="outline" onClick={() => navigate(ROUTES.SUB_PROJECTS)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isSubmitting}>
+              <Save className="mr-1.5 h-4 w-4" />
+              {isSubmitting ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Sub-Project'}
+            </Button>
+          </div>
+        </form>
+      </Form>
+    </motion.div>
   );
 };
 

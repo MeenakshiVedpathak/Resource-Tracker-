@@ -1,0 +1,241 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* ── Core semantic colors (HSL without wrapper for Tailwind opacity) ── */
+    --background: 0 0% 100%;
+    --foreground: 222 47% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    /* Primary: Rich indigo */
+    --primary: 239 84% 61%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 222 47% 11%;
+
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 46%;
+
+    --accent: 220 14% 96%;
+    --accent-foreground: 222 47% 11%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 239 84% 61%;
+
+    --radius: 0.625rem;
+
+    /* ── Sidebar ── */
+    --sidebar-bg: 222 47% 9%;
+    --sidebar-fg: 215 20% 91%;
+    --sidebar-muted: 215 14% 55%;
+    --sidebar-active: 239 84% 67%;
+    --sidebar-hover: 222 47% 14%;
+    --sidebar-border: 222 47% 14%;
+    --sidebar-width: 256px;
+    --sidebar-collapsed-width: 64px;
+
+    /* ── Status colors ── */
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+    --success-muted: 142 76% 95%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    --warning-muted: 48 100% 95%;
+
+    --info: 199 89% 48%;
+    --info-foreground: 0 0% 100%;
+    --info-muted: 199 89% 95%;
+  }
+
+  .dark {
+    --background: 222 47% 5%;
+    --foreground: 215 20% 91%;
+
+    --card: 222 47% 8%;
+    --card-foreground: 215 20% 91%;
+
+    --popover: 222 47% 8%;
+    --popover-foreground: 215 20% 91%;
+
+    --primary: 239 84% 67%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 222 47% 14%;
+    --secondary-foreground: 215 20% 91%;
+
+    --muted: 222 47% 14%;
+    --muted-foreground: 215 14% 55%;
+
+    --accent: 222 47% 14%;
+    --accent-foreground: 215 20% 91%;
+
+    --destructive: 0 62% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 222 47% 16%;
+    --input: 222 47% 16%;
+    --ring: 239 84% 67%;
+
+    --sidebar-bg: 222 47% 6%;
+    --sidebar-fg: 215 20% 91%;
+    --sidebar-muted: 215 14% 45%;
+    --sidebar-active: 239 84% 67%;
+    --sidebar-hover: 222 47% 11%;
+    --sidebar-border: 222 47% 11%;
+
+    --success-muted: 142 50% 12%;
+    --warning-muted: 38 70% 14%;
+    --info-muted: 199 60% 12%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: 'rlig' 1, 'calt' 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* ── Custom scrollbar ── */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-border rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/40;
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+
+  /* ── Focus styles ── */
+  *:focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  /* ── Selection ── */
+  ::selection {
+    @apply bg-primary/20 text-foreground;
+  }
+
+  /* ── Headings ── */
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold tracking-tight;
+    text-wrap: balance;
+  }
+}
+
+@layer components {
+  /* ── Skeleton shimmer ── */
+  .skeleton {
+    @apply rounded-md bg-muted;
+    background: linear-gradient(
+      90deg,
+      hsl(var(--muted)) 25%,
+      hsl(var(--muted-foreground) / 0.1) 50%,
+      hsl(var(--muted)) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite linear;
+  }
+
+  /* ── Page fade-in ── */
+  .page-enter {
+    animation: fade-in 0.2s ease-out;
+  }
+
+  /* ── Glass card ── */
+  .glass {
+    @apply bg-background/80 backdrop-blur-md border border-border/60;
+  }
+
+  /* ── Stat card gradient ── */
+  .stat-gradient-blue {
+    background: linear-gradient(135deg, hsl(239 84% 61% / 0.08), hsl(239 84% 61% / 0.02));
+  }
+  .stat-gradient-green {
+    background: linear-gradient(135deg, hsl(142 71% 45% / 0.08), hsl(142 71% 45% / 0.02));
+  }
+  .stat-gradient-amber {
+    background: linear-gradient(135deg, hsl(38 92% 50% / 0.08), hsl(38 92% 50% / 0.02));
+  }
+  .stat-gradient-red {
+    background: linear-gradient(135deg, hsl(0 72% 51% / 0.08), hsl(0 72% 51% / 0.02));
+  }
+  .stat-gradient-purple {
+    background: linear-gradient(135deg, hsl(270 84% 61% / 0.08), hsl(270 84% 61% / 0.02));
+  }
+  .stat-gradient-cyan {
+    background: linear-gradient(135deg, hsl(199 89% 48% / 0.08), hsl(199 89% 48% / 0.02));
+  }
+
+  /* ── Table styles ── */
+  .data-table th {
+    @apply text-xs font-semibold text-muted-foreground uppercase tracking-wider;
+  }
+  .data-table tr:hover td {
+    @apply bg-muted/30;
+  }
+
+  /* ── Sidebar nav item ── */
+  .nav-item {
+    @apply flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium
+           text-sidebar-muted transition-all duration-150 cursor-pointer
+           hover:bg-sidebar-hover hover:text-sidebar-foreground;
+  }
+  .nav-item.active {
+    @apply bg-primary/15 text-primary;
+  }
+  .nav-item-icon {
+    @apply w-4 h-4 flex-shrink-0;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  .text-gradient {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, hsl(var(--primary)), hsl(270 84% 61%));
+  }
+  .ring-primary {
+    --tw-ring-color: hsl(var(--primary));
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}

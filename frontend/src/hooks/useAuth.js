@@ -1,130 +1,46 @@
-import { useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { useNavigate } from 'react-router-dom';
 import {
-  loginSuccess,
-  logout as logoutAction,
-  setLoading,
-  setError,
-  updateUser,
-  selectUser,
-  selectToken,
+  selectCurrentUser,
   selectIsAuthenticated,
-  selectAuth,
-} from '../store/slices/authSlice';
-import { authApi } from '../utils/api';
-import { toast } from 'react-toastify';
+  selectUserRole,
+  selectUserRoles,
+  selectUserPermissions,
+  logout,
+  setCredentials,
+  setUser,
+} from '@/store/slices/authSlice';
 
-/**
- * useAuth — primary authentication hook.
- *
- * Returns:
- *   user            — currently authenticated user object or null
- *   token           — JWT access token string or null
- *   isAuthenticated — boolean
- *   loading         — boolean, true while a login/logout request is in flight
- *   error           — last auth error message or null
- *   login(credentials) — POST to /auth/login, store tokens, navigate to dashboard
- *   logout()           — POST to /auth/logout, clear state, navigate to /login
- *   hasRole(roles)     — returns true if user.role is in the roles array
- *   updateProfile(data) — merge data into the user object (after profile edit)
- */
-export function useAuth() {
+export const useAuth = () => {
   const dispatch = useDispatch();
-  const navigate = useNavigate();
-
-  const user = useSelector(selectUser);
-  const token = useSelector(selectToken);
+  const user = useSelector(selectCurrentUser);
   const isAuthenticated = useSelector(selectIsAuthenticated);
-  const { loading, error } = useSelector(selectAuth);
+  const role = useSelector(selectUserRole);       // first role — for display
+  const roles = useSelector(selectUserRoles);     // all roles — for permission checks
+  const permissions = useSelector(selectUserPermissions);
 
-  // -------------------------------------------------------------------------
-  // login
-  // -------------------------------------------------------------------------
-  const login = useCallback(
-    async (credentials) => {
-      dispatch(setLoading(true));
-      dispatch(setError(null));
-      try {
-        const response = await authApi.login(credentials);
+  // true if the user has ANY of the specified roles
+  const hasRole = (...requiredRoles) => roles.some((r) => requiredRoles.includes(r));
 
-        const { user: userData, token: accessToken, refreshToken } = response;
+  const hasPermission = (permission) => permissions.includes(permission);
 
-        dispatch(
-          loginSuccess({
-            user: userData,
-            token: accessToken,
-            refreshToken: refreshToken ?? null,
-          })
-        );
+  const handleLogout = () => dispatch(logout());
 
-        toast.success(`Welcome back, ${userData.full_name || userData.email}!`);
-        navigate('/dashboard', { replace: true });
+  const updateCredentials = (payload) => dispatch(setCredentials(payload));
 
-        return { success: true };
-      } catch (err) {
-        const message = err.message || 'Login failed. Please check your credentials.';
-        dispatch(setError(message));
-        toast.error(message);
-        return { success: false, error: message };
-      }
-    },
-    [dispatch, navigate]
-  );
-
-  // -------------------------------------------------------------------------
-  // logout
-  // -------------------------------------------------------------------------
-  const logout = useCallback(async () => {
-    try {
-      // Best-effort server-side session invalidation
-      await authApi.logout().catch(() => {});
-    } finally {
-      dispatch(logoutAction());
-      navigate('/login', { replace: true });
-      toast.info('You have been signed out.');
-    }
-  }, [dispatch, navigate]);
-
-  // -------------------------------------------------------------------------
-  // hasRole
-  // -------------------------------------------------------------------------
-  const hasRole = useCallback(
-    (roles) => {
-      if (!user?.role) return false;
-      const allowed = Array.isArray(roles) ? roles : [roles];
-      // Support role by name string or by id
-      return allowed.some(
-        (r) =>
-          r === user.role ||
-          r === user.role_id ||
-          r?.toLowerCase() === user.role?.toLowerCase()
-      );
-    },
-    [user]
-  );
-
-  // -------------------------------------------------------------------------
-  // updateProfile — dispatch a partial user update
-  // -------------------------------------------------------------------------
-  const updateProfile = useCallback(
-    (data) => {
-      dispatch(updateUser(data));
-    },
-    [dispatch]
-  );
+  const updateUser = (userData) => dispatch(setUser(userData));
 
   return {
     user,
-    token,
     isAuthenticated,
-    loading,
-    error,
-    login,
-    logout,
+    role,
+    roles,
+    permissions,
     hasRole,
-    updateProfile,
+    hasPermission,
+    logout: handleLogout,
+    setCredentials: updateCredentials,
+    setUser: updateUser,
   };
-}
+};
 
 export default useAuth;

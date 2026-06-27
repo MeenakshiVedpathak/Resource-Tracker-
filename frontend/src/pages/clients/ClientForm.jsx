@@ -1,212 +1,179 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { motion } from 'framer-motion';
+import { ArrowLeft, Save } from 'lucide-react';
+import { useClient, useCreateClient, useUpdateClient } from '@/hooks/useClients';
+import { useNotification } from '@/hooks/useNotification';
+import { extractApiError } from '@/services/apiClient';
+import { ROUTES } from '@/constants/routes';
 import {
-  Button,
-  CircularProgress,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  FormControl,
-  FormHelperText,
-  Grid,
-  InputLabel,
-  MenuItem,
-  Select,
-  TextField,
-  Typography,
-} from '@mui/material';
-import { useForm, Controller } from 'react-hook-form';
-import { useDispatch, useSelector } from 'react-redux';
-import { createClient, updateClient, selectClientsLoading } from '../../store/slices/clientSlice';
+  Form, FormField, FormItem, FormLabel, FormControl, FormMessage,
+} from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import PageHeader from '@/components/common/PageHeader';
+import { Skeleton } from '@/components/ui/skeleton';
 
-const INDUSTRY_OPTIONS = [
-  'Technology',
-  'Finance',
-  'Healthcare',
-  'Manufacturing',
-  'Retail',
-  'Energy',
-  'Telecommunications',
-  'Education',
-  'Government',
-  'Consulting',
-  'Media & Entertainment',
-  'Real Estate',
-  'Transportation',
-  'Other',
-];
+const clientSchema = z.object({
+  client_name: z
+    .string()
+    .min(1, 'Client name is required')
+    .max(100, 'Client name cannot exceed 100 characters'),
+  industry: z.string().max(100).optional().or(z.literal('')),
+  status: z.enum(['active', 'inactive']).default('active'),
+});
 
-const STATUS_OPTIONS = [
-  { value: 'active', label: 'Active' },
-  { value: 'inactive', label: 'Inactive' },
-  { value: 'suspended', label: 'Suspended' },
-];
+const FormSkeleton = () => (
+  <Card>
+    <CardContent className="p-6 space-y-4">
+      {Array.from({ length: 4 }).map((_, i) => (
+        <div key={i} className="space-y-2">
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-9 w-full" />
+        </div>
+      ))}
+    </CardContent>
+  </Card>
+);
 
-const defaultValues = {
-  client_name: '',
-  industry: '',
-  status: 'active',
-};
+const ClientForm = () => {
+  const navigate = useNavigate();
+  const { id } = useParams();
+  const isEdit = !!id;
+  const { success, error: showError } = useNotification();
 
-export default function ClientForm({ open, onClose, initialData }) {
-  const dispatch = useDispatch();
-  const loading = useSelector(selectClientsLoading);
-  const isEdit = Boolean(initialData?.id);
+  const { data: client, isPending: isLoadingClient } = useClient(id);
+  const createMutation = useCreateClient();
+  const updateMutation = useUpdateClient(id);
 
-  const {
-    control,
-    handleSubmit,
-    reset,
-    formState: { errors, isDirty },
-  } = useForm({ defaultValues });
+  const form = useForm({
+    resolver: zodResolver(clientSchema),
+    defaultValues: {
+      client_name: '',
+      industry: '',
+      status: 'active',
+    },
+  });
 
   useEffect(() => {
-    if (open) {
-      if (isEdit && initialData) {
-        reset({
-          client_name: initialData.client_name ?? '',
-          industry: initialData.industry ?? '',
-          status: initialData.status ?? 'active',
-        });
-      } else {
-        reset(defaultValues);
-      }
+    if (client && isEdit) {
+      form.reset({
+        client_name: client.client_name ?? '',
+        industry: client.industry ?? '',
+        status: client.status ?? 'active',
+      });
     }
-  }, [open, initialData, isEdit, reset]);
+  }, [client, isEdit, form]);
 
-  const onSubmit = async (data) => {
-    let result;
-    if (isEdit) {
-      result = await dispatch(updateClient({ id: initialData.id, ...data }));
-    } else {
-      result = await dispatch(createClient(data));
-    }
+  const onSubmit = (values) => {
+    const clean = Object.fromEntries(
+      Object.entries(values).filter(([, v]) => v !== '' && v != null)
+    );
 
-    if (!result?.error) {
-      onClose(true);
-    }
+    const mutation = isEdit ? updateMutation : createMutation;
+    mutation.mutate(clean, {
+      onSuccess: () => {
+        success(isEdit ? 'Client updated successfully.' : 'Client created successfully.');
+        navigate(ROUTES.CLIENTS);
+      },
+      onError: (err) => showError(extractApiError(err)),
+    });
   };
 
-  const handleCancel = () => {
-    onClose(false);
-  };
+  const isSubmitting = createMutation.isPending || updateMutation.isPending;
+
+  if (isEdit && isLoadingClient) return <FormSkeleton />;
 
   return (
-    <Dialog
-      open={open}
-      onClose={handleCancel}
-      fullWidth
-      maxWidth="sm"
-      PaperProps={{ sx: { borderRadius: 2 } }}
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="w-full"
     >
-      <DialogTitle sx={{ pb: 1 }}>
-        <Typography variant="h6" fontWeight={700}>
-          {isEdit ? 'Edit Client' : 'Add New Client'}
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          {isEdit ? 'Update the client details below.' : 'Fill in the details to create a new client.'}
-        </Typography>
-      </DialogTitle>
+      <PageHeader
+        title={isEdit ? 'Edit Client' : 'Add Client'}
+        description={isEdit ? `Updating ${client?.client_name ?? ''}` : 'Create a new client record'}
+        actions={
+          <Button variant="outline" size="sm" onClick={() => navigate(ROUTES.CLIENTS)}>
+            <ArrowLeft className="mr-1.5 h-4 w-4" />
+            Back
+          </Button>
+        }
+      />
 
-      <form onSubmit={handleSubmit(onSubmit)} noValidate>
-        <DialogContent dividers sx={{ pt: 2 }}>
-          <Grid container spacing={2.5}>
-            {/* Client Name */}
-            <Grid item xs={12}>
-              <Controller
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm">Client Details</CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <FormField
+                control={form.control}
                 name="client_name"
-                control={control}
-                rules={{
-                  required: 'Client name is required',
-                  minLength: { value: 2, message: 'Minimum 2 characters' },
-                  maxLength: { value: 150, message: 'Maximum 150 characters' },
-                }}
                 render={({ field }) => (
-                  <TextField
-                    {...field}
-                    label="Client Name"
-                    fullWidth
-                    required
-                    error={Boolean(errors.client_name)}
-                    helperText={errors.client_name?.message}
-                    autoFocus
-                    inputProps={{ maxLength: 150 }}
-                  />
+                  <FormItem>
+                    <FormLabel>Client Name <span className="text-destructive">*</span></FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g. Acme Corporation" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
                 )}
               />
-            </Grid>
-
-            {/* Industry */}
-            <Grid item xs={12} sm={6}>
-              <Controller
+              <FormField
+                control={form.control}
                 name="industry"
-                control={control}
-                rules={{ required: 'Industry is required' }}
                 render={({ field }) => (
-                  <FormControl fullWidth required error={Boolean(errors.industry)}>
-                    <InputLabel>Industry</InputLabel>
-                    <Select {...field} label="Industry">
-                      {INDUSTRY_OPTIONS.map((opt) => (
-                        <MenuItem key={opt} value={opt}>
-                          {opt}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                    {errors.industry && (
-                      <FormHelperText>{errors.industry.message}</FormHelperText>
-                    )}
-                  </FormControl>
+                  <FormItem>
+                    <FormLabel>Industry</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g. Technology" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
                 )}
               />
-            </Grid>
-
-            {/* Status */}
-            <Grid item xs={12} sm={6}>
-              <Controller
+              <FormField
+                control={form.control}
                 name="status"
-                control={control}
-                rules={{ required: 'Status is required' }}
                 render={({ field }) => (
-                  <FormControl fullWidth required error={Boolean(errors.status)}>
-                    <InputLabel>Status</InputLabel>
-                    <Select {...field} label="Status">
-                      {STATUS_OPTIONS.map((opt) => (
-                        <MenuItem key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </MenuItem>
-                      ))}
+                  <FormItem>
+                    <FormLabel>Status</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="inactive">Inactive</SelectItem>
+                      </SelectContent>
                     </Select>
-                    {errors.status && (
-                      <FormHelperText>{errors.status.message}</FormHelperText>
-                    )}
-                  </FormControl>
+                    <FormMessage />
+                  </FormItem>
                 )}
               />
-            </Grid>
-          </Grid>
-        </DialogContent>
+            </CardContent>
+          </Card>
 
-        <DialogActions sx={{ px: 3, py: 2, gap: 1 }}>
-          <Button
-            onClick={handleCancel}
-            variant="outlined"
-            color="inherit"
-            sx={{ textTransform: 'none' }}
-            disabled={loading}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            variant="contained"
-            disabled={loading || (!isDirty && isEdit)}
-            startIcon={loading ? <CircularProgress size={16} color="inherit" /> : null}
-            sx={{ textTransform: 'none', fontWeight: 600, minWidth: 100 }}
-          >
-            {loading ? 'Saving…' : isEdit ? 'Update' : 'Create'}
-          </Button>
-        </DialogActions>
-      </form>
-    </Dialog>
+          <div className="sticky bottom-0 z-10 -mx-6 flex items-center justify-end gap-3 border-t bg-background px-6 py-4">
+            <Button type="button" variant="outline" onClick={() => navigate(ROUTES.CLIENTS)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isSubmitting}>
+              <Save className="mr-1.5 h-4 w-4" />
+              {isSubmitting ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Client'}
+            </Button>
+          </div>
+        </form>
+      </Form>
+    </motion.div>
   );
-}
+};
+
+export default ClientForm;

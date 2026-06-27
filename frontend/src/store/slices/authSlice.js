@@ -1,95 +1,68 @@
 import { createSlice } from '@reduxjs/toolkit';
-import { STORAGE_KEYS } from '../../utils/constants';
-
-// Hydrate from localStorage so Redux state survives page refresh
-const storedUser = (() => {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEYS.USER);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-})();
-
-const storedToken = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN) ?? null;
+import { clearAuth, getAccessToken, getRefreshToken, getStoredUser, saveTokens, saveUser } from '@/services/apiClient';
 
 const initialState = {
-  user: storedUser,
-  token: storedToken,
-  refreshToken: localStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN) ?? null,
-  isAuthenticated: !!(storedToken && storedUser),
-  loading: false,
-  error: null,
+  user: getStoredUser(),
+  accessToken: getAccessToken(),
+  refreshToken: getRefreshToken(),
+  isAuthenticated: !!getAccessToken(),
 };
 
 const authSlice = createSlice({
   name: 'auth',
   initialState,
   reducers: {
-    loginSuccess(state, action) {
-      const { user, token, refreshToken } = action.payload;
+    setCredentials: (state, action) => {
+      const { user, accessToken, refreshToken } = action.payload;
       state.user = user;
-      state.token = token;
-      state.refreshToken = refreshToken ?? null;
+      state.accessToken = accessToken;
+      state.refreshToken = refreshToken;
       state.isAuthenticated = true;
-      state.loading = false;
-      state.error = null;
-
-      localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, token);
-      localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(user));
-      if (refreshToken) {
-        localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, refreshToken);
-      }
+      saveTokens(accessToken, refreshToken);
+      saveUser(user);
     },
-    logout(state) {
+    setTokens: (state, action) => {
+      const { accessToken, refreshToken } = action.payload;
+      state.accessToken = accessToken;
+      state.refreshToken = refreshToken;
+      saveTokens(accessToken, refreshToken);
+    },
+    setUser: (state, action) => {
+      state.user = action.payload;
+      saveUser(action.payload);
+    },
+    logout: (state) => {
       state.user = null;
-      state.token = null;
+      state.accessToken = null;
       state.refreshToken = null;
       state.isAuthenticated = false;
-      state.loading = false;
-      state.error = null;
-
-      localStorage.removeItem(STORAGE_KEYS.ACCESS_TOKEN);
-      localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN);
-      localStorage.removeItem(STORAGE_KEYS.USER);
-    },
-    setLoading(state, action) {
-      state.loading = action.payload;
-    },
-    setError(state, action) {
-      state.error = action.payload;
-      state.loading = false;
-    },
-    updateUser(state, action) {
-      state.user = { ...state.user, ...action.payload };
-      localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(state.user));
-    },
-    refreshTokenSuccess(state, action) {
-      const { token, refreshToken } = action.payload;
-      state.token = token;
-      if (refreshToken) state.refreshToken = refreshToken;
-
-      localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, token);
-      if (refreshToken) {
-        localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, refreshToken);
-      }
+      clearAuth();
     },
   },
 });
 
-export const {
-  loginSuccess,
-  logout,
-  setLoading,
-  setError,
-  updateUser,
-  refreshTokenSuccess,
-} = authSlice.actions;
+export const { setCredentials, setTokens, setUser, logout } = authSlice.actions;
 
-// Selectors
-export const selectAuth = (state) => state.auth;
-export const selectUser = (state) => state.auth.user;
-export const selectToken = (state) => state.auth.token;
+const EMPTY_PERMISSIONS = [];
+const EMPTY_ROLES = [];
+
+export const selectCurrentUser = (state) => state.auth.user;
+export const selectAccessToken = (state) => state.auth.accessToken;
 export const selectIsAuthenticated = (state) => state.auth.isAuthenticated;
+
+// Returns array of role name strings — handles roles[] array, single role object, or string
+export const selectUserRoles = (state) => {
+  const user = state.auth.user;
+  if (!user) return EMPTY_ROLES;
+  if (Array.isArray(user.roles) && user.roles.length > 0)
+    return user.roles.map((r) => r.role_name ?? r).filter(Boolean);
+  if (user.role?.role_name) return [user.role.role_name];
+  if (typeof user.role === 'string') return [user.role];
+  return EMPTY_ROLES;
+};
+
+// Returns first role name for display purposes
+export const selectUserRole = (state) => selectUserRoles(state)[0] ?? null;
+export const selectUserPermissions = (state) => state.auth.user?.permissions ?? EMPTY_PERMISSIONS;
 
 export default authSlice.reducer;

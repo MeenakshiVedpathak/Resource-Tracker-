@@ -1,38 +1,68 @@
-import React from 'react';
-import ReactDOM from 'react-dom/client';
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
 import { Provider } from 'react-redux';
-import { BrowserRouter } from 'react-router-dom';
-import { ToastContainer } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
-
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Toaster } from 'react-hot-toast';
+import store from '@/store';
+import { ThemeProvider } from '@/contexts/ThemeContext';
+import { registerLogoutCallback } from '@/services/apiClient';
+import { logout } from '@/store/slices/authSlice';
 import App from './App';
-import { store } from './store';
-import { AuthProvider } from './contexts/AuthContext';
+import '@/styles/index.css';
 
-ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
+// Wire up the logout callback after store is created
+registerLogoutCallback(() => {
+  store.dispatch(logout());
+  window.location.href = '/login';
+});
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5,      // 5 minutes
+      gcTime: 1000 * 60 * 10,         // 10 minutes
+      retry: (failureCount, error) => {
+        if (error?.response?.status >= 400 && error?.response?.status < 500) return false;
+        return failureCount < 2;
+      },
+      refetchOnWindowFocus: false,
+    },
+    mutations: {
+      retry: 0,
+    },
+  },
+});
+
+createRoot(document.getElementById('root')).render(
+  <StrictMode>
     <Provider store={store}>
-      <BrowserRouter>
-        <AuthProvider>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider>
           <App />
-          <ToastContainer
+          <Toaster
             position="top-right"
-            autoClose={4000}
-            hideProgressBar={false}
-            newestOnTop
-            closeOnClick
-            rtl={false}
-            pauseOnFocusLoss
-            draggable
-            pauseOnHover
-            theme="light"
-            toastStyle={{
-              fontSize: '0.875rem',
-              borderRadius: '8px',
+            gutter={8}
+            toastOptions={{
+              duration: 4000,
+              style: {
+                background: 'hsl(var(--card))',
+                color: 'hsl(var(--card-foreground))',
+                border: '1px solid hsl(var(--border))',
+                borderRadius: '0.625rem',
+                fontSize: '0.875rem',
+                padding: '10px 14px',
+                boxShadow: '0 4px 24px 0 rgba(0,0,0,0.10)',
+              },
+              success: {
+                iconTheme: { primary: 'hsl(var(--success))', secondary: '#fff' },
+              },
+              error: {
+                iconTheme: { primary: 'hsl(var(--destructive))', secondary: '#fff' },
+              },
             }}
           />
-        </AuthProvider>
-      </BrowserRouter>
+        </ThemeProvider>
+      </QueryClientProvider>
     </Provider>
-  </React.StrictMode>
+  </StrictMode>
 );

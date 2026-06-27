@@ -1,528 +1,354 @@
-import React, { useState, useCallback } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
+import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useDropzone } from 'react-dropzone';
+import { UploadCloud, FileSpreadsheet, X, CheckCircle2, AlertCircle, ArrowLeft } from 'lucide-react';
+import { timesheetsApi } from '@/api/timesheets.api';
+import { useConfirmImport } from '@/hooks/useTimesheets';
+import { useNotification } from '@/hooks/useNotification';
+import { extractApiError } from '@/services/apiClient';
+import { ROUTES } from '@/constants/routes';
+import { formatDate, formatFileSize } from '@/utils/formatters';
+import PageHeader from '@/components/common/PageHeader';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
-  Box,
-  Stepper,
-  Step,
-  StepLabel,
-  Card,
-  CardContent,
-  CardHeader,
-  Button,
-  Typography,
-  Divider,
-  Alert,
-  Stack,
-  CircularProgress,
   Table,
-  TableHead,
   TableBody,
-  TableRow,
   TableCell,
-  TableContainer,
-  Chip,
-  Paper,
-  LinearProgress,
-  Tooltip,
-  IconButton,
-  alpha,
-  useTheme,
-} from '@mui/material';
-import DownloadIcon from '@mui/icons-material/DownloadOutlined';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import ErrorIcon from '@mui/icons-material/Error';
-import WarningAmberIcon from '@mui/icons-material/WarningAmber';
-import ArrowBackIcon from '@mui/icons-material/ArrowBackOutlined';
-import ArrowForwardIcon from '@mui/icons-material/ArrowForwardOutlined';
-import UploadFileIcon from '@mui/icons-material/UploadFile';
-import ReplayIcon from '@mui/icons-material/Replay';
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/utils/cn';
 
-import PageHeader from '../../components/PageHeader';
-import FileUploadZone from '../../components/FileUploadZone';
-
-import {
-  uploadTimesheet,
-  confirmImport,
-  cancelImport,
-  clearImportState,
-  selectCurrentImport,
-  selectPreviewData,
-  selectImportErrors,
-  selectTimesheetUploading,
-  selectTimesheetLoading,
-  selectTimesheetError,
-} from '../../redux/slices/timesheetSlice';
-
-const STEPS = ['Upload File', 'Review & Validate', 'Confirm Import'];
-
-const PREVIEW_COLUMNS = [
-  { id: 'employee_name', label: 'Employee' },
-  { id: 'date', label: 'Date' },
-  { id: 'hours', label: 'Hours' },
-  { id: 'po_number', label: 'PO Number' },
-  { id: 'sub_project_code', label: 'Sub-Project' },
-  { id: 'description', label: 'Description' },
-];
-
-// ---- Summary Stat ----
-const SummaryCard = ({ label, value, color, icon }) => {
-  const theme = useTheme();
-  return (
-    <Paper
-      variant="outlined"
-      sx={{
-        p: 2.5,
-        flex: 1,
-        minWidth: 130,
-        borderColor: color ? alpha(theme.palette[color]?.main || '#000', 0.35) : undefined,
-        bgcolor: color ? alpha(theme.palette[color]?.main || '#000', 0.04) : undefined,
-      }}
-    >
-      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
-        {icon && (
-          <Box sx={{ color: `${color}.main` }}>{icon}</Box>
-        )}
-        <Typography variant="overline" color="text.secondary">
-          {label}
-        </Typography>
-      </Stack>
-      <Typography
-        variant="h4"
-        fontWeight={700}
-        sx={{ fontVariantNumeric: 'tabular-nums', color: color ? `${color}.main` : 'text.primary' }}
-      >
-        {value ?? '—'}
-      </Typography>
-    </Paper>
-  );
-};
+const MAX_SIZE = 10 * 1024 * 1024; // 10 MB
 
 const TimesheetUpload = () => {
-  const dispatch = useDispatch();
   const navigate = useNavigate();
-  const theme = useTheme();
+  const { success, error: showError } = useNotification();
 
-  const currentImport = useSelector(selectCurrentImport);
-  const previewData = useSelector(selectPreviewData);
-  const importErrors = useSelector(selectImportErrors);
-  const uploading = useSelector(selectTimesheetUploading);
-  const confirming = useSelector(selectTimesheetLoading);
-  const apiError = useSelector(selectTimesheetError);
+  const [step, setStep] = useState(1); // 1 = upload, 2 = preview
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [preview, setPreview] = useState(null); // { importId, valid_rows, error_rows }
 
-  const [activeStep, setActiveStep] = useState(0);
-  const [files, setFiles] = useState([]);
-  const [uploadError, setUploadError] = useState('');
-  const [confirmed, setConfirmed] = useState(false);
+  const confirmMutation = useConfirmImport();
 
-  const handleFileChange = useCallback((newFiles) => {
-    setFiles(
-      newFiles.map((f, i) => ({
-        id: `${f.name}-${i}`,
-        file: f,
-        status: 'idle',
-      }))
-    );
-    setUploadError('');
+  // ── Dropzone ────────────────────────────────────────────────────────────────
+  const onDrop = useCallback((accepted) => {
+    if (accepted.length > 0) setSelectedFile(accepted[0]);
   }, []);
 
-  const handleFileRemove = (fileId) => {
-    setFiles((prev) => prev.filter((f) => f.id !== fileId));
-  };
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: {
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
+      'text/csv': ['.csv'],
+    },
+    maxSize: MAX_SIZE,
+    multiple: false,
+    onDropRejected: (rejections) => {
+      const first = rejections[0]?.errors?.[0];
+      if (first?.code === 'file-too-large') {
+        showError('File exceeds 10 MB limit.');
+      } else {
+        showError(first?.message ?? 'Invalid file. Please upload .xlsx or .csv.');
+      }
+    },
+  });
 
-  // Step 1 -> Step 2: upload and get preview
-  const handleUpload = async () => {
-    if (!files.length) {
-      setUploadError('Please select a file before continuing.');
-      return;
-    }
-    setUploadError('');
-    const formData = new FormData();
-    formData.append('file', files[0].file);
-
-    // Mark file as uploading
-    setFiles((prev) =>
-      prev.map((f) => ({ ...f, status: 'uploading', progress: undefined }))
-    );
-
+  // ── Step 1 → Step 2 ─────────────────────────────────────────────────────────
+  const handlePreview = async () => {
+    if (!selectedFile) return;
+    setIsUploading(true);
     try {
-      await dispatch(uploadTimesheet(formData)).unwrap();
-      setFiles((prev) => prev.map((f) => ({ ...f, status: 'success' })));
-      setActiveStep(1);
+      const result = await timesheetsApi.upload(selectedFile);
+      setPreview({
+        importId:   result?.importId,
+        totalRows:  result?.totalRows  ?? 0,
+        validCount: result?.validRows  ?? 0,
+        errorCount: result?.errorRows  ?? 0,
+        valid_rows: result?.preview    ?? [],   // array of row objects
+        error_rows: result?.errors     ?? [],   // array of error objects
+        canConfirm: result?.canConfirm ?? false,
+      });
+      setStep(2);
     } catch (err) {
-      setFiles((prev) => prev.map((f) => ({ ...f, status: 'error', error: String(err) })));
-      setUploadError(typeof err === 'string' ? err : err?.message || 'Upload failed');
+      showError(extractApiError(err));
+    } finally {
+      setIsUploading(false);
     }
   };
 
-  // Step 2 -> Step 3: confirm import
-  const handleConfirm = async () => {
-    if (!currentImport?.importId) return;
-    try {
-      await dispatch(confirmImport(currentImport.importId)).unwrap();
-      setConfirmed(true);
-      setActiveStep(2);
-    } catch (err) {
-      // error shown via apiError selector
-    }
+  // ── Step 2 → Confirm ────────────────────────────────────────────────────────
+  const handleConfirm = () => {
+    confirmMutation.mutate(preview.importId, {
+      onSuccess: () => {
+        success('Timesheets imported successfully.');
+        navigate(ROUTES.TIMESHEETS);
+      },
+      onError: (err) => showError(extractApiError(err)),
+    });
   };
 
-  const handleCancel = async () => {
-    if (currentImport?.importId) {
-      await dispatch(cancelImport(currentImport.importId));
-    }
-    dispatch(clearImportState());
-    resetWizard();
+  const handleCancel = () => {
+    setStep(1);
+    setSelectedFile(null);
+    setPreview(null);
   };
 
-  const resetWizard = () => {
-    setActiveStep(0);
-    setFiles([]);
-    setUploadError('');
-    setConfirmed(false);
-    dispatch(clearImportState());
-  };
-
-  const handleDownloadTemplate = () => {
-    // In production this calls timesheetService.downloadTemplate()
-    const csvContent =
-      'employee_code,date,hours,po_number,sub_project_code,description\n' +
-      'EMP001,2024-06-01,8,PO-001,SP-001,Development work\n';
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'timesheet_template.csv';
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  // ---- Render helpers ----
-
-  const renderStep0 = () => (
-    <Card>
-      <CardHeader
-        title="Select Timesheet File"
-        subheader="Upload an Excel (.xlsx) or CSV file with timesheet data"
-        action={
-          <Tooltip title="Download the expected import template">
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={<DownloadIcon />}
-              onClick={handleDownloadTemplate}
-            >
-              Download Template
-            </Button>
-          </Tooltip>
+  // ── Render ──────────────────────────────────────────────────────────────────
+  return (
+    <div className="max-w-4xl">
+      <PageHeader
+        title="Upload Timesheets"
+        description="Import employee timesheet data from an Excel or CSV file"
+        actions={
+          <Button variant="outline" size="sm" onClick={() => navigate(ROUTES.TIMESHEETS)}>
+            <ArrowLeft className="mr-1.5 h-4 w-4" />
+            Back to Timesheets
+          </Button>
         }
       />
-      <Divider />
-      <CardContent>
-        <FileUploadZone
-          accept=".xlsx,.xls,.csv"
-          maxSize={20 * 1024 * 1024}
-          multiple={false}
-          files={files}
-          onChange={handleFileChange}
-          onRemove={handleFileRemove}
-          disabled={uploading}
-          helperText="Accepted: .xlsx, .xls, .csv — max 20 MB"
-          error={Boolean(uploadError)}
-          errorText={uploadError}
-        />
 
-        <Alert severity="info" sx={{ mt: 2.5, fontSize: '0.8125rem' }}>
-          <strong>Expected columns:</strong> employee_code, date (YYYY-MM-DD), hours,
-          po_number, sub_project_code (optional), description (optional).
-        </Alert>
-      </CardContent>
-    </Card>
-  );
+      {/* Step indicator */}
+      <div className="flex items-center gap-3 mb-6">
+        <StepBadge num={1} label="Upload File" active={step === 1} done={step > 1} />
+        <div className="flex-1 h-px bg-border" />
+        <StepBadge num={2} label="Preview &amp; Confirm" active={step === 2} done={false} />
+      </div>
 
-  const renderStep1 = () => {
-    const validCount = currentImport?.validRows ?? 0;
-    const errorCount = currentImport?.errorRows ?? 0;
-    const totalCount = currentImport?.totalRows ?? 0;
-    const hasErrors = errorCount > 0;
-
-    return (
-      <Box>
-        {/* Summary stats */}
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 3 }} flexWrap="wrap">
-          <SummaryCard label="Total Rows" value={totalCount} />
-          <SummaryCard
-            label="Valid Rows"
-            value={validCount}
-            color="success"
-            icon={<CheckCircleIcon fontSize="small" />}
-          />
-          <SummaryCard
-            label="Error Rows"
-            value={errorCount}
-            color={hasErrors ? 'error' : 'success'}
-            icon={hasErrors ? <ErrorIcon fontSize="small" /> : <CheckCircleIcon fontSize="small" />}
-          />
-        </Stack>
-
-        {hasErrors && (
-          <Alert severity="warning" icon={<WarningAmberIcon />} sx={{ mb: 2 }}>
-            {errorCount} row{errorCount !== 1 ? 's' : ''} have validation errors and will be
-            skipped. Only the {validCount} valid row{validCount !== 1 ? 's' : ''} will be imported.
-          </Alert>
-        )}
-
-        {apiError && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {apiError}
-          </Alert>
-        )}
-
-        {/* Preview table */}
-        <Card>
-          <CardHeader
-            title="Row Preview"
-            subheader={`Showing ${previewData?.length ?? 0} of ${totalCount} rows`}
-            titleTypographyProps={{ variant: 'subtitle1', fontWeight: 600 }}
-          />
-          <Divider />
-          <TableContainer sx={{ overflowX: 'auto', maxHeight: 480 }}>
-            <Table stickyHeader size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell sx={{ width: 50, fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                    #
-                  </TableCell>
-                  {PREVIEW_COLUMNS.map((col) => (
-                    <TableCell
-                      key={col.id}
-                      sx={{ fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}
-                    >
-                      {col.label}
-                    </TableCell>
-                  ))}
-                  <TableCell sx={{ fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                    Status
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {(previewData || []).length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={PREVIEW_COLUMNS.length + 2} align="center" sx={{ py: 6, color: 'text.secondary' }}>
-                      No preview data available
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  (previewData || []).map((row, idx) => {
-                    const rowErrors = (importErrors || []).filter(
-                      (e) => e.row === (row.row_number ?? idx + 1)
-                    );
-                    const isError = row.is_valid === false || rowErrors.length > 0;
-
-                    return (
-                      <TableRow
-                        key={idx}
-                        sx={{
-                          bgcolor: isError
-                            ? alpha(theme.palette.error.main, 0.06)
-                            : alpha(theme.palette.success.main, 0.04),
-                          '&:hover': {
-                            bgcolor: isError
-                              ? alpha(theme.palette.error.main, 0.1)
-                              : alpha(theme.palette.success.main, 0.08),
-                          },
-                        }}
-                      >
-                        <TableCell sx={{ fontVariantNumeric: 'tabular-nums', color: 'text.secondary' }}>
-                          {row.row_number ?? idx + 1}
-                        </TableCell>
-                        {PREVIEW_COLUMNS.map((col) => (
-                          <TableCell key={col.id} sx={{ fontSize: '0.8125rem' }}>
-                            {row[col.id] ?? '—'}
-                          </TableCell>
-                        ))}
-                        <TableCell>
-                          {isError ? (
-                            <Tooltip
-                              title={rowErrors.map((e) => e.message).join('; ') || 'Invalid row'}
-                            >
-                              <Chip
-                                label="Error"
-                                size="small"
-                                color="error"
-                                sx={{ fontWeight: 600, fontSize: '0.7rem', cursor: 'help' }}
-                              />
-                            </Tooltip>
-                          ) : (
-                            <Chip
-                              label="Valid"
-                              size="small"
-                              color="success"
-                              sx={{ fontWeight: 600, fontSize: '0.7rem' }}
-                            />
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
+      {step === 1 && (
+        <div className="space-y-5">
+          {/* Drop zone */}
+          <Card>
+            <CardContent className="p-6">
+              <div
+                {...getRootProps()}
+                className={cn(
+                  'flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-10 text-center transition-colors cursor-pointer',
+                  isDragActive
+                    ? 'border-primary bg-primary/5'
+                    : 'border-border hover:border-primary/50 hover:bg-muted/30'
                 )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Card>
-      </Box>
-    );
-  };
-
-  const renderStep2 = () => {
-    const validCount = currentImport?.validRows ?? 0;
-    const errorCount = currentImport?.errorRows ?? 0;
-
-    return (
-      <Card sx={{ textAlign: 'center' }}>
-        <CardContent sx={{ py: 6 }}>
-          <CheckCircleIcon
-            sx={{ fontSize: 72, color: 'success.main', mb: 2 }}
-          />
-          <Typography variant="h5" fontWeight={700} gutterBottom>
-            Import Successful
-          </Typography>
-          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-            {validCount} timesheet record{validCount !== 1 ? 's' : ''} have been imported
-            successfully.
-            {errorCount > 0 && ` ${errorCount} row${errorCount !== 1 ? 's' : ''} were skipped due to errors.`}
-          </Typography>
-
-          <Stack direction="row" spacing={2} justifyContent="center" flexWrap="wrap">
-            <Chip
-              label={`${validCount} imported`}
-              color="success"
-              icon={<CheckCircleIcon />}
-              sx={{ fontWeight: 600 }}
-            />
-            {errorCount > 0 && (
-              <Chip
-                label={`${errorCount} skipped`}
-                color="warning"
-                icon={<WarningAmberIcon />}
-                sx={{ fontWeight: 600 }}
-              />
-            )}
-          </Stack>
-
-          <Stack direction="row" spacing={2} justifyContent="center" sx={{ mt: 4 }}>
-            <Button
-              variant="outlined"
-              startIcon={<ReplayIcon />}
-              onClick={resetWizard}
-            >
-              Import Another File
-            </Button>
-            <Button
-              variant="contained"
-              onClick={() => navigate('/timesheets')}
-            >
-              View Timesheets
-            </Button>
-          </Stack>
-        </CardContent>
-      </Card>
-    );
-  };
-
-  return (
-    <Box sx={{ p: { xs: 2, md: 3 } }}>
-      <PageHeader
-        title="Import Timesheets"
-        subtitle="Upload an Excel or CSV file to bulk-import timesheet entries"
-        breadcrumbs={[
-          { label: 'Dashboard', to: '/' },
-          { label: 'Timesheets', to: '/timesheets' },
-          { label: 'Import' },
-        ]}
-        action={{
-          label: 'View All Timesheets',
-          variant: 'outlined',
-          onClick: () => navigate('/timesheets'),
-        }}
-      />
-
-      {/* Stepper */}
-      <Stepper activeStep={activeStep} sx={{ mt: 3, mb: 4 }}>
-        {STEPS.map((label, idx) => (
-          <Step key={label} completed={activeStep > idx || (idx === 2 && confirmed)}>
-            <StepLabel>{label}</StepLabel>
-          </Step>
-        ))}
-      </Stepper>
-
-      {/* Step content */}
-      <Box>
-        {activeStep === 0 && renderStep0()}
-        {activeStep === 1 && renderStep1()}
-        {activeStep === 2 && renderStep2()}
-      </Box>
-
-      {/* Navigation buttons */}
-      {activeStep < 2 && (
-        <Stack
-          direction="row"
-          spacing={2}
-          justifyContent="space-between"
-          sx={{ mt: 3 }}
-        >
-          <Button
-            variant="outlined"
-            color="inherit"
-            startIcon={<ArrowBackIcon />}
-            onClick={activeStep === 0 ? () => navigate('/timesheets') : handleCancel}
-            disabled={uploading || confirming}
-          >
-            {activeStep === 0 ? 'Back to Timesheets' : 'Cancel & Discard'}
-          </Button>
-
-          {activeStep === 0 && (
-            <Button
-              variant="contained"
-              endIcon={
-                uploading ? (
-                  <CircularProgress size={16} color="inherit" />
+              >
+                <input {...getInputProps()} />
+                <UploadCloud
+                  className={cn(
+                    'mb-3 h-10 w-10 transition-colors',
+                    isDragActive ? 'text-primary' : 'text-muted-foreground'
+                  )}
+                />
+                {isDragActive ? (
+                  <p className="text-sm font-medium text-primary">Drop it here…</p>
                 ) : (
-                  <ArrowForwardIcon />
-                )
-              }
-              onClick={handleUpload}
-              disabled={uploading || !files.length}
-              startIcon={<UploadFileIcon />}
-            >
-              {uploading ? 'Uploading…' : 'Upload & Preview'}
-            </Button>
+                  <>
+                    <p className="text-sm font-medium">Drag &amp; drop your file here</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      or click to browse — .xlsx or .csv, max 10 MB
+                    </p>
+                  </>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Selected file preview */}
+          {selectedFile && (
+            <Card>
+              <CardContent className="flex items-center gap-4 p-4">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                  <FileSpreadsheet className="h-5 w-5 text-primary" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{selectedFile.name}</p>
+                  <p className="text-xs text-muted-foreground">{formatFileSize(selectedFile.size)}</p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => setSelectedFile(null)}
+                  title="Remove file"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </CardContent>
+            </Card>
           )}
 
-          {activeStep === 1 && (
+          <div className="flex justify-end">
             <Button
-              variant="contained"
-              color="success"
-              endIcon={
-                confirming ? (
-                  <CircularProgress size={16} color="inherit" />
-                ) : (
-                  <CheckCircleIcon />
-                )
-              }
-              onClick={handleConfirm}
-              disabled={confirming || !currentImport?.validRows}
+              onClick={handlePreview}
+              disabled={!selectedFile || isUploading}
             >
-              {confirming
-                ? 'Importing…'
-                : `Confirm Import (${currentImport?.validRows ?? 0} rows)`}
+              {isUploading ? 'Uploading…' : 'Preview Import'}
             </Button>
-          )}
-        </Stack>
+          </div>
+        </div>
       )}
-    </Box>
+
+      {step === 2 && preview && (
+        <div className="space-y-5">
+          {/* Summary badges */}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-1.5 rounded-lg border bg-card px-3 py-2">
+              <span className="text-xs text-muted-foreground">Import ID:</span>
+              <span className="font-mono text-xs font-semibold">{preview.importId}</span>
+            </div>
+            <div className="flex items-center gap-1.5 rounded-lg border bg-card px-3 py-2">
+              <span className="text-xs text-muted-foreground">Total rows:</span>
+              <span className="font-mono text-xs font-semibold">{preview.totalRows}</span>
+            </div>
+            <Badge className="gap-1.5 bg-green-100 text-green-700 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              {preview.validCount} valid
+            </Badge>
+            {preview.errorCount > 0 && (
+              <Badge variant="destructive" className="gap-1.5">
+                <AlertCircle className="h-3.5 w-3.5" />
+                {preview.errorCount} error{preview.errorCount !== 1 ? 's' : ''}
+              </Badge>
+            )}
+          </div>
+
+          {/* Valid rows */}
+          {preview.valid_rows.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-sm">
+                  <CheckCircle2 className="h-4 w-4 text-green-500" />
+                  Valid Rows ({preview.validCount})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/30">
+                        <TableHead>Row</TableHead>
+                        <TableHead>Employee</TableHead>
+                        <TableHead>Service PO</TableHead>
+                        <TableHead>Sub-Project</TableHead>
+                        <TableHead>Date</TableHead>
+                        <TableHead className="text-right">Hours</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {preview.valid_rows.map((row, idx) => (
+                        <TableRow key={idx}>
+                          <TableCell className="font-mono text-xs text-muted-foreground">
+                            {row.rowNumber ?? idx + 1}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            <p className="font-medium">{row.resourceName ?? '—'}</p>
+                            {row.employeeId && (
+                              <p className="text-xs text-muted-foreground font-mono">ID: {row.employeeId}</p>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {row.servicePOName || (row.poId ? `PO #${row.poId}` : '—')}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {row.subProjectName ?? '—'}
+                          </TableCell>
+                          <TableCell className="text-sm tabular-nums">
+                            {row.date ? formatDate(row.date) : '—'}
+                          </TableCell>
+                          <TableCell className="text-right font-semibold tabular-nums text-sm">
+                            {row.hours != null ? `${Number(row.hours).toFixed(2)}h` : '—'}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Error rows */}
+          {preview.errorCount > 0 && (
+            <Card className="border-destructive/40">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-sm text-destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  Error Rows ({preview.errorCount})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-destructive/5">
+                        <TableHead className="w-24">Row #</TableHead>
+                        <TableHead>Error Message</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {preview.error_rows.map((row, idx) => (
+                        <TableRow key={idx} className="hover:bg-destructive/5">
+                          <TableCell className="font-mono text-xs">
+                            {row.rowNumber ?? row.row_number ?? idx + 1}
+                          </TableCell>
+                          <TableCell className="text-sm text-destructive">
+                            {row.message ?? row.error_message ?? row.error ?? '—'}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          <div className="flex items-center justify-end gap-3 pt-1">
+            <Button
+              variant="outline"
+              onClick={handleCancel}
+              disabled={confirmMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleConfirm}
+              disabled={confirmMutation.isPending || !preview.canConfirm || preview.validCount === 0}
+            >
+              <CheckCircle2 className="mr-1.5 h-4 w-4" />
+              {confirmMutation.isPending ? 'Importing…' : 'Confirm Import'}
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
+
+// ── Step badge helper ─────────────────────────────────────────────────────────
+const StepBadge = ({ num, label, active, done }) => (
+  <div className="flex items-center gap-2 shrink-0">
+    <div
+      className={cn(
+        'flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold transition-colors',
+        active
+          ? 'bg-primary text-primary-foreground'
+          : done
+          ? 'bg-green-500 text-white'
+          : 'bg-muted text-muted-foreground'
+      )}
+    >
+      {done ? <CheckCircle2 className="h-4 w-4" /> : num}
+    </div>
+    <span
+      className={cn(
+        'text-sm font-medium',
+        active ? 'text-foreground' : 'text-muted-foreground'
+      )}
+    >
+      {label}
+    </span>
+  </div>
+);
 
 export default TimesheetUpload;

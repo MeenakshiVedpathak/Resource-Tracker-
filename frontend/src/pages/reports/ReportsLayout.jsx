@@ -1,132 +1,45 @@
-import React from 'react';
-import { Box, Typography, List, ListItemButton, ListItemIcon, ListItemText, Divider, Paper } from '@mui/material';
-import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import PeopleAltOutlinedIcon from '@mui/icons-material/PeopleAltOutlined';
-import BarChartOutlinedIcon from '@mui/icons-material/BarChartOutlined';
-import AccessTimeOutlinedIcon from '@mui/icons-material/AccessTimeOutlined';
-import AssignmentOutlinedIcon from '@mui/icons-material/AssignmentOutlined';
-import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined';
-import GroupsOutlinedIcon from '@mui/icons-material/GroupsOutlined';
-import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
+import { NavLink, Outlet } from 'react-router-dom';
+import { ROUTES } from '@/constants/routes';
+import { cn } from '@/utils/cn';
 
-const NAV_ITEMS = [
-  {
-    label: 'Employee Hourly Rate',
-    path: '/reports/employee-hourly-rate',
-    icon: <PeopleAltOutlinedIcon fontSize="small" />,
-  },
-  {
-    label: 'Monthly Cost Summary',
-    path: '/reports/monthly-cost-summary',
-    icon: <BarChartOutlinedIcon fontSize="small" />,
-  },
-  {
-    label: 'Timesheet Summary',
-    path: '/reports/timesheet-summary',
-    icon: <AccessTimeOutlinedIcon fontSize="small" />,
-  },
-  {
-    label: 'Service PO Utilisation',
-    path: '/reports/service-po-utilisation',
-    icon: <AssignmentOutlinedIcon fontSize="small" />,
-  },
-  {
-    label: 'Sub-Project Hours',
-    path: '/reports/sub-project-hours',
-    icon: <AccountTreeOutlinedIcon fontSize="small" />,
-  },
-  {
-    label: 'Resource Allocation',
-    path: '/reports/resource-allocation',
-    icon: <GroupsOutlinedIcon fontSize="small" />,
-  },
-  {
-    label: 'Operational Cost Breakdown',
-    path: '/reports/operational-cost-breakdown',
-    icon: <ReceiptLongOutlinedIcon fontSize="small" />,
-  },
+const NAV = [
+  { label: 'Employee Hourly Rate',  to: ROUTES.REPORT_HOURLY_RATE },
+  { label: 'Monthly Cost Summary',  to: ROUTES.REPORT_MONTHLY_COST },
+  { label: 'Timesheet Summary',     to: ROUTES.REPORT_TIMESHEET },
+  { label: 'PO Utilisation',        to: ROUTES.REPORT_PO_UTILISATION },
+  { label: 'Sub-Project Hours',     to: ROUTES.REPORT_SUB_PROJECT_HOURS },
+  { label: 'Resource Allocation',   to: ROUTES.REPORT_RESOURCE_ALLOCATION },
+  { label: 'Operational Cost',      to: ROUTES.REPORT_OPERATIONAL_COST },
+  { label: 'Monthly Utilization',   to: ROUTES.REPORT_MONTHLY_UTILIZATION },
+  { label: 'PO vs Resource',        to: ROUTES.REPORT_SERVICE_PO_RESOURCE },
 ];
 
-export default function ReportsLayout() {
-  const navigate = useNavigate();
-  const location = useLocation();
+const ReportsLayout = () => (
+  <div>
+    {/* Mobile horizontal tabs — desktop nav is in the main sidebar */}
+    <div className="md:hidden -mx-6 -mt-6 mb-5 border-b bg-muted/20 overflow-x-auto">
+      <nav className="flex gap-1 px-4 py-2 min-w-max">
+        {NAV.map(({ label, to }) => (
+          <NavLink
+            key={to}
+            to={to}
+            className={({ isActive }) =>
+              cn(
+                'whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+                isActive
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+              )
+            }
+          >
+            {label}
+          </NavLink>
+        ))}
+      </nav>
+    </div>
 
-  return (
-    <Box sx={{ display: 'flex', height: '100%', minHeight: 'calc(100vh - 64px)', bgcolor: '#F5F6FA' }}>
-      {/* Left Sidebar */}
-      <Paper
-        elevation={0}
-        sx={{
-          width: 240,
-          minWidth: 240,
-          borderRight: '1px solid',
-          borderColor: 'divider',
-          borderRadius: 0,
-          bgcolor: '#FFFFFF',
-          display: 'flex',
-          flexDirection: 'column',
-          pt: 3,
-          pb: 2,
-        }}
-      >
-        <Typography
-          variant="overline"
-          sx={{
-            px: 2.5,
-            mb: 1,
-            color: 'text.secondary',
-            fontWeight: 600,
-            letterSpacing: '0.08em',
-            fontSize: '0.7rem',
-          }}
-        >
-          Reports
-        </Typography>
-        <Divider sx={{ mb: 1 }} />
-        <List disablePadding dense>
-          {NAV_ITEMS.map((item) => {
-            const isActive = location.pathname === item.path || location.pathname.startsWith(item.path + '/');
-            return (
-              <ListItemButton
-                key={item.path}
-                selected={isActive}
-                onClick={() => navigate(item.path)}
-                sx={{
-                  px: 2.5,
-                  py: 1,
-                  mx: 1,
-                  borderRadius: 1,
-                  mb: 0.25,
-                  '&.Mui-selected': {
-                    bgcolor: 'primary.main',
-                    color: 'primary.contrastText',
-                    '& .MuiListItemIcon-root': { color: 'primary.contrastText' },
-                    '&:hover': { bgcolor: 'primary.dark' },
-                  },
-                  '&:hover': { bgcolor: 'action.hover' },
-                }}
-              >
-                <ListItemIcon sx={{ minWidth: 32, color: isActive ? 'inherit' : 'text.secondary' }}>
-                  {item.icon}
-                </ListItemIcon>
-                <ListItemText
-                  primary={item.label}
-                  primaryTypographyProps={{
-                    fontSize: '0.8125rem',
-                    fontWeight: isActive ? 600 : 400,
-                    lineHeight: 1.4,
-                  }}
-                />
-              </ListItemButton>
-            );
-          })}
-        </List>
-      </Paper>
+    <Outlet />
+  </div>
+);
 
-      {/* Main Content */}
-      <Box sx={{ flex: 1, overflow: 'auto', p: 3 }}>
-        <Outlet />
-      </Box>
-    </Box>
-  );
-}
+export default ReportsLayout;

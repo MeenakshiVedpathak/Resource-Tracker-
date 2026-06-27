@@ -1,129 +1,77 @@
-import React from 'react';
-import { Navigate } from 'react-router-dom';
-import { useSelector } from 'react-redux';
-import {
-  Box,
-  Card,
-  CardContent,
-  Typography,
-  useTheme,
-} from '@mui/material';
-import AssessmentIcon from '@mui/icons-material/Assessment';
+import { Navigate, Outlet } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
+import { ROUTES } from '@/constants/routes';
 
-const AuthLayout = ({ children }) => {
-  const theme = useTheme();
-  const { isAuthenticated } = useSelector((state) => state.auth);
+const AuthLayout = () => {
+  const { isAuthenticated } = useAuth();
 
   if (isAuthenticated) {
-    return <Navigate to="/" replace />;
+    return <Navigate to={ROUTES.DASHBOARD} replace />;
   }
 
   return (
-    <Box
-      sx={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        bgcolor: 'background.default',
-        background: `linear-gradient(135deg, ${theme.palette.primary.dark} 0%, ${theme.palette.primary.main} 50%, ${theme.palette.secondary.dark} 100%)`,
-        p: 2,
-      }}
-    >
-      {/* Decorative background circles */}
-      <Box
-        aria-hidden="true"
-        sx={{
-          position: 'fixed',
-          top: '-10%',
-          right: '-5%',
-          width: 400,
-          height: 400,
-          borderRadius: '50%',
-          background: 'rgba(255,255,255,0.05)',
-          pointerEvents: 'none',
-        }}
-      />
-      <Box
-        aria-hidden="true"
-        sx={{
-          position: 'fixed',
-          bottom: '-15%',
-          left: '-8%',
-          width: 500,
-          height: 500,
-          borderRadius: '50%',
-          background: 'rgba(255,255,255,0.04)',
-          pointerEvents: 'none',
-        }}
-      />
+    <div className="min-h-screen flex">
+      {/* Left panel — branding */}
+      <div className="hidden lg:flex lg:w-[52%] bg-sidebar relative flex-col justify-between p-12 overflow-hidden">
+        {/* Decorative gradient orbs */}
+        <div className="absolute -top-24 -left-24 h-96 w-96 rounded-full bg-primary/20 blur-3xl" />
+        <div className="absolute bottom-0 right-0 h-80 w-80 rounded-full bg-primary/10 blur-3xl" />
 
-      <Box
-        sx={{
-          width: '100%',
-          maxWidth: 440,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: 3,
-        }}
-      >
-        {/* Brand header */}
-        <Box sx={{ textAlign: 'center', color: 'white' }}>
-          <Box
-            sx={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: 64,
-              height: 64,
-              borderRadius: 2,
-              bgcolor: 'rgba(255,255,255,0.15)',
-              backdropFilter: 'blur(8px)',
-              mb: 2,
-              border: '1px solid rgba(255,255,255,0.2)',
-            }}
-          >
-            <AssessmentIcon sx={{ fontSize: 36, color: 'white' }} />
-          </Box>
-          <Typography
-            variant="h4"
-            fontWeight={700}
-            letterSpacing="-0.5px"
-            sx={{ color: 'white', lineHeight: 1 }}
-          >
-            RUT Portal
-          </Typography>
-          <Typography
-            variant="body2"
-            sx={{ color: 'rgba(255,255,255,0.75)', mt: 0.75, letterSpacing: '0.04em' }}
-          >
-            Resource Utilization Tracking
-          </Typography>
-        </Box>
+        {/* Logo */}
+        <div className="relative z-10 flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary">
+            <span className="text-lg font-bold text-white">R</span>
+          </div>
+          <div>
+            <p className="text-base font-semibold text-white leading-none">RUT Portal</p>
+            <p className="text-xs text-white/50 mt-0.5">Resource & Cost Management</p>
+          </div>
+        </div>
 
-        {/* Auth card */}
-        <Card
-          elevation={0}
-          sx={{
-            width: '100%',
-            borderRadius: 3,
-            backdropFilter: 'blur(20px)',
-            background: 'rgba(255,255,255,0.97)',
-            border: '1px solid rgba(255,255,255,0.3)',
-            overflow: 'visible',
-          }}
-        >
-          <CardContent sx={{ p: { xs: 3, sm: 4 } }}>
-            {children}
-          </CardContent>
-        </Card>
+        {/* Center copy */}
+        <div className="relative z-10 space-y-6">
+          <h1 className="text-4xl font-bold text-white leading-tight">
+            Manage resources,<br />
+            track costs,<br />
+            <span className="text-primary-foreground/70 text-3xl">deliver results.</span>
+          </h1>
+          <p className="text-white/60 text-base max-w-xs leading-relaxed">
+            A unified platform for workforce planning, service PO tracking, and financial reporting across your organization.
+          </p>
+          {/* Feature pills */}
+          <div className="flex flex-wrap gap-2 pt-2">
+            {['Timesheet Import', 'Service PO Tracking', 'Cost Analytics', 'Role-Based Access'].map((f) => (
+              <span
+                key={f}
+                className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70"
+              >
+                {f}
+              </span>
+            ))}
+          </div>
+        </div>
 
-        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.55)' }}>
-          &copy; {new Date().getFullYear()} RUT Portal. All rights reserved.
-        </Typography>
-      </Box>
-    </Box>
+        {/* Bottom tagline */}
+        <p className="relative z-10 text-xs text-white/30">
+          © {new Date().getFullYear()} GTT Data. All rights reserved.
+        </p>
+      </div>
+
+      {/* Right panel — form */}
+      <div className="flex flex-1 flex-col items-center justify-center bg-background px-6 py-12">
+        {/* Mobile logo */}
+        <div className="mb-8 flex items-center gap-2 lg:hidden">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
+            <span className="text-sm font-bold text-white">R</span>
+          </div>
+          <span className="text-base font-semibold">RUT Portal</span>
+        </div>
+
+        <div className="w-full max-w-sm">
+          <Outlet />
+        </div>
+      </div>
+    </div>
   );
 };
 

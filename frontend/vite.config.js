@@ -1,6 +1,9 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   plugins: [react()],
@@ -10,14 +13,12 @@ export default defineConfig({
     },
   },
   server: {
-    port: 3000,
-    proxy: {
-      '/api': {
-        target: 'http://localhost:5000',
-        changeOrigin: true,
-        secure: false,
-      },
-    },
+      host: '0.0.0.0',
+    port: 5173,
+    open: true,
+      allowedHosts: [
+      "impatient-alabaster-lake.ngrok-free.dev"
+    ]
   },
   build: {
     outDir: 'dist',
@@ -25,10 +26,18 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          vendor: ['react', 'react-dom'],
-          mui: ['@mui/material', '@mui/icons-material'],
+          vendor: ['react', 'react-dom', 'react-router-dom'],
           redux: ['@reduxjs/toolkit', 'react-redux'],
-          router: ['react-router-dom'],
+          query: ['@tanstack/react-query'],
+          charts: ['recharts'],
+          motion: ['framer-motion'],
+          radix: [
+            '@radix-ui/react-dialog',
+            '@radix-ui/react-dropdown-menu',
+            '@radix-ui/react-select',
+            '@radix-ui/react-tooltip',
+            '@radix-ui/react-tabs',
+          ],
         },
       },
     },

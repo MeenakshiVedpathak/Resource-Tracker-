@@ -1,333 +1,140 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useDispatch, useSelector } from 'react-redux';
-import { useForm, Controller } from 'react-hook-form';
-import { yupResolver } from '@hookform/resolvers/yup';
-import * as yup from 'yup';
-import { toast } from 'react-toastify';
+import { useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { motion } from 'framer-motion';
+import { Eye, EyeOff, LogIn } from 'lucide-react';
+import { authApi } from '@/api/auth.api';
+import { useAuth } from '@/hooks/useAuth';
+import { useNotification } from '@/hooks/useNotification';
+import { extractApiError } from '@/services/apiClient';
+import { ROUTES } from '@/constants/routes';
 import {
-  Box,
-  Button,
-  Checkbox,
-  CircularProgress,
-  FormControl,
-  FormControlLabel,
-  FormHelperText,
-  IconButton,
-  InputAdornment,
-  InputLabel,
-  OutlinedInput,
-  TextField,
-  Typography,
-  Divider,
-  Alert,
-  useTheme,
-  alpha,
-} from '@mui/material';
-import VisibilityIcon from '@mui/icons-material/Visibility';
-import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
-import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
+  Form, FormField, FormItem, FormLabel, FormControl, FormMessage,
+} from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 
-import AuthLayout from '../../layouts/AuthLayout';
-import { loginThunk, selectAuthLoading, selectAuthError, clearError } from '../../redux/slices/authSlice';
-
-// ---------------------------------------------------------------------------
-// Validation schema
-// ---------------------------------------------------------------------------
-
-const schema = yup.object({
-  email: yup
-    .string()
-    .required('Email is required')
-    .email('Enter a valid email address'),
-  password: yup
-    .string()
-    .required('Password is required')
-    .min(6, 'Password must be at least 6 characters'),
+const loginSchema = z.object({
+  email: z.string().min(1, 'Email is required').email('Enter a valid email'),
+  password: z.string().min(1, 'Password is required'),
 });
 
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
-
 const Login = () => {
-  const theme = useTheme();
-  const dispatch = useDispatch();
   const navigate = useNavigate();
-
-  const loading = useSelector(selectAuthLoading);
-  const authError = useSelector(selectAuthError);
-
+  const location = useLocation();
+  const { setCredentials } = useAuth();
+  const { error: showError } = useNotification();
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(() => {
-    try {
-      return localStorage.getItem('rut_remember_me') === 'true';
-    } catch {
-      return false;
-    }
+  const [isLoading, setIsLoading] = useState(false);
+
+  const from = location.state?.from?.pathname ?? ROUTES.DASHBOARD;
+
+  const form = useForm({
+    resolver: zodResolver(loginSchema),
+    defaultValues: { email: '', password: '' },
   });
-
-  // Populate saved email when "remember me" was previously checked
-  const savedEmail = (() => {
-    try {
-      return rememberMe ? localStorage.getItem('rut_saved_email') || '' : '';
-    } catch {
-      return '';
-    }
-  })();
-
-  const {
-    control,
-    handleSubmit,
-    setError,
-    formState: { errors, isSubmitting },
-  } = useForm({
-    resolver: yupResolver(schema),
-    defaultValues: {
-      email: savedEmail,
-      password: '',
-    },
-  });
-
-  // Clear redux auth error when component unmounts
-  useEffect(() => {
-    return () => {
-      dispatch(clearError());
-    };
-  }, [dispatch]);
-
-  // Show toast when redux error changes
-  useEffect(() => {
-    if (authError) {
-      toast.error(authError, { toastId: 'login-error' });
-    }
-  }, [authError]);
-
-  const handleTogglePassword = () => setShowPassword((prev) => !prev);
-  const handleMouseDownPassword = (e) => e.preventDefault();
 
   const onSubmit = async (values) => {
-    // Persist remember-me preference
+    setIsLoading(true);
     try {
-      if (rememberMe) {
-        localStorage.setItem('rut_remember_me', 'true');
-        localStorage.setItem('rut_saved_email', values.email);
-      } else {
-        localStorage.removeItem('rut_remember_me');
-        localStorage.removeItem('rut_saved_email');
-      }
-    } catch {
-      // localStorage unavailable — continue anyway
-    }
-
-    const result = await dispatch(loginThunk({ email: values.email, password: values.password }));
-
-    if (loginThunk.fulfilled.match(result)) {
-      toast.success('Welcome back!', { toastId: 'login-success' });
-      navigate('/', { replace: true });
-    } else {
-      // authError useEffect will handle toast; set field-level hint for UX
-      setError('password', { type: 'server', message: '' });
+      const res = await authApi.login(values);
+      const { user, accessToken, refreshToken } = res.data;
+      setCredentials({ user, accessToken, refreshToken });
+      navigate(from, { replace: true });
+    } catch (err) {
+      showError(extractApiError(err));
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const isBusy = loading || isSubmitting;
-
   return (
-    <AuthLayout>
-      {/* Form header */}
-      <Box sx={{ mb: 3 }}>
-        <Box
-          aria-hidden="true"
-          sx={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: 44,
-            height: 44,
-            borderRadius: '50%',
-            bgcolor: alpha(theme.palette.primary.main, 0.1),
-            color: 'primary.main',
-            mb: 1.5,
-          }}
-        >
-          <LockOutlinedIcon fontSize="small" />
-        </Box>
-        <Typography
-          variant="h5"
-          fontWeight={700}
-          color="text.primary"
-          sx={{ letterSpacing: '-0.3px', lineHeight: 1.2, textWrap: 'balance' }}
-        >
-          Sign in to your account
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-          Enter your credentials to continue
-        </Typography>
-      </Box>
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+    >
+      <div className="mb-8">
+        <h2 className="text-2xl font-bold tracking-tight">Welcome back</h2>
+        <p className="mt-1.5 text-sm text-muted-foreground">
+          Sign in to your RUT Portal account
+        </p>
+      </div>
 
-      {/* Server-level error banner (non-field errors) */}
-      {authError && (
-        <Alert
-          severity="error"
-          sx={{ mb: 2.5, fontSize: '0.8125rem' }}
-          onClose={() => dispatch(clearError())}
-        >
-          {authError}
-        </Alert>
-      )}
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <FormField
+            control={form.control}
+            name="email"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Email</FormLabel>
+                <FormControl>
+                  <Input
+                    type="email"
+                    placeholder="Enter your email"
+                    autoComplete="email"
+                    autoFocus
+                    {...field}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-      <Box
-        component="form"
-        noValidate
-        onSubmit={handleSubmit(onSubmit)}
-        sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}
-      >
-        {/* Email field */}
-        <Controller
-          name="email"
-          control={control}
-          render={({ field }) => (
-            <TextField
-              {...field}
-              label="Email address"
-              type="email"
-              autoComplete="email"
-              autoFocus
-              fullWidth
-              size="medium"
-              error={Boolean(errors.email)}
-              helperText={errors.email?.message}
-              disabled={isBusy}
-              inputProps={{ 'aria-describedby': errors.email ? 'email-error' : undefined }}
-              FormHelperTextProps={{ id: 'email-error' }}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: 2,
-                  fontSize: '0.9375rem',
-                },
-              }}
-            />
-          )}
-        />
-
-        {/* Password field */}
-        <Controller
-          name="password"
-          control={control}
-          render={({ field }) => (
-            <FormControl
-              variant="outlined"
-              fullWidth
-              size="medium"
-              error={Boolean(errors.password && errors.password.message)}
-              disabled={isBusy}
-            >
-              <InputLabel htmlFor="password-input">Password</InputLabel>
-              <OutlinedInput
-                {...field}
-                id="password-input"
-                type={showPassword ? 'text' : 'password'}
-                autoComplete="current-password"
-                label="Password"
-                aria-describedby={errors.password?.message ? 'password-error' : undefined}
-                sx={{
-                  borderRadius: 2,
-                  fontSize: '0.9375rem',
-                }}
-                endAdornment={
-                  <InputAdornment position="end">
-                    <IconButton
-                      aria-label={showPassword ? 'Hide password' : 'Show password'}
-                      onClick={handleTogglePassword}
-                      onMouseDown={handleMouseDownPassword}
-                      edge="end"
-                      size="small"
+          <FormField
+            control={form.control}
+            name="password"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Password</FormLabel>
+                <FormControl>
+                  <div className="relative">
+                    <Input
+                      type={showPassword ? 'text' : 'password'}
+                      placeholder="Enter your password"
+                      autoComplete="current-password"
+                      className="pr-10"
+                      {...field}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((v) => !v)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                       tabIndex={-1}
                     >
-                      {showPassword ? (
-                        <VisibilityOffIcon fontSize="small" />
-                      ) : (
-                        <VisibilityIcon fontSize="small" />
-                      )}
-                    </IconButton>
-                  </InputAdornment>
-                }
-              />
-              {errors.password?.message && (
-                <FormHelperText id="password-error">
-                  {errors.password.message}
-                </FormHelperText>
-              )}
-            </FormControl>
-          )}
-        />
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-        {/* Remember me */}
-        <FormControlLabel
-          control={
-            <Checkbox
-              checked={rememberMe}
-              onChange={(e) => setRememberMe(e.target.checked)}
-              size="small"
-              disabled={isBusy}
-              color="primary"
-            />
-          }
-          label={
-            <Typography variant="body2" color="text.secondary">
-              Remember my email
-            </Typography>
-          }
-          sx={{ mt: -0.5, mb: -0.5, userSelect: 'none' }}
-        />
+          <Button type="submit" className="w-full mt-2" disabled={isLoading} size="lg">
+            {isLoading ? (
+              <span className="flex items-center gap-2">
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                Signing in…
+              </span>
+            ) : (
+              <span className="flex items-center gap-2">
+                <LogIn className="h-4 w-4" />
+                Sign in
+              </span>
+            )}
+          </Button>
+        </form>
+      </Form>
 
-        {/* Submit */}
-        <Button
-          type="submit"
-          variant="contained"
-          color="primary"
-          size="large"
-          fullWidth
-          disabled={isBusy}
-          aria-busy={isBusy}
-          sx={{
-            mt: 0.5,
-            py: 1.25,
-            borderRadius: 2,
-            fontSize: '0.9375rem',
-            fontWeight: 600,
-            letterSpacing: '0.01em',
-            position: 'relative',
-            boxShadow: 'none',
-            '&:not(:disabled):hover': {
-              boxShadow: `0 4px 14px ${alpha(theme.palette.primary.main, 0.35)}`,
-            },
-          }}
-        >
-          {isBusy ? (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <CircularProgress size={18} color="inherit" thickness={5} />
-              Signing in…
-            </Box>
-          ) : (
-            'Sign in'
-          )}
-        </Button>
-      </Box>
-
-      <Divider sx={{ my: 3, borderColor: 'divider' }} />
-
-      <Typography
-        variant="caption"
-        color="text.disabled"
-        align="center"
-        display="block"
-        sx={{ letterSpacing: '0.02em' }}
-      >
-        Contact your system administrator if you need access.
-      </Typography>
-    </AuthLayout>
+      <p className="mt-6 text-center text-xs text-muted-foreground">
+        Contact your administrator if you don't have access.
+      </p>
+    </motion.div>
   );
 };
 

@@ -1,236 +1,259 @@
-import React, { useState, useMemo } from 'react';
+import { useState } from 'react';
+import * as XLSX from 'xlsx';
+import { createColumnHelper } from '@tanstack/react-table';
+import { Download, Search } from 'lucide-react';
+import { useResourceAllocationReport } from '@/hooks/useReports';
+import { useDebounce } from '@/hooks/useDebounce';
+import { formatHours } from '@/utils/formatters';
+import DataTable from '@/components/common/DataTable';
+import PageHeader from '@/components/common/PageHeader';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
-  Box, Typography, Paper, Table, TableBody, TableCell, TableContainer,
-  TableHead, TableRow, TablePagination, TableSortLabel, TextField,
-  MenuItem, Select, FormControl, InputLabel, Button, Chip, Stack,
-  InputAdornment, ToggleButtonGroup, ToggleButton,
-} from '@mui/material';
-import SearchIcon from '@mui/icons-material/Search';
-import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
-import FilterListIcon from '@mui/icons-material/FilterList';
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import { cn } from '@/utils/cn';
 
-const MOCK_DATA = [
-  { id: 1, employee_code: 'EMP001', full_name: 'Alice Johnson', role: 'Senior Developer', po_code: 'PO-2025-001', po_name: 'Cloud Migration Phase 1', allocation_pct: 80, start_date: '2025-01-15', end_date: '2025-06-30', is_active: true },
-  { id: 2, employee_code: 'EMP001', full_name: 'Alice Johnson', role: 'Senior Developer', po_code: 'PO-2025-007', po_name: 'AI/ML Pilot Project', allocation_pct: 20, start_date: '2025-03-01', end_date: '2025-07-31', is_active: true },
-  { id: 3, employee_code: 'EMP002', full_name: 'Bob Martinez', role: 'Frontend Developer', po_code: 'PO-2025-001', po_name: 'Cloud Migration Phase 1', allocation_pct: 100, start_date: '2025-02-01', end_date: '2025-06-30', is_active: true },
-  { id: 4, employee_code: 'EMP003', full_name: 'Carol White', role: 'Data Engineer', po_code: 'PO-2025-002', po_name: 'Data Analytics Platform', allocation_pct: 100, start_date: '2025-01-10', end_date: '2025-07-31', is_active: true },
-  { id: 5, employee_code: 'EMP004', full_name: 'David Chen', role: 'Security Analyst', po_code: 'PO-2025-003', po_name: 'Security Audit', allocation_pct: 100, start_date: '2025-04-01', end_date: '2025-05-31', is_active: false },
-  { id: 6, employee_code: 'EMP005', full_name: 'Eva Patel', role: 'BI Developer', po_code: 'PO-2025-002', po_name: 'Data Analytics Platform', allocation_pct: 100, start_date: '2025-03-01', end_date: '2025-07-31', is_active: true },
-  { id: 7, employee_code: 'EMP006', full_name: 'Frank Nguyen', role: 'DevOps Engineer', po_code: 'PO-2025-004', po_name: 'DevOps Modernisation', allocation_pct: 100, start_date: '2025-02-15', end_date: '2025-08-31', is_active: true },
-  { id: 8, employee_code: 'EMP007', full_name: 'Grace Kim', role: 'Security Consultant', po_code: 'PO-2025-003', po_name: 'Security Audit', allocation_pct: 50, start_date: '2025-04-01', end_date: '2025-05-31', is_active: false },
-  { id: 9, employee_code: 'EMP007', full_name: 'Grace Kim', role: 'Security Consultant', po_code: 'PO-2025-008', po_name: 'Legacy System Upgrade', allocation_pct: 50, start_date: '2025-06-01', end_date: '2025-12-31', is_active: true },
-  { id: 10, employee_code: 'EMP008', full_name: 'Henry Brown', role: 'Infrastructure Engineer', po_code: 'PO-2025-004', po_name: 'DevOps Modernisation', allocation_pct: 100, start_date: '2025-02-15', end_date: '2025-08-31', is_active: true },
-  { id: 11, employee_code: 'EMP009', full_name: 'Irene Davis', role: 'Mobile Developer', po_code: 'PO-2025-005', po_name: 'Mobile App Development', allocation_pct: 100, start_date: '2025-01-01', end_date: '2025-09-30', is_active: true },
-  { id: 12, employee_code: 'EMP010', full_name: 'James Wilson', role: 'Mobile Developer', po_code: 'PO-2025-005', po_name: 'Mobile App Development', allocation_pct: 100, start_date: '2025-01-01', end_date: '2025-09-30', is_active: true },
+const columnHelper = createColumnHelper();
+
+const MONTH_OPTIONS = [
+  { value: '1', label: 'January' },
+  { value: '2', label: 'February' },
+  { value: '3', label: 'March' },
+  { value: '4', label: 'April' },
+  { value: '5', label: 'May' },
+  { value: '6', label: 'June' },
+  { value: '7', label: 'July' },
+  { value: '8', label: 'August' },
+  { value: '9', label: 'September' },
+  { value: '10', label: 'October' },
+  { value: '11', label: 'November' },
+  { value: '12', label: 'December' },
 ];
 
-const PO_OPTIONS = [...new Set(MOCK_DATA.map((r) => r.po_code))];
-const EMPLOYEE_OPTIONS = [...new Set(MOCK_DATA.map((r) => r.full_name))];
+const exportToExcel = (rows) => {
+  const header = ['Code', 'Employee', 'Designation', 'Client', 'Service PO', 'PO Code', 'Service Type', 'PO Status', 'Billable', 'Hours Logged'];
+  const dataRows = rows.map((r) => [
+    r.employee_code ?? '',
+    r.full_name ?? '',
+    r.designation ?? '',
+    r.client_name ?? '',
+    r.service_po_name ?? '',
+    r.service_po_code ?? '',
+    r.service_type_name ?? '',
+    r.po_status ?? '',
+    r.is_billable ? 'Yes' : 'No',
+    r.total_hours_logged != null ? Number(r.total_hours_logged) : '',
+  ]);
+  const ws = XLSX.utils.aoa_to_sheet([header, ...dataRows]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Resource Allocation');
+  XLSX.writeFile(wb, 'Resource_Allocation.xlsx');
+};
 
-function descendingComparator(a, b, orderBy) {
-  if (b[orderBy] < a[orderBy]) return -1;
-  if (b[orderBy] > a[orderBy]) return 1;
-  return 0;
-}
+const SERVICE_TYPE_COLORS = {
+  staffaugmentation:    'bg-blue-500/10 text-blue-700 dark:text-blue-400',
+  'staff augmentation': 'bg-blue-500/10 text-blue-700 dark:text-blue-400',
+  project:              'bg-violet-500/10 text-violet-700 dark:text-violet-400',
+  support:              'bg-amber-500/10 text-amber-700 dark:text-amber-400',
+  servicepack:          'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
+  'service pack':       'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
+  'managed services':   'bg-cyan-500/10 text-cyan-700 dark:text-cyan-400',
+};
 
-function getComparator(order, orderBy) {
-  return order === 'desc'
-    ? (a, b) => descendingComparator(a, b, orderBy)
-    : (a, b) => -descendingComparator(a, b, orderBy);
-}
+const serviceTypeBadgeClass = (type) =>
+  SERVICE_TYPE_COLORS[type?.toLowerCase()] ?? 'bg-muted text-muted-foreground';
 
-const HEAD_CELLS = [
-  { id: 'full_name', label: 'Employee', numeric: false },
-  { id: 'employee_code', label: 'Code', numeric: false },
-  { id: 'role', label: 'Role', numeric: false },
-  { id: 'po_code', label: 'PO Code', numeric: false },
-  { id: 'po_name', label: 'PO Name', numeric: false },
-  { id: 'allocation_pct', label: 'Allocation %', numeric: true },
-  { id: 'start_date', label: 'Start Date', numeric: false },
-  { id: 'end_date', label: 'End Date', numeric: false },
-  { id: 'is_active', label: 'Status', numeric: false },
+const columns = [
+  columnHelper.accessor('employee_code', {
+    header: 'Code',
+    size: 110,
+    cell: (info) => (
+      <span className="font-mono text-xs font-semibold text-muted-foreground">
+        {info.getValue() || '—'}
+      </span>
+    ),
+  }),
+  columnHelper.accessor('full_name', {
+    header: 'Employee',
+    cell: (info) => (
+      <div>
+        <p className="font-medium text-xs">{info.getValue() || '—'}</p>
+        {info.row.original.designation && (
+          <p className="text-[10px] text-muted-foreground">{info.row.original.designation}</p>
+        )}
+      </div>
+    ),
+  }),
+  columnHelper.accessor('client_name', {
+    header: 'Client',
+    cell: (info) => info.getValue() || <span className="text-muted-foreground">—</span>,
+  }),
+  columnHelper.accessor('service_po_name', {
+    header: 'Service PO',
+    cell: (info) => (
+      <div>
+        <p className="text-xs">{info.getValue() || '—'}</p>
+        {info.row.original.service_po_code && (
+          <p className="text-[10px] font-mono text-muted-foreground">
+            {info.row.original.service_po_code}
+          </p>
+        )}
+      </div>
+    ),
+  }),
+  columnHelper.accessor('service_type_name', {
+    header: 'Service Type',
+    size: 150,
+    cell: (info) => {
+      const val = info.getValue();
+      return val ? (
+        <span className={cn(
+          'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium',
+          serviceTypeBadgeClass(val)
+        )}>
+          {val}
+        </span>
+      ) : (
+        <span className="text-muted-foreground text-xs">—</span>
+      );
+    },
+  }),
+  columnHelper.accessor('po_status', {
+    header: 'PO Status',
+    size: 100,
+    cell: (info) => {
+      const v = info.getValue();
+      return v ? (
+        <span className={cn(
+          'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium capitalize',
+          v === 'active'
+            ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+            : 'bg-muted text-muted-foreground'
+        )}>
+          {v}
+        </span>
+      ) : <span className="text-muted-foreground text-xs">—</span>;
+    },
+  }),
+  columnHelper.accessor('is_billable', {
+    header: 'Billable',
+    size: 85,
+    cell: (info) => {
+      const v = info.getValue();
+      return (
+        <span className={cn(
+          'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium',
+          v ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+            : 'bg-muted text-muted-foreground'
+        )}>
+          {v ? 'Yes' : 'No'}
+        </span>
+      );
+    },
+  }),
+  columnHelper.accessor('total_hours_logged', {
+    header: 'Hours Logged',
+    size: 120,
+    cell: (info) => (
+      <span className="tabular-nums font-medium">{formatHours(info.getValue())}</span>
+    ),
+  }),
 ];
 
-export default function ResourceAllocation() {
+const now = new Date();
+
+const ResourceAllocation = () => {
+  const [month, setMonth] = useState('');
+  const [year, setYear] = useState(String(now.getFullYear()));
   const [search, setSearch] = useState('');
-  const [selectedEmployee, setSelectedEmployee] = useState('');
-  const [selectedPO, setSelectedPO] = useState('');
-  const [activeFilter, setActiveFilter] = useState('all');
-  const [order, setOrder] = useState('asc');
-  const [orderBy, setOrderBy] = useState('full_name');
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
 
-  const handleRequestSort = (property) => {
-    const isAsc = orderBy === property && order === 'asc';
-    setOrder(isAsc ? 'desc' : 'asc');
-    setOrderBy(property);
-    setPage(0);
+  const debouncedSearch = useDebounce(search, 400);
+
+  const params = {
+    page,
+    limit,
+    ...(month && { month: Number(month) }),
+    ...(year && { year: Number(year) }),
+    ...(debouncedSearch && { search: debouncedSearch }),
   };
 
-  const filtered = useMemo(() => {
-    return MOCK_DATA.filter((row) => {
-      const matchSearch = !search || row.full_name.toLowerCase().includes(search.toLowerCase()) || row.role.toLowerCase().includes(search.toLowerCase());
-      const matchEmployee = !selectedEmployee || row.full_name === selectedEmployee;
-      const matchPO = !selectedPO || row.po_code === selectedPO;
-      const matchActive = activeFilter === 'all' || (activeFilter === 'active' && row.is_active) || (activeFilter === 'inactive' && !row.is_active);
-      return matchSearch && matchEmployee && matchPO && matchActive;
-    });
-  }, [search, selectedEmployee, selectedPO, activeFilter]);
+  const { data, isPending } = useResourceAllocationReport(params);
 
-  const sorted = useMemo(() => [...filtered].sort(getComparator(order, orderBy)), [filtered, order, orderBy]);
-  const paginated = sorted.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
-
-  const activeCount = MOCK_DATA.filter((r) => r.is_active).length;
-
-  const handleExport = () => {
-    const headers = 'Employee,Code,Role,PO Code,PO Name,Allocation %,Start Date,End Date,Status\n';
-    const rows = sorted.map((r) =>
-      `${r.full_name},${r.employee_code},${r.role},${r.po_code},${r.po_name},${r.allocation_pct}%,${r.start_date},${r.end_date},${r.is_active ? 'Active' : 'Inactive'}`
-    ).join('\n');
-    const blob = new Blob([headers + rows], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'resource_allocation.csv';
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+  const rows = Array.isArray(data?.data) ? data.data : [];
+  const meta = data?.meta ?? {};
 
   return (
-    <Box>
-      <Box sx={{ mb: 3, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
-        <Box>
-          <Typography variant="h5" fontWeight={700} gutterBottom>Resource Allocation</Typography>
-          <Typography variant="body2" color="text.secondary">Employee-to-PO allocation periods and percentage splits</Typography>
-        </Box>
-        <Button variant="outlined" startIcon={<FileDownloadOutlinedIcon />} onClick={handleExport} size="small">
-          Export CSV
-        </Button>
-      </Box>
-
-      <Stack direction="row" spacing={2} sx={{ mb: 2 }} flexWrap="wrap">
-        <Chip label={`${filtered.length} allocations`} size="small" variant="outlined" />
-        <Chip label={`${activeCount} active`} size="small" color="success" variant="outlined" />
-        <Chip label={`${MOCK_DATA.length - activeCount} inactive`} size="small" color="default" variant="outlined" />
-      </Stack>
-
-      <Paper elevation={0} variant="outlined" sx={{ p: 2, mb: 2, display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
-        <FilterListIcon sx={{ color: 'text.secondary' }} fontSize="small" />
-        <TextField
-          size="small"
-          placeholder="Search employee or role..."
-          value={search}
-          onChange={(e) => { setSearch(e.target.value); setPage(0); }}
-          sx={{ minWidth: 200 }}
-          InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }}
-        />
-        <FormControl size="small" sx={{ minWidth: 160 }}>
-          <InputLabel>Employee</InputLabel>
-          <Select value={selectedEmployee} label="Employee" onChange={(e) => { setSelectedEmployee(e.target.value); setPage(0); }}>
-            <MenuItem value="">All Employees</MenuItem>
-            {EMPLOYEE_OPTIONS.map((e) => <MenuItem key={e} value={e}>{e}</MenuItem>)}
-          </Select>
-        </FormControl>
-        <FormControl size="small" sx={{ minWidth: 160 }}>
-          <InputLabel>Purchase Order</InputLabel>
-          <Select value={selectedPO} label="Purchase Order" onChange={(e) => { setSelectedPO(e.target.value); setPage(0); }}>
-            <MenuItem value="">All POs</MenuItem>
-            {PO_OPTIONS.map((p) => <MenuItem key={p} value={p}>{p}</MenuItem>)}
-          </Select>
-        </FormControl>
-        <ToggleButtonGroup
-          value={activeFilter}
-          exclusive
-          onChange={(_, v) => { if (v !== null) { setActiveFilter(v); setPage(0); } }}
-          size="small"
-        >
-          <ToggleButton value="all">All</ToggleButton>
-          <ToggleButton value="active">Active</ToggleButton>
-          <ToggleButton value="inactive">Inactive</ToggleButton>
-        </ToggleButtonGroup>
-        {(search || selectedEmployee || selectedPO || activeFilter !== 'all') && (
-          <Button size="small" onClick={() => { setSearch(''); setSelectedEmployee(''); setSelectedPO(''); setActiveFilter('all'); setPage(0); }}>
-            Clear
+    <div>
+      <PageHeader
+        title="Resource Allocation"
+        description="View employee-to-PO assignments and hours logged."
+        actions={rows.length > 0 ? (
+          <Button variant="outline" size="sm" onClick={() => exportToExcel(rows)}>
+            <Download className="mr-1.5 h-4 w-4" />Export Excel
           </Button>
-        )}
-      </Paper>
+        ) : null}
+      />
 
-      <Paper elevation={0} variant="outlined" sx={{ overflow: 'hidden' }}>
-        <TableContainer sx={{ overflowX: 'auto' }}>
-          <Table size="small" stickyHeader>
-            <TableHead>
-              <TableRow>
-                {HEAD_CELLS.map((cell) => (
-                  <TableCell
-                    key={cell.id}
-                    align={cell.numeric ? 'right' : 'left'}
-                    sortDirection={orderBy === cell.id ? order : false}
-                    sx={{ fontWeight: 600, bgcolor: '#F5F6FA', whiteSpace: 'nowrap' }}
-                  >
-                    <TableSortLabel
-                      active={orderBy === cell.id}
-                      direction={orderBy === cell.id ? order : 'asc'}
-                      onClick={() => handleRequestSort(cell.id)}
-                    >
-                      {cell.label}
-                    </TableSortLabel>
-                  </TableCell>
-                ))}
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {paginated.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={HEAD_CELLS.length} align="center" sx={{ py: 6, color: 'text.secondary' }}>
-                    No allocations found.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                paginated.map((row) => (
-                  <TableRow key={row.id} hover sx={{ opacity: row.is_active ? 1 : 0.65 }}>
-                    <TableCell>{row.full_name}</TableCell>
-                    <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{row.employee_code}</TableCell>
-                    <TableCell>
-                      <Typography variant="caption" color="text.secondary">{row.role}</Typography>
-                    </TableCell>
-                    <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{row.po_code}</TableCell>
-                    <TableCell>{row.po_name}</TableCell>
-                    <TableCell align="right">
-                      <Chip
-                        label={`${row.allocation_pct}%`}
-                        size="small"
-                        color={row.allocation_pct === 100 ? 'primary' : 'default'}
-                        variant={row.allocation_pct === 100 ? 'filled' : 'outlined'}
-                        sx={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}
-                      />
-                    </TableCell>
-                    <TableCell sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{row.start_date}</TableCell>
-                    <TableCell sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{row.end_date}</TableCell>
-                    <TableCell>
-                      <Chip
-                        label={row.is_active ? 'Active' : 'Inactive'}
-                        size="small"
-                        color={row.is_active ? 'success' : 'default'}
-                        variant="outlined"
-                      />
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-        <TablePagination
-          component="div"
-          count={filtered.length}
-          page={page}
-          onPageChange={(_, p) => setPage(p)}
-          rowsPerPage={rowsPerPage}
-          onRowsPerPageChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0); }}
-          rowsPerPageOptions={[5, 10, 25]}
-        />
-      </Paper>
-    </Box>
+      {/* Filter bar */}
+      <div className="mb-5 flex flex-wrap items-end gap-3">
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Month</Label>
+          <Select value={month} onValueChange={(v) => { setMonth(v); setPage(1); }}>
+            <SelectTrigger className="h-9 w-36 text-sm">
+              <SelectValue placeholder="All months" />
+            </SelectTrigger>
+            <SelectContent>
+              {MONTH_OPTIONS.map((m) => (
+                <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Year</Label>
+          <Input
+            type="number"
+            value={year}
+            onChange={(e) => { setYear(e.target.value); setPage(1); }}
+            className="h-9 w-24 text-sm"
+            min={2000}
+            max={2100}
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Search</Label>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Employee, PO…"
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              className="h-9 pl-9 w-52 text-sm"
+            />
+          </div>
+        </div>
+      </div>
+
+      <DataTable
+        columns={columns}
+        data={rows}
+        isLoading={isPending}
+        pagination={meta.total != null ? {
+          page: meta.page ?? page,
+          limit: meta.limit ?? limit,
+          total: meta.total,
+        } : undefined}
+        onPageChange={setPage}
+        onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
+      />
+    </div>
   );
-}
+};
+
+export default ResourceAllocation;

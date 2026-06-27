@@ -1,258 +1,137 @@
-import React, { lazy, Suspense } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { lazy, Suspense } from 'react';
+import { Route, Routes } from 'react-router-dom';
+import { ROUTES } from '@/constants/routes';
 import ProtectedRoute from './ProtectedRoute';
-import MainLayout from '../layouts/MainLayout';
-import AuthLayout from '../layouts/AuthLayout';
-import LoadingSpinner from '../components/LoadingSpinner';
+import AuthLayout from '@/layouts/AuthLayout';
+import MainLayout from '@/layouts/MainLayout';
+import LoadingScreen from '@/components/common/LoadingScreen';
 
-// Lazy-loaded pages
-const LoginPage = lazy(() => import('../pages/auth/LoginPage'));
-const DashboardPage = lazy(() => import('../pages/dashboard/DashboardPage'));
+// ── Auth pages ──
+const Login = lazy(() => import('@/pages/auth/Login'));
 
-const EmployeesListPage = lazy(() => import('../pages/employees/EmployeesListPage'));
-const EmployeeNewPage = lazy(() => import('../pages/employees/EmployeeNewPage'));
-const EmployeeEditPage = lazy(() => import('../pages/employees/EmployeeEditPage'));
+// ── Core ──
+const Dashboard = lazy(() => import('@/pages/Dashboard'));
 
-const UsersListPage = lazy(() => import('../pages/users/UsersListPage'));
-const UserNewPage = lazy(() => import('../pages/users/UserNewPage'));
-const UserEditPage = lazy(() => import('../pages/users/UserEditPage'));
+// ── People ──
+const EmployeeList = lazy(() => import('@/pages/employees/EmployeeList'));
+const EmployeeForm = lazy(() => import('@/pages/employees/EmployeeForm'));
+const UserList = lazy(() => import('@/pages/users/UserList'));
+const UserForm = lazy(() => import('@/pages/users/UserForm'));
+const RoleList = lazy(() => import('@/pages/roles/RoleList'));
 
-const RolesListPage = lazy(() => import('../pages/roles/RolesListPage'));
+// ── Business ──
+const ClientList = lazy(() => import('@/pages/clients/ClientList'));
+const ClientForm = lazy(() => import('@/pages/clients/ClientForm'));
+const ServicePOList = lazy(() => import('@/pages/servicePOs/ServicePOList'));
+const ServicePOForm = lazy(() => import('@/pages/servicePOs/ServicePOForm'));
+const ServicePODetail = lazy(() => import('@/pages/servicePOs/ServicePODetail'));
+const SubProjectList = lazy(() => import('@/pages/subProjects/SubProjectList'));
+const SubProjectForm = lazy(() => import('@/pages/subProjects/SubProjectForm'));
 
-const ClientsListPage = lazy(() => import('../pages/clients/ClientsListPage'));
-const ClientNewPage = lazy(() => import('../pages/clients/ClientNewPage'));
-const ClientEditPage = lazy(() => import('../pages/clients/ClientEditPage'));
+// ── Resources ──
+const TimesheetList = lazy(() => import('@/pages/timesheets/TimesheetList'));
+const TimesheetUpload = lazy(() => import('@/pages/timesheets/TimesheetUpload'));
+const TimesheetImportDetail = lazy(() => import('@/pages/timesheets/TimesheetImportDetail'));
+const MonthlyCostList = lazy(() => import('@/pages/monthlyCosts/MonthlyCostList'));
+const MonthlyCostForm = lazy(() => import('@/pages/monthlyCosts/MonthlyCostForm'));
+const MonthlyCostImport = lazy(() => import('@/pages/monthlyCosts/MonthlyCostImport'));
 
-const ServicePOsListPage = lazy(() => import('../pages/service-pos/ServicePOsListPage'));
-const ServicePONewPage = lazy(() => import('../pages/service-pos/ServicePONewPage'));
-const ServicePODetailPage = lazy(() => import('../pages/service-pos/ServicePODetailPage'));
-const ServicePOEditPage = lazy(() => import('../pages/service-pos/ServicePOEditPage'));
+// ── Reports ──
+const ReportsLayout = lazy(() => import('@/pages/reports/ReportsLayout'));
+const EmployeeHourlyRate = lazy(() => import('@/pages/reports/EmployeeHourlyRate'));
+const MonthlyCostSummary = lazy(() => import('@/pages/reports/MonthlyCostSummary'));
+const TimesheetSummary = lazy(() => import('@/pages/reports/TimesheetSummary'));
+const ServicePOUtilisation = lazy(() => import('@/pages/reports/ServicePOUtilisation'));
+const SubProjectHours = lazy(() => import('@/pages/reports/SubProjectHours'));
+const ResourceAllocation = lazy(() => import('@/pages/reports/ResourceAllocation'));
+const OperationalCost = lazy(() => import('@/pages/reports/OperationalCost'));
+const MonthlyUtilization = lazy(() => import('@/pages/reports/MonthlyUtilization'));
+const ServicePOResource = lazy(() => import('@/pages/reports/ServicePOResource'));
 
-const SubProjectsListPage = lazy(() => import('../pages/sub-projects/SubProjectsListPage'));
-const MonthlyCostsPage = lazy(() => import('../pages/monthly-costs/MonthlyCostsPage'));
+// ── Settings ──
+const Profile = lazy(() => import('@/pages/Profile'));
+const Notifications = lazy(() => import('@/pages/Notifications'));
 
-const TimesheetUploadPage = lazy(() => import('../pages/timesheets/TimesheetUploadPage'));
-const TimesheetsListPage = lazy(() => import('../pages/timesheets/TimesheetsListPage'));
+// ── Errors ──
+const NotFound = lazy(() => import('@/pages/NotFound'));
 
-const ReportsPage = lazy(() => import('../pages/reports/ReportsPage'));
-const UtilizationReportPage = lazy(() => import('../pages/reports/UtilizationReportPage'));
-const BillingReportPage = lazy(() => import('../pages/reports/BillingReportPage'));
-const CostReportPage = lazy(() => import('../pages/reports/CostReportPage'));
+const AppRoutes = () => (
+  <Suspense fallback={<LoadingScreen />}>
+    <Routes>
+      {/* Auth */}
+      <Route element={<AuthLayout />}>
+        <Route path={ROUTES.LOGIN} element={<Login />} />
+      </Route>
 
-const SettingsPage = lazy(() => import('../pages/settings/SettingsPage'));
-const NotificationsPage = lazy(() => import('../pages/notifications/NotificationsPage'));
+      {/* Protected app */}
+      <Route
+        element={
+          <ProtectedRoute>
+            <MainLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route path={ROUTES.DASHBOARD} element={<Dashboard />} />
 
-const NotFoundPage = lazy(() => import('../pages/NotFoundPage'));
+        {/* Employees */}
+        <Route path={ROUTES.EMPLOYEES} element={<EmployeeList />} />
+        <Route path={ROUTES.EMPLOYEE_NEW} element={<EmployeeForm />} />
+        <Route path={ROUTES.EMPLOYEE_EDIT} element={<EmployeeForm />} />
 
-// Role constants
-export const ROLES = {
-  HR: 'HR',
-  FINANCE: 'Finance',
-  DIVISION_HEAD: 'Division Head',
-  PROJECT_MANAGER: 'Project Manager',
-  MANAGEMENT: 'Management',
-};
+        {/* Users */}
+        <Route path={ROUTES.USERS} element={<UserList />} />
+        <Route path={ROUTES.USER_NEW} element={<UserForm />} />
+        <Route path={ROUTES.USER_EDIT} element={<UserForm />} />
 
-const ALL_ROLES = Object.values(ROLES);
+        {/* Roles */}
+        <Route path={ROUTES.ROLES} element={<RoleList />} />
 
-// Route definitions with role access control
-export const routeConfig = [
-  {
-    path: '/',
-    element: <DashboardPage />,
-    allowedRoles: ALL_ROLES,
-    label: 'Dashboard',
-  },
-  {
-    path: '/employees',
-    element: <EmployeesListPage />,
-    allowedRoles: [ROLES.HR, ROLES.DIVISION_HEAD, ROLES.MANAGEMENT],
-    label: 'Employees',
-  },
-  {
-    path: '/employees/new',
-    element: <EmployeeNewPage />,
-    allowedRoles: [ROLES.HR],
-    label: 'New Employee',
-  },
-  {
-    path: '/employees/:id/edit',
-    element: <EmployeeEditPage />,
-    allowedRoles: [ROLES.HR],
-    label: 'Edit Employee',
-  },
-  {
-    path: '/users',
-    element: <UsersListPage />,
-    allowedRoles: [ROLES.HR, ROLES.MANAGEMENT],
-    label: 'Users',
-  },
-  {
-    path: '/users/new',
-    element: <UserNewPage />,
-    allowedRoles: [ROLES.HR],
-    label: 'New User',
-  },
-  {
-    path: '/users/:id/edit',
-    element: <UserEditPage />,
-    allowedRoles: [ROLES.HR],
-    label: 'Edit User',
-  },
-  {
-    path: '/roles',
-    element: <RolesListPage />,
-    allowedRoles: [ROLES.MANAGEMENT],
-    label: 'Roles',
-  },
-  {
-    path: '/clients',
-    element: <ClientsListPage />,
-    allowedRoles: [ROLES.DIVISION_HEAD, ROLES.MANAGEMENT, ROLES.PROJECT_MANAGER],
-    label: 'Clients',
-  },
-  {
-    path: '/clients/new',
-    element: <ClientNewPage />,
-    allowedRoles: [ROLES.DIVISION_HEAD, ROLES.MANAGEMENT],
-    label: 'New Client',
-  },
-  {
-    path: '/clients/:id/edit',
-    element: <ClientEditPage />,
-    allowedRoles: [ROLES.DIVISION_HEAD, ROLES.MANAGEMENT],
-    label: 'Edit Client',
-  },
-  {
-    path: '/service-pos',
-    element: <ServicePOsListPage />,
-    allowedRoles: [ROLES.DIVISION_HEAD, ROLES.MANAGEMENT, ROLES.PROJECT_MANAGER, ROLES.FINANCE],
-    label: 'Service POs',
-  },
-  {
-    path: '/service-pos/new',
-    element: <ServicePONewPage />,
-    allowedRoles: [ROLES.DIVISION_HEAD, ROLES.MANAGEMENT],
-    label: 'New Service PO',
-  },
-  {
-    path: '/service-pos/:id',
-    element: <ServicePODetailPage />,
-    allowedRoles: [ROLES.DIVISION_HEAD, ROLES.MANAGEMENT, ROLES.PROJECT_MANAGER, ROLES.FINANCE],
-    label: 'Service PO Detail',
-  },
-  {
-    path: '/service-pos/:id/edit',
-    element: <ServicePOEditPage />,
-    allowedRoles: [ROLES.DIVISION_HEAD, ROLES.MANAGEMENT],
-    label: 'Edit Service PO',
-  },
-  {
-    path: '/sub-projects',
-    element: <SubProjectsListPage />,
-    allowedRoles: [ROLES.DIVISION_HEAD, ROLES.MANAGEMENT, ROLES.PROJECT_MANAGER],
-    label: 'Sub Projects',
-  },
-  {
-    path: '/monthly-costs',
-    element: <MonthlyCostsPage />,
-    allowedRoles: [ROLES.FINANCE, ROLES.MANAGEMENT],
-    label: 'Monthly Costs',
-  },
-  {
-    path: '/timesheets/upload',
-    element: <TimesheetUploadPage />,
-    allowedRoles: [ROLES.HR, ROLES.PROJECT_MANAGER, ROLES.DIVISION_HEAD],
-    label: 'Upload Timesheets',
-  },
-  {
-    path: '/timesheets',
-    element: <TimesheetsListPage />,
-    allowedRoles: ALL_ROLES,
-    label: 'Timesheets',
-  },
-  {
-    path: '/reports',
-    element: <ReportsPage />,
-    allowedRoles: [ROLES.MANAGEMENT, ROLES.DIVISION_HEAD, ROLES.FINANCE],
-    label: 'Reports',
-  },
-  {
-    path: '/reports/utilization',
-    element: <UtilizationReportPage />,
-    allowedRoles: [ROLES.MANAGEMENT, ROLES.DIVISION_HEAD, ROLES.FINANCE],
-    label: 'Utilization Report',
-  },
-  {
-    path: '/reports/billing',
-    element: <BillingReportPage />,
-    allowedRoles: [ROLES.MANAGEMENT, ROLES.FINANCE],
-    label: 'Billing Report',
-  },
-  {
-    path: '/reports/cost',
-    element: <CostReportPage />,
-    allowedRoles: [ROLES.MANAGEMENT, ROLES.FINANCE],
-    label: 'Cost Report',
-  },
-  {
-    path: '/settings',
-    element: <SettingsPage />,
-    allowedRoles: ALL_ROLES,
-    label: 'Settings',
-  },
-  {
-    path: '/notifications',
-    element: <NotificationsPage />,
-    allowedRoles: ALL_ROLES,
-    label: 'Notifications',
-  },
-];
+        {/* Clients */}
+        <Route path={ROUTES.CLIENTS} element={<ClientList />} />
+        <Route path={ROUTES.CLIENT_NEW} element={<ClientForm />} />
+        <Route path={ROUTES.CLIENT_EDIT} element={<ClientForm />} />
 
-const AppRoutes = () => {
-  return (
-    <Suspense fallback={<LoadingSpinner fullPage />}>
-      <Routes>
-        {/* Public Routes */}
-        <Route
-          path="/login"
-          element={
-            <AuthLayout>
-              <LoginPage />
-            </AuthLayout>
-          }
-        />
+        {/* Service POs */}
+        <Route path={ROUTES.SERVICE_POS} element={<ServicePOList />} />
+        <Route path={ROUTES.SERVICE_PO_NEW} element={<ServicePOForm />} />
+        <Route path={ROUTES.SERVICE_PO_DETAIL} element={<ServicePODetail />} />
+        <Route path={ROUTES.SERVICE_PO_EDIT} element={<ServicePOForm />} />
 
-        {/* Protected Routes */}
-        <Route
-          element={
-            <ProtectedRoute>
-              <MainLayout />
-            </ProtectedRoute>
-          }
-        >
-          {routeConfig.map(({ path, element, allowedRoles }) => (
-            <Route
-              key={path}
-              path={path}
-              element={
-                <ProtectedRoute allowedRoles={allowedRoles}>
-                  {element}
-                </ProtectedRoute>
-              }
-            />
-          ))}
+        {/* Sub-projects */}
+        <Route path={ROUTES.SUB_PROJECTS} element={<SubProjectList />} />
+        <Route path={ROUTES.SUB_PROJECT_NEW} element={<SubProjectForm />} />
+        <Route path={ROUTES.SUB_PROJECT_EDIT} element={<SubProjectForm />} />
 
-          {/* Reports wildcard */}
-          <Route path="/reports/*" element={<ReportsPage />} />
+        {/* Resources */}
+        <Route path={ROUTES.TIMESHEETS} element={<TimesheetList />} />
+        <Route path={ROUTES.TIMESHEET_UPLOAD} element={<TimesheetUpload />} />
+        <Route path={ROUTES.TIMESHEET_IMPORT_DETAIL} element={<TimesheetImportDetail />} />
+        <Route path={ROUTES.MONTHLY_COSTS} element={<MonthlyCostList />} />
+        <Route path={ROUTES.MONTHLY_COST_IMPORT} element={<MonthlyCostImport />} />
+        <Route path={ROUTES.MONTHLY_COST_NEW} element={<MonthlyCostForm />} />
+        <Route path={ROUTES.MONTHLY_COST_EDIT} element={<MonthlyCostForm />} />
+
+        {/* Reports */}
+        <Route path={ROUTES.REPORTS} element={<ReportsLayout />}>
+          <Route path={ROUTES.REPORT_HOURLY_RATE} element={<EmployeeHourlyRate />} />
+          <Route path={ROUTES.REPORT_MONTHLY_COST} element={<MonthlyCostSummary />} />
+          <Route path={ROUTES.REPORT_TIMESHEET} element={<TimesheetSummary />} />
+          <Route path={ROUTES.REPORT_PO_UTILISATION} element={<ServicePOUtilisation />} />
+          <Route path={ROUTES.REPORT_SUB_PROJECT_HOURS} element={<SubProjectHours />} />
+          <Route path={ROUTES.REPORT_RESOURCE_ALLOCATION} element={<ResourceAllocation />} />
+          <Route path={ROUTES.REPORT_OPERATIONAL_COST} element={<OperationalCost />} />
+          <Route path={ROUTES.REPORT_MONTHLY_UTILIZATION} element={<MonthlyUtilization />} />
+          <Route path={ROUTES.REPORT_SERVICE_PO_RESOURCE} element={<ServicePOResource />} />
         </Route>
 
-        {/* 404 */}
-        <Route path="/404" element={<NotFoundPage />} />
-        <Route path="*" element={<Navigate to="/404" replace />} />
-      </Routes>
-    </Suspense>
-  );
-};
+        {/* Settings */}
+        <Route path={ROUTES.PROFILE} element={<Profile />} />
+        <Route path={ROUTES.NOTIFICATIONS} element={<Notifications />} />
+      </Route>
+
+      <Route path={ROUTES.NOT_FOUND} element={<NotFound />} />
+    </Routes>
+  </Suspense>
+);
 
 export default AppRoutes;

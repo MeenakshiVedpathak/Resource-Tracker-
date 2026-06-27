@@ -1,447 +1,330 @@
-import React, { useEffect } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
+import { useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useForm, Controller } from 'react-hook-form';
-import { yupResolver } from '@hookform/resolvers/yup';
-import * as yup from 'yup';
+import { useForm, useWatch } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { motion } from 'framer-motion';
+import { ArrowLeft, Save } from 'lucide-react';
+import { useEmployee, useCreateEmployee, useUpdateEmployee } from '@/hooks/useEmployees';
+import { useNotification } from '@/hooks/useNotification';
+import { extractApiError } from '@/services/apiClient';
+import { ROUTES } from '@/constants/routes';
 import {
-  Box,
-  Grid,
-  TextField,
-  MenuItem,
-  Button,
-  Alert,
-  CircularProgress,
-  Divider,
-  Typography,
-  Paper,
-} from '@mui/material';
-import SaveIcon from '@mui/icons-material/Save';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-
-import PageHeader from '../../components/PageHeader';
+  Form, FormField, FormItem, FormLabel, FormControl, FormMessage, FormDescription,
+} from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
-  createEmployee,
-  updateEmployee,
-  fetchEmployee,
-  clearCurrentEmployee,
-  selectCurrentEmployee,
-  selectEmployeeLoading,
-  selectEmployeeError,
-} from '../../redux/slices/employeeSlice';
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import PageHeader from '@/components/common/PageHeader';
+import { Skeleton } from '@/components/ui/skeleton';
 
-// ---------------------------------------------------------------------------
-// Validation schema
-// ---------------------------------------------------------------------------
-
-const schema = yup.object({
-  full_name: yup
+const employeeSchema = z.object({
+  employee_code: z
     .string()
-    .trim()
-    .min(2, 'Full name must be at least 2 characters.')
-    .max(120, 'Full name must not exceed 120 characters.')
-    .required('Full name is required.'),
-  designation: yup
-    .string()
-    .trim()
-    .min(2, 'Designation must be at least 2 characters.')
-    .max(100, 'Designation must not exceed 100 characters.')
-    .required('Designation is required.'),
-  total_experience: yup
-    .number()
-    .typeError('Total experience must be a number.')
-    .min(0, 'Total experience cannot be negative.')
-    .max(60, 'Total experience seems too high.')
-    .required('Total experience is required.'),
-  company_experience: yup
-    .number()
-    .typeError('Company experience must be a number.')
-    .min(0, 'Company experience cannot be negative.')
-    .max(60, 'Company experience seems too high.')
-    .required('Company experience is required.')
-    .test(
-      'lte-total',
-      'Company experience cannot exceed total experience.',
-      function (value) {
-        const total = this.parent.total_experience;
-        if (value === undefined || total === undefined) return true;
-        return value <= total;
-      }
-    ),
-  resource_description: yup
-    .string()
-    .trim()
-    .max(1000, 'Description must not exceed 1000 characters.')
-    .nullable(),
-  date_of_joining: yup
-    .string()
-    .required('Date of joining is required.')
-    .nullable(),
-  date_of_leaving: yup
-    .string()
-    .nullable()
-    .test(
-      'after-joining',
-      'Date of leaving must be after the date of joining.',
-      function (value) {
-        if (!value) return true;
-        const joining = this.parent.date_of_joining;
-        if (!joining) return true;
-        return new Date(value) > new Date(joining);
-      }
-    ),
-  status: yup
-    .string()
-    .oneOf(['active', 'inactive'], 'Status must be active or inactive.')
-    .required('Status is required.'),
+    .min(2, 'Employee code must be at least 2 characters')
+    .max(20, 'Employee code cannot exceed 20 characters')
+    .regex(/^[A-Z0-9_-]+$/, 'Only uppercase letters, numbers, hyphens, and underscores are allowed')
+    .transform((v) => v.toUpperCase()),
+  full_name: z.string().min(2, 'Full name must be at least 2 characters').max(100),
+  designation: z.string().max(100).optional().or(z.literal('')),
+  total_experience: z.preprocess(
+    (v) => (v === '' || v == null ? null : Number(v)),
+    z.number().min(0, 'Must be 0 or more').max(60, 'Cannot exceed 60').nullable().optional()
+  ),
+  company_experience: z.preprocess(
+    (v) => (v === '' || v == null ? null : Number(v)),
+    z.number().min(0, 'Must be 0 or more').max(60, 'Cannot exceed 60').nullable().optional()
+  ),
+  resource_description: z.string().max(2000).optional().or(z.literal('')),
+  date_of_joining: z.string().optional().or(z.literal('')),
+  date_of_leaving: z.string().optional().or(z.literal('')),
+  status: z.enum(['active', 'inactive']).default('active'),
 });
 
-// ---------------------------------------------------------------------------
-// Default values
-// ---------------------------------------------------------------------------
-
-const defaultValues = {
-  full_name: '',
-  designation: '',
-  total_experience: '',
-  company_experience: '',
-  resource_description: '',
-  date_of_joining: '',
-  date_of_leaving: '',
-  status: 'active',
-};
-
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
+const FormSkeleton = () => (
+  <Card>
+    <CardContent className="p-6 space-y-4">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div key={i} className="space-y-2">
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-9 w-full" />
+        </div>
+      ))}
+    </CardContent>
+  </Card>
+);
 
 const EmployeeForm = () => {
-  const dispatch = useDispatch();
   const navigate = useNavigate();
   const { id } = useParams();
-  const isEdit = Boolean(id);
+  const isEdit = !!id;
+  const { success, error: showError } = useNotification();
 
-  const currentEmployee = useSelector(selectCurrentEmployee);
-  const loading = useSelector(selectEmployeeLoading);
-  const error = useSelector(selectEmployeeError);
+  const { data: employee, isPending: isLoadingEmployee } = useEmployee(id);
+  const createMutation = useCreateEmployee();
+  const updateMutation = useUpdateEmployee(id);
 
-  const {
-    control,
-    handleSubmit,
-    reset,
-    formState: { errors, isSubmitting },
-  } = useForm({
-    resolver: yupResolver(schema),
-    defaultValues,
+  const form = useForm({
+    resolver: zodResolver(employeeSchema),
+    defaultValues: {
+      employee_code: '',
+      full_name: '',
+      designation: '',
+      total_experience: '',
+      company_experience: '',
+      resource_description: '',
+      date_of_joining: '',
+      date_of_leaving: '',
+      status: 'active',
+    },
   });
 
-  // ---------------------------------------------------------------------------
-  // Load existing employee for edit mode
-  // ---------------------------------------------------------------------------
+  const dateOfJoining = useWatch({ control: form.control, name: 'date_of_joining' });
 
   useEffect(() => {
-    if (isEdit) {
-      dispatch(fetchEmployee(id));
+    if (!dateOfJoining) {
+      form.setValue('company_experience', '');
+      return;
     }
-    return () => {
-      dispatch(clearCurrentEmployee());
-    };
-  }, [dispatch, id, isEdit]);
+    const start = new Date(dateOfJoining);
+    if (isNaN(start.getTime())) return;
+    const diffMs = Date.now() - start.getTime();
+    const years = diffMs / (1000 * 60 * 60 * 24 * 365.25);
+    form.setValue('company_experience', Math.max(0, parseFloat(years.toFixed(1))));
+  }, [dateOfJoining, form]);
 
   useEffect(() => {
-    if (isEdit && currentEmployee) {
-      reset({
-        full_name: currentEmployee.full_name || '',
-        designation: currentEmployee.designation || '',
-        total_experience: currentEmployee.total_experience ?? '',
-        company_experience: currentEmployee.company_experience ?? '',
-        resource_description: currentEmployee.resource_description || '',
-        date_of_joining: currentEmployee.date_of_joining
-          ? currentEmployee.date_of_joining.split('T')[0]
-          : '',
-        date_of_leaving: currentEmployee.date_of_leaving
-          ? currentEmployee.date_of_leaving.split('T')[0]
-          : '',
-        status: currentEmployee.status || 'active',
+    if (employee && isEdit) {
+      form.reset({
+        employee_code: employee.employee_code ?? '',
+        full_name: employee.full_name ?? '',
+        designation: employee.designation ?? '',
+        total_experience: employee.total_experience ?? '',
+        company_experience: employee.company_experience ?? '',
+        resource_description: employee.resource_description ?? '',
+        date_of_joining: employee.date_of_joining?.split('T')[0] ?? '',
+        date_of_leaving: employee.date_of_leaving?.split('T')[0] ?? '',
+        status: employee.status ?? 'active',
       });
     }
-  }, [currentEmployee, isEdit, reset]);
+  }, [employee, isEdit, form]);
 
-  // ---------------------------------------------------------------------------
-  // Submit
-  // ---------------------------------------------------------------------------
+  const onSubmit = async (values) => {
+    const clean = Object.fromEntries(
+      Object.entries(values).filter(([, v]) => v !== '' && v != null)
+    );
 
-  const onSubmit = async (data) => {
-    const payload = {
-      ...data,
-      total_experience: Number(data.total_experience),
-      company_experience: Number(data.company_experience),
-      date_of_leaving: data.date_of_leaving || null,
-      resource_description: data.resource_description || null,
-    };
-
-    try {
-      if (isEdit) {
-        await dispatch(updateEmployee({ id, data: payload })).unwrap();
-      } else {
-        await dispatch(createEmployee(payload)).unwrap();
-      }
-      navigate('/employees');
-    } catch {
-      // error handled via redux state
-    }
+    const mutation = isEdit ? updateMutation : createMutation;
+    mutation.mutate(clean, {
+      onSuccess: () => {
+        success(isEdit ? 'Employee updated successfully.' : 'Employee created successfully.');
+        navigate(ROUTES.EMPLOYEES);
+      },
+      onError: (err) => showError(extractApiError(err)),
+    });
   };
 
-  // ---------------------------------------------------------------------------
-  // Render
-  // ---------------------------------------------------------------------------
+  const isSubmitting = createMutation.isPending || updateMutation.isPending;
+
+  if (isEdit && isLoadingEmployee) return <FormSkeleton />;
 
   return (
-    <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: 860, mx: 'auto' }}>
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="w-full"
+    >
       <PageHeader
         title={isEdit ? 'Edit Employee' : 'Add Employee'}
-        subtitle={
-          isEdit
-            ? 'Update the employee record below.'
-            : 'Fill in the details to register a new employee.'
+        description={isEdit ? `Updating ${employee?.full_name ?? ''}` : 'Create a new employee record'}
+        actions={
+          <Button variant="outline" size="sm" onClick={() => navigate(ROUTES.EMPLOYEES)}>
+            <ArrowLeft className="mr-1.5 h-4 w-4" />
+            Back
+          </Button>
         }
-        breadcrumbs={[
-          { label: 'Home', to: '/' },
-          { label: 'Employees', to: '/employees' },
-          { label: isEdit ? 'Edit' : 'Add' },
-        ]}
       />
 
-      {error && (
-        <Alert severity="error" sx={{ mt: 2.5, mb: 1 }}>
-          {error}
-        </Alert>
-      )}
-
-      <Paper variant="outlined" sx={{ mt: 3, borderRadius: 2, overflow: 'hidden' }}>
-        {/* Section: Basic Info */}
-        <Box sx={{ px: 3, pt: 3, pb: 1 }}>
-          <Typography variant="subtitle2" fontWeight={700} color="text.secondary" sx={{ mb: 2, textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: '0.72rem' }}>
-            Basic Information
-          </Typography>
-          <Grid container spacing={2.5}>
-            <Grid item xs={12} sm={6}>
-              <Controller
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+          {/* Identity */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm">Identity</CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <FormField
+                control={form.control}
+                name="employee_code"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Employee Code <span className="text-destructive">*</span></FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="EMP-001"
+                        {...field}
+                        onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+                        disabled={isEdit}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
                 name="full_name"
-                control={control}
                 render={({ field }) => (
-                  <TextField
-                    {...field}
-                    label="Full Name"
-                    fullWidth
-                    required
-                    error={Boolean(errors.full_name)}
-                    helperText={errors.full_name?.message}
-                    autoFocus={!isEdit}
-                  />
+                  <FormItem>
+                    <FormLabel>Full Name <span className="text-destructive">*</span></FormLabel>
+                    <FormControl><Input placeholder="e.g. Rahul Sharma" {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
                 )}
               />
-            </Grid>
-
-            <Grid item xs={12} sm={6}>
-              <Controller
+              <FormField
+                control={form.control}
                 name="designation"
-                control={control}
                 render={({ field }) => (
-                  <TextField
-                    {...field}
-                    label="Designation"
-                    fullWidth
-                    required
-                    error={Boolean(errors.designation)}
-                    helperText={errors.designation?.message}
-                  />
+                  <FormItem>
+                    <FormLabel>Designation</FormLabel>
+                    <FormControl><Input placeholder="e.g. Senior Engineer" {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
                 )}
               />
-            </Grid>
-
-            <Grid item xs={12} sm={6}>
-              <Controller
-                name="total_experience"
-                control={control}
-                render={({ field }) => (
-                  <TextField
-                    {...field}
-                    label="Total Experience (years)"
-                    fullWidth
-                    required
-                    type="number"
-                    inputProps={{ min: 0, max: 60, step: 0.5 }}
-                    error={Boolean(errors.total_experience)}
-                    helperText={errors.total_experience?.message}
-                  />
-                )}
-              />
-            </Grid>
-
-            <Grid item xs={12} sm={6}>
-              <Controller
-                name="company_experience"
-                control={control}
-                render={({ field }) => (
-                  <TextField
-                    {...field}
-                    label="Company Experience (years)"
-                    fullWidth
-                    required
-                    type="number"
-                    inputProps={{ min: 0, max: 60, step: 0.5 }}
-                    error={Boolean(errors.company_experience)}
-                    helperText={errors.company_experience?.message}
-                  />
-                )}
-              />
-            </Grid>
-          </Grid>
-        </Box>
-
-        <Divider sx={{ mx: 3, my: 2 }} />
-
-        {/* Section: Dates & Status */}
-        <Box sx={{ px: 3, pb: 1 }}>
-          <Typography variant="subtitle2" fontWeight={700} color="text.secondary" sx={{ mb: 2, textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: '0.72rem' }}>
-            Employment Details
-          </Typography>
-          <Grid container spacing={2.5}>
-            <Grid item xs={12} sm={6}>
-              <Controller
-                name="date_of_joining"
-                control={control}
-                render={({ field }) => (
-                  <TextField
-                    {...field}
-                    label="Date of Joining"
-                    type="date"
-                    fullWidth
-                    required
-                    InputLabelProps={{ shrink: true }}
-                    error={Boolean(errors.date_of_joining)}
-                    helperText={errors.date_of_joining?.message}
-                  />
-                )}
-              />
-            </Grid>
-
-            <Grid item xs={12} sm={6}>
-              <Controller
-                name="date_of_leaving"
-                control={control}
-                render={({ field }) => (
-                  <TextField
-                    {...field}
-                    label="Date of Leaving"
-                    type="date"
-                    fullWidth
-                    InputLabelProps={{ shrink: true }}
-                    error={Boolean(errors.date_of_leaving)}
-                    helperText={errors.date_of_leaving?.message || 'Leave blank if still employed.'}
-                  />
-                )}
-              />
-            </Grid>
-
-            <Grid item xs={12} sm={4}>
-              <Controller
+              <FormField
+                control={form.control}
                 name="status"
-                control={control}
                 render={({ field }) => (
-                  <TextField
-                    {...field}
-                    label="Status"
-                    select
-                    fullWidth
-                    required
-                    error={Boolean(errors.status)}
-                    helperText={errors.status?.message}
-                  >
-                    <MenuItem value="active">Active</MenuItem>
-                    <MenuItem value="inactive">Inactive</MenuItem>
-                  </TextField>
+                  <FormItem>
+                    <FormLabel>Status</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="inactive">Inactive</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
                 )}
               />
-            </Grid>
-          </Grid>
-        </Box>
-
-        <Divider sx={{ mx: 3, my: 2 }} />
-
-        {/* Section: Description */}
-        <Box sx={{ px: 3, pb: 3 }}>
-          <Typography variant="subtitle2" fontWeight={700} color="text.secondary" sx={{ mb: 2, textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: '0.72rem' }}>
-            Resource Description
-          </Typography>
-          <Controller
-            name="resource_description"
-            control={control}
-            render={({ field }) => (
-              <TextField
-                {...field}
-                label="Resource Description"
-                fullWidth
-                multiline
-                minRows={4}
-                maxRows={10}
-                placeholder="Describe the employee's key skills, responsibilities, and areas of expertise…"
-                error={Boolean(errors.resource_description)}
-                helperText={
-                  errors.resource_description?.message ||
-                  `${(field.value || '').length} / 1000 characters`
-                }
-                inputProps={{ maxLength: 1000 }}
+            </CardContent>
+          </Card>
+          {/* Experience & Employment */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm">Experience &amp; Employment</CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <FormField
+                control={form.control}
+                name="date_of_joining"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Date of Joining</FormLabel>
+                    <FormControl><Input type="date" {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-            )}
-          />
-        </Box>
+              <FormField
+                control={form.control}
+                name="date_of_leaving"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Date of Leaving</FormLabel>
+                    <FormControl><Input type="date" {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="total_experience"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Total Experience (yrs)</FormLabel>
+                    <FormControl>
+                      <Input type="number" step="0.1" min="0" max="60" placeholder="e.g. 7.5" {...field} />
+                    </FormControl>
+                    <FormDescription className="text-xs">Incl. previous companies</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="company_experience"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Company Experience (yrs)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        placeholder="Auto-calculated"
+                        readOnly
+                        tabIndex={-1}
+                        className="bg-muted cursor-not-allowed"
+                        {...field}
+                        value={field.value ?? ''}
+                      />
+                    </FormControl>
+                    <FormDescription className="text-xs">From Date of Joining</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </CardContent>
+          </Card>
 
-        {/* Action buttons */}
-        <Box
-          sx={{
-            px: 3,
-            py: 2,
-            bgcolor: 'action.hover',
-            borderTop: '1px solid',
-            borderColor: 'divider',
-            display: 'flex',
-            gap: 1.5,
-            justifyContent: 'flex-end',
-          }}
-        >
-          <Button
-            variant="outlined"
-            color="inherit"
-            startIcon={<ArrowBackIcon />}
-            onClick={() => navigate('/employees')}
-            disabled={isSubmitting || loading}
-          >
-            Cancel
-          </Button>
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={
-              isSubmitting || loading ? (
-                <CircularProgress size={16} color="inherit" />
-              ) : (
-                <SaveIcon />
-              )
-            }
-            onClick={handleSubmit(onSubmit)}
-            disabled={isSubmitting || loading}
-          >
-            {isSubmitting || loading
-              ? 'Saving…'
-              : isEdit
-              ? 'Save Changes'
-              : 'Create Employee'}
-          </Button>
-        </Box>
-      </Paper>
-    </Box>
+
+
+          {/* Description */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm">Resource Description</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <FormField
+                control={form.control}
+                name="resource_description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormControl>
+                      <Textarea
+                        placeholder="Skills, certifications, and project experience…"
+                        className="min-h-[5rem] resize-y"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </CardContent>
+          </Card>
+
+          <div className="sticky bottom-0 z-10 -mx-6 flex items-center justify-end gap-3 border-t bg-background px-6 py-4">
+            <Button type="button" variant="outline" onClick={() => navigate(ROUTES.EMPLOYEES)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isSubmitting}>
+              <Save className="mr-1.5 h-4 w-4" />
+              {isSubmitting ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Employee'}
+            </Button>
+          </div>
+        </form>
+      </Form>
+    </motion.div>
   );
 };
 

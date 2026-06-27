@@ -1,402 +1,367 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { createColumnHelper } from '@tanstack/react-table';
+import { Plus, Pencil, Trash2, Calculator, Upload } from 'lucide-react';
+import { useMonthlyCosts, useDeleteMonthlyCost, useCalculateMonthlyCosts } from '@/hooks/useMonthlyCosts';
+import { useAuth } from '@/hooks/useAuth';
+import { useNotification } from '@/hooks/useNotification';
+import { useDebounce } from '@/hooks/useDebounce';
+import { extractApiError } from '@/services/apiClient';
+import { buildPath, ROUTES } from '@/constants/routes';
+import { formatCurrency, formatMonthYear } from '@/utils/formatters';
+import DataTable from '@/components/common/DataTable';
+import PageHeader from '@/components/common/PageHeader';
+import ConfirmDialog from '@/components/common/ConfirmDialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
-  Box,
-  Button,
-  Stack,
-  TextField,
-  Tooltip,
-  Chip,
-  Typography,
-  Paper,
-  Divider,
-  alpha,
-  useTheme,
-} from '@mui/material';
-import AddIcon from '@mui/icons-material/Add';
-import EditIcon from '@mui/icons-material/EditOutlined';
-import DeleteIcon from '@mui/icons-material/DeleteOutlineOutlined';
-import FilterListIcon from '@mui/icons-material/FilterList';
-import ClearIcon from '@mui/icons-material/Clear';
-import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
-
-import PageHeader from '../../components/PageHeader';
-import DataTable from '../../components/DataTable';
-import ConfirmDialog from '../../components/ConfirmDialog';
-
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
-  fetchMonthlyCosts,
-  deleteMonthlyCost,
-  setFilters,
-  resetFilters,
-  selectMonthlyCosts,
-  selectMonthlyCostTotal,
-  selectMonthlyCostLoading,
-  selectMonthlyCostFilters,
-} from '../../redux/slices/monthlyCostSlice';
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from '@/components/ui/dialog';
 
-const MONTH_NAMES = [
-  'January','February','March','April','May','June',
-  'July','August','September','October','November','December',
+const columnHelper = createColumnHelper();
+
+const MONTH_OPTIONS = [
+  { value: '1', label: 'January' },
+  { value: '2', label: 'February' },
+  { value: '3', label: 'March' },
+  { value: '4', label: 'April' },
+  { value: '5', label: 'May' },
+  { value: '6', label: 'June' },
+  { value: '7', label: 'July' },
+  { value: '8', label: 'August' },
+  { value: '9', label: 'September' },
+  { value: '10', label: 'October' },
+  { value: '11', label: 'November' },
+  { value: '12', label: 'December' },
 ];
 
-const formatCurrency = (val) => {
-  if (val === null || val === undefined || val === '') return '—';
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
-    maximumFractionDigits: 0,
-  }).format(Number(val));
-};
-
-const CurrencyCell = ({ value }) => (
-  <Box
-    component="span"
-    sx={{ fontVariantNumeric: 'tabular-nums', fontWeight: 500 }}
-  >
-    {formatCurrency(value)}
-  </Box>
-);
-
 const MonthlyCostList = () => {
-  const dispatch = useDispatch();
   const navigate = useNavigate();
-  const theme = useTheme();
+  const { hasRole } = useAuth();
+  const { success, error: showError } = useNotification();
 
-  const monthlyCosts = useSelector(selectMonthlyCosts);
-  const total = useSelector(selectMonthlyCostTotal);
-  const loading = useSelector(selectMonthlyCostLoading);
-  const filters = useSelector(selectMonthlyCostFilters);
-
-  const currentYear = new Date().getFullYear();
-  const currentMonth = new Date().getMonth() + 1;
-
-  const [deleteTarget, setDeleteTarget] = useState(null);
-  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
   const [search, setSearch] = useState('');
-  const [monthFilter, setMonthFilter] = useState(filters.month || '');
-  const [yearFilter, setYearFilter] = useState(filters.year || '');
-  const [sortBy, setSortBy] = useState('year');
-  const [sortDir, setSortDir] = useState('desc');
+  const [monthFilter, setMonthFilter] = useState('all');
+  const [yearFilter, setYearFilter] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
-  const page = (filters.page || 1) - 1;
-  const rowsPerPage = filters.limit || 10;
+  // Calculate dialog state
+  const [calcOpen, setCalcOpen] = useState(false);
+  const [calcMonth, setCalcMonth] = useState(String(new Date().getMonth() + 1));
+  const [calcYear, setCalcYear] = useState(String(new Date().getFullYear()));
 
-  const loadData = useCallback(() => {
-    dispatch(
-      fetchMonthlyCosts({
-        page: filters.page,
-        limit: filters.limit,
-        month: filters.month || undefined,
-        year: filters.year || undefined,
-        sort_by: sortBy,
-        sort_dir: sortDir,
-      })
-    );
-  }, [dispatch, filters, sortBy, sortDir]);
+  const debouncedSearch = useDebounce(search, 400);
+  const canManage = hasRole('Finance', 'Management');
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
-
-  const handleMonthChange = (e) => {
-    const val = e.target.value;
-    setMonthFilter(val);
-    dispatch(setFilters({ month: val, page: 1 }));
+  const params = {
+    page,
+    limit,
+    ...(monthFilter !== 'all' && { month: Number(monthFilter) }),
+    ...(yearFilter && { year: Number(yearFilter) }),
+    ...(debouncedSearch && { search: debouncedSearch }),
   };
 
-  const handleYearChange = (e) => {
-    const val = e.target.value;
-    setYearFilter(val);
-    dispatch(setFilters({ year: val, page: 1 }));
-  };
+  const { data, isPending } = useMonthlyCosts(params);
+  const deleteMutation = useDeleteMonthlyCost();
+  const calculateMutation = useCalculateMonthlyCosts();
 
-  const handlePageChange = (_, newPage) => {
-    dispatch(setFilters({ page: newPage + 1 }));
-  };
-
-  const handleRowsPerPageChange = (e) => {
-    dispatch(setFilters({ limit: parseInt(e.target.value, 10), page: 1 }));
-  };
-
-  const handleSort = (col) => {
-    const newDir = sortBy === col && sortDir === 'asc' ? 'desc' : 'asc';
-    setSortBy(col);
-    setSortDir(newDir);
-  };
-
-  const handleClearFilters = () => {
-    setMonthFilter('');
-    setYearFilter('');
-    setSearch('');
-    dispatch(resetFilters());
-  };
-
-  const handleDelete = async () => {
-    if (!deleteTarget) return;
-    setDeleteLoading(true);
-    try {
-      await dispatch(deleteMonthlyCost(deleteTarget.id)).unwrap();
-    } finally {
-      setDeleteLoading(false);
-      setDeleteTarget(null);
-    }
-  };
-
-  const hasActiveFilters = monthFilter || yearFilter || search;
+  const records = data?.data ?? [];
+  const meta = data?.meta ?? {};
 
   const columns = [
-    {
-      id: 'employee_name',
-      label: 'Employee',
-      minWidth: 180,
-      sortable: true,
-      render: (val, row) => (
-        <Box>
-          <Typography variant="body2" fontWeight={600} sx={{ lineHeight: 1.3 }}>
-            {val || row?.employee?.full_name || '—'}
-          </Typography>
-          {(row?.employee?.employee_code || row?.employee_code) && (
-            <Typography variant="caption" color="text.secondary">
-              {row?.employee?.employee_code || row?.employee_code}
-            </Typography>
+    columnHelper.accessor((row) => row.employee_name ?? row.employee?.full_name, {
+      id: 'employee',
+      header: 'Employee',
+      cell: (info) => (
+        <div>
+          <p className="font-medium text-sm">{info.getValue() ?? '—'}</p>
+          {(info.row.original.employee_code ?? info.row.original.employee?.employee_code) && (
+            <p className="text-xs text-muted-foreground font-mono">
+              {info.row.original.employee_code ?? info.row.original.employee?.employee_code}
+            </p>
           )}
-        </Box>
+        </div>
       ),
-    },
-    {
-      id: 'month',
-      label: 'Period',
-      minWidth: 130,
-      sortable: true,
-      render: (val, row) => (
-        <Box
-          component="span"
-          sx={{
-            fontWeight: 600,
-            fontVariantNumeric: 'tabular-nums',
-            color: theme.palette.text.primary,
-          }}
-        >
-          {val ? MONTH_NAMES[(Number(val) - 1)] : '—'} {row?.year || ''}
-        </Box>
+    }),
+    columnHelper.accessor('month', {
+      header: 'Month',
+      size: 140,
+      cell: (info) => (
+        <span className="text-sm">{formatMonthYear(info.getValue(), info.row.original.year)}</span>
       ),
-    },
-    {
-      id: 'salary_cost',
-      label: 'Salary Cost',
-      minWidth: 130,
-      align: 'right',
-      sortable: true,
-      render: (val) => <CurrencyCell value={val} />,
-    },
-    {
-      id: 'ops_cost',
-      label: 'Ops Cost',
-      minWidth: 120,
-      align: 'right',
-      sortable: true,
-      render: (val) => <CurrencyCell value={val} />,
-    },
-    {
-      id: 'ops_cost_per_employee',
-      label: 'Ops / Employee',
-      minWidth: 130,
-      align: 'right',
-      sortable: false,
-      render: (val) => (
-        <Box
-          component="span"
-          sx={{
-            fontVariantNumeric: 'tabular-nums',
-            color: theme.palette.text.secondary,
-            fontSize: '0.85rem',
-          }}
-        >
-          {formatCurrency(val)}
-        </Box>
+    }),
+    columnHelper.accessor('salary_cost', {
+      header: 'Salary Cost',
+      size: 150,
+      cell: (info) => (
+        <span className="tabular-nums text-sm">{formatCurrency(info.getValue())}</span>
       ),
-    },
-    {
-      id: 'total_cost',
-      label: 'Total Cost',
-      minWidth: 130,
-      align: 'right',
-      sortable: true,
-      render: (val) => (
-        <Box
-          component="span"
-          sx={{
-            fontVariantNumeric: 'tabular-nums',
-            fontWeight: 700,
-            color: theme.palette.primary.main,
-          }}
-        >
-          {formatCurrency(val)}
-        </Box>
+    }),
+    columnHelper.accessor('ops_cost', {
+      header: 'Ops Cost',
+      size: 130,
+      cell: (info) => (
+        <span className="tabular-nums text-sm">{formatCurrency(info.getValue())}</span>
       ),
-    },
-    {
-      id: 'billable_cost',
-      label: 'Billable',
-      minWidth: 120,
-      align: 'right',
-      sortable: true,
-      render: (val) => (
-        <Box
-          component="span"
-          sx={{
-            fontVariantNumeric: 'tabular-nums',
-            fontWeight: 600,
-            color: theme.palette.success.dark,
-          }}
-        >
-          {formatCurrency(val)}
-        </Box>
+    }),
+    columnHelper.accessor('total_cost', {
+      header: 'Total Cost',
+      size: 140,
+      cell: (info) => (
+        <span className="tabular-nums font-semibold text-sm">{formatCurrency(info.getValue())}</span>
       ),
-    },
+    }),
+    columnHelper.accessor('billable_cost', {
+      header: 'Billable Cost',
+      size: 140,
+      cell: (info) =>
+        info.getValue() != null ? (
+          <span className="tabular-nums text-sm">{formatCurrency(info.getValue())}</span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+    }),
+    columnHelper.display({
+      id: 'actions',
+      size: 88,
+      cell: ({ row }) =>
+        canManage ? (
+          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              title="Edit"
+              onClick={() =>
+                navigate(buildPath(ROUTES.MONTHLY_COST_EDIT, { id: row.original.id }))
+              }
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+              title="Delete"
+              onClick={() => setDeleteTarget(row.original)}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        ) : null,
+    }),
   ];
 
-  const actions = [
-    {
-      label: 'Edit',
-      icon: <EditIcon fontSize="small" />,
-      tooltip: 'Edit monthly cost',
-      color: 'primary',
-      onClick: (row) => navigate(`/monthly-costs/${row.id}/edit`),
-    },
-    {
-      label: 'Delete',
-      icon: <DeleteIcon fontSize="small" />,
-      tooltip: 'Delete record',
-      color: 'error',
-      onClick: (row) => setDeleteTarget(row),
-    },
-  ];
+  const handleDelete = () => {
+    deleteMutation.mutate(deleteTarget.id, {
+      onSuccess: () => {
+        success('Monthly cost record deleted.');
+        setDeleteTarget(null);
+      },
+      onError: (err) => {
+        showError(extractApiError(err));
+        setDeleteTarget(null);
+      },
+    });
+  };
+
+  const handleCalculate = () => {
+    calculateMutation.mutate(
+      { month: Number(calcMonth), year: Number(calcYear) },
+      {
+        onSuccess: () => {
+          success(`Monthly costs calculated for ${formatMonthYear(Number(calcMonth), Number(calcYear))}.`);
+          setCalcOpen(false);
+        },
+        onError: (err) => showError(extractApiError(err)),
+      }
+    );
+  };
 
   return (
-    <Box sx={{ p: { xs: 2, md: 3 } }}>
+    <div>
       <PageHeader
         title="Monthly Costs"
-        subtitle="Track employee salary, ops, and billable costs per month"
-        breadcrumbs={[
-          { label: 'Dashboard', to: '/' },
-          { label: 'Monthly Costs' },
-        ]}
-        action={{
-          label: 'Add Monthly Cost',
-          icon: <AddIcon />,
-          onClick: () => navigate('/monthly-costs/new'),
+        description="Manage and review monthly employee cost records"
+        actions={
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCalcOpen(true)}
+            >
+              <Calculator className="mr-1.5 h-4 w-4" />
+              Calculate Month
+            </Button>
+            {canManage && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate(ROUTES.MONTHLY_COST_IMPORT)}
+              >
+                <Upload className="mr-1.5 h-4 w-4" />
+                Import Excel
+              </Button>
+            )}
+            {canManage && (
+              <Button size="sm" onClick={() => navigate(ROUTES.MONTHLY_COST_NEW)}>
+                <Plus className="mr-1.5 h-4 w-4" />
+                Add Monthly Cost
+              </Button>
+            )}
+          </div>
+        }
+      />
+
+      <DataTable
+        columns={columns}
+        data={records}
+        isLoading={isPending}
+        searchValue={search}
+        onSearchChange={(v) => {
+          setSearch(v);
+          setPage(1);
+        }}
+        searchPlaceholder="Search by employee…"
+        toolbar={
+          <>
+            <Select
+              value={monthFilter}
+              onValueChange={(v) => {
+                setMonthFilter(v);
+                setPage(1);
+              }}
+            >
+              <SelectTrigger className="h-9 w-36 text-sm">
+                <SelectValue placeholder="All months" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All months</SelectItem>
+                {MONTH_OPTIONS.map((m) => (
+                  <SelectItem key={m.value} value={m.value}>
+                    {m.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Input
+              type="number"
+              placeholder="Year"
+              value={yearFilter}
+              onChange={(e) => {
+                setYearFilter(e.target.value);
+                setPage(1);
+              }}
+              className="h-9 w-24 text-sm"
+              min="2000"
+              max="2100"
+            />
+          </>
+        }
+        pagination={
+          meta.total != null
+            ? {
+                page: meta.page ?? page,
+                limit: meta.limit ?? limit,
+                total: meta.total,
+              }
+            : undefined
+        }
+        onPageChange={setPage}
+        onPageSizeChange={(s) => {
+          setLimit(s);
+          setPage(1);
         }}
       />
 
-      {/* Filter bar */}
-      <Stack
-        direction={{ xs: 'column', sm: 'row' }}
-        spacing={1.5}
-        alignItems={{ sm: 'center' }}
-        sx={{ mt: 3, mb: 2 }}
-        flexWrap="wrap"
-      >
-        <TextField
-          select
-          label="Month"
-          value={monthFilter}
-          onChange={handleMonthChange}
-          size="small"
-          sx={{ minWidth: 140 }}
-          SelectProps={{ native: false }}
-        >
-          <option value="" style={{ padding: '6px 16px', display: 'block' }}>All Months</option>
-          {MONTH_NAMES.map((name, idx) => (
-            <option
-              key={idx + 1}
-              value={idx + 1}
-              style={{ padding: '6px 16px', display: 'block' }}
-            >
-              {name}
-            </option>
-          ))}
-        </TextField>
-
-        <TextField
-          label="Year"
-          type="number"
-          value={yearFilter}
-          onChange={handleYearChange}
-          size="small"
-          sx={{ width: 110 }}
-          inputProps={{ min: 2000, max: currentYear + 5 }}
-          placeholder={String(currentYear)}
-        />
-
-        {hasActiveFilters && (
-          <>
-            <Chip
-              icon={<FilterListIcon sx={{ fontSize: '0.9rem !important' }} />}
-              label="Filters active"
-              size="small"
-              color="primary"
-              variant="outlined"
-            />
-            <Tooltip title="Clear all filters">
-              <Button
-                size="small"
-                variant="text"
-                startIcon={<ClearIcon />}
-                onClick={handleClearFilters}
-                color="inherit"
-                sx={{ color: 'text.secondary' }}
-              >
-                Clear
-              </Button>
-            </Tooltip>
-          </>
-        )}
-      </Stack>
-
-      <DataTable
-        title="Cost Records"
-        columns={columns}
-        rows={monthlyCosts || []}
-        total={total}
-        page={page}
-        rowsPerPage={rowsPerPage}
-        onPageChange={handlePageChange}
-        onRowsPerPageChange={handleRowsPerPageChange}
-        loading={loading}
-        sortBy={sortBy}
-        sortDir={sortDir}
-        onSort={handleSort}
-        searchValue={search}
-        onSearchChange={setSearch}
-        searchPlaceholder="Search by employee name…"
-        actions={actions}
-        exportable
-        onExport={() => {}}
-        rowKey="id"
-      />
-
+      {/* Delete confirmation */}
       <ConfirmDialog
-        open={Boolean(deleteTarget)}
-        title="Delete Cost Record"
-        message={
-          deleteTarget
-            ? `Delete the cost record for "${
-                deleteTarget.employee_name || 'this employee'
-              }" (${
-                deleteTarget.month ? MONTH_NAMES[deleteTarget.month - 1] : ''
-              } ${deleteTarget.year || ''})? This cannot be undone.`
-            : ''
-        }
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title="Delete monthly cost record?"
+        description="This record will be permanently deleted and cannot be recovered."
         confirmLabel="Delete"
-        confirmColor="error"
-        loading={deleteLoading}
         onConfirm={handleDelete}
-        onCancel={() => setDeleteTarget(null)}
+        isLoading={deleteMutation.isPending}
       />
-    </Box>
+
+      {/* Calculate Month dialog */}
+      <Dialog open={calcOpen} onOpenChange={setCalcOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Calculate Monthly Costs</DialogTitle>
+            <DialogDescription>
+              Bulk-calculate costs for all employees for the selected month and year.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-2 gap-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="calc-month">Month</Label>
+              <Select value={calcMonth} onValueChange={setCalcMonth}>
+                <SelectTrigger id="calc-month" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {MONTH_OPTIONS.map((m) => (
+                    <SelectItem key={m.value} value={m.value}>
+                      {m.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="calc-year">Year</Label>
+              <Input
+                id="calc-year"
+                type="number"
+                value={calcYear}
+                onChange={(e) => setCalcYear(e.target.value)}
+                min="2000"
+                max="2100"
+                className="w-full"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCalcOpen(false)}
+              disabled={calculateMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleCalculate}
+              disabled={calculateMutation.isPending || !calcMonth || !calcYear}
+            >
+              <Calculator className="mr-1.5 h-4 w-4" />
+              {calculateMutation.isPending ? 'Calculating…' : 'Calculate'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 };
 

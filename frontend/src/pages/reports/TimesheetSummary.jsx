@@ -1,243 +1,211 @@
-import React, { useState, useMemo } from 'react';
-import {
-  Box, Typography, Paper, Table, TableBody, TableCell, TableContainer,
-  TableHead, TableRow, TablePagination, TableSortLabel, TextField,
-  MenuItem, Select, FormControl, InputLabel, Button, Chip, Stack,
-  InputAdornment,
-} from '@mui/material';
-import SearchIcon from '@mui/icons-material/Search';
-import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
-import FilterListIcon from '@mui/icons-material/FilterList';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { format, isWithinInterval, parseISO } from 'date-fns';
+import { useState } from 'react';
+import * as XLSX from 'xlsx';
+import { createColumnHelper } from '@tanstack/react-table';
+import { Download, Search } from 'lucide-react';
+import { useTimesheetSummary } from '@/hooks/useReports';
+import { useDebounce } from '@/hooks/useDebounce';
+import { formatDate, formatHours } from '@/utils/formatters';
+import DataTable from '@/components/common/DataTable';
+import PageHeader from '@/components/common/PageHeader';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { cn } from '@/utils/cn';
 
-const MOCK_DATA = [
-  { id: 1, employee_code: 'EMP001', full_name: 'Alice Johnson', po_code: 'PO-2025-001', po_name: 'Cloud Migration Phase 1', sub_project: 'Backend API', date: '2025-06-01', hours: 8 },
-  { id: 2, employee_code: 'EMP002', full_name: 'Bob Martinez', po_code: 'PO-2025-001', po_name: 'Cloud Migration Phase 1', sub_project: 'Frontend UI', date: '2025-06-01', hours: 7.5 },
-  { id: 3, employee_code: 'EMP003', full_name: 'Carol White', po_code: 'PO-2025-002', po_name: 'Data Analytics Platform', sub_project: 'ETL Pipeline', date: '2025-06-02', hours: 8 },
-  { id: 4, employee_code: 'EMP001', full_name: 'Alice Johnson', po_code: 'PO-2025-001', po_name: 'Cloud Migration Phase 1', sub_project: 'Backend API', date: '2025-06-02', hours: 8 },
-  { id: 5, employee_code: 'EMP004', full_name: 'David Chen', po_code: 'PO-2025-003', po_name: 'Security Audit', sub_project: 'Penetration Testing', date: '2025-06-03', hours: 6 },
-  { id: 6, employee_code: 'EMP005', full_name: 'Eva Patel', po_code: 'PO-2025-002', po_name: 'Data Analytics Platform', sub_project: 'Dashboard', date: '2025-06-03', hours: 8 },
-  { id: 7, employee_code: 'EMP006', full_name: 'Frank Nguyen', po_code: 'PO-2025-004', po_name: 'DevOps Modernisation', sub_project: 'CI/CD Pipeline', date: '2025-06-04', hours: 7 },
-  { id: 8, employee_code: 'EMP002', full_name: 'Bob Martinez', po_code: 'PO-2025-001', po_name: 'Cloud Migration Phase 1', sub_project: 'Frontend UI', date: '2025-06-04', hours: 8 },
-  { id: 9, employee_code: 'EMP007', full_name: 'Grace Kim', po_code: 'PO-2025-003', po_name: 'Security Audit', sub_project: 'Compliance Review', date: '2025-06-05', hours: 7.5 },
-  { id: 10, employee_code: 'EMP003', full_name: 'Carol White', po_code: 'PO-2025-002', po_name: 'Data Analytics Platform', sub_project: 'ETL Pipeline', date: '2025-06-05', hours: 8 },
-  { id: 11, employee_code: 'EMP008', full_name: 'Henry Brown', po_code: 'PO-2025-004', po_name: 'DevOps Modernisation', sub_project: 'Infrastructure', date: '2025-06-06', hours: 8 },
-  { id: 12, employee_code: 'EMP009', full_name: 'Irene Davis', po_code: 'PO-2025-005', po_name: 'Mobile App Development', sub_project: 'iOS App', date: '2025-06-06', hours: 7 },
-  { id: 13, employee_code: 'EMP010', full_name: 'James Wilson', po_code: 'PO-2025-005', po_name: 'Mobile App Development', sub_project: 'Android App', date: '2025-06-07', hours: 8 },
-  { id: 14, employee_code: 'EMP001', full_name: 'Alice Johnson', po_code: 'PO-2025-001', po_name: 'Cloud Migration Phase 1', sub_project: 'Backend API', date: '2025-06-07', hours: 7 },
-  { id: 15, employee_code: 'EMP005', full_name: 'Eva Patel', po_code: 'PO-2025-002', po_name: 'Data Analytics Platform', sub_project: 'Dashboard', date: '2025-06-08', hours: 8 },
+const columnHelper = createColumnHelper();
+
+const exportToExcel = (rows) => {
+  const header = ['Employee Code', 'Employee Name', 'Designation', 'Client', 'Service PO', 'PO Code', 'Sub-Project', 'Service Type', 'Billable', 'Date', 'Hours'];
+  const dataRows = rows.map((r) => [
+    r.employee_code ?? '',
+    r.full_name ?? '',
+    r.designation ?? '',
+    r.client_name ?? '',
+    r.service_po_name ?? '',
+    r.service_po_code ?? '',
+    r.sub_project_name ?? '',
+    r.service_type_name ?? '',
+    r.is_billable ? 'Yes' : 'No',
+    r.timesheet_date ?? '',
+    r.hours_logged != null ? Number(r.hours_logged) : '',
+  ]);
+  const ws = XLSX.utils.aoa_to_sheet([header, ...dataRows]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Timesheet Summary');
+  XLSX.writeFile(wb, 'Timesheet_Summary.xlsx');
+};
+
+const columns = [
+  columnHelper.accessor('employee_code', {
+    header: 'Code',
+    size: 110,
+    cell: (info) => (
+      <span className="font-mono text-xs text-muted-foreground">{info.getValue() || '—'}</span>
+    ),
+  }),
+  columnHelper.accessor('full_name', {
+    header: 'Employee',
+    cell: (info) => (
+      <div>
+        <p className="font-medium text-xs">{info.getValue() || '—'}</p>
+        {info.row.original.designation && (
+          <p className="text-[10px] text-muted-foreground">{info.row.original.designation}</p>
+        )}
+      </div>
+    ),
+  }),
+  columnHelper.accessor('client_name', {
+    header: 'Client',
+    cell: (info) => info.getValue() || <span className="text-muted-foreground">—</span>,
+  }),
+  columnHelper.accessor('service_po_name', {
+    header: 'Service PO',
+    cell: (info) => (
+      <div>
+        <p className="text-xs">{info.getValue() || '—'}</p>
+        {info.row.original.service_po_code && (
+          <p className="text-[10px] font-mono text-muted-foreground">{info.row.original.service_po_code}</p>
+        )}
+      </div>
+    ),
+  }),
+  columnHelper.accessor('sub_project_name', {
+    header: 'Sub-Project',
+    cell: (info) => info.getValue() || <span className="text-muted-foreground text-xs">—</span>,
+  }),
+  columnHelper.accessor('service_type_name', {
+    header: 'Service Type',
+    size: 130,
+    cell: (info) => info.getValue() || <span className="text-muted-foreground">—</span>,
+  }),
+  columnHelper.accessor('is_billable', {
+    header: 'Billable',
+    size: 90,
+    cell: (info) => {
+      const v = info.getValue();
+      return (
+        <span className={cn(
+          'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium',
+          v ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+            : 'bg-muted text-muted-foreground'
+        )}>
+          {v ? 'Yes' : 'No'}
+        </span>
+      );
+    },
+  }),
+  columnHelper.accessor('timesheet_date', {
+    header: 'Date',
+    size: 110,
+    cell: (info) => (
+      <span className="text-xs tabular-nums">{formatDate(info.getValue())}</span>
+    ),
+  }),
+  columnHelper.accessor('hours_logged', {
+    header: 'Hours',
+    size: 90,
+    cell: (info) => (
+      <span className="font-semibold tabular-nums">{formatHours(info.getValue())}</span>
+    ),
+  }),
 ];
 
-const PO_OPTIONS = [...new Set(MOCK_DATA.map((r) => r.po_code))];
-const EMPLOYEE_OPTIONS = [...new Set(MOCK_DATA.map((r) => r.full_name))];
-
-function descendingComparator(a, b, orderBy) {
-  if (b[orderBy] < a[orderBy]) return -1;
-  if (b[orderBy] > a[orderBy]) return 1;
-  return 0;
-}
-
-function getComparator(order, orderBy) {
-  return order === 'desc'
-    ? (a, b) => descendingComparator(a, b, orderBy)
-    : (a, b) => -descendingComparator(a, b, orderBy);
-}
-
-const HEAD_CELLS = [
-  { id: 'full_name', label: 'Employee', numeric: false },
-  { id: 'employee_code', label: 'Code', numeric: false },
-  { id: 'po_code', label: 'PO Code', numeric: false },
-  { id: 'po_name', label: 'PO Name', numeric: false },
-  { id: 'sub_project', label: 'Sub-Project', numeric: false },
-  { id: 'date', label: 'Date', numeric: false },
-  { id: 'hours', label: 'Hours', numeric: true },
-];
-
-export default function TimesheetSummary() {
+const TimesheetSummary = () => {
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [search, setSearch] = useState('');
-  const [selectedEmployee, setSelectedEmployee] = useState('');
-  const [selectedPO, setSelectedPO] = useState('');
-  const [dateFrom, setDateFrom] = useState(null);
-  const [dateTo, setDateTo] = useState(null);
-  const [order, setOrder] = useState('desc');
-  const [orderBy, setOrderBy] = useState('date');
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
 
-  const handleRequestSort = (property) => {
-    const isAsc = orderBy === property && order === 'asc';
-    setOrder(isAsc ? 'desc' : 'asc');
-    setOrderBy(property);
-    setPage(0);
+  const debouncedSearch = useDebounce(search, 400);
+
+  const params = {
+    page,
+    limit,
+    ...(startDate && { startDate }),
+    ...(endDate && { endDate }),
+    ...(debouncedSearch && { search: debouncedSearch }),
   };
 
-  const filtered = useMemo(() => {
-    return MOCK_DATA.filter((row) => {
-      const matchSearch = !search || row.full_name.toLowerCase().includes(search.toLowerCase()) || row.po_name.toLowerCase().includes(search.toLowerCase());
-      const matchEmployee = !selectedEmployee || row.full_name === selectedEmployee;
-      const matchPO = !selectedPO || row.po_code === selectedPO;
-      let matchDate = true;
-      if (dateFrom && dateTo) {
-        const d = parseISO(row.date);
-        matchDate = isWithinInterval(d, { start: dateFrom, end: dateTo });
-      } else if (dateFrom) {
-        matchDate = parseISO(row.date) >= dateFrom;
-      } else if (dateTo) {
-        matchDate = parseISO(row.date) <= dateTo;
-      }
-      return matchSearch && matchEmployee && matchPO && matchDate;
-    });
-  }, [search, selectedEmployee, selectedPO, dateFrom, dateTo]);
+  const { data, isPending } = useTimesheetSummary(params);
 
-  const sorted = useMemo(() => [...filtered].sort(getComparator(order, orderBy)), [filtered, order, orderBy]);
-  const paginated = sorted.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
-
-  const totalHours = filtered.reduce((a, r) => a + r.hours, 0);
-
-  const handleExport = () => {
-    const headers = 'Employee,Code,PO Code,PO Name,Sub-Project,Date,Hours\n';
-    const rows = sorted.map((r) =>
-      `${r.full_name},${r.employee_code},${r.po_code},${r.po_name},${r.sub_project},${r.date},${r.hours}`
-    ).join('\n');
-    const blob = new Blob([headers + rows], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'timesheet_summary.csv';
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const handleClearFilters = () => {
-    setSearch(''); setSelectedEmployee(''); setSelectedPO('');
-    setDateFrom(null); setDateTo(null); setPage(0);
-  };
-
-  const hasFilters = search || selectedEmployee || selectedPO || dateFrom || dateTo;
+  // data.data = { records: [...], summary: { total_hours_on_page } }
+  const rows    = Array.isArray(data?.data?.records) ? data.data.records : [];
+  const summary = data?.data?.summary ?? {};
+  const meta    = data?.meta ?? {};
 
   return (
-    <LocalizationProvider dateAdapter={AdapterDateFns}>
-      <Box>
-        <Box sx={{ mb: 3, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
-          <Box>
-            <Typography variant="h5" fontWeight={700} gutterBottom>Timesheet Summary</Typography>
-            <Typography variant="body2" color="text.secondary">Employee time entries across projects and sub-projects</Typography>
-          </Box>
-          <Button variant="outlined" startIcon={<FileDownloadOutlinedIcon />} onClick={handleExport} size="small">
-            Export CSV
+    <div>
+      <PageHeader
+        title="Timesheet Summary"
+        description="Review timesheet entries by employee, PO, and sub-project."
+        actions={rows.length > 0 ? (
+          <Button variant="outline" size="sm" onClick={() => exportToExcel(rows)}>
+            <Download className="mr-1.5 h-4 w-4" />Export Excel
           </Button>
-        </Box>
+        ) : null}
+      />
 
-        <Stack direction="row" spacing={2} sx={{ mb: 2 }} flexWrap="wrap">
-          <Chip label={`${filtered.length} entries`} size="small" variant="outlined" />
-          <Chip label={`Total: ${totalHours.toFixed(1)} hrs`} size="small" color="primary" variant="outlined" />
-        </Stack>
+      {/* Filter bar */}
+      <div className="mb-5 flex flex-wrap items-end gap-3">
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Start Date</Label>
+          <Input
+            type="date"
+            value={startDate}
+            onChange={(e) => { setStartDate(e.target.value); setPage(1); }}
+            className="h-9 w-40 text-sm"
+          />
+        </div>
 
-        <Paper elevation={0} variant="outlined" sx={{ p: 2, mb: 2, display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
-          <FilterListIcon sx={{ color: 'text.secondary' }} fontSize="small" />
-          <TextField
-            size="small"
-            placeholder="Search..."
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(0); }}
-            sx={{ minWidth: 180 }}
-            InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }}
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">End Date</Label>
+          <Input
+            type="date"
+            value={endDate}
+            onChange={(e) => { setEndDate(e.target.value); setPage(1); }}
+            className="h-9 w-40 text-sm"
           />
-          <FormControl size="small" sx={{ minWidth: 160 }}>
-            <InputLabel>Employee</InputLabel>
-            <Select value={selectedEmployee} label="Employee" onChange={(e) => { setSelectedEmployee(e.target.value); setPage(0); }}>
-              <MenuItem value="">All Employees</MenuItem>
-              {EMPLOYEE_OPTIONS.map((e) => <MenuItem key={e} value={e}>{e}</MenuItem>)}
-            </Select>
-          </FormControl>
-          <FormControl size="small" sx={{ minWidth: 160 }}>
-            <InputLabel>Purchase Order</InputLabel>
-            <Select value={selectedPO} label="Purchase Order" onChange={(e) => { setSelectedPO(e.target.value); setPage(0); }}>
-              <MenuItem value="">All POs</MenuItem>
-              {PO_OPTIONS.map((p) => <MenuItem key={p} value={p}>{p}</MenuItem>)}
-            </Select>
-          </FormControl>
-          <DatePicker
-            label="From Date"
-            value={dateFrom}
-            onChange={(v) => { setDateFrom(v); setPage(0); }}
-            slotProps={{ textField: { size: 'small', sx: { minWidth: 150 } } }}
-          />
-          <DatePicker
-            label="To Date"
-            value={dateTo}
-            onChange={(v) => { setDateTo(v); setPage(0); }}
-            slotProps={{ textField: { size: 'small', sx: { minWidth: 150 } } }}
-          />
-          {hasFilters && <Button size="small" onClick={handleClearFilters}>Clear</Button>}
-        </Paper>
+        </div>
 
-        <Paper elevation={0} variant="outlined" sx={{ overflow: 'hidden' }}>
-          <TableContainer sx={{ overflowX: 'auto' }}>
-            <Table size="small" stickyHeader>
-              <TableHead>
-                <TableRow>
-                  {HEAD_CELLS.map((cell) => (
-                    <TableCell
-                      key={cell.id}
-                      align={cell.numeric ? 'right' : 'left'}
-                      sortDirection={orderBy === cell.id ? order : false}
-                      sx={{ fontWeight: 600, bgcolor: '#F5F6FA', whiteSpace: 'nowrap' }}
-                    >
-                      <TableSortLabel
-                        active={orderBy === cell.id}
-                        direction={orderBy === cell.id ? order : 'asc'}
-                        onClick={() => handleRequestSort(cell.id)}
-                      >
-                        {cell.label}
-                      </TableSortLabel>
-                    </TableCell>
-                  ))}
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {paginated.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={HEAD_CELLS.length} align="center" sx={{ py: 6, color: 'text.secondary' }}>
-                      No timesheet entries found.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  paginated.map((row) => (
-                    <TableRow key={row.id} hover>
-                      <TableCell>{row.full_name}</TableCell>
-                      <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{row.employee_code}</TableCell>
-                      <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{row.po_code}</TableCell>
-                      <TableCell>{row.po_name}</TableCell>
-                      <TableCell>
-                        <Chip label={row.sub_project} size="small" variant="outlined" sx={{ fontSize: '0.72rem' }} />
-                      </TableCell>
-                      <TableCell sx={{ fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                        {format(parseISO(row.date), 'dd MMM yyyy')}
-                      </TableCell>
-                      <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: 'primary.main' }}>
-                        {row.hours.toFixed(1)}
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-          <TablePagination
-            component="div"
-            count={filtered.length}
-            page={page}
-            onPageChange={(_, p) => setPage(p)}
-            rowsPerPage={rowsPerPage}
-            onRowsPerPageChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0); }}
-            rowsPerPageOptions={[5, 10, 25, 50]}
-          />
-        </Paper>
-      </Box>
-    </LocalizationProvider>
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Search</Label>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Employee, PO…"
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              className="h-9 pl-9 w-52 text-sm"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Summary chip */}
+      {!isPending && summary.total_hours_on_page != null && (
+        <div className="mb-4 flex flex-wrap gap-3">
+          <div className="rounded-md border bg-blue-500/10 px-3 py-1.5 text-xs text-blue-700 dark:text-blue-400">
+            <span>Total Hours (this page) </span>
+            <span className="font-semibold tabular-nums">{Number(summary.total_hours_on_page).toFixed(1)}</span>
+          </div>
+        </div>
+      )}
+
+      <DataTable
+        columns={columns}
+        data={rows}
+        isLoading={isPending}
+        pagination={meta.total != null ? {
+          page: meta.page ?? page,
+          limit: meta.limit ?? limit,
+          total: meta.total,
+        } : undefined}
+        onPageChange={setPage}
+        onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
+      />
+    </div>
   );
-}
+};
+
+export default TimesheetSummary;
