@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Plus, Pencil, Trash2, Calculator, Upload } from 'lucide-react';
+import { Plus, Pencil, Trash2, Calculator, Upload, Search } from 'lucide-react';
 import { useMonthlyCosts, useDeleteMonthlyCost, useCalculateMonthlyCosts } from '@/hooks/useMonthlyCosts';
 import { useAuth } from '@/hooks/useAuth';
 import { useNotification } from '@/hooks/useNotification';
@@ -193,12 +193,24 @@ const MonthlyCostList = () => {
   };
 
   return (
-    <div>
+    <div className="space-y-4">
       <PageHeader
         title="Monthly Costs"
         description="Manage and review monthly employee cost records"
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by employee..."
+                className="pl-9 w-[250px] h-9 text-sm bg-white"
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(1);
+                }}
+              />
+            </div>
             <Button
               variant="outline"
               size="sm"
@@ -231,12 +243,6 @@ const MonthlyCostList = () => {
         columns={columns}
         data={records}
         isLoading={isPending}
-        searchValue={search}
-        onSearchChange={(v) => {
-          setSearch(v);
-          setPage(1);
-        }}
-        searchPlaceholder="Search by employee…"
         toolbar={
           <>
             <Select
@@ -246,7 +252,7 @@ const MonthlyCostList = () => {
                 setPage(1);
               }}
             >
-              <SelectTrigger className="h-9 w-36 text-sm">
+              <SelectTrigger className="h-9 w-36 text-sm bg-white">
                 <SelectValue placeholder="All months" />
               </SelectTrigger>
               <SelectContent>
@@ -267,7 +273,7 @@ const MonthlyCostList = () => {
                 setYearFilter(e.target.value);
                 setPage(1);
               }}
-              className="h-9 w-24 text-sm"
+              className="h-9 w-24 text-sm bg-white"
               min="2000"
               max="2100"
             />

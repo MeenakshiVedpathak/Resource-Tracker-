@@ -17,15 +17,8 @@ const AuthLayout = () => {
         <div className="absolute -top-24 -left-24 h-96 w-96 rounded-full bg-primary/20 blur-3xl" />
         <div className="absolute bottom-0 right-0 h-80 w-80 rounded-full bg-primary/10 blur-3xl" />
 
-        {/* Logo */}
         <div className="relative z-10 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary">
-            <span className="text-lg font-bold text-white">R</span>
-          </div>
-          <div>
-            <p className="text-base font-semibold text-white leading-none">RUT Portal</p>
-            <p className="text-xs text-white/50 mt-0.5">Resource & Cost Management</p>
-          </div>
+          <img src="/logo.png" alt="Logo" className="h-16 object-contain" />
         </div>
 
         {/* Center copy */}
@@ -59,12 +52,8 @@ const AuthLayout = () => {
 
       {/* Right panel — form */}
       <div className="flex flex-1 flex-col items-center justify-center bg-background px-6 py-12">
-        {/* Mobile logo */}
-        <div className="mb-8 flex items-center gap-2 lg:hidden">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-            <span className="text-sm font-bold text-white">R</span>
-          </div>
-          <span className="text-base font-semibold">RUT Portal</span>
+        <div className="mb-8 flex items-center justify-center lg:hidden">
+          <img src="/logo.png" alt="Logo" className="h-12 object-contain" />
         </div>
 
         <div className="w-full max-w-sm">

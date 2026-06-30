@@ -51,6 +51,7 @@ const ResourceAllocation = lazy(() => import('@/pages/reports/ResourceAllocation
 const OperationalCost = lazy(() => import('@/pages/reports/OperationalCost'));
 const MonthlyUtilization = lazy(() => import('@/pages/reports/MonthlyUtilization'));
 const ServicePOResource = lazy(() => import('@/pages/reports/ServicePOResource'));
+const ServicePOSummary = lazy(() => import('@/pages/reports/ServicePOSummary'));
 
 // ── Settings ──
 const Profile = lazy(() => import('@/pages/Profile'));
@@ -78,43 +79,50 @@ const AppRoutes = () => (
         <Route path={ROUTES.DASHBOARD} element={<Dashboard />} />
 
         {/* Employees */}
-        <Route path={ROUTES.EMPLOYEES} element={<EmployeeList />} />
-        <Route path={ROUTES.EMPLOYEE_NEW} element={<EmployeeForm />} />
-        <Route path={ROUTES.EMPLOYEE_EDIT} element={<EmployeeForm />} />
+        <Route path={ROUTES.EMPLOYEES} element={<EmployeeList />}>
+          <Route path="new" element={<EmployeeForm />} />
+          <Route path=":id/edit" element={<EmployeeForm />} />
+        </Route>
 
         {/* Users */}
-        <Route path={ROUTES.USERS} element={<UserList />} />
-        <Route path={ROUTES.USER_NEW} element={<UserForm />} />
-        <Route path={ROUTES.USER_EDIT} element={<UserForm />} />
+        <Route path={ROUTES.USERS} element={<UserList />}>
+          <Route path="new" element={<UserForm />} />
+          <Route path=":id/edit" element={<UserForm />} />
+        </Route>
 
         {/* Roles */}
         <Route path={ROUTES.ROLES} element={<RoleList />} />
 
         {/* Clients */}
-        <Route path={ROUTES.CLIENTS} element={<ClientList />} />
-        <Route path={ROUTES.CLIENT_NEW} element={<ClientForm />} />
-        <Route path={ROUTES.CLIENT_EDIT} element={<ClientForm />} />
+        <Route path={ROUTES.CLIENTS} element={<ClientList />}>
+          <Route path="new" element={<ClientForm />} />
+          <Route path=":id/edit" element={<ClientForm />} />
+        </Route>
 
         {/* Service POs */}
-        <Route path={ROUTES.SERVICE_POS} element={<ServicePOList />} />
-        <Route path={ROUTES.SERVICE_PO_NEW} element={<ServicePOForm />} />
+        <Route path={ROUTES.SERVICE_POS} element={<ServicePOList />}>
+          <Route path="new" element={<ServicePOForm />} />
+          <Route path=":id/edit" element={<ServicePOForm />} />
+        </Route>
         <Route path={ROUTES.SERVICE_PO_DETAIL} element={<ServicePODetail />} />
-        <Route path={ROUTES.SERVICE_PO_EDIT} element={<ServicePOForm />} />
 
         {/* Sub-projects */}
-        <Route path={ROUTES.SUB_PROJECTS} element={<SubProjectList />} />
-        <Route path={ROUTES.SUB_PROJECT_NEW} element={<SubProjectForm />} />
-        <Route path={ROUTES.SUB_PROJECT_EDIT} element={<SubProjectForm />} />
+        <Route path={ROUTES.SUB_PROJECTS} element={<SubProjectList />}>
+          <Route path="new" element={<SubProjectForm />} />
+          <Route path=":id/edit" element={<SubProjectForm />} />
+        </Route>
 
         {/* Service Types */}
-        <Route path={ROUTES.SERVICE_TYPES} element={<ServiceTypeList />} />
-        <Route path={ROUTES.SERVICE_TYPE_NEW} element={<ServiceTypeForm />} />
-        <Route path={ROUTES.SERVICE_TYPE_EDIT} element={<ServiceTypeForm />} />
+        <Route path={ROUTES.SERVICE_TYPES} element={<ServiceTypeList />}>
+          <Route path="new" element={<ServiceTypeForm />} />
+          <Route path=":id/edit" element={<ServiceTypeForm />} />
+        </Route>
 
         {/* Service Categories */}
-        <Route path={ROUTES.SERVICE_CATEGORIES} element={<ServiceCategoryList />} />
-        <Route path={ROUTES.SERVICE_CATEGORY_NEW} element={<ServiceCategoryForm />} />
-        <Route path={ROUTES.SERVICE_CATEGORY_EDIT} element={<ServiceCategoryForm />} />
+        <Route path={ROUTES.SERVICE_CATEGORIES} element={<ServiceCategoryList />}>
+          <Route path="new" element={<ServiceCategoryForm />} />
+          <Route path=":id/edit" element={<ServiceCategoryForm />} />
+        </Route>
 
         {/* Resources */}
         <Route path={ROUTES.TIMESHEETS} element={<TimesheetList />} />
@@ -136,6 +144,7 @@ const AppRoutes = () => (
           <Route path={ROUTES.REPORT_OPERATIONAL_COST} element={<OperationalCost />} />
           <Route path={ROUTES.REPORT_MONTHLY_UTILIZATION} element={<MonthlyUtilization />} />
           <Route path={ROUTES.REPORT_SERVICE_PO_RESOURCE} element={<ServicePOResource />} />
+          <Route path={ROUTES.REPORT_SERVICE_PO_SUMMARY} element={<ServicePOSummary />} />
         </Route>
 
         {/* Settings */}

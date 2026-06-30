@@ -8,6 +8,9 @@ import { formatDate } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
 
 const columnHelper = createColumnHelper();
 
@@ -17,6 +20,11 @@ const TimesheetList = () => {
 
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
+  
+  const currentDate = new Date();
+  const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
+  const [selectedMonth, setSelectedMonth] = useState(String(currentDate.getMonth() + 1));
+  const [selectedYear, setSelectedYear] = useState(String(currentDate.getFullYear()));
 
   const params = { page, limit };
 
@@ -87,12 +95,12 @@ const TimesheetList = () => {
   ];
 
   return (
-    <div>
+    <div className="space-y-4">
       <PageHeader
         title="Timesheet Imports"
         description="History of all uploaded timesheet files"
         actions={
-          <Button size="sm" onClick={() => navigate(ROUTES.TIMESHEET_UPLOAD)}>
+          <Button size="sm" onClick={() => setIsUploadDialogOpen(true)}>
             <Upload className="mr-1.5 h-4 w-4" />
             Upload Excel
           </Button>
@@ -116,6 +124,60 @@ const TimesheetList = () => {
         onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
         onRowClick={(row) => navigate(buildPath(ROUTES.TIMESHEET_IMPORT_DETAIL, { id: row.id }))}
       />
+
+      <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Select Period</DialogTitle>
+            <DialogDescription>
+              Choose the month and year for this timesheet import.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label>Month</Label>
+              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select month" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                    <SelectItem key={m} value={String(m)}>
+                      {new Date(0, m - 1).toLocaleString('default', { month: 'long' })}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label>Year</Label>
+              <Select value={selectedYear} onValueChange={setSelectedYear}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select year" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 5 }, (_, i) => currentDate.getFullYear() - 2 + i).map((y) => (
+                    <SelectItem key={y} value={String(y)}>
+                      {y}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsUploadDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={() => {
+              setIsUploadDialogOpen(false);
+              navigate(ROUTES.TIMESHEET_UPLOAD, { state: { month: selectedMonth, year: selectedYear } });
+            }}>
+              Continue
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

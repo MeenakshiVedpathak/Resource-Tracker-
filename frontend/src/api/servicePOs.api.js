@@ -10,6 +10,6 @@ export const servicePOsApi = {
   allocate: (id, employeeIds) =>
     apiClient.post(`/service-pos/${id}/allocate`, { employee_ids: employeeIds }).then((r) => r.data),
   deallocate: (id, employeeId) =>
-    apiClient.delete(`/service-pos/${id}/resources/${employeeId}`).then((r) => r.data),
+    apiClient.delete(`/service-pos/${id}/resources/${employeeId}`, { data: { is_delete: true } }).then((r) => r.data),
   getUtilisation: (id) => apiClient.get(`/service-pos/${id}/utilisation`).then((r) => r.data?.data),
 };

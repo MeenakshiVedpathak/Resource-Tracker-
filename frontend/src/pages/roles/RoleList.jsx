@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Outlet } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
 import { Pencil } from 'lucide-react';
 import { useRoles } from '@/hooks/useRoles';
@@ -12,8 +12,18 @@ import PageHeader from '@/components/common/PageHeader';
 import StatusBadge from '@/components/common/StatusBadge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { cn } from '@/utils/cn';
 
 const columnHelper = createColumnHelper();
+
+const TruncatedCell = ({ value, maxWidth = '150px', className }) => {
+  if (!value) return <span className="text-sm text-muted-foreground">—</span>;
+  return (
+    <div className={cn("text-sm truncate", className)} style={{ maxWidth }} title={value}>
+      {value}
+    </div>
+  );
+};
 
 const RoleList = () => {
   const navigate = useNavigate();
@@ -21,12 +31,15 @@ const RoleList = () => {
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
 
   const debouncedSearch = useDebounce(search, 400);
   const isManagement = hasRole('Management');
 
   const params = {
-    limit: 100,
+    page,
+    limit,
     ...(statusFilter !== 'all' && { status: statusFilter }),
     ...(debouncedSearch && { search: debouncedSearch }),
   };
@@ -34,11 +47,32 @@ const RoleList = () => {
   const { data, isPending } = useRoles(params);
 
   const roles = data?.data ?? [];
+  const meta = data?.meta ?? {};
 
   const columns = [
+    columnHelper.display({
+      id: 'actions',
+      header: 'Actions',
+      size: 90,
+      meta: { sticky: true, left: 0 },
+      cell: ({ row }) =>
+        isManagement ? (
+          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+            <Button
+              size="sm"
+              onClick={() => navigate(buildPath(ROUTES.ROLES + '/' + row.original.id + '/edit'))}
+              className="h-6 px-2 bg-blue-500 hover:bg-blue-600 text-white rounded font-normal text-[11px] transition-colors"
+            >
+              <Pencil className="h-3 w-3 mr-1" /> Edit
+            </Button>
+          </div>
+        ) : null,
+    }),
     columnHelper.accessor('role_name', {
       header: 'Role Name',
-      cell: (info) => <span className="font-medium">{info.getValue()}</span>,
+      size: 250,
+      meta: { sticky: true, left: 90 },
+      cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="230px" className="font-medium" />,
     }),
     columnHelper.accessor('status', {
       header: 'Status',
@@ -51,23 +85,6 @@ const RoleList = () => {
       cell: (info) => (
         <span className="text-xs text-muted-foreground">{formatDate(info.getValue())}</span>
       ),
-    }),
-    columnHelper.display({
-      id: 'actions',
-      size: 60,
-      cell: ({ row }) =>
-        isManagement ? (
-          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              title="Edit"
-              onClick={() => navigate(buildPath(ROUTES.ROLES + '/' + row.original.id + '/edit'))}
-            >
-              <Pencil className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        ) : null,
     }),
   ];
 
@@ -83,10 +100,10 @@ const RoleList = () => {
         data={roles}
         isLoading={isPending}
         searchValue={search}
-        onSearchChange={(v) => setSearch(v)}
+        onSearchChange={(v) => { setSearch(v); setPage(1); }}
         searchPlaceholder="Search roles…"
         toolbar={
-          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v)}>
+          <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
             <SelectTrigger className="h-9 w-32 text-sm">
               <SelectValue />
             </SelectTrigger>
@@ -97,7 +114,20 @@ const RoleList = () => {
             </SelectContent>
           </Select>
         }
+        pagination={
+          meta.total != null
+            ? {
+                page: meta.current_page ?? page,
+                limit: meta.per_page ?? limit,
+                total: meta.total,
+              }
+            : undefined
+        }
+        onPageChange={setPage}
+        onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
       />
+
+      <Outlet />
     </div>
   );
 };

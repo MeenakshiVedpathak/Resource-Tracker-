@@ -1,7 +1,8 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useMemo } from 'react';
+import { useNavigate, Outlet } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { useIsMutating } from '@tanstack/react-query';
+import { Plus, Pencil, Trash2, Search } from 'lucide-react';
 import { useEmployees, useDeleteEmployee } from '@/hooks/useEmployees';
 import { useAuth } from '@/hooks/useAuth';
 import { useNotification } from '@/hooks/useNotification';
@@ -9,16 +10,29 @@ import { useDebounce } from '@/hooks/useDebounce';
 import { extractApiError } from '@/services/apiClient';
 import { buildPath, ROUTES } from '@/constants/routes';
 import { formatDate } from '@/utils/formatters';
+import { cn } from '@/utils/cn';
 import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
 import StatusBadge from '@/components/common/StatusBadge';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
+import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 
 const columnHelper = createColumnHelper();
+
+const TruncatedCell = ({ value, maxWidth = '150px', className }) => {
+  if (!value) return <span className="text-sm text-muted-foreground">—</span>;
+  return (
+    <div className={cn("text-sm truncate", className)} style={{ maxWidth }} title={value}>
+      {value}
+    </div>
+  );
+};
+
+
 
 const EmployeeList = () => {
   const navigate = useNavigate();
@@ -37,85 +51,106 @@ const EmployeeList = () => {
     page,
     limit,
     status: statusFilter,
-    ...(debouncedSearch && { search: debouncedSearch }),
+    ...(debouncedSearch && debouncedSearch.length >= 3 && { search: debouncedSearch }),
   };
 
-  const { data, isPending } = useEmployees(params);
+  const { data, isPending, isFetching } = useEmployees(params);
   const deleteMutation = useDeleteEmployee();
+  const isMutating = useIsMutating();
 
   const employees = data?.data ?? [];
   const meta = data?.meta ?? {};
   const isHR = hasRole('HR', 'Management');
 
-  const columns = [
+  const columns = useMemo(() => [
+    columnHelper.display({
+      id: 'actions',
+      header: 'Actions',
+      size: 160,
+      meta: { sticky: true, left: 0 },
+      cell: ({ row }) => (
+        isHR ? (
+          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+            <Button
+              size="sm"
+              onClick={() => navigate(buildPath(ROUTES.EMPLOYEE_EDIT, { id: row.original.id }))}
+              className="h-6 px-2 bg-blue-500 hover:bg-blue-600 text-white rounded font-normal text-[11px] transition-colors"
+            >
+              <Pencil className="h-3 w-3 mr-1" /> Edit
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-[11px] text-destructive hover:text-destructive hover:bg-destructive/10"
+              title="Delete"
+              onClick={() => setDeleteTarget(row.original)}
+            >
+              <Trash2 className="h-3 w-3 mr-1" /> Delete
+            </Button>
+          </div>
+        ) : null
+      ),
+    }),
     columnHelper.accessor('employee_code', {
-      header: 'Code',
-      size: 110,
+      header: 'Employee ID',
+      size: 130,
+      meta: { sticky: true, left: 160 },
       cell: (info) => (
-        <span className="font-mono text-xs font-semibold text-muted-foreground">{info.getValue()}</span>
+        <TruncatedCell value={info.getValue()} maxWidth="100px" className="font-medium" />
       ),
     }),
     columnHelper.accessor('full_name', {
       header: 'Name',
-      cell: (info) => <span className="font-medium">{info.getValue()}</span>,
+      size: 200,
+      meta: { sticky: true, left: 290 },
+      cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="160px" />,
+    }),
+    columnHelper.accessor('email_id', {
+      header: 'Email ID',
+      size: 220,
+      cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="190px" />,
     }),
     columnHelper.accessor('designation', {
       header: 'Designation',
-      cell: (info) => info.getValue() || <span className="text-muted-foreground">—</span>,
+      size: 180,
+      cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="160px" />,
     }),
     columnHelper.accessor('total_experience', {
-      header: 'Experience',
-      size: 110,
+      header: 'Total Experience',
+      size: 120,
       cell: (info) => {
         const val = info.getValue();
         return val != null
-          ? <span className="tabular-nums">{val} yrs</span>
-          : <span className="text-muted-foreground">—</span>;
+          ? <span className="text-sm tabular-nums whitespace-nowrap">{val} yrs</span>
+          : <span className="text-sm text-muted-foreground">—</span>;
+      },
+    }),
+    columnHelper.accessor('company_experience', {
+      header: 'Company Experience',
+      size: 140,
+      cell: (info) => {
+        const val = info.getValue();
+        return val != null
+          ? <span className="text-sm tabular-nums whitespace-nowrap">{val} yrs</span>
+          : <span className="text-sm text-muted-foreground">—</span>;
       },
     }),
     columnHelper.accessor('date_of_joining', {
       header: 'Joined',
-      size: 120,
-      cell: (info) => <span className="text-xs">{formatDate(info.getValue())}</span>,
+      size: 110,
+      cell: (info) => <span className="text-sm whitespace-nowrap">{formatDate(info.getValue())}</span>,
     }),
     columnHelper.accessor('status', {
       header: 'Status',
       size: 100,
       cell: (info) => <StatusBadge status={info.getValue()} />,
     }),
-    columnHelper.display({
-      id: 'actions',
-      size: 88,
-      cell: ({ row }) => (
-        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            title="Edit"
-            onClick={() => navigate(buildPath(ROUTES.EMPLOYEE_EDIT, { id: row.original.id }))}
-          >
-            <Pencil className="h-3.5 w-3.5" />
-          </Button>
-          {isHR && (
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="text-destructive hover:text-destructive hover:bg-destructive/10"
-              title="Deactivate"
-              onClick={() => setDeleteTarget(row.original)}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          )}
-        </div>
-      ),
-    }),
-  ];
+  ], [navigate, isHR]);
 
   const handleDelete = () => {
     deleteMutation.mutate(deleteTarget.id, {
       onSuccess: () => {
-        success(`${deleteTarget.full_name} has been deactivated.`);
+        success(`${deleteTarget.full_name} has been Deleted.`);
         setDeleteTarget(null);
       },
       onError: (err) => {
@@ -125,18 +160,32 @@ const EmployeeList = () => {
     });
   };
 
+  const handleSearch = (e) => {
+    setSearch(e.target.value);
+    setPage(1);
+  };
+
   return (
-    <div>
+    <div className="space-y-4">
       <PageHeader
         title="Employees"
-        description="Manage your workforce — view, add, and update employee records"
         actions={
-          isHR && (
-            <Button size="sm" onClick={() => navigate(ROUTES.EMPLOYEE_NEW)}>
-              <Plus className="mr-1.5 h-4 w-4" />
-              Add Employee
-            </Button>
-          )
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by name, code..."
+                className="pl-9 w-[250px] h-9 text-sm bg-white"
+                value={search}
+                onChange={handleSearch}
+              />
+            </div>
+            {isHR && (
+              <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => navigate(ROUTES.EMPLOYEE_NEW)}>
+                <Plus className="mr-1.5 h-4 w-4" /> Add Employee
+              </Button>
+            )}
+          </div>
         }
       />
 
@@ -144,12 +193,9 @@ const EmployeeList = () => {
         columns={columns}
         data={employees}
         isLoading={isPending}
-        searchValue={search}
-        onSearchChange={(v) => { setSearch(v); setPage(1); }}
-        searchPlaceholder="Search by name, code, designation…"
         toolbar={
           <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
-            <SelectTrigger className="h-9 w-32 text-sm">
+            <SelectTrigger className="h-9 w-32 text-sm bg-white">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -172,12 +218,13 @@ const EmployeeList = () => {
       <ConfirmDialog
         open={!!deleteTarget}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
-        title="Deactivate employee?"
+        title="Delete employee?"
         description={`${deleteTarget?.full_name} will be set to inactive. They won't be assignable to new Service POs.`}
-        confirmLabel="Deactivate"
+        confirmLabel="Delete"
         onConfirm={handleDelete}
         isLoading={deleteMutation.isPending}
       />
+      <Outlet />
     </div>
   );
 };

@@ -80,26 +80,38 @@ const DataTable = ({
       )}
 
       {/* Table */}
-      <div className="rounded-xl border overflow-hidden bg-card">
-        <Table>
+      <div className="bg-white border rounded-lg overflow-hidden">
+        <Table className="data-table">
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id} className="hover:bg-transparent border-b bg-muted/30">
-                {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id} style={{ width: header.getSize() !== 150 ? header.getSize() : undefined }}>
-                    {header.isPlaceholder ? null : header.column.getCanSort() ? (
-                      <button
-                        onClick={header.column.getToggleSortingHandler()}
-                        className="inline-flex items-center gap-0.5 hover:text-foreground transition-colors"
-                      >
-                        {flexRender(header.column.columnDef.header, header.getContext())}
-                        <SortIcon column={header.column} />
-                      </button>
-                    ) : (
-                      flexRender(header.column.columnDef.header, header.getContext())
-                    )}
-                  </TableHead>
-                ))}
+              <TableRow key={headerGroup.id} className="hover:bg-transparent border-b bg-slate-50">
+                {headerGroup.headers.map((header) => {
+                  const isSticky = header.column.columnDef.meta?.sticky;
+                  const left = header.column.columnDef.meta?.left || 0;
+                  const w = header.getSize() !== 150 ? header.getSize() : undefined;
+                  return (
+                    <TableHead
+                      key={header.id}
+                      className={cn(isSticky && 'sticky-col')}
+                      style={{
+                        ...(w ? { width: w, minWidth: w, maxWidth: w } : {}),
+                        ...(isSticky ? { left } : {})
+                      }}
+                    >
+                      {header.isPlaceholder ? null : header.column.getCanSort() ? (
+                        <button
+                          onClick={header.column.getToggleSortingHandler()}
+                          className="inline-flex items-center gap-0.5 hover:text-foreground transition-colors"
+                        >
+                          {flexRender(header.column.columnDef.header, header.getContext())}
+                          <SortIcon column={header.column} />
+                        </button>
+                      ) : (
+                        flexRender(header.column.columnDef.header, header.getContext())
+                      )}
+                    </TableHead>
+                  );
+                })}
               </TableRow>
             ))}
           </TableHeader>
@@ -134,11 +146,23 @@ const DataTable = ({
                   )}
                   onClick={() => onRowClick?.(row.original)}
                 >
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </TableCell>
-                  ))}
+                  {row.getVisibleCells().map((cell) => {
+                    const isSticky = cell.column.columnDef.meta?.sticky;
+                    const left = cell.column.columnDef.meta?.left || 0;
+                    const w = cell.column.getSize() !== 150 ? cell.column.getSize() : undefined;
+                    return (
+                      <TableCell
+                        key={cell.id}
+                        className={cn(isSticky && 'sticky-col')}
+                        style={{
+                          ...(w ? { width: w, minWidth: w, maxWidth: w } : {}),
+                          ...(isSticky ? { left } : {})
+                        }}
+                      >
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    );
+                  })}
                 </motion.tr>
               ))
             )}
@@ -157,11 +181,11 @@ const DataTable = ({
               <div className="flex items-center gap-2">
                 <span className="text-xs text-muted-foreground whitespace-nowrap">Rows per page</span>
                 <Select value={String(pagination.limit)} onValueChange={(v) => onPageSizeChange(Number(v))}>
-                  <SelectTrigger className="h-8 w-16 text-xs">
+                  <SelectTrigger className="h-8 w-16 text-xs bg-white">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {[10, 20, 50, 100].map((size) => (
+                    {Array.from(new Set([10, 20, 50, 100, Number(pagination.limit)])).sort((a,b) => a - b).map((size) => (
                       <SelectItem key={size} value={String(size)}>{size}</SelectItem>
                     ))}
                   </SelectContent>

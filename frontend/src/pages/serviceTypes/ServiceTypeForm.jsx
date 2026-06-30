@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Save } from 'lucide-react';
+import { Save } from 'lucide-react';
 import { useServiceType, useCreateServiceType, useUpdateServiceType } from '@/hooks/useServiceTypes';
 import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
 import { useNotification } from '@/hooks/useNotification';
@@ -15,10 +15,15 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import PageHeader from '@/components/common/PageHeader';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetFooter,
+} from "@/components/ui/sheet";
 
 const schema = z.object({
   service_type_name: z
@@ -31,16 +36,11 @@ const schema = z.object({
 });
 
 const FormSkeleton = () => (
-  <Card>
-    <CardContent className="p-6 space-y-4">
-      {Array.from({ length: 2 }).map((_, i) => (
-        <div key={i} className="space-y-2">
-          <Skeleton className="h-4 w-24" />
-          <Skeleton className="h-9 w-full" />
-        </div>
-      ))}
-    </CardContent>
-  </Card>
+  <div className="space-y-4 p-4">
+    {Array.from({ length: 2 }).map((_, i) => (
+      <div key={i} className="space-y-2 h-14 bg-muted animate-pulse rounded-md" />
+    ))}
+  </div>
 );
 
 const ServiceTypeForm = () => {
@@ -76,10 +76,14 @@ const ServiceTypeForm = () => {
     mutation.mutate(values, {
       onSuccess: () => {
         success(isEdit ? 'Service type updated.' : 'Service type created.');
-        navigate(ROUTES.SERVICE_TYPES);
+        handleClose();
       },
       onError: (err) => showError(extractApiError(err)),
     });
+  };
+
+  const handleClose = () => {
+    navigate(ROUTES.SERVICE_TYPES);
   };
 
   const isSubmitting = createMutation.isPending || updateMutation.isPending;
@@ -87,94 +91,85 @@ const ServiceTypeForm = () => {
   if (isEdit && isLoading) return <FormSkeleton />;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="w-full max-w-lg"
-    >
-      <PageHeader
-        title={isEdit ? 'Edit Service Type' : 'New Service Type'}
-        description={
-          isEdit
-            ? `Updating: ${serviceType?.service_type_name ?? ''}`
-            : 'Add a new service type'
-        }
-        actions={
-          <Button variant="outline" size="sm" onClick={() => navigate(ROUTES.SERVICE_TYPES)}>
-            <ArrowLeft className="mr-1.5 h-4 w-4" />
-            Back
-          </Button>
-        }
-      />
+    <Sheet open={true} onOpenChange={(open) => !open && handleClose()}>
+      <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col bg-white overflow-hidden">
+        <SheetHeader className="px-5 py-3 border-b">
+          <SheetTitle className="text-base font-medium text-left">{isEdit ? 'Edit Service Type' : 'New Service Type'}</SheetTitle>
+        </SheetHeader>
 
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm">Service Type Details</CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <FormField
-                control={form.control}
-                name="service_type_name"
-                render={({ field }) => (
-                  <FormItem className="sm:col-span-2">
-                    <FormLabel>
-                      Service Type Name <span className="text-destructive">*</span>
-                    </FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g. Cloud Support" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+        <div className="flex-1 overflow-y-auto">
+          {isEdit && isLoading ? (
+            <FormSkeleton />
+          ) : (
+            <Form {...form}>
+              <form id="type-form" onSubmit={form.handleSubmit(onSubmit)} className="p-5 flex flex-col gap-5">
+                <div className="space-y-2">
+                  <h3 className="text-xs font-semibold text-foreground border-b pb-1">Service Type Details</h3>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <FormField
+                  control={form.control}
+                  name="service_category_id"
+                  render={({ field }) => (
+                    <FormItem className="space-y-1 sm:col-span-2">
+                      <FormLabel className="text-[13px]">
+                        <span className="text-destructive">*</span> Service Category
+                      </FormLabel>
+                      <Select
+                        value={field.value ? String(field.value) : ''}
+                        onValueChange={(v) => field.onChange(Number(v))}
+                        disabled={isLoadingCategories}
+                      >
+                        <FormControl>
+                          <SelectTrigger className="h-8 text-sm">
+                            <SelectValue placeholder="Select service category" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {serviceCategories.map((c) => (
+                            <SelectItem key={c.id} value={String(c.id)}>
+                              {c.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-              <FormField
-                control={form.control}
-                name="service_category_id"
-                render={({ field }) => (
-                  <FormItem className="sm:col-span-2">
-                    <FormLabel>
-                      Service Category <span className="text-destructive">*</span>
-                    </FormLabel>
-                    <Select
-                      value={field.value ? String(field.value) : ''}
-                      onValueChange={(v) => field.onChange(Number(v))}
-                      disabled={isLoadingCategories}
-                    >
+                <FormField
+                  control={form.control}
+                  name="service_type_name"
+                  render={({ field }) => (
+                    <FormItem className="space-y-1 sm:col-span-2">
+                      <FormLabel className="text-[13px]">
+                        <span className="text-destructive">*</span> Service Type Name
+                      </FormLabel>
                       <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select service category" />
-                        </SelectTrigger>
+                        <Input placeholder="e.g. Cloud Support" className="h-8 text-sm" {...field} />
                       </FormControl>
-                      <SelectContent>
-                        {serviceCategories.map((c) => (
-                          <SelectItem key={c.id} value={String(c.id)}>
-                            {c.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </CardContent>
-          </Card>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                  </div>
+                </div>
+              </form>
+            </Form>
+          )}
+        </div>
 
-          <div className="flex items-center justify-end gap-3">
-            <Button type="button" variant="outline" onClick={() => navigate(ROUTES.SERVICE_TYPES)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              <Save className="mr-1.5 h-4 w-4" />
-              {isSubmitting ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Service Type'}
-            </Button>
-          </div>
-        </form>
-      </Form>
-    </motion.div>
+        <SheetFooter className="px-5 py-3 border-t flex items-center justify-end gap-3 sm:justify-end">
+          <Button type="button" variant="outline" size="sm" onClick={handleClose}>
+            Cancel
+          </Button>
+          <Button type="submit" size="sm" disabled={isSubmitting} form="type-form">
+            <Save className="mr-1.5 h-3.5 w-3.5" />
+            {isSubmitting ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Service Type'}
+          </Button>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   );
 };
 

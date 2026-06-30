@@ -60,6 +60,7 @@ export const ROUTES = {
   REPORT_OPERATIONAL_COST: '/reports/operational-cost',
   REPORT_MONTHLY_UTILIZATION: '/reports/monthly-utilization',
   REPORT_SERVICE_PO_RESOURCE: '/reports/service-po-resource',
+  REPORT_SERVICE_PO_SUMMARY: '/reports/service-po-summary',
 
   // Settings
   PROFILE: '/profile',

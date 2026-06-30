@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Outlet } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
 import { Plus, Pencil, Eye } from 'lucide-react';
 import { useServicePOs } from '@/hooks/useServicePOs';
@@ -14,8 +14,18 @@ import StatusBadge from '@/components/common/StatusBadge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { cn } from '@/utils/cn';
 
 const columnHelper = createColumnHelper();
+
+const TruncatedCell = ({ value, maxWidth = '150px', className }) => {
+  if (!value) return <span className="text-sm text-muted-foreground">—</span>;
+  return (
+    <div className={cn("text-sm truncate", className)} style={{ maxWidth }} title={value}>
+      {value}
+    </div>
+  );
+};
 
 const ServicePOList = () => {
   const navigate = useNavigate();
@@ -48,47 +58,71 @@ const ServicePOList = () => {
   const meta = data?.meta ?? {};
 
   const columns = [
+    columnHelper.display({
+      id: 'actions',
+      header: 'Actions',
+      size: 160,
+      meta: { sticky: true, left: 0 },
+      cell: ({ row }) => (
+        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+          <Button
+            size="sm"
+            onClick={() => navigate(buildPath(ROUTES.SERVICE_PO_DETAIL, { id: row.original.id }))}
+            className="h-6 px-2 bg-blue-500 hover:bg-blue-600 text-white rounded font-normal text-[11px] transition-colors"
+          >
+            <Eye className="h-3 w-3 mr-1" /> View
+          </Button>
+          {canManage && (
+            <Button
+              size="sm"
+              onClick={() => navigate(buildPath(ROUTES.SERVICE_PO_EDIT, { id: row.original.id }))}
+              className="h-6 px-2 bg-blue-500 hover:bg-blue-600 text-white rounded font-normal text-[11px] transition-colors"
+            >
+              <Pencil className="h-3 w-3 mr-1" /> Edit
+            </Button>
+          )}
+        </div>
+      ),
+    }),
+
     columnHelper.accessor('service_po_code', {
       header: 'PO Code',
-      size: 130,
+      size: 160,
+      meta: { sticky: true, left: 160 },
       cell: (info) => (
-        <span className="font-mono text-xs font-semibold text-muted-foreground">
+        <div className="font-mono text-xs font-semibold text-muted-foreground truncate" style={{ maxWidth: "160px" }} title={info.getValue()}>
           {info.getValue()}
-        </span>
+        </div>
       ),
     }),
     columnHelper.accessor('service_po_name', {
       header: 'PO Name',
-      cell: (info) => <span className="font-medium">{info.getValue()}</span>,
+      size: 300,
+      cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="280px" className="font-medium" />,
     }),
     columnHelper.accessor('client_name', {
       header: 'Client',
-      cell: (info) =>
-        info.getValue() ? (
-          info.getValue()
-        ) : (
-          <span className="text-muted-foreground">—</span>
-        ),
+      size: 220,
+      cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="200px" />,
     }),
     columnHelper.accessor('service_type_id', {
       header: 'Service Type',
-      size: 150,
-      cell: (info) => serviceTypeMap[info.getValue()] ?? <span className="text-muted-foreground">—</span>,
+      size: 220,
+      cell: (info) => <TruncatedCell value={serviceTypeMap[info.getValue()]} maxWidth="200px" />,
     }),
     columnHelper.accessor('account_manager', {
       header: 'Account Manager',
-      size: 150,
-      cell: (info) => info.getValue() || <span className="text-muted-foreground">—</span>,
+      size: 180,
+      cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="160px" />,
     }),
     columnHelper.accessor('service_description', {
       header: 'Description',
-      cell: (info) => info.getValue()
-        ? <span className="line-clamp-2 text-xs text-muted-foreground">{info.getValue()}</span>
-        : <span className="text-muted-foreground">—</span>,
+      size: 300,
+      cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="280px" className="text-muted-foreground" />,
     }),
     columnHelper.accessor('po_value', {
       header: 'PO Value',
-      size: 120,
+      size: 160,
       cell: (info) =>
         info.getValue() != null ? (
           formatCurrency(info.getValue())
@@ -98,12 +132,12 @@ const ServicePOList = () => {
     }),
     columnHelper.accessor('invoice_frequency', {
       header: 'Invoice Freq.',
-      size: 130,
+      size: 160,
       cell: (info) => info.getValue() || <span className="text-muted-foreground">—</span>,
     }),
-    columnHelper.accessor('invoiced_amount', {
-      header: 'Invoiced Amount',
-      size: 140,
+    columnHelper.accessor('invoice_amount', {
+      header: 'Invoice Amount',
+      size: 160,
       cell: (info) =>
         info.getValue() != null ? (
           <span className="tabular-nums font-medium">{formatCurrency(info.getValue())}</span>
@@ -113,44 +147,18 @@ const ServicePOList = () => {
     }),
     columnHelper.accessor('start_date', {
       header: 'Start Date',
-      size: 110,
+      size: 130,
       cell: (info) => formatDate(info.getValue()),
     }),
     columnHelper.accessor('end_date', {
       header: 'End Date',
-      size: 110,
+      size: 130,
       cell: (info) => formatDate(info.getValue()),
     }),
     columnHelper.accessor('status', {
       header: 'Status',
-      size: 110,
+      size: 140,
       cell: (info) => <StatusBadge status={info.getValue()} />,
-    }),
-    columnHelper.display({
-      id: 'actions',
-      size: 96,
-      cell: ({ row }) => (
-        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-          {canManage && (
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              title="Edit"
-              onClick={() => navigate(buildPath(ROUTES.SERVICE_PO_EDIT, { id: row.original.id }))}
-            >
-              <Pencil className="h-3.5 w-3.5" />
-            </Button>
-          )}
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            title="View Detail"
-            onClick={() => navigate(buildPath(ROUTES.SERVICE_PO_DETAIL, { id: row.original.id }))}
-          >
-            <Eye className="h-3.5 w-3.5" />
-          </Button>
-        </div>
-      ),
     }),
   ];
 
@@ -203,16 +211,18 @@ const ServicePOList = () => {
         pagination={
           meta.total != null
             ? {
-                page: meta.page ?? page,
-                limit: meta.limit ?? limit,
-                total: meta.total,
-              }
+              page: meta.page ?? page,
+              limit: meta.limit ?? limit,
+              total: meta.total,
+            }
             : undefined
         }
         onPageChange={setPage}
         onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
         onRowClick={(row) => navigate(buildPath(ROUTES.SERVICE_PO_DETAIL, { id: row.id }))}
       />
+
+      <Outlet />
     </div>
   );
 };

@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useDropzone } from 'react-dropzone';
 import { UploadCloud, FileSpreadsheet, X, CheckCircle2, AlertCircle, ArrowLeft } from 'lucide-react';
 import { timesheetsApi } from '@/api/timesheets.api';
@@ -26,12 +26,17 @@ const MAX_SIZE = 10 * 1024 * 1024; // 10 MB
 
 const TimesheetUpload = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { success, error: showError } = useNotification();
 
   const [step, setStep] = useState(1); // 1 = upload, 2 = preview
   const [selectedFile, setSelectedFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [preview, setPreview] = useState(null); // { importId, valid_rows, error_rows }
+  
+  const currentDate = new Date();
+  const month = location.state?.month || String(currentDate.getMonth() + 1);
+  const year = location.state?.year || String(currentDate.getFullYear());
 
   const confirmMutation = useConfirmImport();
 
@@ -63,7 +68,7 @@ const TimesheetUpload = () => {
     if (!selectedFile) return;
     setIsUploading(true);
     try {
-      const result = await timesheetsApi.upload(selectedFile);
+      const result = await timesheetsApi.upload(selectedFile, month, year);
       setPreview({
         importId:   result?.importId,
         totalRows:  result?.totalRows  ?? 0,
@@ -121,6 +126,14 @@ const TimesheetUpload = () => {
 
       {step === 1 && (
         <div className="space-y-5">
+          {/* Period Details */}
+          <div className="flex items-center gap-3 p-3 rounded-lg bg-primary/5 border border-primary/20">
+            <span className="text-sm font-medium text-primary">Selected Period:</span>
+            <Badge variant="outline" className="bg-white">
+              {new Date(0, parseInt(month) - 1).toLocaleString('default', { month: 'long' })} {year}
+            </Badge>
+          </div>
+
           {/* Drop zone */}
           <Card>
             <CardContent className="p-6">
@@ -292,7 +305,9 @@ const TimesheetUpload = () => {
                             {row.rowNumber ?? row.row_number ?? idx + 1}
                           </TableCell>
                           <TableCell className="text-sm text-destructive">
-                            {row.message ?? row.error_message ?? row.error ?? '—'}
+                            {row.errors?.length > 0
+                              ? row.errors.join(', ')
+                              : row.message ?? row.error_message ?? row.error ?? '—'}
                           </TableCell>
                         </TableRow>
                       ))}

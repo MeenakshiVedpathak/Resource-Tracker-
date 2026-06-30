@@ -66,3 +66,11 @@ export const useServicePOResourceReport = (params) =>
     queryFn: () => reportsApi.getResourceAllocation(params),
     placeholderData: (prev) => prev,
   });
+
+export const useServicePOSummary = (params) =>
+  useQuery({
+    queryKey: QUERY_KEYS.REPORT_SERVICE_PO_SUMMARY(params),
+    queryFn: () => reportsApi.getServicePOSummary(params),
+    enabled: !!(params?.month && params?.year),
+    placeholderData: (prev) => prev,
+  });

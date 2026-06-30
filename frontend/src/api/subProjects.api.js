@@ -6,5 +6,5 @@ export const subProjectsApi = {
   getById: (id) => apiClient.get(`/sub-projects/${id}`).then((r) => r.data?.data),
   create: (payload) => apiClient.post('/sub-projects', payload).then((r) => r.data),
   update: (id, payload) => apiClient.put(`/sub-projects/${id}`, payload).then((r) => r.data),
-  delete: (id) => apiClient.delete(`/sub-projects/${id}`).then((r) => r.data),
+  delete: (id) => apiClient.delete(`/sub-projects/${id}`, { data: { is_delete: true } }).then((r) => r.data),
 };

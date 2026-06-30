@@ -57,6 +57,7 @@ const NAV_GROUPS = [
          
           { label: 'Employee Hourly Rate',  to: ROUTES.REPORT_HOURLY_RATE },
           { label: 'Monthly Cost Summary',  to: ROUTES.REPORT_MONTHLY_COST },
+          { label: 'Service PO Summary',    to: ROUTES.REPORT_SERVICE_PO_SUMMARY },
           { label: 'Timesheet Summary',     to: ROUTES.REPORT_TIMESHEET },
           { label: 'PO Utilisation',        to: ROUTES.REPORT_PO_UTILISATION },
           { label: 'Sub-Project Hours',     to: ROUTES.REPORT_SUB_PROJECT_HOURS },
@@ -107,9 +108,8 @@ const NavItem = ({ item, collapsed }) => {
       <Link
         to={item.to}
         className={cn(
-          'nav-item group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all',
-          'text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-hover',
-          active && 'active text-sidebar-foreground bg-sidebar-hover/80',
+          'nav-item group relative flex items-center gap-3 transition-all',
+          active && 'active',
           collapsed && 'justify-center px-2'
         )}
         title={collapsed ? item.label : undefined}
@@ -171,23 +171,9 @@ const Sidebar = () => {
         'flex h-16 shrink-0 items-center border-b border-sidebar-border px-4 gap-3',
         collapsed && 'justify-center px-2'
       )}>
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary">
-          <span className="text-sm font-bold text-white">R</span>
+        <div className="flex shrink-0 items-center justify-center rounded-lg">
+          <img src="/logo.png" alt="Logo" className={cn("object-contain", collapsed ? "w-8" : "h-10")} />
         </div>
-        <AnimatePresence initial={false}>
-          {!collapsed && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.1 }}
-              className="overflow-hidden"
-            >
-              <p className="text-sm font-semibold text-sidebar-foreground leading-none whitespace-nowrap">RUT Portal</p>
-              <p className="text-[10px] text-sidebar-foreground/40 mt-0.5 whitespace-nowrap">Resource Management</p>
-            </motion.div>
-          )}
-        </AnimatePresence>
       </div>
 
       {/* Navigation */}

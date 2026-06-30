@@ -17,5 +17,5 @@ export const employeesApi = {
     apiClient.put(`/employees/${id}`, payload).then((r) => r.data),
 
   delete: (id) =>
-    apiClient.delete(`/employees/${id}`).then((r) => r.data),
+    apiClient.delete(`/employees/${id}`, { data: { is_delete: true } }).then((r) => r.data),
 };

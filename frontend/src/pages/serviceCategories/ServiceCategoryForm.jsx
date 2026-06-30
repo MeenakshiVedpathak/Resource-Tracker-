@@ -1,10 +1,10 @@
 import { useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Save } from 'lucide-react';
+import { Save } from 'lucide-react';
 import { useServiceCategory, useCreateServiceCategory, useUpdateServiceCategory } from '@/hooks/useServiceCategories';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
@@ -14,10 +14,16 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import PageHeader from '@/components/common/PageHeader';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetFooter,
+} from "@/components/ui/sheet";
+import { cn } from '@/utils/cn';
 
 const schema = z.object({
   name: z
@@ -28,16 +34,11 @@ const schema = z.object({
 });
 
 const FormSkeleton = () => (
-  <Card>
-    <CardContent className="p-6 space-y-4">
-      {Array.from({ length: 2 }).map((_, i) => (
-        <div key={i} className="space-y-2">
-          <Skeleton className="h-4 w-24" />
-          <Skeleton className="h-9 w-full" />
-        </div>
-      ))}
-    </CardContent>
-  </Card>
+  <div className="space-y-4 p-4">
+    {Array.from({ length: 2 }).map((_, i) => (
+      <div key={i} className="space-y-2 h-14 bg-muted animate-pulse rounded-md" />
+    ))}
+  </div>
 );
 
 const ServiceCategoryForm = () => {
@@ -55,6 +56,8 @@ const ServiceCategoryForm = () => {
     defaultValues: { name: '', status: 'active' },
   });
 
+  const formStatus = useWatch({ control: form.control, name: 'status' });
+
   useEffect(() => {
     if (category && isEdit) {
       form.reset({
@@ -69,10 +72,14 @@ const ServiceCategoryForm = () => {
     mutation.mutate(values, {
       onSuccess: () => {
         success(isEdit ? 'Service category updated.' : 'Service category created.');
-        navigate(ROUTES.SERVICE_CATEGORIES);
+        handleClose();
       },
       onError: (err) => showError(extractApiError(err)),
     });
+  };
+
+  const handleClose = () => {
+    navigate(ROUTES.SERVICE_CATEGORIES);
   };
 
   const isSubmitting = createMutation.isPending || updateMutation.isPending;
@@ -80,81 +87,79 @@ const ServiceCategoryForm = () => {
   if (isEdit && isLoading) return <FormSkeleton />;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="w-full max-w-lg"
-    >
-      <PageHeader
-        title={isEdit ? 'Edit Service Category' : 'New Service Category'}
-        description={isEdit ? `Updating: ${category?.name ?? ''}` : 'Add a new service category'}
-        actions={
-          <Button variant="outline" size="sm" onClick={() => navigate(ROUTES.SERVICE_CATEGORIES)}>
-            <ArrowLeft className="mr-1.5 h-4 w-4" />
-            Back
-          </Button>
-        }
-      />
+    <Sheet open={true} onOpenChange={(open) => !open && handleClose()}>
+      <SheetContent side="right" className="w-full sm:max-w-sm p-0 flex flex-col bg-white overflow-hidden">
+        <SheetHeader className="px-5 py-3 border-b">
+          <SheetTitle className="text-base font-medium text-left">{isEdit ? 'Edit Service Category' : 'New Service Category'}</SheetTitle>
+        </SheetHeader>
 
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm">Category Details</CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem className="sm:col-span-2">
-                    <FormLabel>
-                      Category Name <span className="text-destructive">*</span>
-                    </FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g. Managed Services" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="status"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Status</FormLabel>
-                    <Select value={field.value} onValueChange={field.onChange}>
+        <div className="flex-1 overflow-y-auto">
+          {isEdit && isLoading ? (
+            <FormSkeleton />
+          ) : (
+            <Form {...form}>
+              <form id="category-form" onSubmit={form.handleSubmit(onSubmit)} className="p-5 flex flex-col gap-5">
+                <div className="space-y-2">
+                  <h3 className="text-xs font-semibold text-foreground border-b pb-1">Category Details</h3>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem className="space-y-1 sm:col-span-2">
+                      <FormLabel className="text-[11px] text-muted-foreground font-medium">
+                        <span className="text-destructive mr-0.5">*</span> Category Name 
+                      </FormLabel>
                       <FormControl>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
+                        <Input placeholder="e.g. Managed Services" className="h-8 text-sm" {...field} />
                       </FormControl>
-                      <SelectContent>
-                        <SelectItem value="active">Active</SelectItem>
-                        <SelectItem value="inactive">Inactive</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </CardContent>
-          </Card>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-          <div className="flex items-center justify-end gap-3">
-            <Button type="button" variant="outline" onClick={() => navigate(ROUTES.SERVICE_CATEGORIES)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              <Save className="mr-1.5 h-4 w-4" />
-              {isSubmitting ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Category'}
-            </Button>
-          </div>
-        </form>
-      </Form>
-    </motion.div>
+                <FormField
+                  control={form.control}
+                  name="status"
+                  render={({ field }) => (
+                    <FormItem className="space-y-1 mt-1">
+                      <FormLabel className="text-[11px] text-muted-foreground font-medium">Status</FormLabel>
+                      <FormControl>
+                        <div>
+                          <button
+                            type="button"
+                            onClick={() => field.onChange(formStatus === 'active' ? 'inactive' : 'active')}
+                            className={cn(
+                              "flex items-center justify-between gap-1.5 rounded-full px-2 py-1 w-[72px] transition-all duration-300 focus:outline-none",
+                              formStatus === 'active' ? "bg-blue-500 text-white flex-row" : "bg-slate-300 text-slate-700 flex-row-reverse"
+                            )}
+                          >
+                            <span className="text-[11px] font-medium leading-none px-0.5">{formStatus === 'active' ? 'Active' : 'Inactive'}</span>
+                            <div className="h-3 w-3 shrink-0 rounded-full bg-white shadow-sm" />
+                          </button>
+                        </div>
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                  </div>
+                </div>
+              </form>
+            </Form>
+          )}
+        </div>
+
+        <SheetFooter className="px-5 py-3 border-t flex items-center justify-end gap-3 sm:justify-end">
+          <Button type="button" variant="outline" size="sm" onClick={handleClose}>
+            Cancel
+          </Button>
+          <Button type="submit" size="sm" disabled={isSubmitting} form="category-form">
+            <Save className="mr-1.5 h-3.5 w-3.5" />
+            {isSubmitting ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Category'}
+          </Button>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   );
 };
 

@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Save } from 'lucide-react';
+import { Save } from 'lucide-react';
 import { useServicePO, useCreateServicePO, useUpdateServicePO } from '@/hooks/useServicePOs';
 import { useActiveClients } from '@/hooks/useClients';
 import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
@@ -17,20 +17,19 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
-import PageHeader from '@/components/common/PageHeader';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetFooter,
+} from "@/components/ui/sheet";
 
 const poSchema = z
   .object({
-    service_po_code: z
-      .string()
-      .min(2, 'PO code must be at least 2 characters')
-      .max(30, 'PO code cannot exceed 30 characters')
-      .regex(/^[A-Z0-9/_-]+$/, 'Only uppercase letters, numbers, /, _, - allowed')
-      .transform((v) => v.toUpperCase()),
     service_po_name: z
       .string()
       .min(3, 'PO name must be at least 3 characters')
@@ -52,12 +51,12 @@ const poSchema = z
     account_manager: z.string().min(1, 'Account manager is required').max(100),
     service_description: z.string().min(1, 'Service description is required').max(1000),
     invoice_frequency: z.string().min(1, 'Invoice frequency is required'),
-    invoiced_amount: z.preprocess(
+    invoice_amount: z.preprocess(
       (v) => (v === '' || v == null ? undefined : Number(v)),
-      z.number({ required_error: 'Invoiced amount is required' }).min(0, 'Must be 0 or more')
+      z.number({ required_error: 'Invoice amount is required' }).min(0, 'Must be 0 or more')
     ),
     is_billable: z.boolean().default(true),
-    status: z.enum(['active', 'closed', 'cancelled']).default('active'),
+    status: z.enum(['in-progress', 'completed', 'on-hold', 'pending', 'cancelled', 'closed']).default('in-progress'),
   })
   .refine(
     (data) => {
@@ -68,16 +67,11 @@ const poSchema = z
   );
 
 const FormSkeleton = () => (
-  <Card>
-    <CardContent className="p-6 space-y-4">
-      {Array.from({ length: 6 }).map((_, i) => (
-        <div key={i} className="space-y-2">
-          <Skeleton className="h-4 w-24" />
-          <Skeleton className="h-9 w-full" />
-        </div>
-      ))}
-    </CardContent>
-  </Card>
+  <div className="space-y-4 p-4">
+    {Array.from({ length: 4 }).map((_, i) => (
+      <div key={i} className="space-y-2 h-14 bg-muted animate-pulse rounded-md" />
+    ))}
+  </div>
 );
 
 const ServicePOForm = () => {
@@ -95,7 +89,6 @@ const ServicePOForm = () => {
   const form = useForm({
     resolver: zodResolver(poSchema),
     defaultValues: {
-      service_po_code: '',
       service_po_name: '',
       client_id: '',
       service_type_id: '',
@@ -106,16 +99,15 @@ const ServicePOForm = () => {
       account_manager: '',
       service_description: '',
       invoice_frequency: '',
-      invoiced_amount: '',
+      invoice_amount: '',
       is_billable: true,
-      status: 'active',
+      status: 'in-progress',
     },
   });
 
   useEffect(() => {
     if (po && isEdit) {
       form.reset({
-        service_po_code: po.service_po_code ?? '',
         service_po_name: po.service_po_name ?? '',
         client_id: po.client_id ?? '',
         service_type_id: po.service_type_id ?? '',
@@ -126,9 +118,9 @@ const ServicePOForm = () => {
         account_manager: po.account_manager ?? '',
         service_description: po.service_description ?? '',
         invoice_frequency: po.invoice_frequency ?? '',
-        invoiced_amount: po.invoiced_amount ?? '',
+        invoice_amount: po.invoice_amount ?? '',
         is_billable: po.is_billable ?? true,
-        status: po.status ?? 'active',
+        status: po.status ?? 'in-progress',
       });
     }
   }, [po, isEdit, form]);
@@ -142,10 +134,14 @@ const ServicePOForm = () => {
     mutation.mutate(clean, {
       onSuccess: () => {
         success(isEdit ? 'Service PO updated successfully.' : 'Service PO created successfully.');
-        navigate(ROUTES.SERVICE_POS);
+        handleClose();
       },
       onError: (err) => showError(extractApiError(err)),
     });
+  };
+
+  const handleClose = () => {
+    navigate(ROUTES.SERVICE_POS);
   };
 
   const isSubmitting = createMutation.isPending || updateMutation.isPending;
@@ -153,67 +149,34 @@ const ServicePOForm = () => {
   if (isEdit && isLoadingPO) return <FormSkeleton />;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="w-full"
-    >
-      <PageHeader
-        title={isEdit ? 'Edit Service PO' : 'New Service PO'}
-        description={
-          isEdit
-            ? `Updating ${po?.service_po_name ?? ''}`
-            : 'Create a new service purchase order'
-        }
-        actions={
-          <Button variant="outline" size="sm" onClick={() => navigate(ROUTES.SERVICE_POS)}>
-            <ArrowLeft className="mr-1.5 h-4 w-4" />
-            Back
-          </Button>
-        }
-      />
+    <Sheet open={true} onOpenChange={(open) => !open && handleClose()}>
+      <SheetContent side="right" className="w-full sm:max-w-3xl p-0 flex flex-col bg-white overflow-hidden">
+        <SheetHeader className="px-5 py-3 border-b">
+          <SheetTitle className="text-base font-medium text-left">{isEdit ? 'Edit Service PO' : 'New Service PO'}</SheetTitle>
+        </SheetHeader>
 
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
-          {/* PO Details */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm">PO Details</CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {!isEdit && (
-                <FormField
-                  control={form.control}
-                  name="service_po_code"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>
-                        PO Code <span className="text-destructive">*</span>
-                      </FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="e.g. PO/2024/001"
-                          {...field}
-                          onChange={(e) => field.onChange(e.target.value.toUpperCase())}
-                        />
-                      </FormControl>
-                      <FormDescription>Uppercase letters, numbers, /, _, - (2–30 chars)</FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              )}
+        <div className="flex-1 overflow-y-auto">
+          {isEdit && isLoadingPO ? (
+            <FormSkeleton />
+          ) : (
+            <Form {...form}>
+              <form id="servicepo-form" onSubmit={form.handleSubmit(onSubmit)} className="p-5 flex flex-col gap-6">
+                
+                {/* PO Details */}
+                <div className="space-y-3">
+                  <h3 className="text-xs font-semibold text-foreground border-b pb-1">PO Details</h3>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
 
               <FormField
                 control={form.control}
                 name="service_po_name"
                 render={({ field }) => (
-                  <FormItem className={!isEdit ? '' : 'sm:col-span-2'}>
-                    <FormLabel>
-                      PO Name <span className="text-destructive">*</span>
+                  <FormItem className="space-y-1 sm:col-span-2">
+                    <FormLabel className="text-[13px]">
+                      <span className="text-destructive">*</span> PO Name
                     </FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g. Annual Support Services 2024" {...field} />
+                      <Input placeholder="e.g. Annual Support Services" className="h-8 text-sm" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -224,9 +187,9 @@ const ServicePOForm = () => {
                 control={form.control}
                 name="client_id"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>
-                      Client <span className="text-destructive">*</span>
+                  <FormItem className="space-y-1">
+                    <FormLabel className="text-[13px]">
+                      <span className="text-destructive">*</span> Client
                     </FormLabel>
                     <Select
                       value={field.value ? String(field.value) : ''}
@@ -234,7 +197,7 @@ const ServicePOForm = () => {
                       disabled={isLoadingClients}
                     >
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger className="h-8 text-sm">
                           <SelectValue placeholder="Select client" />
                         </SelectTrigger>
                       </FormControl>
@@ -255,9 +218,9 @@ const ServicePOForm = () => {
                 control={form.control}
                 name="service_type_id"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>
-                      Service Type <span className="text-destructive">*</span>
+                  <FormItem className="space-y-1">
+                    <FormLabel className="text-[13px]">
+                      <span className="text-destructive">*</span> Service Type
                     </FormLabel>
                     <Select
                       value={field.value ? String(field.value) : ''}
@@ -265,7 +228,7 @@ const ServicePOForm = () => {
                       disabled={isLoadingCategories}
                     >
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger className="h-8 text-sm">
                           <SelectValue placeholder="Select service type" />
                         </SelectTrigger>
                       </FormControl>
@@ -286,10 +249,10 @@ const ServicePOForm = () => {
                 control={form.control}
                 name="account_manager"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Account Manager <span className="text-destructive">*</span></FormLabel>
+                  <FormItem className="space-y-1">
+                    <FormLabel className="text-[13px]"><span className="text-destructive">*</span> Account Manager</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g. Rakesh Wagh" {...field} />
+                      <Input placeholder="e.g. Rakesh Wagh" className="h-8 text-sm" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -300,18 +263,21 @@ const ServicePOForm = () => {
                 control={form.control}
                 name="status"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Status</FormLabel>
+                  <FormItem className="space-y-1">
+                    <FormLabel className="text-[13px]">Status</FormLabel>
                     <Select value={field.value} onValueChange={field.onChange}>
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger className="h-8 text-sm">
                           <SelectValue />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="active">Active</SelectItem>
-                        <SelectItem value="closed">Closed</SelectItem>
+                        <SelectItem value="in-progress">In Progress</SelectItem>
+                        <SelectItem value="completed">Completed</SelectItem>
+                        <SelectItem value="on-hold">On Hold</SelectItem>
+                        <SelectItem value="pending">Pending</SelectItem>
                         <SelectItem value="cancelled">Cancelled</SelectItem>
+                        <SelectItem value="closed">Closed</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -322,13 +288,13 @@ const ServicePOForm = () => {
                 control={form.control}
                 name="service_description"
                 render={({ field }) => (
-                  <FormItem className="sm:col-span-2">
-                    <FormLabel>Service Description <span className="text-destructive">*</span></FormLabel>
+                  <FormItem className="space-y-1 sm:col-span-2">
+                    <FormLabel className="text-[13px]"><span className="text-destructive">*</span> Service Description</FormLabel>
                     <FormControl>
                       <Textarea
                         placeholder="Describe the services included in this PO…"
-                        rows={3}
-                        className="resize-none"
+                        rows={2}
+                        className="resize-none text-sm"
                         {...field}
                       />
                     </FormControl>
@@ -336,27 +302,26 @@ const ServicePOForm = () => {
                   </FormItem>
                 )}
               />
-            </CardContent>
-          </Card>
+                  </div>
+                </div>
 
-          {/* Commercial */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm">Commercial</CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {/* Commercial */}
+                <div className="space-y-3">
+                  <h3 className="text-xs font-semibold text-foreground border-b pb-1">Commercial Details</h3>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <FormField
                 control={form.control}
                 name="po_value"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>PO Value (INR)</FormLabel>
+                  <FormItem className="space-y-1">
+                    <FormLabel className="text-[13px]">PO Value (INR)</FormLabel>
                     <FormControl>
                       <Input
                         type="number"
                         min="0"
                         step="0.01"
                         placeholder="e.g. 500000"
+                        className="h-8 text-sm"
                         {...field}
                       />
                     </FormControl>
@@ -369,14 +334,15 @@ const ServicePOForm = () => {
                 control={form.control}
                 name="expected_man_hours"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Expected Man-Hours</FormLabel>
+                  <FormItem className="space-y-1">
+                    <FormLabel className="text-[13px]">Expected Man-Hours</FormLabel>
                     <FormControl>
                       <Input
                         type="number"
                         min="0"
                         step="0.5"
                         placeholder="e.g. 1200"
+                        className="h-8 text-sm"
                         {...field}
                       />
                     </FormControl>
@@ -389,12 +355,12 @@ const ServicePOForm = () => {
                 control={form.control}
                 name="start_date"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>
-                      Start Date <span className="text-destructive">*</span>
+                  <FormItem className="space-y-1">
+                    <FormLabel className="text-[13px]">
+                      <span className="text-destructive">*</span> Start Date 
                     </FormLabel>
                     <FormControl>
-                      <Input type="date" {...field} />
+                      <Input type="date" className="h-8 text-sm" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -405,12 +371,12 @@ const ServicePOForm = () => {
                 control={form.control}
                 name="end_date"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>
-                      End Date <span className="text-destructive">*</span>
+                  <FormItem className="space-y-1">
+                    <FormLabel className="text-[13px]">
+                      <span className="text-destructive">*</span> End Date 
                     </FormLabel>
                     <FormControl>
-                      <Input type="date" {...field} />
+                      <Input type="date" className="h-8 text-sm" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -421,22 +387,20 @@ const ServicePOForm = () => {
                 control={form.control}
                 name="invoice_frequency"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Invoice Frequency <span className="text-destructive">*</span></FormLabel>
+                  <FormItem className="space-y-1">
+                    <FormLabel className="text-[13px]"><span className="text-destructive">*</span> Invoice Frequency</FormLabel>
                     <Select value={field.value} onValueChange={field.onChange}>
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger className="h-8 text-sm">
                           <SelectValue placeholder="Select frequency" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="Monthly">Monthly</SelectItem>
-                        <SelectItem value="Quarterly">Quarterly</SelectItem>
-                        <SelectItem value="Milestone based">Milestone based</SelectItem>
-                        <SelectItem value="Yearly AMC">Yearly AMC</SelectItem>
-                        <SelectItem value="One-time">One-time</SelectItem>
-                        <SelectItem value="Internal - No Invoice">Internal - No Invoice</SelectItem>
-                        <SelectItem value="POC">POC</SelectItem>
+                        <SelectItem value="monthly">Monthly</SelectItem>
+                        <SelectItem value="milestone-based">Milestone based</SelectItem>
+                        <SelectItem value="yearly-amc">Yearly AMC</SelectItem>
+                        <SelectItem value="internal-no-invoice">Internal - No Invoice</SelectItem>
+                        <SelectItem value="poc">POC</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -446,16 +410,17 @@ const ServicePOForm = () => {
 
               <FormField
                 control={form.control}
-                name="invoiced_amount"
+                name="invoice_amount"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Invoiced Amount (INR) <span className="text-destructive">*</span></FormLabel>
+                  <FormItem className="space-y-1">
+                    <FormLabel className="text-[13px]"><span className="text-destructive">*</span> Invoice Amount (INR)</FormLabel>
                     <FormControl>
                       <Input
                         type="number"
                         min="0"
                         step="0.01"
                         placeholder="e.g. 250000"
+                        className="h-8 text-sm"
                         {...field}
                       />
                     </FormControl>
@@ -468,10 +433,10 @@ const ServicePOForm = () => {
                 control={form.control}
                 name="is_billable"
                 render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 sm:col-span-2">
-                    <div>
-                      <FormLabel className="text-sm font-medium">Billable</FormLabel>
-                      <FormDescription className="text-xs">
+                  <FormItem className="flex flex-row items-center justify-between rounded-md border p-3 sm:col-span-2 shadow-sm">
+                    <div className="space-y-0.5">
+                      <FormLabel className="text-[13px] font-medium">Billable</FormLabel>
+                      <FormDescription className="text-[11px]">
                         This PO involves billable work for the client
                       </FormDescription>
                     </div>
@@ -481,21 +446,24 @@ const ServicePOForm = () => {
                   </FormItem>
                 )}
               />
-            </CardContent>
-          </Card>
+                  </div>
+                </div>
+              </form>
+            </Form>
+          )}
+        </div>
 
-          <div className="sticky bottom-0 z-10 -mx-6 flex items-center justify-end gap-3 border-t bg-background px-6 py-4">
-            <Button type="button" variant="outline" onClick={() => navigate(ROUTES.SERVICE_POS)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              <Save className="mr-1.5 h-4 w-4" />
-              {isSubmitting ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Service PO'}
-            </Button>
-          </div>
-        </form>
-      </Form>
-    </motion.div>
+        <SheetFooter className="px-5 py-3 border-t flex items-center justify-end gap-3 sm:justify-end">
+          <Button type="button" variant="outline" size="sm" onClick={handleClose}>
+            Cancel
+          </Button>
+          <Button type="submit" size="sm" disabled={isSubmitting} form="servicepo-form">
+            <Save className="mr-1.5 h-3.5 w-3.5" />
+            {isSubmitting ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Service PO'}
+          </Button>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   );
 };
 

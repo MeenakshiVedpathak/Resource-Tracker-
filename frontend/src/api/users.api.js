@@ -5,5 +5,5 @@ export const usersApi = {
   getById: (id) => apiClient.get(`/users/${id}`).then((r) => r.data?.data),
   create: (payload) => apiClient.post('/users', payload).then((r) => r.data),
   update: (id, payload) => apiClient.put(`/users/${id}`, payload).then((r) => r.data),
-  delete: (id) => apiClient.delete(`/users/${id}`).then((r) => r.data),
+  delete: (id) => apiClient.delete(`/users/${id}`, { data: { is_delete: true } }).then((r) => r.data),
 };

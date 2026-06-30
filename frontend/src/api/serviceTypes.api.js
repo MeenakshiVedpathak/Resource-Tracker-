@@ -5,5 +5,5 @@ export const serviceTypesApi = {
   getById: (id) => apiClient.get(`/service-types/${id}`).then((r) => r.data?.data),
   create: (payload) => apiClient.post('/service-types', payload).then((r) => r.data),
   update: (id, payload) => apiClient.put(`/service-types/${id}`, payload).then((r) => r.data),
-  delete: (id) => apiClient.delete(`/service-types/${id}`).then((r) => r.data),
+  delete: (id) => apiClient.delete(`/service-types/${id}`, { data: { is_delete: true } }).then((r) => r.data),
 };

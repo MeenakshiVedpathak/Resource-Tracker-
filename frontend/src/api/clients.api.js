@@ -6,5 +6,5 @@ export const clientsApi = {
   getById: (id) => apiClient.get(`/clients/${id}`).then((r) => r.data?.data),
   create: (payload) => apiClient.post('/clients', payload).then((r) => r.data),
   update: (id, payload) => apiClient.put(`/clients/${id}`, payload).then((r) => r.data),
-  delete: (id) => apiClient.delete(`/clients/${id}`).then((r) => r.data),
+  delete: (id) => apiClient.delete(`/clients/${id}`, { data: { is_delete: true } }).then((r) => r.data),
 };

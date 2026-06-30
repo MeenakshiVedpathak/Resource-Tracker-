@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Outlet } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Plus, Pencil } from 'lucide-react';
-import { useServiceTypes } from '@/hooks/useServiceTypes';
+import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { useServiceTypes, useDeleteServiceType } from '@/hooks/useServiceTypes';
 import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
 import { useAuth } from '@/hooks/useAuth';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -11,12 +11,26 @@ import { formatDate } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
 import { Button } from '@/components/ui/button';
+import ConfirmDialog from '@/components/common/ConfirmDialog';
+import { useNotification } from '@/hooks/useNotification';
+import { extractApiError } from '@/services/apiClient';
+import { cn } from '@/utils/cn';
 
 const columnHelper = createColumnHelper();
+
+const TruncatedCell = ({ value, maxWidth = '150px', className }) => {
+  if (!value) return <span className="text-sm text-muted-foreground">—</span>;
+  return (
+    <div className={cn("text-sm truncate", className)} style={{ maxWidth }} title={value}>
+      {value}
+    </div>
+  );
+};
 
 const ServiceTypeList = () => {
   const navigate = useNavigate();
   const { hasRole } = useAuth();
+  const { success, showError } = useNotification();
 
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -35,21 +49,70 @@ const ServiceTypeList = () => {
   };
 
   const { data, isPending } = useServiceTypes(params);
+  const deleteMutation = useDeleteServiceType();
+  const [deleteTarget, setDeleteTarget] = useState(null);
+
+  const handleDelete = () => {
+    if (!deleteTarget) return;
+    deleteMutation.mutate(deleteTarget.id, {
+      onSuccess: () => {
+        success('Service type deleted successfully.');
+        setDeleteTarget(null);
+      },
+      onError: (err) => {
+        showError(extractApiError(err));
+        setDeleteTarget(null);
+      },
+    });
+  };
 
   const rows = Array.isArray(data?.data) ? data.data : [];
   const meta = data?.meta ?? {};
 
+  // Since backend doesn't support pagination for service types, we slice it client-side
+  const total = meta.total ?? rows.length;
+  const paginatedRows = rows.slice((page - 1) * limit, page * limit);
+
   const columns = [
+    columnHelper.display({
+      id: 'actions',
+      header: 'Actions',
+      size: 160,
+      meta: { sticky: true, left: 0 },
+      cell: ({ row }) =>
+        canManage ? (
+          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+            <Button
+              size="sm"
+              onClick={() => navigate(buildPath(ROUTES.SERVICE_TYPE_EDIT, { id: row.original.id }))}
+              className="h-6 px-2 bg-blue-500 hover:bg-blue-600 text-white rounded font-normal text-[11px] transition-colors"
+            >
+              <Pencil className="h-3 w-3 mr-1" /> Edit
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-[11px] text-destructive hover:text-destructive hover:bg-destructive/10"
+              title="Delete"
+              onClick={() => setDeleteTarget(row.original)}
+            >
+              <Trash2 className="h-3 w-3 mr-1" /> Delete
+            </Button>
+          </div>
+        ) : null,
+    }),
     columnHelper.accessor('service_type_name', {
       header: 'Service Type Name',
-      cell: (info) => <span className="font-medium">{info.getValue()}</span>,
+      size: 300,
+      meta: { sticky: true, left: 90 },
+      cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="280px" className="font-medium" />,
     }),
     columnHelper.accessor('service_category_id', {
       header: 'Service Category',
-      size: 200,
+      size: 250,
       cell: (info) =>
         categoryMap[info.getValue()] ? (
-          <span className="text-sm">{categoryMap[info.getValue()]}</span>
+          <TruncatedCell value={categoryMap[info.getValue()]} maxWidth="230px" />
         ) : (
           <span className="text-muted-foreground">—</span>
         ),
@@ -60,23 +123,6 @@ const ServiceTypeList = () => {
       cell: (info) => (
         <span className="text-xs text-muted-foreground">{formatDate(info.getValue())}</span>
       ),
-    }),
-    columnHelper.display({
-      id: 'actions',
-      size: 60,
-      cell: ({ row }) =>
-        canManage ? (
-          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              title="Edit"
-              onClick={() => navigate(buildPath(ROUTES.SERVICE_TYPE_EDIT, { id: row.original.id }))}
-            >
-              <Pencil className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        ) : null,
     }),
   ];
 
@@ -97,19 +143,32 @@ const ServiceTypeList = () => {
 
       <DataTable
         columns={columns}
-        data={rows}
+        data={paginatedRows}
         isLoading={isPending}
         searchValue={search}
         onSearchChange={(v) => { setSearch(v); setPage(1); }}
         searchPlaceholder="Search service types…"
-        pagination={
-          meta.total != null
-            ? { page: meta.page ?? page, limit: meta.limit ?? limit, total: meta.total }
-            : undefined
-        }
+        pagination={{
+          page: meta.current_page ?? page,
+          limit: meta.per_page ?? limit,
+          total: total
+        }}
         onPageChange={setPage}
         onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
       />
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title="Delete Service Type"
+        description={`Are you sure you want to delete the service type "${deleteTarget?.service_type_name}"? This action cannot be undone.`}
+        onConfirm={handleDelete}
+        isLoading={deleteMutation.isPending}
+        confirmLabel="Delete"
+        variant="destructive"
+      />
+
+      <Outlet />
     </div>
   );
 };

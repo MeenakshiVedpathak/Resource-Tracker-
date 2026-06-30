@@ -5,10 +5,12 @@ export const timesheetsApi = {
   getById: (id) => apiClient.get(`/timesheets/${id}`).then((r) => r.data?.data),
   create: (payload) => apiClient.post('/timesheets', payload).then((r) => r.data),
   update: (id, payload) => apiClient.put(`/timesheets/${id}`, payload).then((r) => r.data),
-  delete: (id) => apiClient.delete(`/timesheets/${id}`).then((r) => r.data),
-  upload: (file) => {
+  delete: (id) => apiClient.delete(`/timesheets/${id}`, { data: { is_delete: true } }).then((r) => r.data),
+  upload: (file, month, year) => {
     const form = new FormData();
     form.append('file', file);
+    if (month) form.append('month', month);
+    if (year) form.append('year', year);
     return apiClient
       .post('/timesheets/upload', form, {
         headers: { 'Content-Type': 'multipart/form-data' },

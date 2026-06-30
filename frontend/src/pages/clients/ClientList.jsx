@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Outlet } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { useClients, useDeleteClient } from '@/hooks/useClients';
@@ -14,8 +14,18 @@ import StatusBadge from '@/components/common/StatusBadge';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { cn } from '@/utils/cn';
 
 const columnHelper = createColumnHelper();
+
+const TruncatedCell = ({ value, maxWidth = '150px', className }) => {
+  if (!value) return <span className="text-sm text-muted-foreground">—</span>;
+  return (
+    <div className={cn("text-sm truncate", className)} style={{ maxWidth }} title={value}>
+      {value}
+    </div>
+  );
+};
 
 const ClientList = () => {
   const navigate = useNavigate();
@@ -45,60 +55,59 @@ const ClientList = () => {
   const meta = data?.meta ?? {};
 
   const columns = [
+    columnHelper.display({
+      id: 'actions',
+      header: 'Actions',
+      size: 160,
+      meta: { sticky: true, left: 0 },
+      cell: ({ row }) =>
+        canManage ? (
+          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+            <Button
+              size="sm"
+              onClick={() => navigate(buildPath(ROUTES.CLIENT_EDIT, { id: row.original.id }))}
+              className="h-6 px-2 bg-blue-500 hover:bg-blue-600 text-white rounded font-normal text-[11px] transition-colors"
+            >
+              <Pencil className="h-3 w-3 mr-1" /> Edit
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-[11px] text-destructive hover:text-destructive hover:bg-destructive/10"
+              onClick={() => setDeleteTarget(row.original)}
+            >
+              <Trash2 className="h-3 w-3 mr-1" /> Delete
+            </Button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigate(buildPath(ROUTES.CLIENT_EDIT, { id: row.original.id }))}
+              className="h-7 w-7 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded"
+              title="Edit"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        ),
+    }),
     columnHelper.accessor('client_name', {
       header: 'Client Name',
-      cell: (info) => <span className="font-medium">{info.getValue()}</span>,
+      size: 250,
+      meta: { sticky: true, left: 150 },
+      cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="230px" className="font-medium" />,
     }),
     columnHelper.accessor('industry', {
       header: 'Industry',
-      cell: (info) =>
-        info.getValue() ? (
-          info.getValue()
-        ) : (
-          <span className="text-muted-foreground">—</span>
-        ),
+      size: 250,
+      cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="230px" />,
     }),
     columnHelper.accessor('status', {
       header: 'Status',
-      size: 100,
+      size: 120,
       cell: (info) => <StatusBadge status={info.getValue()} />,
-    }),
-    columnHelper.display({
-      id: 'actions',
-      size: 88,
-      cell: ({ row }) =>
-        canManage ? (
-          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              title="Edit"
-              onClick={() => navigate(buildPath(ROUTES.CLIENT_EDIT, { id: row.original.id }))}
-            >
-              <Pencil className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="text-destructive hover:text-destructive hover:bg-destructive/10"
-              title="Delete"
-              onClick={() => setDeleteTarget(row.original)}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        ) : (
-          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              title="Edit"
-              onClick={() => navigate(buildPath(ROUTES.CLIENT_EDIT, { id: row.original.id }))}
-            >
-              <Pencil className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        ),
     }),
   ];
 
@@ -172,6 +181,8 @@ const ClientList = () => {
         onConfirm={handleDelete}
         isLoading={deleteMutation.isPending}
       />
+
+      <Outlet />
     </div>
   );
 };

@@ -1,4 +1,4 @@
-import { createSlice } from '@reduxjs/toolkit';
+import { createSlice, createSelector } from '@reduxjs/toolkit';
 import { clearAuth, getAccessToken, getRefreshToken, getStoredUser, saveTokens, saveUser } from '@/services/apiClient';
 
 const initialState = {
@@ -51,15 +51,17 @@ export const selectAccessToken = (state) => state.auth.accessToken;
 export const selectIsAuthenticated = (state) => state.auth.isAuthenticated;
 
 // Returns array of role name strings — handles roles[] array, single role object, or string
-export const selectUserRoles = (state) => {
-  const user = state.auth.user;
-  if (!user) return EMPTY_ROLES;
-  if (Array.isArray(user.roles) && user.roles.length > 0)
-    return user.roles.map((r) => r.role_name ?? r).filter(Boolean);
-  if (user.role?.role_name) return [user.role.role_name];
-  if (typeof user.role === 'string') return [user.role];
-  return EMPTY_ROLES;
-};
+export const selectUserRoles = createSelector(
+  [(state) => state.auth.user],
+  (user) => {
+    if (!user) return EMPTY_ROLES;
+    if (Array.isArray(user.roles) && user.roles.length > 0)
+      return user.roles.map((r) => r.role_name ?? r).filter(Boolean);
+    if (user.role?.role_name) return [user.role.role_name];
+    if (typeof user.role === 'string') return [user.role];
+    return EMPTY_ROLES;
+  }
+);
 
 // Returns first role name for display purposes
 export const selectUserRole = (state) => selectUserRoles(state)[0] ?? null;

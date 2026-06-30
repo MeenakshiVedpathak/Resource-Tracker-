@@ -80,9 +80,11 @@ export const getStatusColor = (status) => {
     inactive: 'destructive',
     closed: 'secondary',
     cancelled: 'destructive',
-    completed: 'info',
+    completed: 'success',
     pending: 'warning',
     failed: 'destructive',
+    'in-progress': 'info',
+    'on-hold': 'warning',
   };
   return map[status?.toLowerCase()] ?? 'secondary';
 };

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Outlet } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { useSubProjects, useDeleteSubProject } from '@/hooks/useSubProjects';
@@ -21,8 +21,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { cn } from '@/utils/cn';
 
 const columnHelper = createColumnHelper();
+
+const TruncatedCell = ({ value, maxWidth = '150px', className }) => {
+  if (!value) return <span className="text-sm text-muted-foreground">—</span>;
+  return (
+    <div className={cn("text-sm truncate", className)} style={{ maxWidth }} title={value}>
+      {value}
+    </div>
+  );
+};
 
 const SubProjectList = () => {
   const navigate = useNavigate();
@@ -55,70 +65,60 @@ const SubProjectList = () => {
   const meta = data?.meta ?? {};
 
   const columns = [
+    columnHelper.display({
+      id: 'actions',
+      header: 'Actions',
+      size: 160,
+      meta: { sticky: true, left: 0 },
+      cell: ({ row }) => (
+        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+          <Button
+            size="sm"
+            onClick={() => navigate(buildPath(ROUTES.SUB_PROJECT_EDIT, { id: row.original.id }))}
+            className="h-6 px-2 bg-blue-500 hover:bg-blue-600 text-white rounded font-normal text-[11px] transition-colors"
+          >
+            <Pencil className="h-3 w-3 mr-1" /> Edit
+          </Button>
+          {canManage && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-[11px] text-destructive hover:text-destructive hover:bg-destructive/10"
+              onClick={() => setDeleteTarget(row.original)}
+            >
+              <Trash2 className="h-3 w-3 mr-1" /> Delete
+            </Button>
+          )}
+        </div>
+      ),
+    }),
     columnHelper.accessor('sub_project_name', {
       header: 'Name',
-      cell: (info) => <span className="font-medium">{info.getValue()}</span>,
+      size: 200,
+      meta: { sticky: true, left: 150 },
+      cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="180px" className="font-medium" />,
     }),
     columnHelper.accessor('service_po_name', {
       header: 'Service PO',
-      cell: (info) =>
-        info.getValue() ? (
-          <span className="text-sm">{info.getValue()}</span>
-        ) : (
-          <span className="text-muted-foreground">—</span>
-        ),
+      size: 200,
+      cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="180px" />,
     }),
     columnHelper.accessor('description', {
       header: 'Description',
-      cell: (info) =>
-        info.getValue() ? (
-          <span className="text-sm text-muted-foreground line-clamp-1">
-            {info.getValue()}
-          </span>
-        ) : (
-          <span className="text-muted-foreground">—</span>
-        ),
+      size: 250,
+      cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="230px" className="text-muted-foreground" />,
     }),
     columnHelper.accessor('status', {
       header: 'Status',
       size: 110,
       cell: (info) => <StatusBadge status={info.getValue()} />,
     }),
-    columnHelper.display({
-      id: 'actions',
-      size: 88,
-      cell: ({ row }) => (
-        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            title="Edit"
-            onClick={() =>
-              navigate(buildPath(ROUTES.SUB_PROJECT_EDIT, { id: row.original.id }))
-            }
-          >
-            <Pencil className="h-3.5 w-3.5" />
-          </Button>
-          {canManage && (
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="text-destructive hover:text-destructive hover:bg-destructive/10"
-              title="Delete"
-              onClick={() => setDeleteTarget(row.original)}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          )}
-        </div>
-      ),
-    }),
   ];
 
   const handleDelete = () => {
     deleteMutation.mutate(deleteTarget.id, {
       onSuccess: () => {
-        success(`"${deleteTarget.sub_project_name}" has been deactivated.`);
+        success(`"${deleteTarget.sub_project_name}" has been Deleted.`);
         setDeleteTarget(null);
       },
       onError: (err) => {
@@ -211,6 +211,8 @@ const SubProjectList = () => {
           navigate(buildPath(ROUTES.SUB_PROJECT_EDIT, { id: row.id }))
         }
       />
+
+      <Outlet />
 
       <ConfirmDialog
         open={!!deleteTarget}
