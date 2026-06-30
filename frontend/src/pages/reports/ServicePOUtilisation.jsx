@@ -36,7 +36,8 @@ const exportToExcel = (rows) => {
 const columns = [
   columnHelper.accessor('po_code', {
     header: 'PO Code',
-    size: 120,
+    meta: { sticky: true, left: 0 },
+    size: 140,
     cell: (info) => (
       <span className="font-mono text-xs font-semibold text-muted-foreground">
         {info.getValue() || '—'}
@@ -45,10 +46,13 @@ const columns = [
   }),
   columnHelper.accessor('po_name', {
     header: 'PO Name',
+    meta: { sticky: true, left: 140 },
+    size: 250,
     cell: (info) => <span className="font-medium">{info.getValue() || '—'}</span>,
   }),
   columnHelper.accessor('client_name', {
     header: 'Client',
+    size: 200,
     cell: (info) => info.getValue() || <span className="text-muted-foreground">—</span>,
   }),
   columnHelper.accessor('expected_hours', {
@@ -60,14 +64,14 @@ const columns = [
   }),
   columnHelper.accessor('actual_hours', {
     header: 'Actual Hours',
-    size: 130,
+    size: 140,
     cell: (info) => (
       <span className="tabular-nums">{formatHours(info.getValue())}</span>
     ),
   }),
   columnHelper.accessor('utilisation_percentage', {
     header: 'Utilisation',
-    size: 180,
+    size: 160,
     cell: (info) => {
       const pct = Number(info.getValue() ?? 0);
       const capped = Math.min(pct, 100);

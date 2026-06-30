@@ -104,17 +104,20 @@ const exportToExcel = (rows, month, year) => {
 
 // ─── main component ──────────────────────────────────────────────────────────
 const ServicePOResource = () => {
-  const [month, setMonth] = useState('');
-  const [year,  setYear]  = useState('');
+  const [month, setMonth] = useState(String(new Date().getMonth() + 1));
+  const [year,  setYear]  = useState(String(new Date().getFullYear()));
+  const [page,  setPage]  = useState(1);
 
   const params = {
     ...(month && { month: Number(month) }),
     ...(year && Number(year) >= 2000 && { year: Number(year) }),
+    page,
   };
 
   const { data, isPending } = useServicePOResourceReport(params);
 
   const rows   = data?.data ?? [];
+  const meta   = data?.meta ?? {};
   const groups = useMemo(() => groupRows(rows), [rows]);
 
   const monthLabel  = month ? formatMonthYear(Number(month), Number(year)) : '';
@@ -142,7 +145,7 @@ const ServicePOResource = () => {
       <div className="mb-6 flex flex-wrap items-end gap-3">
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs font-medium">Month</Label>
-          <Select value={month} onValueChange={setMonth}>
+          <Select value={month} onValueChange={(v) => { setMonth(v); setPage(1); }}>
             <SelectTrigger className="h-9 w-36 text-sm">
               <SelectValue placeholder="Select month" />
             </SelectTrigger>
@@ -156,14 +159,16 @@ const ServicePOResource = () => {
 
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs font-medium">Year</Label>
-          <Input
-            type="number"
-            value={year}
-            onChange={(e) => setYear(e.target.value)}
-            className="h-9 w-24 text-sm"
-            min="2000"
-            max="2100"
-          />
+          <Select value={year} onValueChange={(v) => { setYear(v); setPage(1); }}>
+            <SelectTrigger className="h-9 w-24 text-sm">
+              <SelectValue placeholder="Year" />
+            </SelectTrigger>
+            <SelectContent>
+              {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i).map(y => (
+                <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -308,10 +313,37 @@ const ServicePOResource = () => {
             </table>
           </div>
 
-          <p className="mt-2 text-xs text-muted-foreground">
-            {groups.length} service PO{groups.length !== 1 ? 's' : ''} · {rows.length} resource row{rows.length !== 1 ? 's' : ''}
-            {monthLabel ? ` · ${monthLabel}` : ''}
-          </p>
+          <div className="mt-3 flex items-center justify-between gap-2">
+            <p className="text-xs text-muted-foreground">
+              {meta.total != null
+                ? `${meta.total} record${meta.total !== 1 ? 's' : ''} · page ${meta.page ?? page} of ${meta.totalPages ?? 1}`
+                : `${groups.length} service PO${groups.length !== 1 ? 's' : ''} · ${rows.length} resource row${rows.length !== 1 ? 's' : ''}`}
+              {monthLabel ? ` · ${monthLabel}` : ''}
+            </p>
+            {(meta.totalPages ?? 1) > 1 && (
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline" size="sm"
+                  className="h-7 px-2 text-xs"
+                  disabled={!(meta.hasPrev || meta.hasPrevPage)}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  Previous
+                </Button>
+                <span className="text-xs text-muted-foreground px-1">
+                  {meta.page ?? page} / {meta.totalPages}
+                </span>
+                <Button
+                  variant="outline" size="sm"
+                  className="h-7 px-2 text-xs"
+                  disabled={!(meta.hasNext || meta.hasNextPage)}
+                  onClick={() => setPage((p) => p + 1)}
+                >
+                  Next
+                </Button>
+              </div>
+            )}
+          </div>
         </>
       )}
     </div>

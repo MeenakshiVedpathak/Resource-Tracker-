@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Upload } from 'lucide-react';
+import { Upload, Info } from 'lucide-react';
 import { useTimesheetHistory } from '@/hooks/useTimesheets';
 import { ROUTES, buildPath } from '@/constants/routes';
 import { formatDate } from '@/utils/formatters';
@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 const columnHelper = createColumnHelper();
 
@@ -100,10 +101,25 @@ const TimesheetList = () => {
         title="Timesheet Imports"
         description="History of all uploaded timesheet files"
         actions={
-          <Button size="sm" onClick={() => setIsUploadDialogOpen(true)}>
-            <Upload className="mr-1.5 h-4 w-4" />
-            Upload Excel
-          </Button>
+          <div className="flex items-center gap-2">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-xs text-xs space-y-1">
+                  <ul className="list-disc pl-3">
+                    <li>Worksheet name should be short of month like Jan, Feb etc.</li>
+                    <li>The employee and project should be present in their respective masters with status active</li>
+                  </ul>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <Button size="sm" onClick={() => setIsUploadDialogOpen(true)}>
+              <Upload className="mr-1.5 h-4 w-4" />
+              Upload Excel
+            </Button>
+          </div>
         }
       />
 

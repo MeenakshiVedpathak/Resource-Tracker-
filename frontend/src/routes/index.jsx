@@ -52,6 +52,7 @@ const OperationalCost = lazy(() => import('@/pages/reports/OperationalCost'));
 const MonthlyUtilization = lazy(() => import('@/pages/reports/MonthlyUtilization'));
 const ServicePOResource = lazy(() => import('@/pages/reports/ServicePOResource'));
 const ServicePOSummary = lazy(() => import('@/pages/reports/ServicePOSummary'));
+const MonthlyResourceUtilization = lazy(() => import('@/pages/reports/MonthlyResourceUtilization'));
 
 // ── Settings ──
 const Profile = lazy(() => import('@/pages/Profile'));
@@ -128,10 +129,11 @@ const AppRoutes = () => (
         <Route path={ROUTES.TIMESHEETS} element={<TimesheetList />} />
         <Route path={ROUTES.TIMESHEET_UPLOAD} element={<TimesheetUpload />} />
         <Route path={ROUTES.TIMESHEET_IMPORT_DETAIL} element={<TimesheetImportDetail />} />
-        <Route path={ROUTES.MONTHLY_COSTS} element={<MonthlyCostList />} />
+        <Route path={ROUTES.MONTHLY_COSTS} element={<MonthlyCostList />}>
+          <Route path="new" element={<MonthlyCostForm />} />
+          <Route path=":id/edit" element={<MonthlyCostForm />} />
+        </Route>
         <Route path={ROUTES.MONTHLY_COST_IMPORT} element={<MonthlyCostImport />} />
-        <Route path={ROUTES.MONTHLY_COST_NEW} element={<MonthlyCostForm />} />
-        <Route path={ROUTES.MONTHLY_COST_EDIT} element={<MonthlyCostForm />} />
 
         {/* Reports */}
         <Route path={ROUTES.REPORTS} element={<ReportsLayout />}>
@@ -145,6 +147,7 @@ const AppRoutes = () => (
           <Route path={ROUTES.REPORT_MONTHLY_UTILIZATION} element={<MonthlyUtilization />} />
           <Route path={ROUTES.REPORT_SERVICE_PO_RESOURCE} element={<ServicePOResource />} />
           <Route path={ROUTES.REPORT_SERVICE_PO_SUMMARY} element={<ServicePOSummary />} />
+          <Route path={ROUTES.REPORT_MONTHLY_RESOURCE_UTILIZATION} element={<MonthlyResourceUtilization />} />
         </Route>
 
         {/* Settings */}

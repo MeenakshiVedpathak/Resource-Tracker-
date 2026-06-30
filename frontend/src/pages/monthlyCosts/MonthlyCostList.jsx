@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Outlet } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
 import { Plus, Pencil, Trash2, Calculator, Upload, Search } from 'lucide-react';
 import { useMonthlyCosts, useDeleteMonthlyCost, useCalculateMonthlyCosts } from '@/hooks/useMonthlyCosts';
@@ -84,14 +84,42 @@ const MonthlyCostList = () => {
   const meta = data?.meta ?? {};
 
   const columns = [
+    columnHelper.display({
+      id: 'actions',
+      header: 'Actions',
+      size: 180,
+      meta: { sticky: true, left: 0 },
+      cell: ({ row }) =>
+        canManage ? (
+          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+            <Button
+              size="sm"
+              onClick={() => navigate(buildPath(ROUTES.MONTHLY_COST_EDIT, { id: row.original.id }))}
+              className="h-6 px-2 bg-blue-500 hover:bg-blue-600 text-white rounded font-normal text-[11px] transition-colors"
+            >
+              <Pencil className="h-3 w-3 mr-1" /> Edit
+            </Button>
+            <Button
+              size="sm"
+              className="h-6 px-2 bg-red-500 hover:bg-red-600 text-white rounded font-normal text-[11px] transition-colors"
+              title="Delete"
+              onClick={() => setDeleteTarget(row.original)}
+            >
+              <Trash2 className="h-3 w-3 mr-1" /> Delete
+            </Button>
+          </div>
+        ) : null,
+    }),
     columnHelper.accessor((row) => row.employee_name ?? row.employee?.full_name, {
       id: 'employee',
       header: 'Employee',
+      size: 200,
+      meta: { sticky: true, left: 180 },
       cell: (info) => (
         <div>
-          <p className="font-medium text-sm">{info.getValue() ?? '—'}</p>
+          <p className="font-medium text-sm truncate">{info.getValue() ?? '—'}</p>
           {(info.row.original.employee_code ?? info.row.original.employee?.employee_code) && (
-            <p className="text-xs text-muted-foreground font-mono">
+            <p className="text-xs text-muted-foreground font-mono truncate">
               {info.row.original.employee_code ?? info.row.original.employee?.employee_code}
             </p>
           )}
@@ -135,34 +163,6 @@ const MonthlyCostList = () => {
         ) : (
           <span className="text-muted-foreground">—</span>
         ),
-    }),
-    columnHelper.display({
-      id: 'actions',
-      size: 88,
-      cell: ({ row }) =>
-        canManage ? (
-          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              title="Edit"
-              onClick={() =>
-                navigate(buildPath(ROUTES.MONTHLY_COST_EDIT, { id: row.original.id }))
-              }
-            >
-              <Pencil className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="text-destructive hover:text-destructive hover:bg-destructive/10"
-              title="Delete"
-              onClick={() => setDeleteTarget(row.original)}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        ) : null,
     }),
   ];
 
@@ -265,18 +265,22 @@ const MonthlyCostList = () => {
               </SelectContent>
             </Select>
 
-            <Input
-              type="number"
-              placeholder="Year"
+            <Select
               value={yearFilter}
-              onChange={(e) => {
-                setYearFilter(e.target.value);
+              onValueChange={(v) => {
+                setYearFilter(v);
                 setPage(1);
               }}
-              className="h-9 w-24 text-sm bg-white"
-              min="2000"
-              max="2100"
-            />
+            >
+              <SelectTrigger className="h-9 w-24 text-sm bg-white">
+                <SelectValue placeholder="Year" />
+              </SelectTrigger>
+              <SelectContent>
+                {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i).map(y => (
+                  <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </>
         }
         pagination={
@@ -335,15 +339,16 @@ const MonthlyCostList = () => {
 
             <div className="space-y-2">
               <Label htmlFor="calc-year">Year</Label>
-              <Input
-                id="calc-year"
-                type="number"
-                value={calcYear}
-                onChange={(e) => setCalcYear(e.target.value)}
-                min="2000"
-                max="2100"
-                className="w-full"
-              />
+              <Select value={calcYear} onValueChange={(v) => setCalcYear(v)}>
+                <SelectTrigger id="calc-year" className="w-full">
+                  <SelectValue placeholder="Year" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i).map(y => (
+                    <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
@@ -367,6 +372,8 @@ const MonthlyCostList = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Outlet />
     </div>
   );
 };

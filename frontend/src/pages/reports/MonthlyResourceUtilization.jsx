@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import * as XLSX from 'xlsx';
 import { Download, Search } from 'lucide-react';
-import { useMonthlyUtilization } from '@/hooks/useReports';
+import { useMonthlyResourceUtilization } from '@/hooks/useReports';
 import { formatMonthYear } from '@/utils/formatters';
 import PageHeader from '@/components/common/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -26,19 +26,6 @@ const MONTH_OPTIONS = [
   { value: '12', label: 'December' },
 ];
 
-// Non-billable hour columns
-const NON_BILLABLE_COLS = [
-  { key: 'internal_support_hours', label: 'Internal Support' },
-  { key: 'team_management_hours',  label: 'Team Mgmt.' },
-];
-
-// Leave & other columns
-const OTHER_COLS = [
-  { key: 'leaves_hours', label: 'Leaves' },
-  { key: 'lnd_hours',    label: 'L&D' },
-  { key: 'others_hours', label: 'Others' },
-];
-
 const fh = (val) => {
   const n = Number(val);
   if (val == null || isNaN(n) || n === 0) return null;
@@ -52,40 +39,67 @@ const HoursCell = ({ value }) => {
     : <span className="text-muted-foreground/30">—</span>;
 };
 
-const exportToExcel = (records, month, year) => {
+const exportToExcel = (records, columns, month, year) => {
   const monthLabel = MONTH_OPTIONS.find((m) => m.value === String(month))?.label ?? month;
 
-  const header = [
+  const headerRow1 = [
+    '', '', '', '', '', '', '', '', '', // 9 Fixed cols empty
+  ];
+  const headerRow2 = [
     'Sr. No.', 'Name', 'Designation', 'Total Exp', 'Co. Exp',
-    'Monthly Cap (hrs)', 'Billing Cap (hrs)', 'Client(s)',
-    'Internal Support (hrs)', 'Team Mgmt. (hrs)',
-    'Leaves (hrs)', 'L&D (hrs)', 'Others (hrs)',
-    'Billable Total (hrs)', 'Non-Billable Total (hrs)', 'Total Utilization excl. Leaves (hrs)',
+    'Resource Description', 'Monthly Cap (hrs)', 'Billing Cap (hrs)', 'Client(s)'
   ];
 
-  const dataRows = records.map((r, i) => [
-    i + 1,
-    r.full_name ?? '',
-    r.designation ?? '',
-    r.total_experience ?? '',
-    r.company_experience ?? '',
-    r.monthly_capacity ?? '',
-    r.monthly_billing_capacity ?? '',
-    r.clients ?? '',
-    r.internal_support_hours ?? 0,
-    r.team_management_hours ?? 0,
-    r.leaves_hours ?? 0,
-    r.lnd_hours ?? 0,
-    r.others_hours ?? 0,
-    r.billable_total ?? 0,
-    r.non_billable_total ?? 0,
-    r.total_utilization_excl_leaves_pct ?? 0,
-  ]);
+  columns.forEach(cat => {
+    headerRow1.push(cat.category_name);
+    for (let i = 1; i < cat.service_types.length; i++) headerRow1.push(''); // span
+    cat.service_types.forEach(st => headerRow2.push(st.name));
+  });
 
-  const ws = XLSX.utils.aoa_to_sheet([header, ...dataRows]);
+  headerRow1.push('Summary', '', '');
+  headerRow2.push('Billable Total (hrs)', 'Non-Billable Total (hrs)', 'Total Utilization (hrs)');
+
+  const dataRows = records.map((r, i) => {
+    const row = [
+      i + 1,
+      r.full_name ?? '',
+      r.designation ?? '',
+      r.total_experience ?? '',
+      r.company_experience ?? '',
+      r.resource_description ?? '',
+      r.monthly_capacity ?? '',
+      r.monthly_billing_capacity ?? '',
+      r.clients ?? '',
+    ];
+
+    columns.forEach(cat => {
+      cat.service_types.forEach(st => {
+        row.push(r.hours?.[st.id] ?? 0);
+      });
+    });
+
+    row.push(r.billable_total ?? 0, r.non_billable_total ?? 0, r.total_utilization ?? 0);
+    return row;
+  });
+
+  const ws = XLSX.utils.aoa_to_sheet([headerRow1, headerRow2, ...dataRows]);
+  
+  // merge cells for top header
+  const merges = [];
+  let colIndex = 9;
+  columns.forEach(cat => {
+    const len = cat.service_types.length;
+    if (len > 1) {
+      merges.push({ s: { r: 0, c: colIndex }, e: { r: 0, c: colIndex + len - 1 } });
+    }
+    colIndex += len;
+  });
+  merges.push({ s: { r: 0, c: colIndex }, e: { r: 0, c: colIndex + 2 } });
+  ws['!merges'] = merges;
+
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Utilization');
-  XLSX.writeFile(wb, `Monthly_Utilization_${monthLabel}_${year}.xlsx`);
+  XLSX.utils.book_append_sheet(wb, ws, 'Resource Utilization');
+  XLSX.writeFile(wb, `Monthly_Resource_Utilization_${monthLabel}_${year}.xlsx`);
 };
 
 // ─── column helpers ──────────────────────────────────────────────────────────
@@ -95,7 +109,7 @@ const td = (...cls) =>
   cn('px-2.5 py-2 text-xs border-r border-border last:border-r-0', ...cls);
 
 // ─── component ───────────────────────────────────────────────────────────────
-const MonthlyUtilization = () => {
+const MonthlyResourceUtilization = () => {
   const [month,  setMonth]  = useState(String(new Date().getMonth() + 1));
   const [year,   setYear]   = useState(String(new Date().getFullYear()));
   const [search, setSearch] = useState('');
@@ -110,9 +124,9 @@ const MonthlyUtilization = () => {
     ...(search.trim() && { search: search.trim() }),
   } : undefined;
 
-  const { data, isPending } = useMonthlyUtilization(params);
+  const { data, isPending } = useMonthlyResourceUtilization(params);
 
-  // data.data = { records: [...], summary: {...} }
+  const columns = data?.data?.columns ?? [];
   const records = Array.isArray(data?.data?.records) ? data.data.records : [];
   const meta    = data?.meta    ?? {};
   const summary = data?.data?.summary ?? {};
@@ -122,15 +136,32 @@ const MonthlyUtilization = () => {
   const handleMonthChange  = (v) => { setMonth(v);        setPage(1); };
   const handleSearchChange = (e) => { setSearch(e.target.value); setPage(1); };
 
-  // Total columns: 8 fixed + 2 non-billable + 3 other + 3 summary = 16
+  const getCategoryColorClass = (catId) => {
+    switch(catId) {
+      case 1: return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400';
+      case 2: return 'bg-blue-500/10 text-blue-700 dark:text-blue-400';
+      case 3: return 'bg-orange-500/10 text-orange-700 dark:text-orange-400';
+      default: return 'bg-muted/40 text-foreground';
+    }
+  };
+
+  const getCellColorClass = (catId) => {
+    switch(catId) {
+      case 1: return 'bg-emerald-500/[0.02]';
+      case 2: return 'bg-blue-500/[0.02]';
+      case 3: return 'bg-orange-500/[0.02]';
+      default: return '';
+    }
+  };
+
   return (
     <div>
       <PageHeader
-        title="Monthly Utilization"
-        description="Employee utilization summary for a selected month"
+        title="Monthly Resource Utilization"
+        description="Detailed resource utilization based on service categories"
         actions={
           records.length > 0 ? (
-            <Button variant="outline" size="sm" onClick={() => exportToExcel(records, month, year)}>
+            <Button variant="outline" size="sm" onClick={() => exportToExcel(records, columns, month, year)}>
               <Download className="mr-1.5 h-4 w-4" />
               Export Excel
             </Button>
@@ -212,6 +243,12 @@ const MonthlyUtilization = () => {
                 <span className="font-semibold tabular-nums">{Number(summary.non_billable_total).toFixed(1)} hrs</span>
               </div>
             )}
+            {summary.total_utilization != null && (
+              <div className="rounded-md border bg-blue-500/10 px-3 py-1.5 text-xs text-blue-700 dark:text-blue-400">
+                Total Utilization&nbsp;
+                <span className="font-semibold tabular-nums">{Number(summary.total_utilization).toFixed(1)} hrs</span>
+              </div>
+            )}
             {summary.leaves_hours != null && (
               <div className="rounded-md border bg-muted/40 px-3 py-1.5 text-xs">
                 Leaves&nbsp;
@@ -222,55 +259,57 @@ const MonthlyUtilization = () => {
 
           {/* ── Table ── */}
           <div className="rounded-lg border overflow-hidden">
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto max-h-[70vh]">
               <table className="min-w-max w-full border-collapse text-sm">
-
-                {/* Group header row */}
                 <thead className="sticky top-0 z-20">
                   <tr className="border-b bg-muted/60">
                     <th colSpan={2} className="sticky left-0 z-30 bg-muted" />
-                    <th colSpan={6} className="border-r border-border" />
-                    <th colSpan={2} className="px-3 py-1.5 text-center text-xs font-semibold border-r border-border bg-orange-500/10 text-orange-700 dark:text-orange-400">
-                      Non-Billable
-                    </th>
-                    <th colSpan={3} className="px-3 py-1.5 text-center text-xs font-semibold border-r border-border text-muted-foreground">
-                      Leave &amp; Others
-                    </th>
-                    <th colSpan={3} className="px-3 py-1.5 text-center text-xs font-semibold bg-blue-500/10 text-blue-700 dark:text-blue-400">
+                    <th colSpan={7} className="border-r border-border" />
+                    {columns.map(cat => (
+                      <th 
+                        key={cat.category_id} 
+                        colSpan={cat.service_types.length} 
+                        className={cn('px-3 py-1.5 text-center text-xs font-semibold border-r border-border', getCategoryColorClass(cat.category_id))}
+                      >
+                        {cat.category_name}
+                      </th>
+                    ))}
+                    <th colSpan={3} className="px-3 py-1.5 text-center text-xs font-semibold bg-primary/10 text-primary">
                       Summary
                     </th>
                   </tr>
 
-                  {/* Column headers */}
                   <tr className="border-b bg-muted/40">
                     <th className={th('sticky left-0 z-30 bg-muted w-[50px] text-center')}>#</th>
                     <th className={th('sticky left-[50px] z-30 bg-muted border-r border-border shadow-[1px_0_0_0_var(--border)] w-[220px] min-w-[220px] max-w-[220px] overflow-hidden text-ellipsis whitespace-nowrap')}>Name</th>
                     <th className={th('min-w-[160px]')}>Designation</th>
                     <th className={th('w-[90px] text-right')}>Total Exp</th>
                     <th className={th('w-[90px] text-right')}>Co. Exp</th>
+                    <th className={th('min-w-[150px]')}>Resource Description</th>
                     <th className={th('w-[100px] text-right')}>Cap. (hrs)</th>
                     <th className={th('w-[100px] text-right')}>Bill. Cap.</th>
                     <th className={th('min-w-[180px]')}>Client(s)</th>
-                    {NON_BILLABLE_COLS.map((c) => (
-                      <th key={c.key} className={th('w-[130px] text-right bg-orange-500/[0.04]')}>{c.label}</th>
-                    ))}
-                    {OTHER_COLS.map((c) => (
-                      <th key={c.key} className={th('w-[90px] text-right')}>{c.label}</th>
-                    ))}
-                    <th className={th('w-[120px] text-right bg-blue-500/[0.04] font-bold')}>Billable (hrs)</th>
-                    <th className={th('w-[120px] text-right bg-blue-500/[0.04] font-bold')}>Non-Bill. (hrs)</th>
-                    <th className={th('w-[180px] text-right bg-blue-500/[0.04] font-bold border-r-0')}>Total Utilization (excl. Leaves)</th>
+                    
+                    {columns.map(cat => 
+                      cat.service_types.map(st => (
+                        <th key={st.id} className={th('w-[110px] text-right', getCellColorClass(cat.category_id))}>
+                          {st.name}
+                        </th>
+                      ))
+                    )}
+                    
+                    <th className={th('w-[120px] text-right bg-primary/[0.04] font-bold')}>Billable (hrs)</th>
+                    <th className={th('w-[120px] text-right bg-primary/[0.04] font-bold')}>Non-Bill. (hrs)</th>
+                    <th className={th('w-[150px] text-right bg-primary/[0.04] font-bold border-r-0')}>Total Utilization</th>
                   </tr>
                 </thead>
 
                 <tbody className="divide-y divide-border">
                   {records.map((row, i) => (
                     <tr key={row.employee_id ?? i} className="group hover:bg-muted/30 transition-colors">
-                      {/* # */}
                       <td className={td('sticky left-0 z-10 bg-background group-hover:bg-slate-50 dark:group-hover:bg-slate-800/80 w-[50px] text-center text-muted-foreground transition-colors')}>
-                        {((meta.page ?? page) - 1) * (meta.limit ?? 10) + i + 1}
+                        {((meta.page ?? page) - 1) * (meta.limit ?? 50) + i + 1}
                       </td>
-                      {/* Name */}
                       <td className={td('sticky left-[50px] z-10 bg-background border-r border-border shadow-[1px_0_0_0_var(--border)] group-hover:bg-slate-50 dark:group-hover:bg-slate-800/80 transition-colors w-[220px] min-w-[220px] max-w-[220px] overflow-hidden text-ellipsis whitespace-nowrap')}>
                         <p className="font-medium">{row.full_name ?? '—'}</p>
                         {row.employee_code && (
@@ -280,30 +319,27 @@ const MonthlyUtilization = () => {
                       <td className={td()}>{row.designation || <span className="text-muted-foreground">—</span>}</td>
                       <td className={td('text-right tabular-nums')}>{row.total_experience ?? '—'}</td>
                       <td className={td('text-right tabular-nums')}>{row.company_experience ?? '—'}</td>
+                      <td className={td('truncate max-w-[150px]')} title={row.resource_description}>{row.resource_description || <span className="text-muted-foreground">—</span>}</td>
                       <td className={td('text-right tabular-nums')}>{row.monthly_capacity ?? '—'}</td>
                       <td className={td('text-right tabular-nums')}>{row.monthly_billing_capacity ?? '—'}</td>
                       <td className={td('max-w-[200px] truncate')} title={row.clients}>{row.clients || <span className="text-muted-foreground">—</span>}</td>
-                      {/* Non-Billable */}
-                      {NON_BILLABLE_COLS.map((c) => (
-                        <td key={c.key} className={td('text-right bg-orange-500/[0.02]')}>
-                          <HoursCell value={row[c.key]} />
-                        </td>
-                      ))}
-                      {/* Leave & Others */}
-                      {OTHER_COLS.map((c) => (
-                        <td key={c.key} className={td('text-right')}>
-                          <HoursCell value={row[c.key]} />
-                        </td>
-                      ))}
-                      {/* Summary */}
-                      <td className={td('text-right font-semibold bg-blue-500/[0.02]')}>
+                      
+                      {columns.map(cat => 
+                        cat.service_types.map(st => (
+                          <td key={st.id} className={td('text-right', getCellColorClass(cat.category_id))}>
+                            <HoursCell value={row.hours?.[st.id]} />
+                          </td>
+                        ))
+                      )}
+
+                      <td className={td('text-right font-semibold bg-primary/[0.02]')}>
                         <HoursCell value={row.billable_total} />
                       </td>
-                      <td className={td('text-right font-semibold bg-blue-500/[0.02]')}>
+                      <td className={td('text-right font-semibold bg-primary/[0.02]')}>
                         <HoursCell value={row.non_billable_total} />
                       </td>
-                      <td className={td('text-right font-semibold bg-blue-500/[0.02] border-r-0')}>
-                        <HoursCell value={row.total_utilization_excl_leaves_pct} />
+                      <td className={td('text-right font-semibold bg-primary/[0.02] border-r-0')}>
+                        <HoursCell value={row.total_utilization} />
                       </td>
                     </tr>
                   ))}
@@ -326,7 +362,7 @@ const MonthlyUtilization = () => {
                 <Button
                   variant="outline" size="sm"
                   className="h-7 px-2 text-xs"
-                  disabled={!meta.hasPrev}
+                  disabled={!meta.hasPrevPage}
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                 >
                   Previous
@@ -337,7 +373,7 @@ const MonthlyUtilization = () => {
                 <Button
                   variant="outline" size="sm"
                   className="h-7 px-2 text-xs"
-                  disabled={!meta.hasNext}
+                  disabled={!meta.hasNextPage}
                   onClick={() => setPage((p) => p + 1)}
                 >
                   Next
@@ -351,4 +387,4 @@ const MonthlyUtilization = () => {
   );
 };
 
-export default MonthlyUtilization;
+export default MonthlyResourceUtilization;

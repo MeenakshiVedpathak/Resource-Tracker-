@@ -28,10 +28,10 @@ export const useUpdateMonthlyCost = (id) => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (payload) => monthlyCostsApi.update(id, payload),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['monthly-costs'] });
-      qc.invalidateQueries({ queryKey: QUERY_KEYS.MONTHLY_COST(id) });
-    },
+    onSuccess: () => Promise.all([
+        qc.invalidateQueries({ queryKey: ['monthly-costs'] }),
+        qc.invalidateQueries({ queryKey: QUERY_KEYS.MONTHLY_COST(id) })
+      ]),
   });
 };
 

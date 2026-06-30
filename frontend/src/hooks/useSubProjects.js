@@ -35,10 +35,10 @@ export const useUpdateSubProject = (id) => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (payload) => subProjectsApi.update(id, payload),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['sub-projects'] });
-      qc.invalidateQueries({ queryKey: QUERY_KEYS.SUB_PROJECT(id) });
-    },
+    onSuccess: () => Promise.all([
+        qc.invalidateQueries({ queryKey: ['sub-projects'] }),
+        qc.invalidateQueries({ queryKey: QUERY_KEYS.SUB_PROJECT(id) })
+      ]),
   });
 };
 

@@ -68,7 +68,8 @@ const serviceTypeBadgeClass = (type) =>
 const columns = [
   columnHelper.accessor('employee_code', {
     header: 'Code',
-    size: 110,
+    meta: { sticky: true, left: 0 },
+    size: 120,
     cell: (info) => (
       <span className="font-mono text-xs font-semibold text-muted-foreground">
         {info.getValue() || '—'}
@@ -77,6 +78,8 @@ const columns = [
   }),
   columnHelper.accessor('full_name', {
     header: 'Employee',
+    meta: { sticky: true, left: 120 },
+    size: 220,
     cell: (info) => (
       <div>
         <p className="font-medium text-xs">{info.getValue() || '—'}</p>
@@ -88,10 +91,12 @@ const columns = [
   }),
   columnHelper.accessor('client_name', {
     header: 'Client',
+    size: 200,
     cell: (info) => info.getValue() || <span className="text-muted-foreground">—</span>,
   }),
   columnHelper.accessor('service_po_name', {
     header: 'Service PO',
+    size: 220,
     cell: (info) => (
       <div>
         <p className="text-xs">{info.getValue() || '—'}</p>
@@ -105,7 +110,7 @@ const columns = [
   }),
   columnHelper.accessor('service_type_name', {
     header: 'Service Type',
-    size: 150,
+    size: 160,
     cell: (info) => {
       const val = info.getValue();
       return val ? (
@@ -122,7 +127,7 @@ const columns = [
   }),
   columnHelper.accessor('po_status', {
     header: 'PO Status',
-    size: 100,
+    size: 150,
     cell: (info) => {
       const v = info.getValue();
       return v ? (
@@ -139,7 +144,7 @@ const columns = [
   }),
   columnHelper.accessor('is_billable', {
     header: 'Billable',
-    size: 85,
+    size: 110,
     cell: (info) => {
       const v = info.getValue();
       return (
@@ -155,7 +160,7 @@ const columns = [
   }),
   columnHelper.accessor('total_hours_logged', {
     header: 'Hours Logged',
-    size: 120,
+    size: 140,
     cell: (info) => (
       <span className="tabular-nums font-medium">{formatHours(info.getValue())}</span>
     ),
@@ -165,7 +170,7 @@ const columns = [
 const now = new Date();
 
 const ResourceAllocation = () => {
-  const [month, setMonth] = useState('');
+  const [month, setMonth] = useState(String(now.getMonth() + 1));
   const [year, setYear] = useState(String(now.getFullYear()));
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -216,14 +221,16 @@ const ResourceAllocation = () => {
 
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Year</Label>
-          <Input
-            type="number"
-            value={year}
-            onChange={(e) => { setYear(e.target.value); setPage(1); }}
-            className="h-9 w-24 text-sm"
-            min={2000}
-            max={2100}
-          />
+          <Select value={year} onValueChange={(v) => { setYear(v); setPage(1); }}>
+            <SelectTrigger className="h-9 w-24 text-sm">
+              <SelectValue placeholder="Year" />
+            </SelectTrigger>
+            <SelectContent>
+              {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i).map(y => (
+                <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="flex flex-col gap-1.5">

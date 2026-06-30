@@ -38,13 +38,16 @@ const exportToExcel = (rows) => {
 const columns = [
   columnHelper.accessor('employee_code', {
     header: 'Code',
-    size: 110,
+    meta: { sticky: true, left: 0 },
+    size: 120,
     cell: (info) => (
       <span className="font-mono text-xs text-muted-foreground">{info.getValue() || '—'}</span>
     ),
   }),
   columnHelper.accessor('full_name', {
     header: 'Employee',
+    meta: { sticky: true, left: 120 },
+    size: 220,
     cell: (info) => (
       <div>
         <p className="font-medium text-xs">{info.getValue() || '—'}</p>
@@ -56,10 +59,12 @@ const columns = [
   }),
   columnHelper.accessor('client_name', {
     header: 'Client',
+    size: 200,
     cell: (info) => info.getValue() || <span className="text-muted-foreground">—</span>,
   }),
   columnHelper.accessor('service_po_name', {
     header: 'Service PO',
+    size: 220,
     cell: (info) => (
       <div>
         <p className="text-xs">{info.getValue() || '—'}</p>
@@ -71,16 +76,18 @@ const columns = [
   }),
   columnHelper.accessor('sub_project_name', {
     header: 'Sub-Project',
+    meta: { sticky: true, left: 140 },
+    size: 250,
     cell: (info) => info.getValue() || <span className="text-muted-foreground text-xs">—</span>,
   }),
   columnHelper.accessor('service_type_name', {
     header: 'Service Type',
-    size: 130,
+    size: 160,
     cell: (info) => info.getValue() || <span className="text-muted-foreground">—</span>,
   }),
   columnHelper.accessor('is_billable', {
     header: 'Billable',
-    size: 90,
+    size: 110,
     cell: (info) => {
       const v = info.getValue();
       return (
@@ -103,7 +110,7 @@ const columns = [
   }),
   columnHelper.accessor('hours_logged', {
     header: 'Hours',
-    size: 90,
+    size: 110,
     cell: (info) => (
       <span className="font-semibold tabular-nums">{formatHours(info.getValue())}</span>
     ),

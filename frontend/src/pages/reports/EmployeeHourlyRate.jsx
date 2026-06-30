@@ -60,7 +60,8 @@ const CostCell = ({ value }) =>
 const columns = [
   columnHelper.accessor('employee_code', {
     header: 'Employee Code',
-    size: 130,
+    meta: { sticky: true, left: 0 },
+    size: 120,
     cell: (info) => (
       <span className="font-mono text-xs font-semibold text-muted-foreground">
         {info.getValue() || '—'}
@@ -69,15 +70,18 @@ const columns = [
   }),
   columnHelper.accessor('full_name', {
     header: 'Employee Name',
+    meta: { sticky: true, left: 120 },
+    size: 220,
     cell: (info) => <span className="font-medium">{info.getValue() || '—'}</span>,
   }),
   columnHelper.accessor('designation', {
     header: 'Designation',
+    size: 180,
     cell: (info) => info.getValue() || <span className="text-muted-foreground">—</span>,
   }),
   columnHelper.accessor('month_year', {
     header: 'Month',
-    size: 110,
+    size: 130,
     cell: (info) => (
       <span className="tabular-nums font-mono text-xs">{info.getValue() || '—'}</span>
     ),
@@ -89,7 +93,7 @@ const columns = [
   }),
   columnHelper.accessor('ops_cost', {
     header: 'Ops Cost',
-    size: 130,
+    size: 140,
     cell: (info) => <CostCell value={info.getValue()} />,
   }),
   columnHelper.accessor('total_cost', {
@@ -189,15 +193,16 @@ const EmployeeHourlyRate = () => {
 
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Year <span className="text-destructive">*</span></Label>
-          <Input
-            type="number"
-            placeholder="YYYY"
-            value={year}
-            onChange={(e) => setYear(e.target.value)}
-            className="h-9 w-24 text-sm"
-            min={2000}
-            max={2100}
-          />
+          <Select value={year} onValueChange={(v) => setYear(v)}>
+            <SelectTrigger className="h-9 w-24 text-sm">
+              <SelectValue placeholder="Year" />
+            </SelectTrigger>
+            <SelectContent>
+              {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i).map(y => (
+                <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="flex flex-col gap-1.5">
@@ -219,7 +224,7 @@ const EmployeeHourlyRate = () => {
           disabled={!canRun}
           className="self-end"
         >
-          Run Report
+          Apply
         </Button>
       </div>
 

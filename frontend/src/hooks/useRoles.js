@@ -28,10 +28,10 @@ export const useUpdateRole = (id) => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (payload) => rolesApi.update(id, payload),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['roles'] });
-      qc.invalidateQueries({ queryKey: QUERY_KEYS.ROLE(id) });
-    },
+    onSuccess: () => Promise.all([
+        qc.invalidateQueries({ queryKey: ['roles'] }),
+        qc.invalidateQueries({ queryKey: QUERY_KEYS.ROLE(id) })
+      ]),
   });
 };
 

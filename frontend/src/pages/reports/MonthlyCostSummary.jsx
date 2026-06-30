@@ -59,7 +59,7 @@ const columns = [
   }),
   columnHelper.accessor('employee_count', {
     header: 'Employees',
-    size: 110,
+    size: 150,
     cell: (info) => (
       <span className="tabular-nums">{info.getValue() ?? '—'}</span>
     ),
@@ -73,14 +73,14 @@ const columns = [
   }),
   columnHelper.accessor('total_ops_cost', {
     header: 'Ops Cost',
-    size: 130,
+    size: 150,
     cell: (info) => (
       <span className="tabular-nums">{formatCurrency(info.getValue())}</span>
     ),
   }),
   columnHelper.accessor('total_billable_cost', {
     header: 'Billable Cost',
-    size: 140,
+    size: 150,
     cell: (info) => (
       <span className="tabular-nums">{formatCurrency(info.getValue())}</span>
     ),
@@ -98,7 +98,7 @@ const now = new Date();
 
 const MonthlyCostSummary = () => {
   const [year, setYear] = useState(String(now.getFullYear()));
-  const [month, setMonth] = useState('all');
+  const [month, setMonth] = useState(String(now.getMonth() + 1));
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
 
@@ -137,15 +137,16 @@ const MonthlyCostSummary = () => {
       <div className="mb-5 flex flex-wrap items-end gap-3">
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Year</Label>
-          <Input
-            type="number"
-            placeholder="YYYY"
-            value={year}
-            onChange={(e) => { setYear(e.target.value); setPage(1); }}
-            className="h-9 w-24 text-sm"
-            min={2000}
-            max={2100}
-          />
+          <Select value={year} onValueChange={(v) => { setYear(v); setPage(1); }}>
+            <SelectTrigger className="h-9 w-24 text-sm">
+              <SelectValue placeholder="Year" />
+            </SelectTrigger>
+            <SelectContent>
+              {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i).map(y => (
+                <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="flex flex-col gap-1.5">

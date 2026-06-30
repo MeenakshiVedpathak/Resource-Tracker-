@@ -42,10 +42,10 @@ export const useUpdateServicePO = (id) => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (payload) => servicePOsApi.update(id, payload),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['service-pos'] });
-      qc.invalidateQueries({ queryKey: QUERY_KEYS.SERVICE_PO(id) });
-    },
+    onSuccess: () => Promise.all([
+        qc.invalidateQueries({ queryKey: ['service-pos'] }),
+        qc.invalidateQueries({ queryKey: QUERY_KEYS.SERVICE_PO(id) })
+      ]),
   });
 };
 
@@ -61,10 +61,10 @@ export const useAllocateResources = (poId) => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (employeeIds) => servicePOsApi.allocate(poId, employeeIds),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['service-pos'] });
-      qc.invalidateQueries({ queryKey: QUERY_KEYS.SERVICE_PO(poId) });
-    },
+    onSuccess: () => Promise.all([
+        qc.invalidateQueries({ queryKey: ['service-pos'] }),
+        qc.invalidateQueries({ queryKey: QUERY_KEYS.SERVICE_PO(poId) })
+      ]),
   });
 };
 
@@ -72,9 +72,17 @@ export const useDeallocateResource = (poId) => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (employeeId) => servicePOsApi.deallocate(poId, employeeId),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['service-pos'] });
-      qc.invalidateQueries({ queryKey: QUERY_KEYS.SERVICE_PO(poId) });
-    },
+    onSuccess: () => Promise.all([
+        qc.invalidateQueries({ queryKey: ['service-pos'] }),
+        qc.invalidateQueries({ queryKey: QUERY_KEYS.SERVICE_PO(poId) })
+      ]),
+  });
+};
+
+export const useDeleteServicePO = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id) => servicePOsApi.delete(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['service-pos'] }),
   });
 };

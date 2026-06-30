@@ -35,10 +35,10 @@ export const useUpdateEmployee = (id) => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (payload) => employeesApi.update(id, payload),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['employees'] });
-      qc.invalidateQueries({ queryKey: QUERY_KEYS.EMPLOYEE(id) });
-    },
+    onSuccess: () => Promise.all([
+        qc.invalidateQueries({ queryKey: ['employees'] }),
+        qc.invalidateQueries({ queryKey: QUERY_KEYS.EMPLOYEE(id) })
+      ]),
   });
 };
 

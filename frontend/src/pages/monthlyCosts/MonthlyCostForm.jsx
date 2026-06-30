@@ -2,8 +2,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { motion } from 'framer-motion';
-import { ArrowLeft, Save } from 'lucide-react';
+import { Save } from 'lucide-react';
 import { useMonthlyCost, useCreateMonthlyCost, useUpdateMonthlyCost } from '@/hooks/useMonthlyCosts';
 import { useActiveEmployees } from '@/hooks/useEmployees';
 import { useNotification } from '@/hooks/useNotification';
@@ -14,10 +13,15 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import PageHeader from '@/components/common/PageHeader';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetFooter,
+} from "@/components/ui/sheet";
 
 const MONTH_OPTIONS = [
   { value: '1',  label: 'January' },
@@ -56,16 +60,11 @@ const monthlyCostSchema = z.object({
 });
 
 const FormSkeleton = () => (
-  <Card>
-    <CardContent className="p-6 space-y-4">
-      {Array.from({ length: 5 }).map((_, i) => (
-        <div key={i} className="space-y-2">
-          <Skeleton className="h-4 w-24" />
-          <Skeleton className="h-9 w-full" />
-        </div>
-      ))}
-    </CardContent>
-  </Card>
+  <div className="space-y-4 p-4">
+    {Array.from({ length: 4 }).map((_, i) => (
+      <div key={i} className="space-y-2 h-14 bg-muted animate-pulse rounded-md" />
+    ))}
+  </div>
 );
 
 // Rendered only after record + employees are both ready — useForm initialises from correct data immediately
@@ -114,30 +113,25 @@ const MonthlyCostFormContent = ({ id, isEdit, record, activeEmployees }) => {
 
   const isSubmitting = createMutation.isPending || updateMutation.isPending;
 
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="w-full"
-    >
-      <PageHeader
-        title={isEdit ? 'Edit Monthly Cost' : 'Add Monthly Cost'}
-        description={isEdit ? 'Update this monthly cost record' : 'Create a new monthly cost entry'}
-        actions={
-          <Button variant="outline" size="sm" onClick={() => navigate(ROUTES.MONTHLY_COSTS)}>
-            <ArrowLeft className="mr-1.5 h-4 w-4" />
-            Back
-          </Button>
-        }
-      />
+  const handleClose = () => navigate(ROUTES.MONTHLY_COSTS);
 
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm">Cost Details</CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+  return (
+    <Sheet open={true} onOpenChange={(open) => !open && handleClose()}>
+      <SheetContent 
+        side="right" 
+        className="w-full sm:max-w-3xl p-0 flex flex-col bg-white overflow-hidden"
+        onInteractOutside={(e) => e.preventDefault()}
+      >
+        <SheetHeader className="px-5 py-3 border-b">
+          <SheetTitle className="text-base font-medium text-left">
+            {isEdit ? 'Edit Monthly Cost' : 'Add Monthly Cost'}
+          </SheetTitle>
+        </SheetHeader>
+
+        <div className="flex-1 overflow-y-auto">
+          <Form {...form}>
+            <form id="monthly-cost-form" onSubmit={form.handleSubmit(onSubmit)} className="p-5 flex flex-col gap-5">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
 
               {/* Employee */}
               <FormField
@@ -257,21 +251,22 @@ const MonthlyCostFormContent = ({ id, isEdit, record, activeEmployees }) => {
                 )}
               />
 
-            </CardContent>
-          </Card>
+              </div>
+            </form>
+          </Form>
+        </div>
 
-          <div className="sticky bottom-0 z-10 -mx-6 flex items-center justify-end gap-3 border-t bg-background px-6 py-4">
-            <Button type="button" variant="outline" onClick={() => navigate(ROUTES.MONTHLY_COSTS)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              <Save className="mr-1.5 h-4 w-4" />
-              {isSubmitting ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Record'}
-            </Button>
-          </div>
-        </form>
-      </Form>
-    </motion.div>
+        <SheetFooter className="px-5 py-3 border-t flex items-center justify-end gap-3 sm:justify-end">
+          <Button type="button" variant="outline" size="sm" onClick={handleClose}>
+            Cancel
+          </Button>
+          <Button type="submit" size="sm" disabled={isSubmitting} form="monthly-cost-form">
+            <Save className="mr-1.5 h-3.5 w-3.5" />
+            {isSubmitting ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Record'}
+          </Button>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   );
 };
 

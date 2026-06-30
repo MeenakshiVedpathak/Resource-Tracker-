@@ -12,6 +12,7 @@ const NAV = [
   { label: 'Operational Cost',      to: ROUTES.REPORT_OPERATIONAL_COST },
   { label: 'Monthly Utilization',   to: ROUTES.REPORT_MONTHLY_UTILIZATION },
   { label: 'PO vs Resource',        to: ROUTES.REPORT_SERVICE_PO_RESOURCE },
+  { label: 'Resource Utilization',  to: ROUTES.REPORT_MONTHLY_RESOURCE_UTILIZATION },
 ];
 
 const ReportsLayout = () => (

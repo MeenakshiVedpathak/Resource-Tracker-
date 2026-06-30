@@ -77,7 +77,7 @@ const ServiceCategoryList = () => {
     columnHelper.display({
       id: 'actions',
       header: 'Actions',
-      size: 160,
+      size: 180,
       meta: { sticky: true, left: 0 },
       cell: ({ row }) =>
         canManage ? (
@@ -90,9 +90,8 @@ const ServiceCategoryList = () => {
               <Pencil className="h-3 w-3 mr-1" /> Edit
             </Button>
             <Button
-              variant="ghost"
               size="sm"
-              className="h-6 px-2 text-[11px] text-destructive hover:text-destructive hover:bg-destructive/10"
+              className="h-6 px-2 bg-red-500 hover:bg-red-600 text-white rounded font-normal text-[11px] transition-colors"
               title="Delete"
               onClick={() => setDeleteTarget(row.original)}
             >

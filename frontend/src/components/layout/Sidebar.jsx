@@ -54,6 +54,7 @@ const NAV_GROUPS = [
         children: [
           { label: 'PO vs Resource', to: ROUTES.REPORT_SERVICE_PO_RESOURCE },
           { label: 'Monthly Utilization', to: ROUTES.REPORT_MONTHLY_UTILIZATION },
+          { label: 'Resource Utilization', to: ROUTES.REPORT_MONTHLY_RESOURCE_UTILIZATION },
 
           { label: 'Employee Hourly Rate', to: ROUTES.REPORT_HOURLY_RATE },
           { label: 'Monthly Cost Summary', to: ROUTES.REPORT_MONTHLY_COST },

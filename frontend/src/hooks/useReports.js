@@ -74,3 +74,11 @@ export const useServicePOSummary = (params) =>
     enabled: !!(params?.month && params?.year),
     placeholderData: (prev) => prev,
   });
+
+export const useMonthlyResourceUtilization = (params) =>
+  useQuery({
+    queryKey: QUERY_KEYS.REPORT_MONTHLY_RESOURCE_UTILIZATION(params),
+    queryFn: () => reportsApi.getMonthlyResourceUtilization(params),
+    enabled: !!(params?.month && params?.year),
+    placeholderData: (prev) => prev,
+  });

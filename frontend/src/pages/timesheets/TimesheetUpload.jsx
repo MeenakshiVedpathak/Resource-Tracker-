@@ -203,26 +203,49 @@ const TimesheetUpload = () => {
 
       {step === 2 && preview && (
         <div className="space-y-5">
-          {/* Summary badges */}
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-1.5 rounded-lg border bg-card px-3 py-2">
-              <span className="text-xs text-muted-foreground">Import ID:</span>
-              <span className="font-mono text-xs font-semibold">{preview.importId}</span>
-            </div>
-            <div className="flex items-center gap-1.5 rounded-lg border bg-card px-3 py-2">
-              <span className="text-xs text-muted-foreground">Total rows:</span>
-              <span className="font-mono text-xs font-semibold">{preview.totalRows}</span>
-            </div>
-            <Badge className="gap-1.5 bg-green-100 text-green-700 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400">
-              <CheckCircle2 className="h-3.5 w-3.5" />
-              {preview.validCount} valid
-            </Badge>
-            {preview.errorCount > 0 && (
-              <Badge variant="destructive" className="gap-1.5">
-                <AlertCircle className="h-3.5 w-3.5" />
-                {preview.errorCount} error{preview.errorCount !== 1 ? 's' : ''}
+          {/* Summary and Actions */}
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+            {/* Summary badges */}
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-1.5 rounded-lg border bg-card px-3 py-2">
+                <span className="text-xs text-muted-foreground">Import ID:</span>
+                <span className="font-mono text-xs font-semibold">{preview.importId}</span>
+              </div>
+              <div className="flex items-center gap-1.5 rounded-lg border bg-card px-3 py-2">
+                <span className="text-xs text-muted-foreground">Total rows:</span>
+                <span className="font-mono text-xs font-semibold">{preview.totalRows}</span>
+              </div>
+              <Badge className="gap-1.5 bg-green-100 text-green-700 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                {preview.validCount} valid
               </Badge>
-            )}
+              {preview.errorCount > 0 && (
+                <Badge variant="destructive" className="gap-1.5">
+                  <AlertCircle className="h-3.5 w-3.5" />
+                  {preview.errorCount} error{preview.errorCount !== 1 ? 's' : ''}
+                </Badge>
+              )}
+            </div>
+
+            {/* Action buttons (Top) */}
+            <div className="flex items-center gap-3 shrink-0">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleCancel}
+                disabled={confirmMutation.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleConfirm}
+                disabled={confirmMutation.isPending || !preview.canConfirm || preview.validCount === 0}
+              >
+                <CheckCircle2 className="mr-1.5 h-4 w-4" />
+                {confirmMutation.isPending ? 'Importing…' : 'Confirm Import'}
+              </Button>
+            </div>
           </div>
 
           {/* Valid rows */}
@@ -235,9 +258,9 @@ const TimesheetUpload = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
-                <div className="overflow-x-auto">
+                <div className="overflow-auto max-h-[400px]">
                   <Table>
-                    <TableHeader>
+                    <TableHeader className="sticky top-0 z-10 bg-slate-50 dark:bg-slate-900 shadow-sm">
                       <TableRow className="bg-muted/30">
                         <TableHead>Row</TableHead>
                         <TableHead>Employee</TableHead>
@@ -290,9 +313,9 @@ const TimesheetUpload = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
-                <div className="overflow-x-auto">
+                <div className="overflow-auto max-h-[300px]">
                   <Table>
-                    <TableHeader>
+                    <TableHeader className="sticky top-0 z-10 bg-slate-50 dark:bg-slate-900 shadow-sm">
                       <TableRow className="bg-destructive/5">
                         <TableHead className="w-24">Row #</TableHead>
                         <TableHead>Error Message</TableHead>
@@ -318,7 +341,7 @@ const TimesheetUpload = () => {
             </Card>
           )}
 
-          <div className="flex items-center justify-end gap-3 pt-1">
+          <div className="sticky bottom-0 z-20 flex items-center justify-end gap-3 py-4 bg-background/95 backdrop-blur border-t mt-4 -mx-4 px-4 sm:-mx-6 sm:px-6">
             <Button
               variant="outline"
               onClick={handleCancel}

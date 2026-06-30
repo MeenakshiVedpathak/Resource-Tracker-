@@ -28,10 +28,10 @@ export const useUpdateUser = (id) => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (payload) => usersApi.update(id, payload),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['users'] });
-      qc.invalidateQueries({ queryKey: QUERY_KEYS.USER(id) });
-    },
+    onSuccess: () => Promise.all([
+        qc.invalidateQueries({ queryKey: ['users'] }),
+        qc.invalidateQueries({ queryKey: QUERY_KEYS.USER(id) })
+      ]),
   });
 };
 

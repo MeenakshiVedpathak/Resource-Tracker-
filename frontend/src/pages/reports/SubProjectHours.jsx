@@ -39,13 +39,16 @@ const exportToExcel = (rows) => {
 const columns = [
   columnHelper.accessor('sub_project_code', {
     header: 'Code',
-    size: 150,
+    meta: { sticky: true, left: 0 },
+    size: 140,
     cell: (info) => (
       <span className="font-mono text-xs text-muted-foreground">{info.getValue() || '—'}</span>
     ),
   }),
   columnHelper.accessor('sub_project_name', {
     header: 'Sub-Project',
+    meta: { sticky: true, left: 140 },
+    size: 250,
     cell: (info) => (
       <div>
         <p className="font-medium text-xs">{info.getValue() || '—'}</p>
@@ -57,10 +60,12 @@ const columns = [
   }),
   columnHelper.accessor('client_name', {
     header: 'Client',
+    size: 200,
     cell: (info) => info.getValue() || <span className="text-muted-foreground">—</span>,
   }),
   columnHelper.accessor('service_po_name', {
     header: 'Service PO',
+    size: 220,
     cell: (info) => (
       <div>
         <p className="text-xs">{info.getValue() || '—'}</p>
@@ -72,7 +77,7 @@ const columns = [
   }),
   columnHelper.accessor('status', {
     header: 'Status',
-    size: 90,
+    size: 110,
     cell: (info) => {
       const v = info.getValue();
       return v ? (
@@ -91,35 +96,35 @@ const columns = [
   }),
   columnHelper.accessor('start_date', {
     header: 'Start',
-    size: 100,
+    size: 110,
     cell: (info) => (
       <span className="text-xs tabular-nums">{formatDate(info.getValue())}</span>
     ),
   }),
   columnHelper.accessor('end_date', {
     header: 'End',
-    size: 100,
+    size: 110,
     cell: (info) => (
       <span className="text-xs tabular-nums">{formatDate(info.getValue())}</span>
     ),
   }),
   columnHelper.accessor('distinct_resources', {
     header: 'Resources',
-    size: 90,
+    size: 110,
     cell: (info) => (
       <span className="tabular-nums">{info.getValue() ?? '—'}</span>
     ),
   }),
   columnHelper.accessor('entry_count', {
     header: 'Entries',
-    size: 80,
+    size: 100,
     cell: (info) => (
       <span className="tabular-nums">{info.getValue() ?? '—'}</span>
     ),
   }),
   columnHelper.accessor('total_hours', {
     header: 'Total Hours',
-    size: 110,
+    size: 130,
     cell: (info) => (
       <span className="tabular-nums font-semibold">{formatHours(info.getValue())}</span>
     ),

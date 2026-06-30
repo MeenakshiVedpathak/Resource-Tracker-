@@ -71,6 +71,7 @@ const EmployeeList = () => {
   const [previewFile, setPreviewFile] = useState(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [importResult, setImportResult] = useState(null);
+  const [previewLimit, setPreviewLimit] = useState(5);
 
   const employees = data?.data ?? [];
   const meta = data?.meta ?? {};
@@ -80,7 +81,7 @@ const EmployeeList = () => {
     columnHelper.display({
       id: 'actions',
       header: 'Actions',
-      size: 160,
+      size: 180,
       meta: { sticky: true, left: 0 },
       cell: ({ row }) => (
         isHR ? (
@@ -93,9 +94,8 @@ const EmployeeList = () => {
               <Pencil className="h-3 w-3 mr-1" /> Edit
             </Button>
             <Button
-              variant="ghost"
               size="sm"
-              className="h-6 px-2 text-[11px] text-destructive hover:text-destructive hover:bg-destructive/10"
+              className="h-6 px-2 bg-red-500 hover:bg-red-600 text-white rounded font-normal text-[11px] transition-colors"
               title="Delete"
               onClick={() => setDeleteTarget(row.original)}
             >
@@ -108,7 +108,7 @@ const EmployeeList = () => {
     columnHelper.accessor('employee_code', {
       header: 'Employee ID',
       size: 130,
-      meta: { sticky: true, left: 160 },
+      meta: { sticky: true, left: 180 },
       cell: (info) => (
         <TruncatedCell value={info.getValue()} maxWidth="100px" className="font-medium" />
       ),
@@ -116,7 +116,7 @@ const EmployeeList = () => {
     columnHelper.accessor('full_name', {
       header: 'Name',
       size: 200,
-      meta: { sticky: true, left: 290 },
+      meta: { sticky: true, left: 310 },
       cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="160px" />,
     }),
     columnHelper.accessor('email_id', {
@@ -208,9 +208,9 @@ const EmployeeList = () => {
         const wsname = wb.SheetNames[0];
         const ws = wb.Sheets[wsname];
         const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
-        
         if (data.length > 0) {
           setPreviewData(data);
+          setPreviewLimit(5);
           setPreviewFile(file);
           setIsPreviewOpen(true);
         }
@@ -398,7 +398,7 @@ const EmployeeList = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {previewData.slice(1, 6).map((row, i) => (
+                    {previewData.slice(1, previewLimit + 1).map((row, i) => (
                       <TableRow key={i}>
                         {previewData[0].map((_, colIndex) => (
                           <TableCell key={colIndex} className="whitespace-nowrap py-3 text-sm">
@@ -407,10 +407,17 @@ const EmployeeList = () => {
                         ))}
                       </TableRow>
                     ))}
-                    {previewData.length > 6 && (
+                    {previewData.length > previewLimit + 1 && (
                       <TableRow>
-                        <TableCell colSpan={previewData[0].length} className="text-center text-sm text-muted-foreground bg-muted/10 py-6 italic">
-                          ... and {previewData.length - 6} more rows
+                        <TableCell colSpan={previewData[0].length} className="text-center bg-muted/10 py-4">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                            onClick={() => setPreviewLimit(prev => Math.min(prev + 10, previewData.length - 1))}
+                          >
+                            Show more rows ({previewData.length - previewLimit - 1} remaining)
+                          </Button>
                         </TableCell>
                       </TableRow>
                     )}

@@ -68,7 +68,8 @@ const PctCell = ({ value }) => {
 const columns = [
   columnHelper.accessor('employee_code', {
     header: 'Code',
-    size: 110,
+    meta: { sticky: true, left: 0 },
+    size: 120,
     cell: (info) => (
       <span className="font-mono text-xs font-semibold text-muted-foreground">
         {info.getValue() || '—'}
@@ -77,6 +78,8 @@ const columns = [
   }),
   columnHelper.accessor('full_name', {
     header: 'Employee',
+    meta: { sticky: true, left: 120 },
+    size: 220,
     cell: (info) => (
       <div>
         <p className="font-medium text-xs">{info.getValue() || '—'}</p>
@@ -94,31 +97,31 @@ const columns = [
   }),
   columnHelper.accessor('salary_cost', {
     header: 'Salary Cost',
-    size: 130,
+    size: 140,
     cell: (info) => (
       <span className="tabular-nums">{formatCurrency(info.getValue())}</span>
     ),
   }),
   columnHelper.accessor('salary_pct_of_total', {
     header: 'Salary %',
-    size: 160,
+    size: 150,
     cell: (info) => <PctCell value={info.getValue()} />,
   }),
   columnHelper.accessor('ops_cost', {
     header: 'Ops Cost',
-    size: 120,
+    size: 140,
     cell: (info) => (
       <span className="tabular-nums">{formatCurrency(info.getValue())}</span>
     ),
   }),
   columnHelper.accessor('ops_pct_of_total', {
     header: 'Ops %',
-    size: 160,
+    size: 150,
     cell: (info) => <PctCell value={info.getValue()} />,
   }),
   columnHelper.accessor('billable_cost', {
     header: 'Billable Cost',
-    size: 130,
+    size: 140,
     cell: (info) => (
       <span className="tabular-nums text-emerald-700 dark:text-emerald-400">
         {formatCurrency(info.getValue())}
@@ -127,12 +130,12 @@ const columns = [
   }),
   columnHelper.accessor('billable_pct_of_total', {
     header: 'Billable %',
-    size: 160,
+    size: 150,
     cell: (info) => <PctCell value={info.getValue()} />,
   }),
   columnHelper.accessor('total_cost', {
     header: 'Total Cost',
-    size: 130,
+    size: 140,
     cell: (info) => (
       <span className="tabular-nums font-semibold">{formatCurrency(info.getValue())}</span>
     ),
@@ -143,7 +146,7 @@ const now = new Date();
 
 const OperationalCost = () => {
   const [year, setYear] = useState(String(now.getFullYear()));
-  const [month, setMonth] = useState('all');
+  const [month, setMonth] = useState(String(now.getMonth() + 1));
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
@@ -181,15 +184,16 @@ const OperationalCost = () => {
       <div className="mb-5 flex flex-wrap items-end gap-3">
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Year</Label>
-          <Input
-            type="number"
-            placeholder="YYYY"
-            value={year}
-            onChange={(e) => { setYear(e.target.value); setPage(1); }}
-            className="h-9 w-24 text-sm"
-            min={2000}
-            max={2100}
-          />
+          <Select value={year} onValueChange={(v) => { setYear(v); setPage(1); }}>
+            <SelectTrigger className="h-9 w-24 text-sm">
+              <SelectValue placeholder="Year" />
+            </SelectTrigger>
+            <SelectContent>
+              {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i).map(y => (
+                <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="flex flex-col gap-1.5">

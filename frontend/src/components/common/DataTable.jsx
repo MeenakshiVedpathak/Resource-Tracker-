@@ -88,7 +88,7 @@ const DataTable = ({
                 {headerGroup.headers.map((header) => {
                   const isSticky = header.column.columnDef.meta?.sticky;
                   const left = header.column.columnDef.meta?.left || 0;
-                  const w = header.getSize() !== 150 ? header.getSize() : undefined;
+                  const w = (header.getSize() !== 150 || isSticky) ? header.getSize() : undefined;
                   return (
                     <TableHead
                       key={header.id}
@@ -149,7 +149,7 @@ const DataTable = ({
                   {row.getVisibleCells().map((cell) => {
                     const isSticky = cell.column.columnDef.meta?.sticky;
                     const left = cell.column.columnDef.meta?.left || 0;
-                    const w = cell.column.getSize() !== 150 ? cell.column.getSize() : undefined;
+                    const w = (cell.column.getSize() !== 150 || isSticky) ? cell.column.getSize() : undefined;
                     return (
                       <TableCell
                         key={cell.id}

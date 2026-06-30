@@ -35,10 +35,10 @@ export const useUpdateTimesheet = (id) => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (payload) => timesheetsApi.update(id, payload),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['timesheets'] });
-      qc.invalidateQueries({ queryKey: QUERY_KEYS.TIMESHEET(id) });
-    },
+    onSuccess: () => Promise.all([
+        qc.invalidateQueries({ queryKey: ['timesheets'] }),
+        qc.invalidateQueries({ queryKey: QUERY_KEYS.TIMESHEET(id) })
+      ]),
   });
 };
 

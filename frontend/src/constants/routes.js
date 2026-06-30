@@ -61,6 +61,7 @@ export const ROUTES = {
   REPORT_MONTHLY_UTILIZATION: '/reports/monthly-utilization',
   REPORT_SERVICE_PO_RESOURCE: '/reports/service-po-resource',
   REPORT_SERVICE_PO_SUMMARY: '/reports/service-po-summary',
+  REPORT_MONTHLY_RESOURCE_UTILIZATION: '/reports/monthly-resource-utilization',
 
   // Settings
   PROFILE: '/profile',

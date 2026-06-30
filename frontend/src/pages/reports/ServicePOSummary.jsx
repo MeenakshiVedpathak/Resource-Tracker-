@@ -79,78 +79,78 @@ const ValueCell = ({ value, format = 'currency' }) => {
 const columns = [
   columnHelper.accessor('service_po_code', {
     header: 'PO Code',
-    size: 130,
+    size: 160,
     meta: { sticky: true, left: 0 },
     cell: (info) => (
-      <span className="font-mono text-xs font-semibold text-muted-foreground">
+      <span className="font-mono text-xs font-semibold text-muted-foreground whitespace-nowrap">
         {info.getValue() || '—'}
       </span>
     ),
   }),
   columnHelper.accessor('service_po_name', {
     header: 'PO Name',
-    size: 180,
-    meta: { sticky: true, left: 130 },
-    cell: (info) => <div className="truncate font-medium max-w-[160px]" title={info.getValue()}>{info.getValue() || '—'}</div>,
+    size: 240,
+    meta: { sticky: true, left: 160 },
+    cell: (info) => <div className="truncate font-medium max-w-[220px]" title={info.getValue()}>{info.getValue() || '—'}</div>,
   }),
   columnHelper.accessor('client_name', {
     header: 'Client',
-    size: 150,
-    cell: (info) => <div className="truncate max-w-[130px]" title={info.getValue()}>{info.getValue() || '—'}</div>,
+    size: 220,
+    cell: (info) => <div className="truncate max-w-[200px]" title={info.getValue()}>{info.getValue() || '—'}</div>,
   }),
   columnHelper.accessor('service_type', {
     header: 'Service Type',
-    size: 140,
+    size: 150,
     cell: (info) => info.getValue() || '—',
   }),
   columnHelper.accessor('status', {
     header: 'Status',
-    size: 100,
+    size: 160,
     cell: (info) => <StatusBadge status={info.getValue()} />,
   }),
   columnHelper.accessor('start_date', {
     header: 'Start Date',
-    size: 110,
+    size: 120,
     cell: (info) => formatDate(info.getValue()),
   }),
   columnHelper.accessor('end_date', {
     header: 'End Date',
-    size: 110,
+    size: 120,
     cell: (info) => formatDate(info.getValue()),
   }),
   columnHelper.accessor('po_value', {
     header: 'PO Value',
-    size: 130,
+    size: 160,
     cell: (info) => <ValueCell value={info.getValue()} />,
   }),
   columnHelper.accessor('expected_man_hours', {
     header: 'Exp. Hours',
-    size: 110,
+    size: 140,
     cell: (info) => <ValueCell value={info.getValue()} format="hours" />,
   }),
   columnHelper.accessor('hours_delivered_before_month', {
-    header: 'Delivered Hours',
-    size: 130,
+    header: 'Delivered Before Month',
+    size: 180,
     cell: (info) => <ValueCell value={info.getValue()} format="hours" />,
   }),
   columnHelper.accessor('available_hours', {
     header: 'Available Hours',
-    size: 130,
+    size: 150,
     cell: (info) => <ValueCell value={info.getValue()} format="hours" />,
   }),
   columnHelper.accessor('monthly_billable_amount', {
     header: 'Monthly Billable',
-    size: 140,
+    size: 160,
     cell: (info) => <ValueCell value={info.getValue()} />,
   }),
   columnHelper.accessor('invoiced_amount', {
     header: 'Invoiced Amount',
-    size: 140,
+    size: 160,
     cell: (info) => <ValueCell value={info.getValue()} />,
   }),
   columnHelper.accessor('unbilled_amount', {
     header: 'Unbilled Amount',
-    size: 140,
+    size: 160,
     cell: (info) => <ValueCell value={info.getValue()} />,
   }),
 ];
@@ -216,15 +216,16 @@ const ServicePOSummary = () => {
 
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Year <span className="text-destructive">*</span></Label>
-          <Input
-            type="number"
-            placeholder="YYYY"
-            value={year}
-            onChange={(e) => setYear(e.target.value)}
-            className="h-9 w-24 text-sm"
-            min={2000}
-            max={2100}
-          />
+          <Select value={year} onValueChange={(v) => setYear(v)}>
+            <SelectTrigger className="h-9 w-24 text-sm">
+              <SelectValue placeholder="Year" />
+            </SelectTrigger>
+            <SelectContent>
+              {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i).map(y => (
+                <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="flex flex-col gap-1.5">
@@ -246,7 +247,7 @@ const ServicePOSummary = () => {
           disabled={!canRun}
           className="self-end"
         >
-          Run Report
+          Apply
         </Button>
       </div>
 

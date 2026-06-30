@@ -7,7 +7,7 @@ import { motion } from 'framer-motion';
 import { Save } from 'lucide-react';
 import { useServicePO, useCreateServicePO, useUpdateServicePO } from '@/hooks/useServicePOs';
 import { useActiveClients } from '@/hooks/useClients';
-import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
+import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import { ROUTES } from '@/constants/routes';
@@ -82,7 +82,7 @@ const ServicePOForm = () => {
 
   const { data: po, isPending: isLoadingPO } = useServicePO(id);
   const { data: activeClients = [], isPending: isLoadingClients } = useActiveClients();
-  const { data: serviceCategories = [], isPending: isLoadingCategories } = useActiveServiceCategories();
+  const { data: serviceTypes = [], isPending: isLoadingTypes } = useActiveServiceTypes();
   const createMutation = useCreateServicePO();
   const updateMutation = useUpdateServicePO(id);
 
@@ -150,7 +150,11 @@ const ServicePOForm = () => {
 
   return (
     <Sheet open={true} onOpenChange={(open) => !open && handleClose()}>
-      <SheetContent side="right" className="w-full sm:max-w-3xl p-0 flex flex-col bg-white overflow-hidden">
+      <SheetContent 
+        side="right" 
+        className="w-full sm:max-w-3xl p-0 flex flex-col bg-white overflow-hidden"
+        onInteractOutside={(e) => e.preventDefault()}
+      >
         <SheetHeader className="px-5 py-3 border-b">
           <SheetTitle className="text-base font-medium text-left">{isEdit ? 'Edit Service PO' : 'New Service PO'}</SheetTitle>
         </SheetHeader>
@@ -225,7 +229,7 @@ const ServicePOForm = () => {
                     <Select
                       value={field.value ? String(field.value) : ''}
                       onValueChange={(v) => field.onChange(Number(v))}
-                      disabled={isLoadingCategories}
+                      disabled={isLoadingTypes}
                     >
                       <FormControl>
                         <SelectTrigger className="h-8 text-sm">
@@ -233,9 +237,9 @@ const ServicePOForm = () => {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {serviceCategories.map((c) => (
+                        {serviceTypes.map((c) => (
                           <SelectItem key={c.id} value={String(c.id)}>
-                            {c.name}
+                            {c.service_type_name}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -307,7 +311,6 @@ const ServicePOForm = () => {
 
                 {/* Commercial */}
                 <div className="space-y-3">
-                  <h3 className="text-xs font-semibold text-foreground border-b pb-1">Commercial Details</h3>
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <FormField
                 control={form.control}

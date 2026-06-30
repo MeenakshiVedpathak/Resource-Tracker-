@@ -236,21 +236,17 @@
 
   /* ── Sticky Table Columns ── */
   .sticky-col {
-    position: sticky;
-    z-index: 10;
-    background-color: white;
+    @apply sticky z-10 bg-background;
     /* Must be opaque to hide scrolled text */
   }
 
   tr:hover td.sticky-col {
-    background-color: #f6f8fa;
-    /* Opaque equivalent of muted/40 over white */
+    @apply bg-slate-50 dark:bg-slate-800;
+    /* Opaque equivalent of hover over background */
   }
 
   th.sticky-col {
-    background-color: #f8fafc;
-    /* match bg-slate-50 */
-    z-index: 20;
+    @apply z-20 bg-slate-50 dark:bg-slate-800/80;
   }
 }
 
