@@ -20,7 +20,7 @@ const TimesheetList = () => {
   const navigate = useNavigate();
 
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(20);
+  const [limit, setLimit] = useState(10);
   
   const currentDate = new Date();
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);

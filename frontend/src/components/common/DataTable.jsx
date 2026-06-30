@@ -81,12 +81,14 @@ const DataTable = ({
       )}
 
       {/* Table */}
-      <div className={cn("bg-white border rounded-lg overflow-auto", tableContainerClassName || "overflow-hidden")}>
-        <Table className="data-table">
-          <TableHeader>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id} className="hover:bg-transparent border-b bg-slate-50">
-                {headerGroup.headers.map((header) => {
+      <Table 
+        className="data-table"
+        containerClassName={cn("bg-white border rounded-lg overflow-auto", tableContainerClassName || "max-h-[50vh]")}
+      >
+        <TableHeader className="sticky top-0 z-20 bg-slate-50 shadow-[0_1px_3px_0_rgb(0,0,0,0.1)]">
+          {table.getHeaderGroups().map((headerGroup) => (
+            <TableRow key={headerGroup.id} className="hover:bg-transparent border-b bg-slate-50">
+              {headerGroup.headers.map((header) => {
                   const isSticky = header.column.columnDef.meta?.sticky;
                   const left = header.column.columnDef.meta?.left || 0;
                   const w = (header.getSize() !== 150 || isSticky) ? header.getSize() : undefined;
@@ -169,7 +171,6 @@ const DataTable = ({
             )}
           </TableBody>
         </Table>
-      </div>
 
       {/* Pagination */}
       {pagination && (

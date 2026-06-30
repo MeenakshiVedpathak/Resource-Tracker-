@@ -209,7 +209,7 @@ const MonthlyResourceUtilization = () => {
               placeholder="Name…"
               value={search}
               onChange={handleSearchChange}
-              className="h-9 pl-8 w-44 text-sm"
+              className="h-9 pl-8 w-full sm:w-full sm:w-72 text-sm"
               disabled={!enabled}
             />
           </div>
@@ -359,29 +359,42 @@ const MonthlyResourceUtilization = () => {
                 : `${records.length} employee${records.length !== 1 ? 's' : ''}`}
               {monthLabel ? ` · ${monthLabel}` : ''}
             </p>
-            {(meta.totalPages ?? 1) > 1 && (
-              <div className="flex items-center gap-1">
-                <Button
-                  variant="outline" size="sm"
-                  className="h-7 px-2 text-xs"
-                  disabled={!meta.hasPrevPage}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                >
-                  Previous
-                </Button>
-                <span className="text-xs text-muted-foreground px-1">
-                  {meta.page ?? page} / {meta.totalPages}
-                </span>
-                <Button
-                  variant="outline" size="sm"
-                  className="h-7 px-2 text-xs"
-                  disabled={!meta.hasNextPage}
-                  onClick={() => setPage((p) => p + 1)}
-                >
-                  Next
-                </Button>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground whitespace-nowrap">Rows per page</span>
+                <Select value={String(limit)} onValueChange={(v) => { setLimit(Number(v)); setPage(1); }}>
+                  <SelectTrigger className="h-7 w-[60px] text-xs bg-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[10, 20, 50, 100].map(s => <SelectItem key={s} value={String(s)}>{s}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
-            )}
+              {(meta.totalPages ?? 1) > 1 && (
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline" size="sm"
+                    className="h-7 px-2 text-xs"
+                    disabled={!meta.hasPrevPage}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  >
+                    Previous
+                  </Button>
+                  <span className="text-xs text-muted-foreground px-1">
+                    {meta.page ?? page} / {meta.totalPages}
+                  </span>
+                  <Button
+                    variant="outline" size="sm"
+                    className="h-7 px-2 text-xs"
+                    disabled={!meta.hasNextPage}
+                    onClick={() => setPage((p) => p + 1)}
+                  >
+                    Next
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
         </>
       )}

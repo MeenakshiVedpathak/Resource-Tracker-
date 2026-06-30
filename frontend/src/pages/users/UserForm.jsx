@@ -162,12 +162,12 @@ const UserForm = () => {
                 {/* Account Details */}
                 <div className="space-y-2">
                   <h3 className="text-xs font-semibold text-foreground border-b pb-1">Account Details</h3>
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <FormField
                       control={form.control}
                       name="email"
                       render={({ field }) => (
-                        <FormItem className="sm:col-span-2 lg:col-span-1">
+                        <FormItem className="space-y-1">
                           <FormLabel className="text-[11px] text-muted-foreground font-medium"><span className="text-destructive mr-0.5">*</span> Email</FormLabel>
                           <FormControl>
                             <Input type="email" placeholder="user@example.com" className="h-8 text-sm border-gray-200" {...field} />

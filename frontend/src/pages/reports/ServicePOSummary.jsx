@@ -236,7 +236,7 @@ const ServicePOSummary = () => {
               placeholder="PO Name, Client…"
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-              className="h-9 pl-9 w-64 text-sm"
+              className="h-9 pl-9 w-full sm:w-72 text-sm"
             />
           </div>
         </div>

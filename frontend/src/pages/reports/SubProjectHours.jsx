@@ -173,7 +173,7 @@ const SubProjectHours = () => {
               placeholder="Sub-project, PO, client…"
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-              className="h-9 pl-9 w-60 text-sm"
+              className="h-9 pl-9 w-full sm:w-72 text-sm"
             />
           </div>
         </div>

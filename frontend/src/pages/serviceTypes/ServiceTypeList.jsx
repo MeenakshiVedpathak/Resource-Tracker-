@@ -34,7 +34,7 @@ const ServiceTypeList = () => {
 
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(20);
+  const [limit, setLimit] = useState(10);
 
   const debouncedSearch = useDebounce(search, 400);
   const canManage = hasRole('Finance', 'Management');

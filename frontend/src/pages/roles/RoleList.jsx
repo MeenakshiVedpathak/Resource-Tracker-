@@ -32,7 +32,7 @@ const RoleList = () => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(20);
+  const [limit, setLimit] = useState(10);
 
   const debouncedSearch = useDebounce(search, 400);
   const isManagement = hasRole('Management');

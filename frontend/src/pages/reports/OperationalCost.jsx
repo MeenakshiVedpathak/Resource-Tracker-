@@ -218,7 +218,7 @@ const OperationalCost = () => {
               placeholder="Name, code…"
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-              className="h-9 pl-9 w-52 text-sm"
+              className="h-9 pl-9 w-full sm:w-72 text-sm"
             />
           </div>
         </div>

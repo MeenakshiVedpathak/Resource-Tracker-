@@ -36,7 +36,7 @@ const ServiceCategoryList = () => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(20);
+  const [limit, setLimit] = useState(10);
   const [deleteTarget, setDeleteTarget] = useState(null);
 
   const debouncedSearch = useDebounce(search, 400);

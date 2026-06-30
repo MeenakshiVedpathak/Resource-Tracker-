@@ -207,9 +207,10 @@ const ServicePOResource = () => {
 
           {/* ── Table ── */}
           <div className="rounded-lg border overflow-hidden">
-            <table className="w-full border-collapse text-sm">
-              <thead>
-                <tr className="border-b bg-muted/60">
+            <div className="overflow-auto max-h-[50vh]">
+              <table className="w-full border-collapse text-sm">
+                <thead className="sticky top-0 z-20 bg-background shadow-sm">
+                  <tr className="border-b bg-muted/60">
                   <th className="w-[48px] px-3 py-2.5 text-left text-xs font-semibold border-r border-border">#</th>
                   <th className="px-3 py-2.5 text-left text-xs font-semibold border-r border-border min-w-[160px]">Customer Name</th>
                   <th className="px-3 py-2.5 text-left text-xs font-semibold border-r border-border min-w-[200px]">Service PO Summary</th>
@@ -313,6 +314,7 @@ const ServicePOResource = () => {
                 )}
               </tbody>
             </table>
+            </div>
           </div>
 
           <div className="mt-3 flex items-center justify-between gap-2">
@@ -322,7 +324,19 @@ const ServicePOResource = () => {
                 : `${groups.length} service PO${groups.length !== 1 ? 's' : ''} · ${rows.length} resource row${rows.length !== 1 ? 's' : ''}`}
               {monthLabel ? ` · ${monthLabel}` : ''}
             </p>
-            {(meta.totalPages ?? 1) > 1 && (
+                        <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground whitespace-nowrap">Rows per page</span>
+                <Select value={String(limit)} onValueChange={(v) => { setLimit(Number(v)); setPage(1); }}>
+                  <SelectTrigger className="h-7 w-[60px] text-xs bg-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[10, 20, 50, 100].map(s => <SelectItem key={s} value={String(s)}>{s}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              {(meta.totalPages ?? 1) > 1 && (
               <div className="flex items-center gap-1">
                 <Button
                   variant="outline" size="sm"
@@ -345,6 +359,7 @@ const ServicePOResource = () => {
                 </Button>
               </div>
             )}
+            </div>
           </div>
         </>
       )}
