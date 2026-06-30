@@ -33,6 +33,10 @@ async function getDashboardStats() {
     recentActivity,
     topPOs,
     monthlyTrend,
+    nonBillableTrend,
+    nonBillableBreakdown,
+    topClientsBillable,
+    topClientsNonBillable,
   ] = await Promise.all([
     dashboardRepo.getTotalEmployees(),
     dashboardRepo.getActiveEmployees(),
@@ -45,6 +49,10 @@ async function getDashboardStats() {
     dashboardRepo.getRecentTimesheetActivity(),
     dashboardRepo.getTopPOsByHours(),
     dashboardRepo.getMonthlyHoursTrend(),
+    dashboardRepo.getMonthlyNonBillableTrend(),
+    dashboardRepo.getCurrentMonthNonBillableBreakdown(currentMonth, currentYear),
+    dashboardRepo.getTopClientsByBillableHours(currentMonth, currentYear),
+    dashboardRepo.getTopClientsByNonBillableHours(currentMonth, currentYear),
   ]);
 
   const inactiveEmployees = totalEmployees - activeEmployees;
@@ -86,6 +94,10 @@ async function getDashboardStats() {
     charts: {
       monthly_hours_trend: monthlyTrend,
       top_pos_by_hours: topPOs,
+      non_billable_trend: nonBillableTrend,
+      non_billable_breakdown: nonBillableBreakdown,
+      top_clients_billable: topClientsBillable,
+      top_clients_non_billable: topClientsNonBillable,
     },
 
     activity: {
