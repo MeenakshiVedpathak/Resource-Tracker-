@@ -59,7 +59,7 @@ const NAV_GROUPS = [
           { label: 'Monthly Cost Summary', to: ROUTES.REPORT_MONTHLY_COST },
           { label: 'Service PO Summary', to: ROUTES.REPORT_SERVICE_PO_SUMMARY },
           { label: 'Timesheet Summary', to: ROUTES.REPORT_TIMESHEET },
-          { label: 'PO Utilisation', to: ROUTES.REPORT_PO_UTILISATION },
+          // { label: 'PO Utilisation', to: ROUTES.REPORT_PO_UTILISATION },
           { label: 'Sub-Project Hours', to: ROUTES.REPORT_SUB_PROJECT_HOURS },
           { label: 'Resource Allocation', to: ROUTES.REPORT_RESOURCE_ALLOCATION },
           { label: 'Operational Cost', to: ROUTES.REPORT_OPERATIONAL_COST },
