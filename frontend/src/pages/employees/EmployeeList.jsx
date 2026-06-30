@@ -1,9 +1,10 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, Outlet } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
 import { useIsMutating } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2, Search } from 'lucide-react';
-import { useEmployees, useDeleteEmployee } from '@/hooks/useEmployees';
+import { Plus, Pencil, Trash2, Search, Download, Upload, CheckCircle2, AlertCircle } from 'lucide-react';
+import * as XLSX from 'xlsx';
+import { useEmployees, useDeleteEmployee, useImportEmployees } from '@/hooks/useEmployees';
 import { useAuth } from '@/hooks/useAuth';
 import { useNotification } from '@/hooks/useNotification';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -20,6 +21,12 @@ import { Button } from '@/components/ui/button';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
+
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from '@/components/ui/table';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 
 const columnHelper = createColumnHelper();
 
@@ -56,7 +63,14 @@ const EmployeeList = () => {
 
   const { data, isPending, isFetching } = useEmployees(params);
   const deleteMutation = useDeleteEmployee();
+  const importMutation = useImportEmployees();
   const isMutating = useIsMutating();
+  const fileInputRef = useRef(null);
+
+  const [previewData, setPreviewData] = useState(null);
+  const [previewFile, setPreviewFile] = useState(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [importResult, setImportResult] = useState(null);
 
   const employees = data?.data ?? [];
   const meta = data?.meta ?? {};
@@ -165,12 +179,180 @@ const EmployeeList = () => {
     setPage(1);
   };
 
+  const handleDownloadSample = () => {
+    const ws = XLSX.utils.json_to_sheet([{
+      'Employee Code': 'EMP-0076',
+      'Full Name': 'Omkar Patil',
+      'Designation': 'Software Engineer',
+      'Total Experience': 5.2,
+      'Company Experience': 2.1,
+      'Email ID': 'omkar@example.com',
+      'Resource Description': 'Java, React',
+      'Date of Joining': '2023-01-15',
+      'Date of Leaving': ''
+    }]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Employees");
+    XLSX.writeFile(wb, "employee_sample.xlsx");
+  };
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const bstr = evt.target.result;
+        const wb = XLSX.read(bstr, { type: 'binary' });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
+        
+        if (data.length > 0) {
+          setPreviewData(data);
+          setPreviewFile(file);
+          setIsPreviewOpen(true);
+        }
+      } catch (error) {
+        showError('Failed to parse Excel file');
+      } finally {
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  const handleConfirmImport = () => {
+    if (!previewFile) return;
+    
+    importMutation.mutate(previewFile, {
+      onSuccess: (res) => {
+        setImportResult(res);
+        setIsPreviewOpen(false);
+        setPreviewFile(null);
+        setPreviewData(null);
+      },
+      onError: (err) => {
+        // If the backend returns a 400 with a detailed error array, capture it
+        if (err.response?.data) {
+          setImportResult(err.response.data);
+          setIsPreviewOpen(false);
+          setPreviewFile(null);
+          setPreviewData(null);
+        } else {
+          showError(extractApiError(err));
+        }
+      }
+    });
+  };
+
+  const renderImportResults = () => {
+    if (!importResult) return null;
+    
+    const data = importResult.data || importResult;
+    const errors = data.error_rows || data.errors || data.failed || [];
+    const total = data.total ?? data.total_processed ?? 0;
+    const imported = data.imported ?? data.success_count ?? 0;
+    const skipped = data.skipped ?? data.error_count ?? errors.length ?? 0;
+
+    return (
+      <div className="space-y-5">
+        {/* Summary badges */}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-1.5 rounded-lg border bg-card px-3 py-2">
+            <span className="text-xs text-muted-foreground">Total rows:</span>
+            <span className="font-mono text-xs font-semibold">{total}</span>
+          </div>
+          <Badge className="gap-1.5 bg-green-100 text-green-700 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            {imported} imported
+          </Badge>
+          {skipped > 0 && (
+            <Badge variant="destructive" className="gap-1.5">
+              <AlertCircle className="h-3.5 w-3.5" />
+              {skipped} skipped
+            </Badge>
+          )}
+        </div>
+
+        {/* Error rows */}
+        {skipped > 0 && errors.length > 0 && (
+          <Card className="border-destructive/40">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-sm text-destructive">
+                <AlertCircle className="h-4 w-4" />
+                Error Rows ({skipped})
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto max-h-[400px]">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-destructive/5">
+                      <TableHead className="w-24 sticky top-0 bg-red-50">Row #</TableHead>
+                      <TableHead className="sticky top-0 bg-red-50">Error Message</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {errors.map((row, idx) => (
+                      <TableRow key={idx} className="hover:bg-destructive/5">
+                        <TableCell className="font-mono text-xs">
+                          {row.row ?? row.rowNumber ?? row.row_number ?? idx + 1}
+                        </TableCell>
+                        <TableCell className="text-sm text-destructive">
+                          {row.errors?.length > 0
+                            ? row.errors.join(', ')
+                            : row.message ?? row.error_message ?? row.error ?? '—'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+        
+        {skipped === 0 && (
+          <div className="text-center py-8 text-green-600 bg-green-50 rounded-md border border-green-100">
+             All records were imported successfully!
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-4">
       <PageHeader
         title="Employees"
         actions={
           <div className="flex items-center gap-3">
+            {isHR && (
+              <>
+                <Button size="sm" variant="outline" className="bg-white" onClick={handleDownloadSample}>
+                  <Download className="mr-1.5 h-4 w-4" /> Sample
+                </Button>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  className="hidden"
+                  accept=".xlsx,.csv"
+                  onChange={handleFileUpload}
+                />
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="bg-white" 
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={importMutation.isPending}
+                >
+                  <Upload className="mr-1.5 h-4 w-4" /> 
+                  {importMutation.isPending ? 'Uploading...' : 'Upload'}
+                </Button>
+              </>
+            )}
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
@@ -180,7 +362,7 @@ const EmployeeList = () => {
                 onChange={handleSearch}
               />
             </div>
-            {isHR && (
+            {isHR && !isPreviewOpen && !importResult && (
               <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => navigate(ROUTES.EMPLOYEE_NEW)}>
                 <Plus className="mr-1.5 h-4 w-4" /> Add Employee
               </Button>
@@ -189,31 +371,91 @@ const EmployeeList = () => {
         }
       />
 
-      <DataTable
-        columns={columns}
-        data={employees}
-        isLoading={isPending}
-        toolbar={
-          <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
-            <SelectTrigger className="h-9 w-32 text-sm bg-white">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All status</SelectItem>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="inactive">Inactive</SelectItem>
-            </SelectContent>
-          </Select>
-        }
-        pagination={meta.total != null ? {
-          page: meta.current_page ?? page,
-          limit: meta.per_page ?? limit,
-          total: meta.total,
-        } : undefined}
-        onPageChange={setPage}
-        onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
-        onRowClick={(row) => navigate(buildPath(ROUTES.EMPLOYEE_EDIT, { id: row.id }))}
-      />
+      {importResult ? (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-medium">Import Results</h3>
+            <Button variant="outline" onClick={() => setImportResult(null)}>
+              Back to Employees
+            </Button>
+          </div>
+          {renderImportResults()}
+        </div>
+      ) : isPreviewOpen ? (
+        <Card className="shadow-sm">
+          <CardHeader className="pb-3 border-b bg-muted/20">
+            <CardTitle className="text-lg font-medium text-slate-800">Preview Import Data</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-auto max-h-[60vh]">
+              {previewData && previewData.length > 0 && (
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/50">
+                      {previewData[0]?.map((header, i) => (
+                        <TableHead key={i} className="whitespace-nowrap font-semibold sticky top-0 bg-muted/50">{header}</TableHead>
+                      ))}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {previewData.slice(1, 6).map((row, i) => (
+                      <TableRow key={i}>
+                        {previewData[0].map((_, colIndex) => (
+                          <TableCell key={colIndex} className="whitespace-nowrap py-3 text-sm">
+                            {row[colIndex] != null ? row[colIndex].toString() : '-'}
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    ))}
+                    {previewData.length > 6 && (
+                      <TableRow>
+                        <TableCell colSpan={previewData[0].length} className="text-center text-sm text-muted-foreground bg-muted/10 py-6 italic">
+                          ... and {previewData.length - 6} more rows
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              )}
+            </div>
+            <div className="p-4 border-t flex justify-end gap-3 bg-muted/10">
+              <Button variant="outline" onClick={() => setIsPreviewOpen(false)} disabled={importMutation.isPending}>
+                Cancel
+              </Button>
+              <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={handleConfirmImport} disabled={importMutation.isPending}>
+                <CheckCircle2 className="mr-2 h-4 w-4" />
+                {importMutation.isPending ? 'Importing...' : 'Confirm Import'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <DataTable
+          columns={columns}
+          data={employees}
+          isLoading={isPending}
+          toolbar={
+            <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
+              <SelectTrigger className="h-9 w-32 text-sm bg-white">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All status</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="inactive">Inactive</SelectItem>
+              </SelectContent>
+            </Select>
+          }
+          pagination={meta.total != null ? {
+            page: meta.current_page ?? page,
+            limit: meta.per_page ?? limit,
+            total: meta.total,
+          } : undefined}
+          onPageChange={setPage}
+          onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
+          onRowClick={(row) => navigate(buildPath(ROUTES.EMPLOYEE_EDIT, { id: row.id }))}
+        />
+      )}
 
       <ConfirmDialog
         open={!!deleteTarget}
@@ -224,6 +466,9 @@ const EmployeeList = () => {
         onConfirm={handleDelete}
         isLoading={deleteMutation.isPending}
       />
+
+
+
       <Outlet />
     </div>
   );

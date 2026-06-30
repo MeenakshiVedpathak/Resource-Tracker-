@@ -49,3 +49,11 @@ export const useDeleteEmployee = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['employees'] }),
   });
 };
+
+export const useImportEmployees = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: employeesApi.import,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['employees'] }),
+  });
+};

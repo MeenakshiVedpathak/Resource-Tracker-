@@ -18,4 +18,14 @@ export const employeesApi = {
 
   delete: (id) =>
     apiClient.delete(`/employees/${id}`, { data: { is_delete: true } }).then((r) => r.data),
+
+  import: (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return apiClient.post('/employees/import', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    }).then((r) => r.data);
+  },
 };
