@@ -28,13 +28,13 @@ const NAV_GROUPS = [
   {
     label: 'Business',
     items: [
-        { label: 'Service Categories', icon: Tag, to: ROUTES.SERVICE_CATEGORIES },
+      { label: 'Service Categories', icon: Tag, to: ROUTES.SERVICE_CATEGORIES },
       { label: 'Service Types', icon: Layers, to: ROUTES.SERVICE_TYPES },
-    
+
       { label: 'Clients', icon: Building2, to: ROUTES.CLIENTS },
       { label: 'Service POs', icon: FileText, to: ROUTES.SERVICE_POS },
       { label: 'Sub-Projects', icon: FolderOpen, to: ROUTES.SUB_PROJECTS },
-      
+
     ],
   },
   {
@@ -52,18 +52,18 @@ const NAV_GROUPS = [
         icon: BarChart3,
         to: ROUTES.REPORTS,
         children: [
-           { label: 'PO vs Resource',        to: ROUTES.REPORT_SERVICE_PO_RESOURCE },
-          { label: 'Monthly Utilization',   to: ROUTES.REPORT_MONTHLY_UTILIZATION },
-         
-          { label: 'Employee Hourly Rate',  to: ROUTES.REPORT_HOURLY_RATE },
-          { label: 'Monthly Cost Summary',  to: ROUTES.REPORT_MONTHLY_COST },
-          { label: 'Service PO Summary',    to: ROUTES.REPORT_SERVICE_PO_SUMMARY },
-          { label: 'Timesheet Summary',     to: ROUTES.REPORT_TIMESHEET },
-          { label: 'PO Utilisation',        to: ROUTES.REPORT_PO_UTILISATION },
-          { label: 'Sub-Project Hours',     to: ROUTES.REPORT_SUB_PROJECT_HOURS },
-          { label: 'Resource Allocation',   to: ROUTES.REPORT_RESOURCE_ALLOCATION },
-          { label: 'Operational Cost',      to: ROUTES.REPORT_OPERATIONAL_COST },
-          
+          { label: 'PO vs Resource', to: ROUTES.REPORT_SERVICE_PO_RESOURCE },
+          { label: 'Monthly Utilization', to: ROUTES.REPORT_MONTHLY_UTILIZATION },
+
+          { label: 'Employee Hourly Rate', to: ROUTES.REPORT_HOURLY_RATE },
+          { label: 'Monthly Cost Summary', to: ROUTES.REPORT_MONTHLY_COST },
+          { label: 'Service PO Summary', to: ROUTES.REPORT_SERVICE_PO_SUMMARY },
+          { label: 'Timesheet Summary', to: ROUTES.REPORT_TIMESHEET },
+          { label: 'PO Utilisation', to: ROUTES.REPORT_PO_UTILISATION },
+          { label: 'Sub-Project Hours', to: ROUTES.REPORT_SUB_PROJECT_HOURS },
+          { label: 'Resource Allocation', to: ROUTES.REPORT_RESOURCE_ALLOCATION },
+          { label: 'Operational Cost', to: ROUTES.REPORT_OPERATIONAL_COST },
+
         ],
       },
     ],
@@ -169,11 +169,24 @@ const Sidebar = () => {
       {/* Logo */}
       <div className={cn(
         'flex h-16 shrink-0 items-center border-b border-sidebar-border px-4 gap-3',
-        collapsed && 'justify-center px-2'
+        collapsed ? 'justify-center px-2' : ''
       )}>
         <div className="flex shrink-0 items-center justify-center rounded-lg">
-          <img src="/logo.png" alt="Logo" className={cn("object-contain", collapsed ? "w-8" : "h-10")} />
+          <img src="/logo.svg" alt="Logo" className={cn("object-contain", collapsed ? "w-8" : "h-10")} />
         </div>
+        <AnimatePresence initial={false}>
+          {!collapsed && (
+            <motion.span
+              initial={{ opacity: 0, width: 0 }}
+              animate={{ opacity: 1, width: 'auto' }}
+              exit={{ opacity: 0, width: 0 }}
+              transition={{ duration: 0.15 }}
+              className="font-bold text-lg text-white whitespace-nowrap overflow-hidden"
+            >
+              RUT Portal
+            </motion.span>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Navigation */}

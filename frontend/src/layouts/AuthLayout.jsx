@@ -18,7 +18,7 @@ const AuthLayout = () => {
         <div className="absolute bottom-0 right-0 h-80 w-80 rounded-full bg-primary/10 blur-3xl" />
 
         <div className="relative z-10 flex items-center gap-3">
-          <img src="/logo.png" alt="Logo" className="h-16 object-contain" />
+          <img src="/logo.svg" alt="Logo" className="h-16 object-contain" />
         </div>
 
         {/* Center copy */}
@@ -53,7 +53,7 @@ const AuthLayout = () => {
       {/* Right panel — form */}
       <div className="flex flex-1 flex-col items-center justify-center bg-background px-6 py-12">
         <div className="mb-8 flex items-center justify-center lg:hidden">
-          <img src="/logo.png" alt="Logo" className="h-12 object-contain" />
+          <img src="/logo.svg" alt="Logo" className="h-12 object-contain" />
         </div>
 
         <div className="w-full max-w-sm">
