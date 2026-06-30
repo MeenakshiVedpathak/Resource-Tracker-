@@ -99,7 +99,8 @@ const MonthlyUtilization = () => {
   const [month,  setMonth]  = useState(String(new Date().getMonth() + 1));
   const [year,   setYear]   = useState(String(new Date().getFullYear()));
   const [search, setSearch] = useState('');
-  const [page,   setPage]   = useState(1);
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
 
   const enabled = !!(month && year && Number(year) >= 2000 && Number(year) <= 2100);
 
@@ -107,6 +108,7 @@ const MonthlyUtilization = () => {
     month: Number(month),
     year:  Number(year),
     page,
+    limit,
     ...(search.trim() && { search: search.trim() }),
   } : undefined;
 
@@ -222,11 +224,11 @@ const MonthlyUtilization = () => {
 
           {/* ── Table ── */}
           <div className="rounded-lg border overflow-hidden">
-            <div className="overflow-x-auto">
+            <div className="overflow-auto max-h-[50vh]">
               <table className="min-w-max w-full border-collapse text-sm">
 
                 {/* Group header row */}
-                <thead className="sticky top-0 z-20">
+                <thead className="sticky top-0 z-20 bg-background">
                   <tr className="border-b bg-muted/60">
                     <th colSpan={2} className="sticky left-0 z-30 bg-muted" />
                     <th colSpan={6} className="border-r border-border" />
@@ -268,7 +270,7 @@ const MonthlyUtilization = () => {
                     <tr key={row.employee_id ?? i} className="group hover:bg-muted/30 transition-colors">
                       {/* # */}
                       <td className={td('sticky left-0 z-10 bg-background group-hover:bg-slate-50 dark:group-hover:bg-slate-800/80 w-[50px] text-center text-muted-foreground transition-colors')}>
-                        {((meta.page ?? page) - 1) * (meta.limit ?? 10) + i + 1}
+                        {((meta.page ?? page) - 1) * (meta.limit ?? limit) + i + 1}
                       </td>
                       {/* Name */}
                       <td className={td('sticky left-[50px] z-10 bg-background border-r border-border shadow-[1px_0_0_0_var(--border)] group-hover:bg-slate-50 dark:group-hover:bg-slate-800/80 transition-colors w-[220px] min-w-[220px] max-w-[220px] overflow-hidden text-ellipsis whitespace-nowrap')}>

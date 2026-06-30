@@ -106,12 +106,14 @@ const exportToExcel = (rows, month, year) => {
 const ServicePOResource = () => {
   const [month, setMonth] = useState(String(new Date().getMonth() + 1));
   const [year,  setYear]  = useState(String(new Date().getFullYear()));
-  const [page,  setPage]  = useState(1);
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
 
   const params = {
     ...(month && { month: Number(month) }),
     ...(year && Number(year) >= 2000 && { year: Number(year) }),
     page,
+    limit,
   };
 
   const { data, isPending } = useServicePOResourceReport(params);

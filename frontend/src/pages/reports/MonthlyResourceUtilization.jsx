@@ -113,7 +113,8 @@ const MonthlyResourceUtilization = () => {
   const [month,  setMonth]  = useState(String(new Date().getMonth() + 1));
   const [year,   setYear]   = useState(String(new Date().getFullYear()));
   const [search, setSearch] = useState('');
-  const [page,   setPage]   = useState(1);
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
 
   const enabled = !!(month && year && Number(year) >= 2000 && Number(year) <= 2100);
 
@@ -121,6 +122,7 @@ const MonthlyResourceUtilization = () => {
     month: Number(month),
     year:  Number(year),
     page,
+    limit,
     ...(search.trim() && { search: search.trim() }),
   } : undefined;
 
@@ -259,9 +261,9 @@ const MonthlyResourceUtilization = () => {
 
           {/* ── Table ── */}
           <div className="rounded-lg border overflow-hidden">
-            <div className="overflow-x-auto max-h-[70vh]">
+            <div className="overflow-auto max-h-[50vh]">
               <table className="min-w-max w-full border-collapse text-sm">
-                <thead className="sticky top-0 z-20">
+                <thead className="sticky top-0 z-20 bg-background">
                   <tr className="border-b bg-muted/60">
                     <th colSpan={2} className="sticky left-0 z-30 bg-muted" />
                     <th colSpan={7} className="border-r border-border" />
@@ -308,7 +310,7 @@ const MonthlyResourceUtilization = () => {
                   {records.map((row, i) => (
                     <tr key={row.employee_id ?? i} className="group hover:bg-muted/30 transition-colors">
                       <td className={td('sticky left-0 z-10 bg-background group-hover:bg-slate-50 dark:group-hover:bg-slate-800/80 w-[50px] text-center text-muted-foreground transition-colors')}>
-                        {((meta.page ?? page) - 1) * (meta.limit ?? 50) + i + 1}
+                        {((meta.page ?? page) - 1) * (meta.limit ?? limit) + i + 1}
                       </td>
                       <td className={td('sticky left-[50px] z-10 bg-background border-r border-border shadow-[1px_0_0_0_var(--border)] group-hover:bg-slate-50 dark:group-hover:bg-slate-800/80 transition-colors w-[220px] min-w-[220px] max-w-[220px] overflow-hidden text-ellipsis whitespace-nowrap')}>
                         <p className="font-medium">{row.full_name ?? '—'}</p>

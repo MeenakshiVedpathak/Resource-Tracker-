@@ -40,6 +40,7 @@ const DataTable = ({
   emptyState,
   toolbar,
   className,
+  tableContainerClassName,
   rowClassName,
   onRowClick,
 }) => {
@@ -80,7 +81,7 @@ const DataTable = ({
       )}
 
       {/* Table */}
-      <div className="bg-white border rounded-lg overflow-hidden">
+      <div className={cn("bg-white border rounded-lg overflow-auto", tableContainerClassName || "overflow-hidden")}>
         <Table className="data-table">
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (

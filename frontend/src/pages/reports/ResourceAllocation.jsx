@@ -174,7 +174,7 @@ const ResourceAllocation = () => {
   const [year, setYear] = useState(String(now.getFullYear()));
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(20);
+  const [limit, setLimit] = useState(10);
 
   const debouncedSearch = useDebounce(search, 400);
 
@@ -248,6 +248,7 @@ const ResourceAllocation = () => {
       </div>
 
       <DataTable
+        tableContainerClassName="max-h-[50vh]"
         columns={columns}
         data={rows}
         isLoading={isPending}

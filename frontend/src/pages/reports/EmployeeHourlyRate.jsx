@@ -137,7 +137,7 @@ const EmployeeHourlyRate = () => {
   const [year, setYear] = useState(String(now.getFullYear()));
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(20);
+  const [limit, setLimit] = useState(10);
   const [committed, setCommitted] = useState({ month: String(now.getMonth() + 1), year: String(now.getFullYear()) });
 
   const debouncedSearch = useDebounce(search, 400);
@@ -229,6 +229,7 @@ const EmployeeHourlyRate = () => {
       </div>
 
       <DataTable
+        tableContainerClassName="max-h-[50vh]"
         columns={columns}
         data={rows}
         isLoading={isPending}
