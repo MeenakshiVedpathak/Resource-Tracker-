@@ -212,6 +212,147 @@ async function getMonthlyHoursTrend() {
   );
 }
 
+/**
+ * Top 5 clients by billable hours logged in the given month/year.
+ *
+ * @param {number} month - 1-12
+ * @param {number} year
+ * @returns {Promise<object[]>}
+ */
+async function getTopClientsByBillableHours(month, year) {
+  return sequelize.query(
+    `SELECT
+       c.id,
+       c.client_name,
+       ROUND(COALESCE(SUM(t.hours_logged), 0)::numeric, 2) AS billable_hours
+     FROM timesheets t
+     INNER JOIN service_pos sp ON sp.id = t.service_po_id AND sp.is_billable = true
+     INNER JOIN clients c      ON c.id  = sp.client_id
+     WHERE EXTRACT(MONTH FROM t.timesheet_date) = :month
+       AND EXTRACT(YEAR  FROM t.timesheet_date) = :year
+     GROUP BY c.id, c.client_name
+     ORDER BY billable_hours DESC
+     LIMIT 5`,
+    {
+      replacements: { month, year },
+      type: QueryTypes.SELECT,
+    }
+  );
+}
+
+/**
+ * Top 5 clients by non-billable hours logged in the given month/year.
+ * "Customer non-billable" — shows which clients consume the most free effort.
+ *
+ * @param {number} month - 1-12
+ * @param {number} year
+ * @returns {Promise<object[]>}
+ */
+async function getTopClientsByNonBillableHours(month, year) {
+  return sequelize.query(
+    `SELECT
+       c.id,
+       c.client_name,
+       ROUND(COALESCE(SUM(t.hours_logged), 0)::numeric, 2) AS non_billable_hours
+     FROM timesheets t
+     INNER JOIN service_pos sp ON sp.id = t.service_po_id AND sp.is_billable = false
+     INNER JOIN clients c      ON c.id  = sp.client_id
+     WHERE EXTRACT(MONTH FROM t.timesheet_date) = :month
+       AND EXTRACT(YEAR  FROM t.timesheet_date) = :year
+     GROUP BY c.id, c.client_name
+     ORDER BY non_billable_hours DESC
+     LIMIT 5`,
+    {
+      replacements: { month, year },
+      type: QueryTypes.SELECT,
+    }
+  );
+}
+
+/**
+ * Monthly billable vs non-billable hours for the last 6 months.
+ * Used by the trend chart on the dashboard to show whether non-billable
+ * hours are growing over time.
+ *
+ * @returns {Promise<object[]>}
+ */
+async function getMonthlyNonBillableTrend() {
+  return sequelize.query(
+    `SELECT
+       EXTRACT(YEAR  FROM t.timesheet_date)::int                                          AS year,
+       EXTRACT(MONTH FROM t.timesheet_date)::int                                          AS month,
+       TO_CHAR(t.timesheet_date, 'Mon YYYY')                                              AS label,
+       ROUND(COALESCE(SUM(CASE WHEN sp.is_billable = true  THEN t.hours_logged END), 0)::numeric, 2) AS billable_hours,
+       ROUND(COALESCE(SUM(CASE WHEN sp.is_billable = false THEN t.hours_logged END), 0)::numeric, 2) AS non_billable_hours
+     FROM timesheets t
+     INNER JOIN service_pos sp ON sp.id = t.service_po_id
+     WHERE t.timesheet_date >= (CURRENT_DATE - INTERVAL '6 months')
+     GROUP BY year, month, label
+     ORDER BY year ASC, month ASC`,
+    { type: QueryTypes.SELECT }
+  );
+}
+
+/**
+ * Current-month non-billable hours broken down by reason category.
+ * Categories mirror the monthly-utilisation report logic so numbers stay consistent.
+ *
+ * @param {number} month - 1-12
+ * @param {number} year
+ * @returns {Promise<object>}
+ */
+async function getCurrentMonthNonBillableBreakdown(month, year) {
+  const [result] = await sequelize.query(
+    `WITH categorized AS (
+       SELECT
+         t.hours_logged,
+         CASE
+           WHEN st.service_type_name ILIKE '%leave%'
+             OR st.service_type_name ILIKE '%vacation%'
+             OR st.service_type_name ILIKE '%holiday%'          THEN 'leaves'
+           WHEN st.service_type_name ILIKE '%team management%'
+             OR st.service_type_name ILIKE '%management%'       THEN 'team_management'
+           WHEN st.service_type_name ILIKE '%l&d%'
+             OR st.service_type_name ILIKE '%learning%'
+             OR st.service_type_name ILIKE '%training%'
+             OR st.service_type_name ILIKE '%development%'      THEN 'lnd'
+           WHEN st.service_type_name ILIKE '%internal support%'
+             OR st.service_type_name ILIKE '%internal%'
+             OR st.service_type_name ILIKE '%hr%'
+             OR st.service_type_name ILIKE '%marketing%'
+             OR st.service_type_name ILIKE '%finance%'
+             OR st.service_type_name ILIKE '%admin%'            THEN 'internal_support'
+           ELSE 'others'
+         END AS nb_category
+       FROM timesheets t
+       INNER JOIN service_pos sp   ON sp.id = t.service_po_id AND sp.is_billable = false
+       LEFT  JOIN service_types st ON st.id = sp.service_type_id
+       WHERE EXTRACT(MONTH FROM t.timesheet_date) = :month
+         AND EXTRACT(YEAR  FROM t.timesheet_date) = :year
+     )
+     SELECT
+       ROUND(COALESCE(SUM(CASE WHEN nb_category = 'leaves'           THEN hours_logged END), 0)::numeric, 2) AS leaves_hours,
+       ROUND(COALESCE(SUM(CASE WHEN nb_category = 'team_management'  THEN hours_logged END), 0)::numeric, 2) AS team_management_hours,
+       ROUND(COALESCE(SUM(CASE WHEN nb_category = 'lnd'              THEN hours_logged END), 0)::numeric, 2) AS lnd_hours,
+       ROUND(COALESCE(SUM(CASE WHEN nb_category = 'internal_support' THEN hours_logged END), 0)::numeric, 2) AS internal_support_hours,
+       ROUND(COALESCE(SUM(CASE WHEN nb_category = 'others'           THEN hours_logged END), 0)::numeric, 2) AS others_hours,
+       ROUND(COALESCE(SUM(hours_logged), 0)::numeric, 2)                                                     AS total_non_billable
+     FROM categorized`,
+    {
+      replacements: { month, year },
+      type: QueryTypes.SELECT,
+    }
+  );
+  return result ?? {
+    leaves_hours: 0,
+    team_management_hours: 0,
+    lnd_hours: 0,
+    internal_support_hours: 0,
+    others_hours: 0,
+    total_non_billable: 0,
+  };
+}
+
 module.exports = {
   getTotalEmployees,
   getActiveEmployees,
@@ -224,4 +365,8 @@ module.exports = {
   getRecentTimesheetActivity,
   getTopPOsByHours,
   getMonthlyHoursTrend,
+  getMonthlyNonBillableTrend,
+  getCurrentMonthNonBillableBreakdown,
+  getTopClientsByBillableHours,
+  getTopClientsByNonBillableHours,
 };
