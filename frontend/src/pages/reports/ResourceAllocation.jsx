@@ -176,7 +176,7 @@ const ResourceAllocation = () => {
   const [year, setYear] = useState(String(now.getFullYear()));
   const [employeeId, setEmployeeId] = useState('all');
   const [poId, setPoId] = useState('all');
-  const [status, setStatus] = useState('all');
+
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
@@ -192,7 +192,7 @@ const ResourceAllocation = () => {
     ...(year && year !== 'all' && { year: Number(year) }),
     ...(employeeId !== 'all' && { employeeId }),
     ...(poId !== 'all' && { poId }),
-    ...(status !== 'all' && { status }),
+
     ...(debouncedSearch && { search: debouncedSearch }),
   };
 
@@ -276,20 +276,7 @@ const ResourceAllocation = () => {
           </Select>
         </div>
 
-        <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
-          <Label className="text-xs">Status</Label>
-          <Select value={status} onValueChange={(v) => { setStatus(v); setPage(1); }}>
-            <SelectTrigger className="h-9 text-sm w-full">
-              <SelectValue placeholder="All Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="closed">Closed</SelectItem>
-              <SelectItem value="cancelled">Cancelled</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+
 
         <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
           <Label className="text-xs">Search</Label>

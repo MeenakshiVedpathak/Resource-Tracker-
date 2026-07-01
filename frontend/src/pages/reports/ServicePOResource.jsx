@@ -110,7 +110,7 @@ const ServicePOResource = () => {
   const [year,  setYear]  = useState(String(new Date().getFullYear()));
   const [employeeId, setEmployeeId] = useState('all');
   const [poId, setPoId] = useState('all');
-  const [status, setStatus] = useState('all');
+
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
 
@@ -122,7 +122,7 @@ const ServicePOResource = () => {
     ...(year && year !== 'all' && Number(year) >= 2000 && { year: Number(year) }),
     ...(employeeId !== 'all' && { employeeId }),
     ...(poId !== 'all' && { poId }),
-    ...(status !== 'all' && { status }),
+
     page,
     limit,
   };
@@ -217,20 +217,7 @@ const ServicePOResource = () => {
           </Select>
         </div>
 
-        <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
-          <Label className="text-xs font-medium">Status</Label>
-          <Select value={status} onValueChange={(v) => { setStatus(v); setPage(1); }}>
-            <SelectTrigger className="h-9 text-sm w-full">
-              <SelectValue placeholder="All Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="closed">Closed</SelectItem>
-              <SelectItem value="cancelled">Cancelled</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+
       </div>
 
       {/* ── States ── */}

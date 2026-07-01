@@ -160,7 +160,7 @@ const ServicePOSummary = () => {
   const [month, setMonth] = useState(String(now.getMonth() + 1));
   const [year, setYear] = useState(String(now.getFullYear()));
   const [clientId, setClientId] = useState('all');
-  const [status, setStatus] = useState('all');
+
   const [billable, setBillable] = useState('all');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -173,7 +173,7 @@ const ServicePOSummary = () => {
     month,
     year,
     ...(clientId && clientId !== 'all' && { clientId }),
-    ...(status && status !== 'all' && { status }),
+
     ...(billable && billable !== 'all' && { isBillable: billable === 'yes' }),
     page,
     limit,
@@ -242,20 +242,7 @@ const ServicePOSummary = () => {
           </Select>
         </div>
 
-        <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
-          <Label className="text-xs">Status</Label>
-          <Select value={status} onValueChange={(v) => { setStatus(v); setPage(1); }}>
-            <SelectTrigger className="h-9 text-sm w-full">
-              <SelectValue placeholder="All Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="closed">Closed</SelectItem>
-              <SelectItem value="cancelled">Cancelled</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+
 
         <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
           <Label className="text-xs">Billable</Label>
