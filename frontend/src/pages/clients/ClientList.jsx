@@ -387,7 +387,7 @@ const ClientList = () => {
         onSearchChange={(v) => { setSearch(v); setPage(1); }}
         searchPlaceholder="Search clients…"
         toolbar={
-          <SearchableSelect
+          <SearchableSelect showSearch={false}
             options={[
               { label: "All status", value: "all" },
               { label: "Active", value: "active" },

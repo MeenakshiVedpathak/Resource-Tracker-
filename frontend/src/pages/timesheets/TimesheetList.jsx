@@ -179,7 +179,7 @@ const TimesheetList = () => {
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
               <Label>Month</Label>
-              <SearchableSelect
+              <SearchableSelect showSearch={false}
                 options={Array.from({ length: 12 }, (_, i) => {
                   const m = i + 1;
                   return { label: new Date(0, m - 1).toLocaleString('default', { month: 'long' }), value: String(m) };
@@ -192,7 +192,7 @@ const TimesheetList = () => {
             </div>
             <div className="grid gap-2">
               <Label>Year</Label>
-              <SearchableSelect
+              <SearchableSelect showSearch={false}
                 options={Array.from({ length: 5 }, (_, i) => {
                   const y = currentDate.getFullYear() - 2 + i;
                   return { label: String(y), value: String(y) };

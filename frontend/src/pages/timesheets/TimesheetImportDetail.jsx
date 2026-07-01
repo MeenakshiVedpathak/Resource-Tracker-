@@ -233,7 +233,7 @@ const TimesheetImportDetail = () => {
                 className="w-full h-9"
               />
 
-              <SearchableSelect
+              <SearchableSelect showSearch={false}
                 options={[
                   { label: "All Status", value: "all" },
                   { label: "Billable", value: "billable" },

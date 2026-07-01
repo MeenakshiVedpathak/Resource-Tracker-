@@ -103,7 +103,7 @@ const RoleList = () => {
         onSearchChange={(v) => { setSearch(v); setPage(1); }}
         searchPlaceholder="Search roles…"
         toolbar={
-          <SearchableSelect
+          <SearchableSelect showSearch={false}
             options={[
               { label: "All status", value: "all" },
               { label: "Active", value: "active" },

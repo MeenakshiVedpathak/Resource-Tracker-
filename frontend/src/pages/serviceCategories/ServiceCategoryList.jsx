@@ -143,7 +143,7 @@ const ServiceCategoryList = () => {
         onSearchChange={(v) => { setSearch(v); setPage(1); }}
         searchPlaceholder="Search categories…"
         toolbar={
-          <SearchableSelect
+          <SearchableSelect showSearch={false}
             options={[
               { label: "All status", value: "all" },
               { label: "Active", value: "active" },

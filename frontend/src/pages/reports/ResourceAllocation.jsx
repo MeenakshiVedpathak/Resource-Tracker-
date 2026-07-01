@@ -215,7 +215,7 @@ const ResourceAllocation = () => {
       <div className="mb-5 flex flex-wrap items-end gap-4 w-full">
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Month</Label>
-          <SearchableSelect
+          <SearchableSelect showSearch={false}
             options={MONTH_OPTIONS}
             value={month}
             onValueChange={(v) => { setMonth(v); setPage(1); }}
@@ -227,7 +227,7 @@ const ResourceAllocation = () => {
 
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Year</Label>
-          <SearchableSelect
+          <SearchableSelect showSearch={false}
             options={[
               { label: "All", value: "all" },
               ...Array.from({ length: 10 }, (_, i) => {

@@ -23,7 +23,6 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-  SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import {
@@ -605,7 +604,7 @@ const EmployeeList = () => {
           data={employees}
           isLoading={isPending}
           toolbar={
-            <SearchableSelect
+            <SearchableSelect showSearch={false}
               options={[
                 { label: "All status", value: "all" },
                 { label: "Active", value: "active" },

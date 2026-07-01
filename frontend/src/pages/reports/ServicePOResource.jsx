@@ -8,6 +8,7 @@ import { formatMonthYear } from '@/utils/formatters';
 import PageHeader from '@/components/common/PageHeader';
 import { Button } from '@/components/ui/button';
 import { SearchableSelect } from '@/components/ui/searchable-select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -158,7 +159,7 @@ const ServicePOResource = () => {
       <div className="mb-5 flex flex-wrap items-end gap-4 w-full">
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs font-medium">Month</Label>
-          <SearchableSelect
+          <SearchableSelect showSearch={false}
             options={MONTH_OPTIONS}
             value={month}
             onValueChange={(v) => { setMonth(v); setPage(1); }}
@@ -170,7 +171,7 @@ const ServicePOResource = () => {
 
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs font-medium">Year</Label>
-          <SearchableSelect
+          <SearchableSelect showSearch={false}
             options={[
               { label: "All", value: "all" },
               ...Array.from({ length: 10 }, (_, i) => {

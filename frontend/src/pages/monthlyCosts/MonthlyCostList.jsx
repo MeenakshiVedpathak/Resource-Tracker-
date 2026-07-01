@@ -246,7 +246,7 @@ const MonthlyCostList = () => {
         isLoading={isPending}
         toolbar={
           <>
-            <SearchableSelect
+            <SearchableSelect showSearch={false}
               options={[
                 { label: "All months", value: "all" },
                 ...MONTH_OPTIONS
@@ -261,7 +261,7 @@ const MonthlyCostList = () => {
               className="h-9 w-36 text-sm bg-white"
             />
 
-            <SearchableSelect
+            <SearchableSelect showSearch={false}
               options={Array.from({ length: 10 }, (_, i) => {
                 const y = new Date().getFullYear() - 5 + i;
                 return { label: String(y), value: String(y) };
@@ -317,7 +317,7 @@ const MonthlyCostList = () => {
           <div className="grid grid-cols-2 gap-4 py-2">
             <div className="space-y-2">
               <Label htmlFor="calc-month">Month</Label>
-              <SearchableSelect
+              <SearchableSelect showSearch={false}
                 options={MONTH_OPTIONS}
                 value={calcMonth}
                 onValueChange={setCalcMonth}
@@ -329,7 +329,7 @@ const MonthlyCostList = () => {
 
             <div className="space-y-2">
               <Label htmlFor="calc-year">Year</Label>
-              <SearchableSelect
+              <SearchableSelect showSearch={false}
                 options={Array.from({ length: 10 }, (_, i) => {
                   const y = new Date().getFullYear() - 5 + i;
                   return { label: String(y), value: String(y) };

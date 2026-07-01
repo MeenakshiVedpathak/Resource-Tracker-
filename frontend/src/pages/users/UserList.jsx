@@ -214,7 +214,7 @@ const UserList = () => {
         isLoading={isPending}
         toolbar={
           <>
-            <SearchableSelect
+            <SearchableSelect showSearch={false}
               options={[
                 { label: "All status", value: "all" },
                 { label: "Active", value: "active" },

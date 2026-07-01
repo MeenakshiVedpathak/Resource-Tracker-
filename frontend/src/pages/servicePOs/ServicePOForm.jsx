@@ -298,7 +298,7 @@ const ServicePOForm = () => {
                 render={({ field }) => (
                   <FormItem className="space-y-1">
                     <FormLabel className="text-[13px]">Status</FormLabel>
-                    <SearchableSelect
+                    <SearchableSelect showSearch={false}
                       options={[
                         { label: "In Progress", value: "in-progress" },
                         { label: "Completed", value: "completed" },
@@ -421,7 +421,7 @@ const ServicePOForm = () => {
                 render={({ field }) => (
                   <FormItem className="space-y-1">
                     <FormLabel className="text-[13px]"><span className="text-destructive">*</span> Invoice Frequency</FormLabel>
-                    <SearchableSelect
+                    <SearchableSelect showSearch={false}
                       options={[
                         { label: "Monthly", value: "monthly" },
                         { label: "Milestone based", value: "milestone-based" },

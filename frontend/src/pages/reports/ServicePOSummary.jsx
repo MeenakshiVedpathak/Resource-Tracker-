@@ -199,7 +199,7 @@ const ServicePOSummary = () => {
       <div className="mb-5 flex flex-wrap items-end gap-4 w-full">
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Month <span className="text-destructive">*</span></Label>
-          <SearchableSelect
+          <SearchableSelect showSearch={false}
             options={MONTH_OPTIONS}
             value={month}
             onValueChange={(v) => { setMonth(v); setPage(1); }}
@@ -211,7 +211,7 @@ const ServicePOSummary = () => {
 
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Year <span className="text-destructive">*</span></Label>
-          <SearchableSelect
+          <SearchableSelect showSearch={false}
             options={Array.from({ length: 10 }, (_, i) => {
               const y = new Date().getFullYear() - 5 + i;
               return { label: String(y), value: String(y) };
@@ -246,7 +246,7 @@ const ServicePOSummary = () => {
 
         <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
           <Label className="text-xs">Billable</Label>
-          <SearchableSelect
+          <SearchableSelect showSearch={false}
             options={[
               { label: "All", value: "all" },
               { label: "Yes", value: "yes" },

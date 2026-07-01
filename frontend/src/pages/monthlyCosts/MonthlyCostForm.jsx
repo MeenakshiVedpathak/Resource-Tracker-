@@ -14,7 +14,6 @@ import {
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { SearchableSelect } from '@/components/ui/searchable-select';
-import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Sheet,
@@ -164,7 +163,7 @@ const MonthlyCostFormContent = ({ id, isEdit, record, activeEmployees }) => {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Month <span className="text-destructive">*</span></FormLabel>
-                    <SearchableSelect
+                    <SearchableSelect showSearch={false}
                       options={MONTH_OPTIONS}
                       value={field.value}
                       onValueChange={field.onChange}

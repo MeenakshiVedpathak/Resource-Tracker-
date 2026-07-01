@@ -175,7 +175,7 @@ const EmployeeHourlyRate = () => {
       <div className="mb-5 flex flex-wrap items-end gap-4 w-full">
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Month <span className="text-destructive">*</span></Label>
-          <SearchableSelect
+          <SearchableSelect showSearch={false}
             options={MONTH_OPTIONS}
             value={month}
             onValueChange={(v) => { setMonth(v); setPage(1); }}
@@ -187,7 +187,7 @@ const EmployeeHourlyRate = () => {
 
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Year <span className="text-destructive">*</span></Label>
-          <SearchableSelect
+          <SearchableSelect showSearch={false}
             options={Array.from({ length: 10 }, (_, i) => {
               const y = new Date().getFullYear() - 5 + i;
               return { label: String(y), value: String(y) };

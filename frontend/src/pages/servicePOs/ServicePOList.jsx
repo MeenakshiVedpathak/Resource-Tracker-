@@ -230,7 +230,7 @@ const ServicePOList = () => {
               onValueChange={(v) => { setClientFilter(v); setPage(1); }}
               placeholder="All Clients"
               searchPlaceholder="Search client..."
-              className="h-9 w-44 text-sm"
+              className="h-9 w-[240px] text-sm"
             />
             <SearchableSelect
               options={[
@@ -244,9 +244,9 @@ const ServicePOList = () => {
               onValueChange={(v) => { setTypeFilter(v); setPage(1); }}
               placeholder="All Service Types"
               searchPlaceholder="Search type..."
-              className="h-9 w-44 text-sm"
+              className="h-9 w-[220px] text-sm"
             />
-            <SearchableSelect
+            <SearchableSelect showSearch={false}
               options={[
                 { label: "All status", value: "all" },
                 { label: "In Progress", value: "in-progress" },
@@ -260,7 +260,7 @@ const ServicePOList = () => {
               onValueChange={(v) => { setStatusFilter(v); setPage(1); }}
               placeholder="All status"
               searchPlaceholder="Search status..."
-              className="h-9 w-32 text-sm"
+              className="h-9 w-[160px] text-sm"
             />
           </>
         }

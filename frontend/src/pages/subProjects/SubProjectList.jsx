@@ -170,10 +170,10 @@ const SubProjectList = () => {
               }}
               placeholder="All POs"
               searchPlaceholder="Search PO..."
-              className="h-9 w-44 text-sm"
+              className="h-9 w-[280px] text-sm"
             />
 
-            <SearchableSelect
+            <SearchableSelect showSearch={false}
               options={[
                 { label: "All status", value: "all" },
                 { label: "Active", value: "active" },
@@ -186,7 +186,7 @@ const SubProjectList = () => {
               }}
               placeholder="All status"
               searchPlaceholder="Search status..."
-              className="h-9 w-32 text-sm"
+              className="h-9 w-[160px] text-sm"
             />
           </>
         }

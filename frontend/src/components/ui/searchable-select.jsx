@@ -24,9 +24,12 @@ export function SearchableSelect({
   searchPlaceholder = "Search...",
   emptyMessage = "No option found.",
   disabled = false,
+  showSearch,
   className,
 }) {
   const [open, setOpen] = React.useState(false)
+
+  const shouldShowSearch = showSearch !== undefined ? showSearch : true;
 
   const selectedOption = React.useMemo(
     () => options.find((opt) => String(opt.value) === String(value)),
@@ -54,7 +57,7 @@ export function SearchableSelect({
       </PopoverTrigger>
       <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
         <Command>
-          <CommandInput placeholder={searchPlaceholder} />
+          {shouldShowSearch && <CommandInput placeholder={searchPlaceholder} />}
           <CommandEmpty>{emptyMessage}</CommandEmpty>
           <CommandList>
             <CommandGroup>
