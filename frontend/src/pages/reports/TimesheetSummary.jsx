@@ -4,12 +4,15 @@ import { createColumnHelper } from '@tanstack/react-table';
 import { Download, Search } from 'lucide-react';
 import { useTimesheetSummary } from '@/hooks/useReports';
 import { useDebounce } from '@/hooks/useDebounce';
+import { useActiveEmployees } from '@/hooks/useEmployees';
+import { useActiveServicePOs } from '@/hooks/useServicePOs';
 import { formatDate, formatHours } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/utils/cn';
 
 const columnHelper = createColumnHelper();
@@ -120,17 +123,23 @@ const columns = [
 const TimesheetSummary = () => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [employeeId, setEmployeeId] = useState('all');
+  const [poId, setPoId] = useState('all');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
 
   const debouncedSearch = useDebounce(search, 400);
+  const { data: activeEmployees = [] } = useActiveEmployees();
+  const { data: activePOs = [] } = useActiveServicePOs();
 
   const params = {
     page,
     limit,
     ...(startDate && { startDate }),
     ...(endDate && { endDate }),
+    ...(employeeId !== 'all' && { employeeId }),
+    ...(poId !== 'all' && { poId }),
     ...(debouncedSearch && { search: debouncedSearch }),
   };
 
@@ -173,6 +182,38 @@ const TimesheetSummary = () => {
             onChange={(e) => { setEndDate(e.target.value); setPage(1); }}
             className="h-9 w-40 text-sm"
           />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Employee</Label>
+          <Select value={employeeId} onValueChange={(v) => { setEmployeeId(v); setPage(1); }}>
+            <SelectTrigger className="h-9 w-[240px] text-sm">
+              <SelectValue placeholder="All Employees" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Employees</SelectItem>
+              {activeEmployees.map((e) => (
+                <SelectItem key={e.id} value={String(e.id)}>{e.full_name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Service PO</Label>
+          <Select value={poId} onValueChange={(v) => { setPoId(v); setPage(1); }}>
+            <SelectTrigger className="h-9 w-[280px] text-sm">
+              <SelectValue placeholder="All POs" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All POs</SelectItem>
+              {activePOs.map((po) => (
+                <SelectItem key={po.id} value={String(po.id)}>
+                  {po.service_po_name || po.service_po_code}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="flex flex-col gap-1.5">

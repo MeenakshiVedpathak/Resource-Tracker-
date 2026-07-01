@@ -4,6 +4,8 @@ import { createColumnHelper } from '@tanstack/react-table';
 import { Download, Search } from 'lucide-react';
 import { useResourceAllocationReport } from '@/hooks/useReports';
 import { useDebounce } from '@/hooks/useDebounce';
+import { useActiveEmployees } from '@/hooks/useEmployees';
+import { useActiveServicePOs } from '@/hooks/useServicePOs';
 import { formatHours } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
@@ -172,17 +174,25 @@ const now = new Date();
 const ResourceAllocation = () => {
   const [month, setMonth] = useState(String(now.getMonth() + 1));
   const [year, setYear] = useState(String(now.getFullYear()));
+  const [employeeId, setEmployeeId] = useState('all');
+  const [poId, setPoId] = useState('all');
+  const [status, setStatus] = useState('all');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
 
   const debouncedSearch = useDebounce(search, 400);
+  const { data: activeEmployees = [] } = useActiveEmployees();
+  const { data: activePOs = [] } = useActiveServicePOs();
 
   const params = {
     page,
     limit,
-    ...(month && { month: Number(month) }),
-    ...(year && { year: Number(year) }),
+    ...(month && month !== 'all' && { month: Number(month) }),
+    ...(year && year !== 'all' && { year: Number(year) }),
+    ...(employeeId !== 'all' && { employeeId }),
+    ...(poId !== 'all' && { poId }),
+    ...(status !== 'all' && { status }),
     ...(debouncedSearch && { search: debouncedSearch }),
   };
 
@@ -226,9 +236,56 @@ const ResourceAllocation = () => {
               <SelectValue placeholder="Year" />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="all">All</SelectItem>
               {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i).map(y => (
                 <SelectItem key={y} value={String(y)}>{y}</SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Employee</Label>
+          <Select value={employeeId} onValueChange={(v) => { setEmployeeId(v); setPage(1); }}>
+            <SelectTrigger className="h-9 w-[240px] text-sm">
+              <SelectValue placeholder="All Employees" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Employees</SelectItem>
+              {activeEmployees.map((e) => (
+                <SelectItem key={e.id} value={String(e.id)}>{e.full_name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Service PO</Label>
+          <Select value={poId} onValueChange={(v) => { setPoId(v); setPage(1); }}>
+            <SelectTrigger className="h-9 w-[280px] text-sm">
+              <SelectValue placeholder="All POs" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All POs</SelectItem>
+              {activePOs.map((po) => (
+                <SelectItem key={po.id} value={String(po.id)}>
+                  {po.service_po_name || po.service_po_code}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Status</Label>
+          <Select value={status} onValueChange={(v) => { setStatus(v); setPage(1); }}>
+            <SelectTrigger className="h-9 w-32 text-sm">
+              <SelectValue placeholder="All Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="inactive">Inactive</SelectItem>
             </SelectContent>
           </Select>
         </div>

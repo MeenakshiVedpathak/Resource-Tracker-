@@ -59,7 +59,7 @@ const Login = () => {
       <div className="mb-8">
         <h2 className="text-2xl font-bold tracking-tight">Welcome back</h2>
         <p className="mt-1.5 text-sm text-muted-foreground">
-          Sign in to your RUT Portal account
+          Sign in to your Finance Portal account
         </p>
       </div>
 

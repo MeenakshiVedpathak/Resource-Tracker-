@@ -4,6 +4,7 @@ import { createColumnHelper } from '@tanstack/react-table';
 import { Download, Search } from 'lucide-react';
 import { useServicePOUtilisationReport } from '@/hooks/useReports';
 import { useDebounce } from '@/hooks/useDebounce';
+import { useActiveServicePOs } from '@/hooks/useServicePOs';
 import { formatHours, formatPercentage } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
@@ -88,15 +89,18 @@ const columns = [
 ];
 
 const ServicePOUtilisation = () => {
+  const [poId, setPoId] = useState('all');
   const [status, setStatus] = useState('all');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
 
   const debouncedSearch = useDebounce(search, 400);
+  const { data: activePOs = [] } = useActiveServicePOs();
 
   const params = {
-    status,
+    ...(status !== 'all' && { status }),
+    ...(poId !== 'all' && { poId }),
     page,
     limit,
     sortBy: 'utilisation_percentage',
@@ -123,6 +127,23 @@ const ServicePOUtilisation = () => {
 
       {/* Filter bar */}
       <div className="mb-5 flex flex-wrap items-end gap-3">
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Service PO</Label>
+          <Select value={poId} onValueChange={(v) => { setPoId(v); setPage(1); }}>
+            <SelectTrigger className="h-9 w-[280px] text-sm">
+              <SelectValue placeholder="All POs" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All POs</SelectItem>
+              {activePOs.map((po) => (
+                <SelectItem key={po.id} value={String(po.id)}>
+                  {po.service_po_name || po.service_po_code}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Status</Label>
           <Select value={status} onValueChange={(v) => { setStatus(v); setPage(1); }}>

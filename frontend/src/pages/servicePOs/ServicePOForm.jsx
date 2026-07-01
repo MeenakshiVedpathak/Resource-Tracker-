@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -8,6 +8,7 @@ import { Save } from 'lucide-react';
 import { useServicePO, useCreateServicePO, useUpdateServicePO } from '@/hooks/useServicePOs';
 import { useActiveClients } from '@/hooks/useClients';
 import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
+import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import { ROUTES } from '@/constants/routes';
@@ -55,7 +56,6 @@ const poSchema = z
       (v) => (v === '' || v == null ? undefined : Number(v)),
       z.number({ required_error: 'Invoice amount is required' }).min(0, 'Must be 0 or more')
     ),
-    is_billable: z.boolean().default(true),
     status: z.enum(['in-progress', 'completed', 'on-hold', 'pending', 'cancelled', 'closed']).default('in-progress'),
   })
   .refine(
@@ -83,8 +83,11 @@ const ServicePOForm = () => {
   const { data: po, isPending: isLoadingPO } = useServicePO(id);
   const { data: activeClients = [], isPending: isLoadingClients } = useActiveClients();
   const { data: serviceTypes = [], isPending: isLoadingTypes } = useActiveServiceTypes();
+  const { data: activeCategories = [], isPending: isLoadingCategories } = useActiveServiceCategories();
   const createMutation = useCreateServicePO();
   const updateMutation = useUpdateServicePO(id);
+
+  const [selectedCategory, setSelectedCategory] = useState('');
 
   const form = useForm({
     resolver: zodResolver(poSchema),
@@ -100,13 +103,18 @@ const ServicePOForm = () => {
       service_description: '',
       invoice_frequency: '',
       invoice_amount: '',
-      is_billable: true,
       status: 'in-progress',
     },
   });
 
   useEffect(() => {
     if (po && isEdit) {
+      if (serviceTypes.length > 0 && po.service_type_id) {
+        const typeObj = serviceTypes.find(t => t.id === po.service_type_id);
+        if (typeObj) {
+          setSelectedCategory(String(typeObj.service_category_id));
+        }
+      }
       form.reset({
         service_po_name: po.service_po_name ?? '',
         client_id: po.client_id ?? '',
@@ -119,16 +127,24 @@ const ServicePOForm = () => {
         service_description: po.service_description ?? '',
         invoice_frequency: po.invoice_frequency ?? '',
         invoice_amount: po.invoice_amount ?? '',
-        is_billable: po.is_billable ?? true,
         status: po.status ?? 'in-progress',
       });
     }
-  }, [po, isEdit, form]);
+  }, [po, isEdit, form, serviceTypes]);
 
   const onSubmit = (values) => {
+    let is_billable = false;
+    if (selectedCategory && activeCategories.length > 0) {
+      const category = activeCategories.find((c) => String(c.id) === String(selectedCategory));
+      if (category && category.name.toLowerCase() === 'billable') {
+        is_billable = true;
+      }
+    }
+
     const clean = Object.fromEntries(
       Object.entries(values).filter(([, v]) => v !== '' && v != null)
     );
+    clean.is_billable = is_billable;
 
     const mutation = isEdit ? updateMutation : createMutation;
     mutation.mutate(clean, {
@@ -218,6 +234,31 @@ const ServicePOForm = () => {
                 )}
               />
 
+              <div className="space-y-1">
+                <FormLabel className="text-[13px]">
+                  <span className="text-destructive">*</span> Service Category
+                </FormLabel>
+                <Select
+                  value={selectedCategory}
+                  onValueChange={(v) => {
+                    setSelectedCategory(v);
+                    form.setValue('service_type_id', '');
+                  }}
+                  disabled={isLoadingCategories}
+                >
+                  <SelectTrigger className="h-8 text-sm">
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {activeCategories.map((c) => (
+                      <SelectItem key={c.id} value={String(c.id)}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
               <FormField
                 control={form.control}
                 name="service_type_id"
@@ -229,7 +270,7 @@ const ServicePOForm = () => {
                     <Select
                       value={field.value ? String(field.value) : ''}
                       onValueChange={(v) => field.onChange(Number(v))}
-                      disabled={isLoadingTypes}
+                      disabled={isLoadingTypes || !selectedCategory}
                     >
                       <FormControl>
                         <SelectTrigger className="h-8 text-sm">
@@ -237,11 +278,13 @@ const ServicePOForm = () => {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {serviceTypes.map((c) => (
-                          <SelectItem key={c.id} value={String(c.id)}>
-                            {c.service_type_name}
-                          </SelectItem>
-                        ))}
+                        {serviceTypes
+                          .filter((t) => t.service_category_id === Number(selectedCategory))
+                          .map((c) => (
+                            <SelectItem key={c.id} value={String(c.id)}>
+                              {c.service_type_name}
+                            </SelectItem>
+                          ))}
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -432,23 +475,6 @@ const ServicePOForm = () => {
                 )}
               />
 
-              <FormField
-                control={form.control}
-                name="is_billable"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-md border p-3 sm:col-span-2 shadow-sm">
-                    <div className="space-y-0.5">
-                      <FormLabel className="text-[13px] font-medium">Billable</FormLabel>
-                      <FormDescription className="text-[11px]">
-                        This PO involves billable work for the client
-                      </FormDescription>
-                    </div>
-                    <FormControl>
-                      <Switch checked={field.value} onCheckedChange={field.onChange} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
                   </div>
                 </div>
               </form>

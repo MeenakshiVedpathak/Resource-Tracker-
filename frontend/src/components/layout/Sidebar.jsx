@@ -53,9 +53,9 @@ const NAV_GROUPS = [
         to: ROUTES.REPORTS,
         children: [
           { label: 'PO vs Resource', to: ROUTES.REPORT_SERVICE_PO_RESOURCE },
-          { label: 'Monthly Utilization', to: ROUTES.REPORT_MONTHLY_UTILIZATION },
+          // { label: 'Monthly Utilization', to: ROUTES.REPORT_MONTHLY_UTILIZATION },
           { label: 'Service PO Summary', to: ROUTES.REPORT_SERVICE_PO_SUMMARY },
-          { label: 'Resource Utilization', to: ROUTES.REPORT_MONTHLY_RESOURCE_UTILIZATION },
+          { label: 'Monthly Utilization', to: ROUTES.REPORT_MONTHLY_RESOURCE_UTILIZATION },
           { label: 'Employee Hourly Rate', to: ROUTES.REPORT_HOURLY_RATE },
           { label: 'Monthly Cost Summary', to: ROUTES.REPORT_MONTHLY_COST },
           { label: 'Timesheet Summary', to: ROUTES.REPORT_TIMESHEET },
@@ -161,7 +161,7 @@ const Sidebar = () => {
 
   return (
     <motion.aside
-      animate={{ width: collapsed ? 64 : 240 }}
+      animate={{ width: collapsed ? 64 : 260 }}
       transition={{ duration: 0.2, ease: 'easeInOut' }}
       className="relative flex h-full shrink-0 flex-col bg-sidebar border-r border-sidebar-border overflow-hidden"
     >
@@ -182,7 +182,7 @@ const Sidebar = () => {
               transition={{ duration: 0.15 }}
               className="font-bold text-lg text-white whitespace-nowrap overflow-hidden"
             >
-              RUT Portal
+              Finance Portal
             </motion.span>
           )}
         </AnimatePresence>

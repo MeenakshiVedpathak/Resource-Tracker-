@@ -4,6 +4,7 @@ import { createColumnHelper } from '@tanstack/react-table';
 import { Download, Search } from 'lucide-react';
 import { useOperationalCost } from '@/hooks/useReports';
 import { useDebounce } from '@/hooks/useDebounce';
+import { useActiveEmployees } from '@/hooks/useEmployees';
 import { formatCurrency, formatMonthYear } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
@@ -147,17 +148,20 @@ const now = new Date();
 const OperationalCost = () => {
   const [year, setYear] = useState(String(now.getFullYear()));
   const [month, setMonth] = useState(String(now.getMonth() + 1));
+  const [employeeId, setEmployeeId] = useState('all');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
 
   const debouncedSearch = useDebounce(search, 400);
+  const { data: activeEmployees = [] } = useActiveEmployees();
 
   const params = {
     page,
     limit,
     ...(year && { year }),
     ...(month && month !== 'all' && { month }),
+    ...(employeeId !== 'all' && { employeeId }),
     ...(debouncedSearch && { search: debouncedSearch }),
   };
 
@@ -205,6 +209,21 @@ const OperationalCost = () => {
             <SelectContent>
               {MONTH_OPTIONS.map((m) => (
                 <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Employee</Label>
+          <Select value={employeeId} onValueChange={(v) => { setEmployeeId(v); setPage(1); }}>
+            <SelectTrigger className="h-9 w-[240px] text-sm">
+              <SelectValue placeholder="All Employees" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Employees</SelectItem>
+              {activeEmployees.map((e) => (
+                <SelectItem key={e.id} value={String(e.id)}>{e.full_name}</SelectItem>
               ))}
             </SelectContent>
           </Select>

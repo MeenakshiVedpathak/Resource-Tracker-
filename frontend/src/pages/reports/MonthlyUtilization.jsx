@@ -2,6 +2,7 @@ import { useState } from 'react';
 import * as XLSX from 'xlsx';
 import { Download, Search } from 'lucide-react';
 import { useMonthlyUtilization } from '@/hooks/useReports';
+import { useActiveEmployees } from '@/hooks/useEmployees';
 import { formatMonthYear } from '@/utils/formatters';
 import PageHeader from '@/components/common/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -98,15 +99,19 @@ const td = (...cls) =>
 const MonthlyUtilization = () => {
   const [month,  setMonth]  = useState(String(new Date().getMonth() + 1));
   const [year,   setYear]   = useState(String(new Date().getFullYear()));
+  const [employeeId, setEmployeeId] = useState('all');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
+
+  const { data: activeEmployees = [] } = useActiveEmployees();
 
   const enabled = !!(month && year && Number(year) >= 2000 && Number(year) <= 2100);
 
   const params = enabled ? {
     month: Number(month),
     year:  Number(year),
+    ...(employeeId !== 'all' && { employeeId }),
     page,
     limit,
     ...(search.trim() && { search: search.trim() }),
@@ -165,6 +170,21 @@ const MonthlyUtilization = () => {
             <SelectContent>
               {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i).map(y => (
                 <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs font-medium">Employee</Label>
+          <Select value={employeeId} onValueChange={(v) => { setEmployeeId(v); setPage(1); }}>
+            <SelectTrigger className="h-9 w-[240px] text-sm">
+              <SelectValue placeholder="All Employees" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Employees</SelectItem>
+              {activeEmployees.map((e) => (
+                <SelectItem key={e.id} value={String(e.id)}>{e.full_name}</SelectItem>
               ))}
             </SelectContent>
           </Select>

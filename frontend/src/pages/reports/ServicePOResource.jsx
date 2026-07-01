@@ -2,6 +2,8 @@ import { useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import { Download } from 'lucide-react';
 import { useServicePOResourceReport } from '@/hooks/useReports';
+import { useActiveEmployees } from '@/hooks/useEmployees';
+import { useActiveServicePOs } from '@/hooks/useServicePOs';
 import { formatMonthYear } from '@/utils/formatters';
 import PageHeader from '@/components/common/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -106,12 +108,21 @@ const exportToExcel = (rows, month, year) => {
 const ServicePOResource = () => {
   const [month, setMonth] = useState(String(new Date().getMonth() + 1));
   const [year,  setYear]  = useState(String(new Date().getFullYear()));
+  const [employeeId, setEmployeeId] = useState('all');
+  const [poId, setPoId] = useState('all');
+  const [status, setStatus] = useState('all');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
 
+  const { data: activeEmployees = [] } = useActiveEmployees();
+  const { data: activePOs = [] } = useActiveServicePOs();
+
   const params = {
-    ...(month && { month: Number(month) }),
-    ...(year && Number(year) >= 2000 && { year: Number(year) }),
+    ...(month && month !== 'all' && { month: Number(month) }),
+    ...(year && year !== 'all' && Number(year) >= 2000 && { year: Number(year) }),
+    ...(employeeId !== 'all' && { employeeId }),
+    ...(poId !== 'all' && { poId }),
+    ...(status !== 'all' && { status }),
     page,
     limit,
   };
@@ -166,9 +177,56 @@ const ServicePOResource = () => {
               <SelectValue placeholder="Year" />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="all">All</SelectItem>
               {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i).map(y => (
                 <SelectItem key={y} value={String(y)}>{y}</SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs font-medium">Employee</Label>
+          <Select value={employeeId} onValueChange={(v) => { setEmployeeId(v); setPage(1); }}>
+            <SelectTrigger className="h-9 w-[240px] text-sm">
+              <SelectValue placeholder="All Employees" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Employees</SelectItem>
+              {activeEmployees.map((e) => (
+                <SelectItem key={e.id} value={String(e.id)}>{e.full_name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs font-medium">Service PO</Label>
+          <Select value={poId} onValueChange={(v) => { setPoId(v); setPage(1); }}>
+            <SelectTrigger className="h-9 w-[280px] text-sm">
+              <SelectValue placeholder="All POs" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All POs</SelectItem>
+              {activePOs.map((po) => (
+                <SelectItem key={po.id} value={String(po.id)}>
+                  {po.service_po_name || po.service_po_code}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs font-medium">Status</Label>
+          <Select value={status} onValueChange={(v) => { setStatus(v); setPage(1); }}>
+            <SelectTrigger className="h-9 w-32 text-sm">
+              <SelectValue placeholder="All Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="inactive">Inactive</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -187,23 +245,6 @@ const ServicePOResource = () => {
         </div>
       ) : (
         <>
-          {/* ── Summary row ── */}
-          <div className="mb-4 flex flex-wrap gap-3">
-            <div className="rounded-md border bg-muted/40 px-3 py-1.5 text-xs">
-              <span className="text-muted-foreground">PO Groups </span>
-              <span className="font-semibold">{groups.length}</span>
-            </div>
-            <div className="rounded-md border bg-muted/40 px-3 py-1.5 text-xs">
-              <span className="text-muted-foreground">Total Resources </span>
-              <span className="font-semibold">{rows.filter(r => getField(r, 'employee_name', 'full_name', 'resource_name')).length}</span>
-            </div>
-            {totalHours > 0 && (
-              <div className="rounded-md border bg-blue-500/10 px-3 py-1.5 text-xs text-blue-700 dark:text-blue-400">
-                <span>Total Hours </span>
-                <span className="font-semibold tabular-nums">{totalHours.toFixed(1)}</span>
-              </div>
-            )}
-          </div>
 
           {/* ── Table ── */}
           <div className="rounded-lg border overflow-hidden">

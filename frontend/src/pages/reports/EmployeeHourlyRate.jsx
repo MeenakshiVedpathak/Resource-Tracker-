@@ -4,6 +4,7 @@ import { createColumnHelper } from '@tanstack/react-table';
 import { Download, Search } from 'lucide-react';
 import { useEmployeeHourlyRate } from '@/hooks/useReports';
 import { useDebounce } from '@/hooks/useDebounce';
+import { useActiveEmployees } from '@/hooks/useEmployees';
 import { formatCurrency } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
@@ -135,16 +136,18 @@ const now = new Date();
 const EmployeeHourlyRate = () => {
   const [month, setMonth] = useState(String(now.getMonth() + 1));
   const [year, setYear] = useState(String(now.getFullYear()));
+  const [employeeId, setEmployeeId] = useState('all');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
-  const [committed, setCommitted] = useState({ month: String(now.getMonth() + 1), year: String(now.getFullYear()) });
 
   const debouncedSearch = useDebounce(search, 400);
+  const { data: activeEmployees = [] } = useActiveEmployees();
 
   const params = {
-    month: committed.month,
-    year: committed.year,
+    month,
+    year,
+    ...(employeeId && employeeId !== 'all' && { employeeId }),
     page,
     limit,
     ...(debouncedSearch && { search: debouncedSearch }),
@@ -155,21 +158,13 @@ const EmployeeHourlyRate = () => {
   const rows = Array.isArray(data?.data) ? data.data : [];
   const meta = data?.meta ?? {};
 
-  const handleRunReport = () => {
-    if (!month || !year) return;
-    setPage(1);
-    setCommitted({ month, year });
-  };
-
-  const canRun = !!month && !!year;
-
   return (
     <div>
       <PageHeader
         title="Employee Hourly Rate"
         description="View the effective hourly cost per employee based on salary and hours logged."
         actions={rows.length > 0 ? (
-          <Button variant="outline" size="sm" onClick={() => exportToExcel(rows, committed.month, committed.year)}>
+          <Button variant="outline" size="sm" onClick={() => exportToExcel(rows, month, year)}>
             <Download className="mr-1.5 h-4 w-4" />Export Excel
           </Button>
         ) : null}
@@ -179,7 +174,7 @@ const EmployeeHourlyRate = () => {
       <div className="mb-5 flex flex-wrap items-end gap-3">
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Month <span className="text-destructive">*</span></Label>
-          <Select value={month} onValueChange={setMonth}>
+          <Select value={month} onValueChange={(v) => { setMonth(v); setPage(1); }}>
             <SelectTrigger className="h-9 w-36 text-sm">
               <SelectValue placeholder="Select month" />
             </SelectTrigger>
@@ -193,13 +188,28 @@ const EmployeeHourlyRate = () => {
 
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Year <span className="text-destructive">*</span></Label>
-          <Select value={year} onValueChange={(v) => setYear(v)}>
+          <Select value={year} onValueChange={(v) => { setYear(v); setPage(1); }}>
             <SelectTrigger className="h-9 w-24 text-sm">
               <SelectValue placeholder="Year" />
             </SelectTrigger>
             <SelectContent>
               {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i).map(y => (
                 <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Employee</Label>
+          <Select value={employeeId} onValueChange={(v) => { setEmployeeId(v); setPage(1); }}>
+            <SelectTrigger className="h-9 w-[240px] text-sm">
+              <SelectValue placeholder="All Employees" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Employees</SelectItem>
+              {activeEmployees.map((e) => (
+                <SelectItem key={e.id} value={String(e.id)}>{e.full_name}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -218,14 +228,6 @@ const EmployeeHourlyRate = () => {
           </div>
         </div>
 
-        <Button
-          size="sm"
-          onClick={handleRunReport}
-          disabled={!canRun}
-          className="self-end"
-        >
-          Apply
-        </Button>
       </div>
 
       <DataTable

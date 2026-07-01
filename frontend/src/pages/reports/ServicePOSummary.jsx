@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx';
 import { createColumnHelper } from '@tanstack/react-table';
 import { Download, Search } from 'lucide-react';
 import { useServicePOSummary } from '@/hooks/useReports';
+import { useActiveClients } from '@/hooks/useClients';
 import { useDebounce } from '@/hooks/useDebounce';
 import { formatCurrency, formatDate, formatHours } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
@@ -158,16 +159,22 @@ const columns = [
 const ServicePOSummary = () => {
   const [month, setMonth] = useState(String(now.getMonth() + 1));
   const [year, setYear] = useState(String(now.getFullYear()));
+  const [clientId, setClientId] = useState('all');
+  const [status, setStatus] = useState('all');
+  const [billable, setBillable] = useState('all');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
-  const [committed, setCommitted] = useState({ month: String(now.getMonth() + 1), year: String(now.getFullYear()) });
 
   const debouncedSearch = useDebounce(search, 400);
+  const { data: activeClients = [] } = useActiveClients();
 
   const params = {
-    month: committed.month,
-    year: committed.year,
+    month,
+    year,
+    ...(clientId && clientId !== 'all' && { clientId }),
+    ...(status && status !== 'all' && { status }),
+    ...(billable && billable !== 'all' && { isBillable: billable === 'yes' }),
     page,
     limit,
     ...(debouncedSearch && { search: debouncedSearch }),
@@ -177,14 +184,6 @@ const ServicePOSummary = () => {
 
   const records = Array.isArray(data?.data?.records) ? data.data.records : Array.isArray(data?.data) ? data.data : [];
   const meta = data?.meta ?? {};
-
-  const handleRunReport = () => {
-    if (!month || !year) return;
-    setPage(1);
-    setCommitted({ month, year });
-  };
-
-  const canRun = !!month && !!year;
 
   return (
     <div>
@@ -202,7 +201,7 @@ const ServicePOSummary = () => {
       <div className="mb-5 flex flex-wrap items-end gap-3">
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Month <span className="text-destructive">*</span></Label>
-          <Select value={month} onValueChange={setMonth}>
+          <Select value={month} onValueChange={(v) => { setMonth(v); setPage(1); }}>
             <SelectTrigger className="h-9 w-36 text-sm">
               <SelectValue placeholder="Select month" />
             </SelectTrigger>
@@ -216,7 +215,7 @@ const ServicePOSummary = () => {
 
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Year <span className="text-destructive">*</span></Label>
-          <Select value={year} onValueChange={(v) => setYear(v)}>
+          <Select value={year} onValueChange={(v) => { setYear(v); setPage(1); }}>
             <SelectTrigger className="h-9 w-24 text-sm">
               <SelectValue placeholder="Year" />
             </SelectTrigger>
@@ -224,6 +223,49 @@ const ServicePOSummary = () => {
               {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i).map(y => (
                 <SelectItem key={y} value={String(y)}>{y}</SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Client</Label>
+          <Select value={clientId} onValueChange={(v) => { setClientId(v); setPage(1); }}>
+            <SelectTrigger className="h-9 w-[240px] text-sm">
+              <SelectValue placeholder="All Clients" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Clients</SelectItem>
+              {activeClients.map((c) => (
+                <SelectItem key={c.id} value={String(c.id)}>{c.client_name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Status</Label>
+          <Select value={status} onValueChange={(v) => { setStatus(v); setPage(1); }}>
+            <SelectTrigger className="h-9 w-32 text-sm">
+              <SelectValue placeholder="All Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="inactive">Inactive</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Billable</Label>
+          <Select value={billable} onValueChange={(v) => { setBillable(v); setPage(1); }}>
+            <SelectTrigger className="h-9 w-32 text-sm">
+              <SelectValue placeholder="All" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All</SelectItem>
+              <SelectItem value="yes">Yes</SelectItem>
+              <SelectItem value="no">No</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -241,14 +283,6 @@ const ServicePOSummary = () => {
           </div>
         </div>
 
-        <Button
-          size="sm"
-          onClick={handleRunReport}
-          disabled={!canRun}
-          className="self-end"
-        >
-          Apply
-        </Button>
       </div>
 
       <DataTable
