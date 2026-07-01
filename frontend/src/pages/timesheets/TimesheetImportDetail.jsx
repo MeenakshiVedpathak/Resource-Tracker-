@@ -1,3 +1,4 @@
+import { useState, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
 import { ArrowLeft, FileSpreadsheet } from 'lucide-react';
@@ -11,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const columnHelper = createColumnHelper();
 
@@ -24,6 +26,33 @@ const TimesheetImportDetail = () => {
 
   const rows = Array.isArray(rowsData?.data) ? rowsData.data : [];
   const importRecord = (historyData?.data ?? []).find((r) => String(r.id) === String(id));
+
+  const [employeeFilter, setEmployeeFilter] = useState('all');
+  const [poFilter, setPoFilter] = useState('all');
+  const [clientFilter, setClientFilter] = useState('all');
+  const [billableFilter, setBillableFilter] = useState('all');
+
+  const { employees, pos, clients } = useMemo(() => {
+    return {
+      employees: Array.from(new Set(rows.map(r => r.employee?.full_name).filter(Boolean))).sort(),
+      pos: Array.from(new Set(rows.map(r => r.servicePO?.service_po_name).filter(Boolean))).sort(),
+      clients: Array.from(new Set(rows.map(r => r.servicePO?.client?.client_name).filter(Boolean))).sort(),
+    };
+  }, [rows]);
+
+  const filteredRows = useMemo(() => {
+    return rows.filter(row => {
+      if (employeeFilter !== 'all' && row.employee?.full_name !== employeeFilter) return false;
+      if (poFilter !== 'all' && row.servicePO?.service_po_name !== poFilter) return false;
+      if (clientFilter !== 'all' && row.servicePO?.client?.client_name !== clientFilter) return false;
+      if (billableFilter !== 'all') {
+        const isBillable = row.servicePO?.is_billable;
+        if (billableFilter === 'billable' && !isBillable) return false;
+        if (billableFilter === 'non-billable' && isBillable) return false;
+      }
+      return true;
+    });
+  }, [rows, employeeFilter, poFilter, clientFilter, billableFilter]);
 
   const columns = [
     columnHelper.accessor('employee', {
@@ -163,8 +192,58 @@ const TimesheetImportDetail = () => {
       ) : (
         <DataTable
           columns={columns}
-          data={rows}
+          data={filteredRows}
           isLoading={false}
+          toolbar={
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 w-full mb-2">
+              <Select value={employeeFilter} onValueChange={setEmployeeFilter}>
+                <SelectTrigger className="w-full h-9">
+                  <SelectValue placeholder="All Employees" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Employees</SelectItem>
+                  {employees.map((emp) => (
+                    <SelectItem key={emp} value={emp}>{emp}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              
+              <Select value={poFilter} onValueChange={setPoFilter}>
+                <SelectTrigger className="w-full h-9">
+                  <SelectValue placeholder="All Service POs" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Service POs</SelectItem>
+                  {pos.map((po) => (
+                    <SelectItem key={po} value={po}>{po}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select value={clientFilter} onValueChange={setClientFilter}>
+                <SelectTrigger className="w-full h-9">
+                  <SelectValue placeholder="All Clients" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Clients</SelectItem>
+                  {clients.map((client) => (
+                    <SelectItem key={client} value={client}>{client}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select value={billableFilter} onValueChange={setBillableFilter}>
+                <SelectTrigger className="w-full h-9">
+                  <SelectValue placeholder="All Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="billable">Billable</SelectItem>
+                  <SelectItem value="non-billable">Non-billable</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          }
         />
       )}
     </div>

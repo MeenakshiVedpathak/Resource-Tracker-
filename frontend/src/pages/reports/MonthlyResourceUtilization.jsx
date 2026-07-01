@@ -27,6 +27,39 @@ const MONTH_OPTIONS = [
   { value: '12', label: 'December' },
 ];
 
+const STATIC_COLUMNS = [
+  {
+    category_id: 1,
+    category_name: 'Billable',
+    service_types: [
+      { id: 's-1', name: 'Project' },
+      { id: 's-2', name: 'Staff Augmentation' },
+      { id: 's-3', name: 'ServicePack' },
+      { id: 's-4', name: 'AMC' },
+    ]
+  },
+  {
+    category_id: 2,
+    category_name: 'Customer Non-Billable',
+    service_types: [
+      { id: 's-5', name: 'Customer Work ( Presales, POC, L&D, Extended support)' },
+      { id: 's-6', name: 'Complimentary Hours' },
+    ]
+  },
+  {
+    category_id: 3,
+    category_name: 'Non-Billable',
+    service_types: [
+      { id: 's-7', name: 'Product / Solution / Framework Development' },
+      { id: 's-8', name: 'Internal Support ( HR / Marketing / Finance etc.,)' },
+      { id: 's-9', name: 'Team Management' },
+      { id: 's-10', name: 'Leaves (hours)' },
+      { id: 's-11', name: 'L&D' },
+      { id: 's-12', name: 'Others (Non-work)' },
+    ]
+  }
+];
+
 const fh = (val) => {
   const n = Number(val);
   if (val == null || isNaN(n) || n === 0) return null;
@@ -35,9 +68,7 @@ const fh = (val) => {
 
 const HoursCell = ({ value }) => {
   const v = fh(value);
-  return v
-    ? <span className="tabular-nums">{v}</span>
-    : <span className="text-muted-foreground/30">—</span>;
+  return <span className="tabular-nums">{v || '0'}</span>;
 };
 
 const exportToExcel = (records, columns, month, year) => {
@@ -133,7 +164,47 @@ const MonthlyResourceUtilization = () => {
 
   const { data, isPending } = useMonthlyResourceUtilization(params);
 
-  const columns = data?.data?.columns ?? [];
+  const dynamicColumns = data?.data?.columns ?? [];
+  
+  const columns = STATIC_COLUMNS.map(staticCat => {
+    const dynCat = dynamicColumns.find(c => 
+      c.category_name.toLowerCase().replace(/[^a-z]/g, '') === staticCat.category_name.toLowerCase().replace(/[^a-z]/g, '')
+    );
+    
+    const mergedServiceTypes = staticCat.service_types.map(staticSt => {
+      const dynSt = dynCat?.service_types.find(st => {
+        const cleanDyn = st.name.trim().toLowerCase().replace(/\s+/g, ' ');
+        const cleanStatic = staticSt.name.trim().toLowerCase().replace(/\s+/g, ' ');
+        return cleanDyn === cleanStatic || cleanStatic.includes(cleanDyn) || cleanDyn.includes(cleanStatic);
+      });
+      return dynSt ? dynSt : staticSt;
+    });
+
+    if (dynCat) {
+      dynCat.service_types.forEach(dynSt => {
+        const cleanDyn = dynSt.name.trim().toLowerCase().replace(/\s+/g, ' ');
+        if (!mergedServiceTypes.find(st => {
+          const cleanStatic = st.name.trim().toLowerCase().replace(/\s+/g, ' ');
+          return cleanDyn === cleanStatic || cleanStatic.includes(cleanDyn) || cleanDyn.includes(cleanStatic);
+        })) {
+          mergedServiceTypes.push(dynSt);
+        }
+      });
+    }
+
+    return {
+      ...staticCat,
+      category_id: dynCat ? dynCat.category_id : staticCat.category_id,
+      service_types: mergedServiceTypes
+    };
+  });
+
+  dynamicColumns.forEach(dynCat => {
+    if (!columns.find(c => c.category_name.toLowerCase().replace(/[^a-z]/g, '') === dynCat.category_name.toLowerCase().replace(/[^a-z]/g, ''))) {
+      columns.push(dynCat);
+    }
+  });
+
   const records = Array.isArray(data?.data?.records) ? data.data.records : [];
   const meta    = data?.meta    ?? {};
   const summary = data?.data?.summary ?? {};
@@ -177,11 +248,11 @@ const MonthlyResourceUtilization = () => {
       />
 
       {/* ── Filters ── */}
-      <div className="mb-6 flex flex-wrap items-end gap-3">
+      <div className="mb-5 flex flex-wrap items-end gap-4 w-full">
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs font-medium">Month <span className="text-destructive">*</span></Label>
           <Select value={month} onValueChange={handleMonthChange}>
-            <SelectTrigger className="h-9 w-36 text-sm">
+            <SelectTrigger className="h-9 text-sm w-36">
               <SelectValue placeholder="Select month" />
             </SelectTrigger>
             <SelectContent>
@@ -195,7 +266,7 @@ const MonthlyResourceUtilization = () => {
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs font-medium">Year <span className="text-destructive">*</span></Label>
           <Select value={year} onValueChange={(v) => { setYear(v); setPage(1); }}>
-            <SelectTrigger className="h-9 w-24 text-sm">
+            <SelectTrigger className="h-9 text-sm w-24">
               <SelectValue placeholder="Year" />
             </SelectTrigger>
             <SelectContent>
@@ -206,10 +277,10 @@ const MonthlyResourceUtilization = () => {
           </Select>
         </div>
 
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
           <Label className="text-xs font-medium">Employee</Label>
           <Select value={employeeId} onValueChange={(v) => { setEmployeeId(v); setPage(1); }}>
-            <SelectTrigger className="h-9 w-[240px] text-sm">
+            <SelectTrigger className="h-9 text-sm w-full">
               <SelectValue placeholder="All Employees" />
             </SelectTrigger>
             <SelectContent>
@@ -221,7 +292,7 @@ const MonthlyResourceUtilization = () => {
           </Select>
         </div>
 
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
           <Label className="text-xs font-medium">Search Employee</Label>
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
@@ -229,7 +300,7 @@ const MonthlyResourceUtilization = () => {
               placeholder="Name…"
               value={search}
               onChange={handleSearchChange}
-              className="h-9 pl-8 w-full sm:w-full sm:w-72 text-sm"
+              className="h-9 pl-8 sm: text-sm w-full"
               disabled={!enabled}
             />
           </div>
@@ -383,7 +454,7 @@ const MonthlyResourceUtilization = () => {
               <div className="flex items-center gap-2">
                 <span className="text-xs text-muted-foreground whitespace-nowrap">Rows per page</span>
                 <Select value={String(limit)} onValueChange={(v) => { setLimit(Number(v)); setPage(1); }}>
-                  <SelectTrigger className="h-7 w-[60px] text-xs bg-white">
+                  <SelectTrigger className="h-7 text-xs bg-white w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>

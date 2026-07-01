@@ -11,6 +11,7 @@ import { formatDate } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
@@ -35,6 +36,7 @@ const ServiceTypeList = () => {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
+  const [categoryFilter, setCategoryFilter] = useState('all');
 
   const debouncedSearch = useDebounce(search, 400);
   const canManage = hasRole('Finance', 'Management');
@@ -45,6 +47,7 @@ const ServiceTypeList = () => {
   const params = {
     page,
     limit,
+    ...(categoryFilter !== 'all' && { service_category_id: categoryFilter }),
     ...(debouncedSearch && { search: debouncedSearch }),
   };
 
@@ -147,6 +150,21 @@ const ServiceTypeList = () => {
         searchValue={search}
         onSearchChange={(v) => { setSearch(v); setPage(1); }}
         searchPlaceholder="Search service types…"
+        toolbar={
+          <Select value={categoryFilter} onValueChange={(v) => { setCategoryFilter(v); setPage(1); }}>
+            <SelectTrigger className="h-9 w-44 text-sm">
+              <SelectValue placeholder="All Categories" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Categories</SelectItem>
+              {serviceCategories.map((cat) => (
+                <SelectItem key={cat.id} value={String(cat.id)}>
+                  {cat.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        }
         pagination={{
           page: meta.current_page ?? page,
           limit: meta.per_page ?? limit,

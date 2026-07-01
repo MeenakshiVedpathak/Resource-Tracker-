@@ -126,11 +126,11 @@ const ServicePOUtilisation = () => {
       />
 
       {/* Filter bar */}
-      <div className="mb-5 flex flex-wrap items-end gap-3">
-        <div className="flex flex-col gap-1.5">
+      <div className="mb-5 flex flex-wrap items-end gap-4 w-full">
+        <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
           <Label className="text-xs">Service PO</Label>
           <Select value={poId} onValueChange={(v) => { setPoId(v); setPage(1); }}>
-            <SelectTrigger className="h-9 w-[280px] text-sm">
+            <SelectTrigger className="h-9 text-sm w-full">
               <SelectValue placeholder="All POs" />
             </SelectTrigger>
             <SelectContent>
@@ -144,10 +144,10 @@ const ServicePOUtilisation = () => {
           </Select>
         </div>
 
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
           <Label className="text-xs">Status</Label>
           <Select value={status} onValueChange={(v) => { setStatus(v); setPage(1); }}>
-            <SelectTrigger className="h-9 w-32 text-sm">
+            <SelectTrigger className="h-9 text-sm w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -158,7 +158,7 @@ const ServicePOUtilisation = () => {
           </Select>
         </div>
 
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
           <Label className="text-xs">Search</Label>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -166,7 +166,7 @@ const ServicePOUtilisation = () => {
               placeholder="PO code, name, client…"
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-              className="h-9 pl-9 w-full sm:w-72 text-sm"
+              className="h-9 pl-9 w-full  text-sm"
             />
           </div>
         </div>

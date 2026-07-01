@@ -3,6 +3,8 @@ import { useNavigate, Outlet } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
 import { Plus, Pencil, Eye, Trash2 } from 'lucide-react';
 import { useServicePOs, useDeleteServicePO } from '@/hooks/useServicePOs';
+import { useActiveClients } from '@/hooks/useClients';
+import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -38,10 +40,10 @@ const ServicePOList = () => {
   const [limit, setLimit] = useState(10);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [clientFilter, setClientFilter] = useState('');
+  const [clientFilter, setClientFilter] = useState('all');
+  const [typeFilter, setTypeFilter] = useState('all');
 
   const debouncedSearch = useDebounce(search, 400);
-  const debouncedClient = useDebounce(clientFilter, 400);
 
   const canManage = hasRole('Finance', 'Management');
   const { success, error: showError } = useNotification();
@@ -53,10 +55,13 @@ const ServicePOList = () => {
     limit,
     ...(statusFilter !== 'all' && { status: statusFilter }),
     ...(debouncedSearch && { search: debouncedSearch }),
-    ...(debouncedClient && { client: debouncedClient }),
+    ...(clientFilter !== 'all' && { client_id: clientFilter }),
+    ...(typeFilter !== 'all' && { service_type_id: typeFilter }),
   };
 
   const { data, isPending } = useServicePOs(params);
+  const { data: clients = [] } = useActiveClients();
+  const { data: serviceTypes = [] } = useActiveServiceTypes();
 
   const servicePOs = data?.data ?? [];
   const meta = data?.meta ?? {};
@@ -212,12 +217,38 @@ const ServicePOList = () => {
         searchPlaceholder="Search POs…"
         toolbar={
           <>
-            <Input
-              placeholder="Filter by client…"
+            <Select
               value={clientFilter}
-              onChange={(e) => { setClientFilter(e.target.value); setPage(1); }}
-              className="h-9 w-40 text-sm"
-            />
+              onValueChange={(v) => { setClientFilter(v); setPage(1); }}
+            >
+              <SelectTrigger className="h-9 w-44 text-sm">
+                <SelectValue placeholder="All Clients" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Clients</SelectItem>
+                {clients.map((c) => (
+                  <SelectItem key={c.id} value={String(c.id)}>
+                    {c.client_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select
+              value={typeFilter}
+              onValueChange={(v) => { setTypeFilter(v); setPage(1); }}
+            >
+              <SelectTrigger className="h-9 w-44 text-sm">
+                <SelectValue placeholder="All Service Types" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Service Types</SelectItem>
+                {serviceTypes.map((t) => (
+                  <SelectItem key={t.id} value={String(t.id)}>
+                    {t.service_type_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Select
               value={statusFilter}
               onValueChange={(v) => { setStatusFilter(v); setPage(1); }}

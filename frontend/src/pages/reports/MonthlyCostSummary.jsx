@@ -134,11 +134,11 @@ const MonthlyCostSummary = () => {
       />
 
       {/* Filter bar */}
-      <div className="mb-5 flex flex-wrap items-end gap-3">
+      <div className="mb-5 flex flex-wrap items-end gap-4 w-full">
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Year</Label>
           <Select value={year} onValueChange={(v) => { setYear(v); setPage(1); }}>
-            <SelectTrigger className="h-9 w-24 text-sm">
+            <SelectTrigger className="h-9 text-sm w-24">
               <SelectValue placeholder="Year" />
             </SelectTrigger>
             <SelectContent>
@@ -152,7 +152,7 @@ const MonthlyCostSummary = () => {
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Month</Label>
           <Select value={month} onValueChange={(v) => { setMonth(v); setPage(1); }}>
-            <SelectTrigger className="h-9 w-36 text-sm">
+            <SelectTrigger className="h-9 text-sm w-36">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

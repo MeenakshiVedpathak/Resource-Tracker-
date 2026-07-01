@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Upload, Info } from 'lucide-react';
+import { Upload, Info, Download } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { useTimesheetHistory } from '@/hooks/useTimesheets';
 import { ROUTES, buildPath } from '@/constants/routes';
 import { formatDate } from '@/utils/formatters';
@@ -34,6 +35,28 @@ const TimesheetList = () => {
   const allRecords = Array.isArray(data?.data) ? data.data : [];
   const records    = allRecords.filter((r) => r.status === 'completed');
   const meta       = data?.meta ?? {};
+
+  const handleDownloadSample = () => {
+    const wsData = [
+      ['Employee Code', 'Name', 'Project 1', 'Project 2', 'Is Working'],
+      ['EMP-0201', 'Aditya Uday patil', '00:00:00', '00:10:00', 'F'],
+    ];
+    
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    const wb = XLSX.utils.book_new();
+    
+    ws['!cols'] = [
+      { wch: 15 },
+      { wch: 25 },
+      { wch: 20 },
+      { wch: 20 },
+      { wch: 12 },
+    ];
+
+    const currentMonth = new Date().toLocaleString('default', { month: 'short' });
+    XLSX.utils.book_append_sheet(wb, ws, currentMonth);
+    XLSX.writeFile(wb, 'Timesheet_Sample.xlsx');
+  };
 
   const columns = [
     columnHelper.accessor('file_name', {
@@ -115,6 +138,10 @@ const TimesheetList = () => {
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
+            <Button variant="outline" size="sm" onClick={handleDownloadSample}>
+              <Download className="mr-1.5 h-4 w-4" />
+              Download Sample
+            </Button>
             <Button size="sm" onClick={() => setIsUploadDialogOpen(true)}>
               <Upload className="mr-1.5 h-4 w-4" />
               Upload Excel

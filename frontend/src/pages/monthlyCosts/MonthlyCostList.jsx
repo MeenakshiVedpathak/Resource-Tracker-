@@ -56,8 +56,8 @@ const MonthlyCostList = () => {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [search, setSearch] = useState('');
-  const [monthFilter, setMonthFilter] = useState('all');
-  const [yearFilter, setYearFilter] = useState('');
+  const [monthFilter, setMonthFilter] = useState(String(new Date().getMonth() + 1));
+  const [yearFilter, setYearFilter] = useState(String(new Date().getFullYear()));
   const [deleteTarget, setDeleteTarget] = useState(null);
 
   // Calculate dialog state

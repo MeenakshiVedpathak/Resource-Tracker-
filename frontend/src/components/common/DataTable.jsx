@@ -76,7 +76,7 @@ const DataTable = ({
               />
             </div>
           )}
-          {toolbar && <div className="flex items-center gap-2">{toolbar}</div>}
+          {toolbar && <div className="flex items-center gap-2 w-full">{toolbar}</div>}
         </div>
       )}
 

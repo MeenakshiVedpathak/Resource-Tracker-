@@ -1,7 +1,8 @@
 import { useState, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useDropzone } from 'react-dropzone';
-import { UploadCloud, FileSpreadsheet, X, CheckCircle2, AlertCircle, ArrowLeft } from 'lucide-react';
+import { Download, UploadCloud, FileSpreadsheet, X, CheckCircle2, AlertCircle, ArrowLeft } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { timesheetsApi } from '@/api/timesheets.api';
 import { useConfirmImport } from '@/hooks/useTimesheets';
 import { useNotification } from '@/hooks/useNotification';
@@ -63,6 +64,28 @@ const TimesheetUpload = () => {
     },
   });
 
+  const handleDownloadSample = () => {
+    const wsData = [
+      ['Employee Code', 'Name', 'Project 1', 'Project 2', 'Is Working'],
+      ['EMP-0201', 'Aditya Uday patil', '00:00:00', '00:10:00', 'F'],
+    ];
+    
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    const wb = XLSX.utils.book_new();
+    
+    ws['!cols'] = [
+      { wch: 15 },
+      { wch: 25 },
+      { wch: 20 },
+      { wch: 20 },
+      { wch: 12 },
+    ];
+
+    const currentMonth = new Date().toLocaleString('default', { month: 'short' });
+    XLSX.utils.book_append_sheet(wb, ws, currentMonth);
+    XLSX.writeFile(wb, 'Timesheet_Sample.xlsx');
+  };
+
   // ── Step 1 → Step 2 ─────────────────────────────────────────────────────────
   const handlePreview = async () => {
     if (!selectedFile) return;
@@ -110,10 +133,16 @@ const TimesheetUpload = () => {
         title="Upload Timesheets"
         description="Import employee timesheet data from an Excel or CSV file"
         actions={
-          <Button variant="outline" size="sm" onClick={() => navigate(ROUTES.TIMESHEETS)}>
-            <ArrowLeft className="mr-1.5 h-4 w-4" />
-            Back to Timesheets
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={handleDownloadSample}>
+              <Download className="mr-1.5 h-4 w-4" />
+              Download Sample
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => navigate(ROUTES.TIMESHEETS)}>
+              <ArrowLeft className="mr-1.5 h-4 w-4" />
+              Back to Timesheets
+            </Button>
+          </div>
         }
       />
 
@@ -341,22 +370,7 @@ const TimesheetUpload = () => {
             </Card>
           )}
 
-          <div className="sticky bottom-0 z-20 flex items-center justify-end gap-3 py-4 bg-background/95 backdrop-blur border-t mt-4 -mx-4 px-4 sm:-mx-6 sm:px-6">
-            <Button
-              variant="outline"
-              onClick={handleCancel}
-              disabled={confirmMutation.isPending}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleConfirm}
-              disabled={confirmMutation.isPending || !preview.canConfirm || preview.validCount === 0}
-            >
-              <CheckCircle2 className="mr-1.5 h-4 w-4" />
-              {confirmMutation.isPending ? 'Importing…' : 'Confirm Import'}
-            </Button>
-          </div>
+
         </div>
       )}
     </div>

@@ -49,3 +49,11 @@ export const useDeleteClient = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['clients'] }),
   });
 };
+
+export const useImportClients = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: clientsApi.import,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['clients'] }),
+  });
+};

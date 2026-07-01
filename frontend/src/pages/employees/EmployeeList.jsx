@@ -2,9 +2,12 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, Outlet } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
 import { useIsMutating } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2, Search, Download, Upload, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Download, Upload, CheckCircle2, AlertCircle, FileDown, FileText, Printer, FileSpreadsheet, ChevronDown } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { useEmployees, useDeleteEmployee, useImportEmployees } from '@/hooks/useEmployees';
+import { employeesApi } from '@/api/employees.api';
 import { useAuth } from '@/hooks/useAuth';
 import { useNotification } from '@/hooks/useNotification';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -21,6 +24,12 @@ import { Button } from '@/components/ui/button';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -247,6 +256,137 @@ const EmployeeList = () => {
     });
   };
 
+  const handleExportExcel = async () => {
+    try {
+      const res = await employeesApi.getAll({ limit: 10000, status: statusFilter, search: debouncedSearch });
+      const data = res?.data ?? [];
+      if (data.length === 0) {
+        showError("No data to export");
+        return;
+      }
+      const exportData = data.map(emp => ({
+        'Employee ID': emp.employee_code,
+        'Name': emp.full_name,
+        'Email ID': emp.email_id,
+        'Designation': emp.designation,
+        'Total Experience (yrs)': emp.total_experience,
+        'Company Experience (yrs)': emp.company_experience,
+        'Joined Date': formatDate(emp.date_of_joining),
+        'Status': emp.status
+      }));
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Employees");
+      XLSX.writeFile(wb, "employees_export.xlsx");
+      success("Exported to Excel successfully");
+    } catch (error) {
+      showError("Failed to export Excel");
+    }
+  };
+
+  const handleExportPDF = async () => {
+    try {
+      const res = await employeesApi.getAll({ limit: 10000, status: statusFilter, search: debouncedSearch });
+      const data = res?.data ?? [];
+      if (data.length === 0) {
+        showError("No data to export");
+        return;
+      }
+      const doc = new jsPDF();
+      doc.text("Employees List", 14, 15);
+      
+      const tableColumn = ["ID", "Name", "Email", "Designation", "Total Exp", "Comp Exp", "Status"];
+      const tableRows = [];
+
+      data.forEach(emp => {
+        const rowData = [
+          emp.employee_code,
+          emp.full_name,
+          emp.email_id,
+          emp.designation,
+          emp.total_experience || '-',
+          emp.company_experience || '-',
+          emp.status
+        ];
+        tableRows.push(rowData);
+      });
+
+      autoTable(doc, {
+        head: [tableColumn],
+        body: tableRows,
+        startY: 20,
+      });
+      doc.save("employees_export.pdf");
+      success("Exported to PDF successfully");
+    } catch (error) {
+      console.error("PDF Export Error:", error);
+      showError("Failed to export PDF");
+    }
+  };
+
+  const handlePrint = async () => {
+    try {
+      const res = await employeesApi.getAll({ limit: 10000, status: statusFilter, search: debouncedSearch });
+      const data = res?.data ?? [];
+      if (data.length === 0) {
+        showError("No data to print");
+        return;
+      }
+      
+      const printWindow = window.open('', '', 'width=800,height=600');
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>Employees List</title>
+            <style>
+              table { width: 100%; border-collapse: collapse; }
+              th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+              th { background-color: #f2f2f2; }
+              body { font-family: sans-serif; padding: 20px; }
+            </style>
+          </head>
+          <body>
+            <h2>Employees List</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Designation</th>
+                  <th>Total Exp</th>
+                  <th>Comp Exp</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${data.map(emp => `
+                  <tr>
+                    <td>${emp.employee_code || ''}</td>
+                    <td>${emp.full_name || ''}</td>
+                    <td>${emp.email_id || ''}</td>
+                    <td>${emp.designation || ''}</td>
+                    <td>${emp.total_experience || '-'}</td>
+                    <td>${emp.company_experience || '-'}</td>
+                    <td>${emp.status || ''}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+      }, 250);
+    } catch (error) {
+      showError("Failed to print");
+    }
+  };
+
   const renderImportResults = () => {
     if (!importResult) return null;
     
@@ -351,6 +491,27 @@ const EmployeeList = () => {
                   <Upload className="mr-1.5 h-4 w-4" /> 
                   {importMutation.isPending ? 'Uploading...' : 'Upload'}
                 </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button size="sm" variant="outline" className="bg-white">
+                      <FileDown className="mr-1.5 h-4 w-4" /> Export <ChevronDown className="ml-1 h-3 w-3" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={handleExportExcel} className="cursor-pointer">
+                      <FileSpreadsheet className="mr-2 h-4 w-4 text-green-600" />
+                      Excel
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleExportPDF} className="cursor-pointer">
+                      <FileText className="mr-2 h-4 w-4 text-red-500" />
+                      PDF
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handlePrint} className="cursor-pointer">
+                      <Printer className="mr-2 h-4 w-4 text-slate-600" />
+                      Print / View
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </>
             )}
             <div className="relative">

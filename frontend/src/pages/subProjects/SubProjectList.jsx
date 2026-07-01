@@ -97,7 +97,7 @@ const SubProjectList = () => {
       meta: { sticky: true, left: 150 },
       cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="180px" className="font-medium" />,
     }),
-    columnHelper.accessor('service_po_name', {
+    columnHelper.accessor('servicePO.service_po_name', {
       header: 'Service PO',
       size: 200,
       cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="180px" />,

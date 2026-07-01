@@ -38,7 +38,7 @@ const exportToExcel = (rows) => {
     'PO Code', 'PO Name', 'Client Name', 'Service Type', 'Start Date', 'End Date', 
     'Status', 'Billable', 'Invoice Freq.', 'Account Manager', 'PO Value', 
     'Expected Hours', 'Hours Delivered Before Month', 'Available Hours', 
-    'Monthly Billable Amount', 'Invoiced Amount', 'Unbilled Amount'
+    'Billable Amount', 'Invoiced Amount', 'Unbilled Amount'
   ];
   const dataRows = rows.map((r) => [
     r.service_po_code ?? '',
@@ -140,7 +140,7 @@ const columns = [
     cell: (info) => <ValueCell value={info.getValue()} format="hours" />,
   }),
   columnHelper.accessor('monthly_billable_amount', {
-    header: 'Monthly Billable',
+    header: 'Billable Amount',
     size: 160,
     cell: (info) => <ValueCell value={info.getValue()} />,
   }),
@@ -198,11 +198,11 @@ const ServicePOSummary = () => {
       />
 
       {/* Filter bar */}
-      <div className="mb-5 flex flex-wrap items-end gap-3">
+      <div className="mb-5 flex flex-wrap items-end gap-4 w-full">
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Month <span className="text-destructive">*</span></Label>
           <Select value={month} onValueChange={(v) => { setMonth(v); setPage(1); }}>
-            <SelectTrigger className="h-9 w-36 text-sm">
+            <SelectTrigger className="h-9 text-sm w-36">
               <SelectValue placeholder="Select month" />
             </SelectTrigger>
             <SelectContent>
@@ -216,7 +216,7 @@ const ServicePOSummary = () => {
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Year <span className="text-destructive">*</span></Label>
           <Select value={year} onValueChange={(v) => { setYear(v); setPage(1); }}>
-            <SelectTrigger className="h-9 w-24 text-sm">
+            <SelectTrigger className="h-9 text-sm w-24">
               <SelectValue placeholder="Year" />
             </SelectTrigger>
             <SelectContent>
@@ -227,10 +227,10 @@ const ServicePOSummary = () => {
           </Select>
         </div>
 
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
           <Label className="text-xs">Client</Label>
           <Select value={clientId} onValueChange={(v) => { setClientId(v); setPage(1); }}>
-            <SelectTrigger className="h-9 w-[240px] text-sm">
+            <SelectTrigger className="h-9 text-sm w-full">
               <SelectValue placeholder="All Clients" />
             </SelectTrigger>
             <SelectContent>
@@ -242,10 +242,10 @@ const ServicePOSummary = () => {
           </Select>
         </div>
 
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
           <Label className="text-xs">Status</Label>
           <Select value={status} onValueChange={(v) => { setStatus(v); setPage(1); }}>
-            <SelectTrigger className="h-9 w-32 text-sm">
+            <SelectTrigger className="h-9 text-sm w-full">
               <SelectValue placeholder="All Status" />
             </SelectTrigger>
             <SelectContent>
@@ -256,10 +256,10 @@ const ServicePOSummary = () => {
           </Select>
         </div>
 
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
           <Label className="text-xs">Billable</Label>
           <Select value={billable} onValueChange={(v) => { setBillable(v); setPage(1); }}>
-            <SelectTrigger className="h-9 w-32 text-sm">
+            <SelectTrigger className="h-9 text-sm w-full">
               <SelectValue placeholder="All" />
             </SelectTrigger>
             <SelectContent>
@@ -270,7 +270,7 @@ const ServicePOSummary = () => {
           </Select>
         </div>
 
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
           <Label className="text-xs">Search</Label>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -278,7 +278,7 @@ const ServicePOSummary = () => {
               placeholder="PO Name, Client…"
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-              className="h-9 pl-9 w-full sm:w-72 text-sm"
+              className="h-9 pl-9 w-full  text-sm"
             />
           </div>
         </div>

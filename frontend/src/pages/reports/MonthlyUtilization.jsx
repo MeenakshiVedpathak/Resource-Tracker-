@@ -146,11 +146,11 @@ const MonthlyUtilization = () => {
       />
 
       {/* ── Filters ── */}
-      <div className="mb-6 flex flex-wrap items-end gap-3">
+      <div className="mb-5 flex flex-wrap items-end gap-4 w-full">
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs font-medium">Month <span className="text-destructive">*</span></Label>
           <Select value={month} onValueChange={handleMonthChange}>
-            <SelectTrigger className="h-9 w-36 text-sm">
+            <SelectTrigger className="h-9 text-sm w-36">
               <SelectValue placeholder="Select month" />
             </SelectTrigger>
             <SelectContent>
@@ -164,7 +164,7 @@ const MonthlyUtilization = () => {
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs font-medium">Year <span className="text-destructive">*</span></Label>
           <Select value={year} onValueChange={(v) => { setYear(v); setPage(1); }}>
-            <SelectTrigger className="h-9 w-24 text-sm">
+            <SelectTrigger className="h-9 text-sm w-24">
               <SelectValue placeholder="Year" />
             </SelectTrigger>
             <SelectContent>
@@ -175,10 +175,10 @@ const MonthlyUtilization = () => {
           </Select>
         </div>
 
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
           <Label className="text-xs font-medium">Employee</Label>
           <Select value={employeeId} onValueChange={(v) => { setEmployeeId(v); setPage(1); }}>
-            <SelectTrigger className="h-9 w-[240px] text-sm">
+            <SelectTrigger className="h-9 text-sm w-full">
               <SelectValue placeholder="All Employees" />
             </SelectTrigger>
             <SelectContent>
@@ -190,7 +190,7 @@ const MonthlyUtilization = () => {
           </Select>
         </div>
 
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
           <Label className="text-xs font-medium">Search Employee</Label>
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
@@ -198,7 +198,7 @@ const MonthlyUtilization = () => {
               placeholder="Name…"
               value={search}
               onChange={handleSearchChange}
-              className="h-9 pl-8 w-full sm:w-full sm:w-72 text-sm"
+              className="h-9 pl-8 sm: text-sm w-full"
               disabled={!enabled}
             />
           </div>
@@ -347,7 +347,7 @@ const MonthlyUtilization = () => {
               <div className="flex items-center gap-2">
                 <span className="text-xs text-muted-foreground whitespace-nowrap">Rows per page</span>
                 <Select value={String(limit)} onValueChange={(v) => { setLimit(Number(v)); setPage(1); }}>
-                  <SelectTrigger className="h-7 w-[60px] text-xs bg-white">
+                  <SelectTrigger className="h-7 text-xs bg-white w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
