@@ -8,6 +8,7 @@ import { ROUTES } from '@/constants/routes';
 import { formatDate } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -196,52 +197,54 @@ const TimesheetImportDetail = () => {
           isLoading={false}
           toolbar={
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 w-full mb-2">
-              <Select value={employeeFilter} onValueChange={setEmployeeFilter}>
-                <SelectTrigger className="w-full h-9">
-                  <SelectValue placeholder="All Employees" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Employees</SelectItem>
-                  {employees.map((emp) => (
-                    <SelectItem key={emp} value={emp}>{emp}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                options={[
+                  { label: "All Employees", value: "all" },
+                  ...employees.map(emp => ({ label: emp, value: emp }))
+                ]}
+                value={employeeFilter}
+                onValueChange={setEmployeeFilter}
+                placeholder="All Employees"
+                searchPlaceholder="Search employee..."
+                className="w-full h-9"
+              />
               
-              <Select value={poFilter} onValueChange={setPoFilter}>
-                <SelectTrigger className="w-full h-9">
-                  <SelectValue placeholder="All Service POs" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Service POs</SelectItem>
-                  {pos.map((po) => (
-                    <SelectItem key={po} value={po}>{po}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                options={[
+                  { label: "All Service POs", value: "all" },
+                  ...pos.map(po => ({ label: po, value: po }))
+                ]}
+                value={poFilter}
+                onValueChange={setPoFilter}
+                placeholder="All Service POs"
+                searchPlaceholder="Search PO..."
+                className="w-full h-9"
+              />
 
-              <Select value={clientFilter} onValueChange={setClientFilter}>
-                <SelectTrigger className="w-full h-9">
-                  <SelectValue placeholder="All Clients" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Clients</SelectItem>
-                  {clients.map((client) => (
-                    <SelectItem key={client} value={client}>{client}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                options={[
+                  { label: "All Clients", value: "all" },
+                  ...clients.map(client => ({ label: client, value: client }))
+                ]}
+                value={clientFilter}
+                onValueChange={setClientFilter}
+                placeholder="All Clients"
+                searchPlaceholder="Search client..."
+                className="w-full h-9"
+              />
 
-              <Select value={billableFilter} onValueChange={setBillableFilter}>
-                <SelectTrigger className="w-full h-9">
-                  <SelectValue placeholder="All Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="billable">Billable</SelectItem>
-                  <SelectItem value="non-billable">Non-billable</SelectItem>
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                options={[
+                  { label: "All Status", value: "all" },
+                  { label: "Billable", value: "billable" },
+                  { label: "Non-billable", value: "non-billable" }
+                ]}
+                value={billableFilter}
+                onValueChange={setBillableFilter}
+                placeholder="All Status"
+                searchPlaceholder="Search status..."
+                className="w-full h-9"
+              />
             </div>
           }
         />

@@ -10,7 +10,7 @@ import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Label } from '@/components/ui/label';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
@@ -179,33 +179,29 @@ const TimesheetList = () => {
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
               <Label>Month</Label>
-              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select month" />
-                </SelectTrigger>
-                <SelectContent>
-                  {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-                    <SelectItem key={m} value={String(m)}>
-                      {new Date(0, m - 1).toLocaleString('default', { month: 'long' })}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                options={Array.from({ length: 12 }, (_, i) => {
+                  const m = i + 1;
+                  return { label: new Date(0, m - 1).toLocaleString('default', { month: 'long' }), value: String(m) };
+                })}
+                value={selectedMonth}
+                onValueChange={setSelectedMonth}
+                placeholder="Select month"
+                searchPlaceholder="Search month..."
+              />
             </div>
             <div className="grid gap-2">
               <Label>Year</Label>
-              <Select value={selectedYear} onValueChange={setSelectedYear}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select year" />
-                </SelectTrigger>
-                <SelectContent>
-                  {Array.from({ length: 5 }, (_, i) => currentDate.getFullYear() - 2 + i).map((y) => (
-                    <SelectItem key={y} value={String(y)}>
-                      {y}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                options={Array.from({ length: 5 }, (_, i) => {
+                  const y = currentDate.getFullYear() - 2 + i;
+                  return { label: String(y), value: String(y) };
+                })}
+                value={selectedYear}
+                onValueChange={setSelectedYear}
+                placeholder="Select year"
+                searchPlaceholder="Search year..."
+              />
             </div>
           </div>
           <DialogFooter>

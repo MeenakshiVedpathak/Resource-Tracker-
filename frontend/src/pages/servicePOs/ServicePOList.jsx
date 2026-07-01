@@ -19,6 +19,7 @@ import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { cn } from '@/utils/cn';
 
 const columnHelper = createColumnHelper();
@@ -217,55 +218,50 @@ const ServicePOList = () => {
         searchPlaceholder="Search POs…"
         toolbar={
           <>
-            <Select
+            <SearchableSelect
+              options={[
+                { label: "All Clients", value: "all" },
+                ...clients.map((c) => ({
+                  label: c.client_name,
+                  value: String(c.id)
+                }))
+              ]}
               value={clientFilter}
               onValueChange={(v) => { setClientFilter(v); setPage(1); }}
-            >
-              <SelectTrigger className="h-9 w-44 text-sm">
-                <SelectValue placeholder="All Clients" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Clients</SelectItem>
-                {clients.map((c) => (
-                  <SelectItem key={c.id} value={String(c.id)}>
-                    {c.client_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select
+              placeholder="All Clients"
+              searchPlaceholder="Search client..."
+              className="h-9 w-44 text-sm"
+            />
+            <SearchableSelect
+              options={[
+                { label: "All Service Types", value: "all" },
+                ...serviceTypes.map((t) => ({
+                  label: t.service_type_name,
+                  value: String(t.id)
+                }))
+              ]}
               value={typeFilter}
               onValueChange={(v) => { setTypeFilter(v); setPage(1); }}
-            >
-              <SelectTrigger className="h-9 w-44 text-sm">
-                <SelectValue placeholder="All Service Types" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Service Types</SelectItem>
-                {serviceTypes.map((t) => (
-                  <SelectItem key={t.id} value={String(t.id)}>
-                    {t.service_type_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select
+              placeholder="All Service Types"
+              searchPlaceholder="Search type..."
+              className="h-9 w-44 text-sm"
+            />
+            <SearchableSelect
+              options={[
+                { label: "All status", value: "all" },
+                { label: "In Progress", value: "in-progress" },
+                { label: "Completed", value: "completed" },
+                { label: "On Hold", value: "on-hold" },
+                { label: "Pending", value: "pending" },
+                { label: "Cancelled", value: "cancelled" },
+                { label: "Closed", value: "closed" }
+              ]}
               value={statusFilter}
               onValueChange={(v) => { setStatusFilter(v); setPage(1); }}
-            >
-              <SelectTrigger className="h-9 w-36 text-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All status</SelectItem>
-                <SelectItem value="in-progress">In Progress</SelectItem>
-                <SelectItem value="completed">Completed</SelectItem>
-                <SelectItem value="on-hold">On Hold</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="cancelled">Cancelled</SelectItem>
-                <SelectItem value="closed">Closed</SelectItem>
-              </SelectContent>
-            </Select>
+              placeholder="All status"
+              searchPlaceholder="Search status..."
+              className="h-9 w-32 text-sm"
+            />
           </>
         }
         pagination={

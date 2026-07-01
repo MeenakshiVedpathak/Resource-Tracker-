@@ -21,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { cn } from '@/utils/cn';
 
 const columnHelper = createColumnHelper();
@@ -154,42 +155,39 @@ const SubProjectList = () => {
         searchPlaceholder="Search sub-projects…"
         toolbar={
           <>
-            <Select
+            <SearchableSelect
+              options={[
+                { label: "All POs", value: "all" },
+                ...activePOs.map((po) => ({
+                  label: po.po_number ?? po.service_po_name ?? String(po.id),
+                  value: String(po.id)
+                }))
+              ]}
               value={poFilter}
               onValueChange={(v) => {
                 setPoFilter(v);
                 setPage(1);
               }}
-            >
-              <SelectTrigger className="h-9 w-44 text-sm">
-                <SelectValue placeholder="All POs" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All POs</SelectItem>
-                {activePOs.map((po) => (
-                  <SelectItem key={po.id} value={String(po.id)}>
-                    {po.po_number ?? po.service_po_name ?? po.id}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              placeholder="All POs"
+              searchPlaceholder="Search PO..."
+              className="h-9 w-44 text-sm"
+            />
 
-            <Select
+            <SearchableSelect
+              options={[
+                { label: "All status", value: "all" },
+                { label: "Active", value: "active" },
+                { label: "Inactive", value: "inactive" }
+              ]}
               value={statusFilter}
               onValueChange={(v) => {
                 setStatusFilter(v);
                 setPage(1);
               }}
-            >
-              <SelectTrigger className="h-9 w-32 text-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All status</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="inactive">Inactive</SelectItem>
-              </SelectContent>
-            </Select>
+              placeholder="All status"
+              searchPlaceholder="Search status..."
+              className="h-9 w-32 text-sm"
+            />
           </>
         }
         pagination={

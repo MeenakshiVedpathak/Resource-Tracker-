@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { motion } from 'framer-motion';
-import { Save } from 'lucide-react';
+import { Check, ChevronsUpDown, Save } from 'lucide-react';
 import { useServicePO, useCreateServicePO, useUpdateServicePO } from '@/hooks/useServicePOs';
 import { useActiveClients } from '@/hooks/useClients';
 import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
@@ -19,6 +19,8 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -211,24 +213,18 @@ const ServicePOForm = () => {
                     <FormLabel className="text-[13px]">
                       <span className="text-destructive">*</span> Client
                     </FormLabel>
-                    <Select
-                      value={field.value ? String(field.value) : ''}
-                      onValueChange={(v) => field.onChange(Number(v))}
+                    <SearchableSelect
+                      options={activeClients.map(c => ({
+                        value: String(c.id),
+                        label: c.client_name
+                      }))}
+                      value={field.value}
+                      onValueChange={(val) => field.onChange(val ? parseInt(val, 10) : undefined)}
                       disabled={isLoadingClients}
-                    >
-                      <FormControl>
-                        <SelectTrigger className="h-8 text-sm">
-                          <SelectValue placeholder="Select client" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {activeClients.map((c) => (
-                          <SelectItem key={c.id} value={String(c.id)}>
-                            {c.client_name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      placeholder="Select client"
+                      searchPlaceholder="Search client..."
+                      className="h-8 text-sm"
+                    />
                     <FormMessage />
                   </FormItem>
                 )}
@@ -238,25 +234,21 @@ const ServicePOForm = () => {
                 <FormLabel className="text-[13px]">
                   <span className="text-destructive">*</span> Service Category
                 </FormLabel>
-                <Select
-                  value={selectedCategory}
-                  onValueChange={(v) => {
-                    setSelectedCategory(v);
-                    form.setValue('service_type_id', '');
-                  }}
-                  disabled={isLoadingCategories}
-                >
-                  <SelectTrigger className="h-8 text-sm">
-                    <SelectValue placeholder="Select category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {activeCategories.map((c) => (
-                      <SelectItem key={c.id} value={String(c.id)}>
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  <SearchableSelect
+                    options={activeCategories.map(c => ({
+                      value: String(c.id),
+                      label: c.name
+                    }))}
+                    value={selectedCategory}
+                    onValueChange={(val) => {
+                      setSelectedCategory(val);
+                      form.setValue('service_type_id', '');
+                    }}
+                    disabled={isLoadingCategories}
+                    placeholder="Select category"
+                    searchPlaceholder="Search category..."
+                    className="h-8 text-sm"
+                  />
               </div>
 
               <FormField
@@ -267,26 +259,20 @@ const ServicePOForm = () => {
                     <FormLabel className="text-[13px]">
                       <span className="text-destructive">*</span> Service Type
                     </FormLabel>
-                    <Select
-                      value={field.value ? String(field.value) : ''}
-                      onValueChange={(v) => field.onChange(Number(v))}
-                      disabled={isLoadingTypes || !selectedCategory}
-                    >
-                      <FormControl>
-                        <SelectTrigger className="h-8 text-sm">
-                          <SelectValue placeholder="Select service type" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {serviceTypes
-                          .filter((t) => t.service_category_id === Number(selectedCategory))
-                          .map((c) => (
-                            <SelectItem key={c.id} value={String(c.id)}>
-                              {c.service_type_name}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
+                        <SearchableSelect
+                          options={serviceTypes
+                            .filter((t) => t.service_category_id === Number(selectedCategory))
+                            .map(c => ({
+                              value: String(c.id),
+                              label: c.service_type_name
+                            }))}
+                          value={field.value}
+                          onValueChange={(val) => field.onChange(val ? parseInt(val, 10) : undefined)}
+                          disabled={isLoadingTypes || !selectedCategory}
+                          placeholder="Select service type"
+                          searchPlaceholder="Search service type..."
+                          className="h-8 text-sm"
+                        />
                     <FormMessage />
                   </FormItem>
                 )}
@@ -312,21 +298,21 @@ const ServicePOForm = () => {
                 render={({ field }) => (
                   <FormItem className="space-y-1">
                     <FormLabel className="text-[13px]">Status</FormLabel>
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <FormControl>
-                        <SelectTrigger className="h-8 text-sm">
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="in-progress">In Progress</SelectItem>
-                        <SelectItem value="completed">Completed</SelectItem>
-                        <SelectItem value="on-hold">On Hold</SelectItem>
-                        <SelectItem value="pending">Pending</SelectItem>
-                        <SelectItem value="cancelled">Cancelled</SelectItem>
-                        <SelectItem value="closed">Closed</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                      options={[
+                        { label: "In Progress", value: "in-progress" },
+                        { label: "Completed", value: "completed" },
+                        { label: "On Hold", value: "on-hold" },
+                        { label: "Pending", value: "pending" },
+                        { label: "Cancelled", value: "cancelled" },
+                        { label: "Closed", value: "closed" }
+                      ]}
+                      value={field.value}
+                      onValueChange={field.onChange}
+                      placeholder="Select status"
+                      searchPlaceholder="Search status..."
+                      className="h-8 text-sm w-full"
+                    />
                     <FormMessage />
                   </FormItem>
                 )}
@@ -435,20 +421,20 @@ const ServicePOForm = () => {
                 render={({ field }) => (
                   <FormItem className="space-y-1">
                     <FormLabel className="text-[13px]"><span className="text-destructive">*</span> Invoice Frequency</FormLabel>
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <FormControl>
-                        <SelectTrigger className="h-8 text-sm">
-                          <SelectValue placeholder="Select frequency" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="monthly">Monthly</SelectItem>
-                        <SelectItem value="milestone-based">Milestone based</SelectItem>
-                        <SelectItem value="yearly-amc">Yearly AMC</SelectItem>
-                        <SelectItem value="internal-no-invoice">Internal - No Invoice</SelectItem>
-                        <SelectItem value="poc">POC</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                      options={[
+                        { label: "Monthly", value: "monthly" },
+                        { label: "Milestone based", value: "milestone-based" },
+                        { label: "Yearly AMC", value: "yearly-amc" },
+                        { label: "Internal - No Invoice", value: "internal-no-invoice" },
+                        { label: "POC", value: "poc" }
+                      ]}
+                      value={field.value}
+                      onValueChange={field.onChange}
+                      placeholder="Select frequency"
+                      searchPlaceholder="Search frequency..."
+                      className="h-8 text-sm w-full"
+                    />
                     <FormMessage />
                   </FormItem>
                 )}

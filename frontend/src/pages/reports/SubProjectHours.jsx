@@ -11,13 +11,7 @@ import PageHeader from '@/components/common/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { cn } from '@/utils/cn';
 
 const columnHelper = createColumnHelper();
@@ -180,19 +174,20 @@ const SubProjectHours = () => {
       <div className="mb-5 flex flex-wrap items-end gap-4 w-full">
         <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
           <Label className="text-xs">Service PO</Label>
-          <Select value={poId} onValueChange={(v) => { setPoId(v); setPage(1); }}>
-            <SelectTrigger className="h-9 text-sm w-full">
-              <SelectValue placeholder="All POs" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All POs</SelectItem>
-              {activePOs.map((po) => (
-                <SelectItem key={po.id} value={String(po.id)}>
-                  {po.service_po_name || po.service_po_code}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <SearchableSelect
+            options={[
+              { label: "All POs", value: "all" },
+              ...activePOs.map((po) => ({
+                label: po.service_po_name || po.service_po_code || String(po.id),
+                value: String(po.id)
+              }))
+            ]}
+            value={poId}
+            onValueChange={(v) => { setPoId(v); setPage(1); }}
+            placeholder="All POs"
+            searchPlaceholder="Search PO..."
+            className="h-9 text-sm"
+          />
         </div>
 
 

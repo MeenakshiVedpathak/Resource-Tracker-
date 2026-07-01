@@ -16,6 +16,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Sheet,
@@ -114,24 +115,18 @@ const ServiceTypeForm = () => {
                       <FormLabel className="text-[13px]">
                         <span className="text-destructive">*</span> Service Category
                       </FormLabel>
-                      <Select
+                      <SearchableSelect
+                        options={serviceCategories.map((c) => ({
+                          value: String(c.id),
+                          label: c.name
+                        }))}
                         value={field.value ? String(field.value) : ''}
-                        onValueChange={(v) => field.onChange(Number(v))}
+                        onValueChange={(v) => field.onChange(v ? Number(v) : undefined)}
                         disabled={isLoadingCategories}
-                      >
-                        <FormControl>
-                          <SelectTrigger className="h-8 text-sm">
-                            <SelectValue placeholder="Select service category" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {serviceCategories.map((c) => (
-                            <SelectItem key={c.id} value={String(c.id)}>
-                              {c.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        placeholder="Select service category"
+                        searchPlaceholder="Search category..."
+                        className="h-8 text-sm"
+                      />
                       <FormMessage />
                     </FormItem>
                   )}

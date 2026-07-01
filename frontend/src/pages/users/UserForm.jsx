@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Badge } from '@/components/ui/badge';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from '@/components/ui/sheet';
 import { cn } from '@/utils/cn';
@@ -183,20 +184,20 @@ const UserForm = () => {
                       render={({ field }) => (
                         <FormItem className="space-y-1">
                           <FormLabel className="text-[11px] text-muted-foreground font-medium">Linked Employee</FormLabel>
-                          <Select
+                          <SearchableSelect
+                            options={[
+                              { label: "None", value: "none" },
+                              ...employees.map(e => ({
+                                label: e.full_name,
+                                value: String(e.id)
+                              }))
+                            ]}
                             value={field.value != null && field.value !== '' ? String(field.value) : 'none'}
                             onValueChange={(v) => field.onChange(v === 'none' ? null : Number(v))}
-                          >
-                            <FormControl>
-                              <SelectTrigger className="h-8 text-sm border-gray-200"><SelectValue placeholder="None" /></SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="none">None</SelectItem>
-                              {employees.map((e) => (
-                                <SelectItem key={e.id} value={String(e.id)}>{e.full_name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                            placeholder="Select Employee"
+                            searchPlaceholder="Search employee..."
+                            className="h-8 text-sm border-gray-200"
+                          />
                           <FormMessage className="text-[10px]" />
                         </FormItem>
                       )}

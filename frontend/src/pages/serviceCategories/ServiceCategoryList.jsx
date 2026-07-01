@@ -11,7 +11,7 @@ import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
 import StatusBadge from '@/components/common/StatusBadge';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
@@ -143,16 +143,18 @@ const ServiceCategoryList = () => {
         onSearchChange={(v) => { setSearch(v); setPage(1); }}
         searchPlaceholder="Search categories…"
         toolbar={
-          <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
-            <SelectTrigger className="h-9 w-32 text-sm">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All status</SelectItem>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="inactive">Inactive</SelectItem>
-            </SelectContent>
-          </Select>
+          <SearchableSelect
+            options={[
+              { label: "All status", value: "all" },
+              { label: "Active", value: "active" },
+              { label: "Inactive", value: "inactive" }
+            ]}
+            value={statusFilter}
+            onValueChange={(v) => { setStatusFilter(v); setPage(1); }}
+            placeholder="All status"
+            searchPlaceholder="Search status..."
+            className="h-9 w-32 text-sm"
+          />
         }
         pagination={{
           page: meta.current_page ?? page,

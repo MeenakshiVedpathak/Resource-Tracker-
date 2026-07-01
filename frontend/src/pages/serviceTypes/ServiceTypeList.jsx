@@ -12,6 +12,7 @@ import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
@@ -151,19 +152,20 @@ const ServiceTypeList = () => {
         onSearchChange={(v) => { setSearch(v); setPage(1); }}
         searchPlaceholder="Search service types…"
         toolbar={
-          <Select value={categoryFilter} onValueChange={(v) => { setCategoryFilter(v); setPage(1); }}>
-            <SelectTrigger className="h-9 w-44 text-sm">
-              <SelectValue placeholder="All Categories" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Categories</SelectItem>
-              {serviceCategories.map((cat) => (
-                <SelectItem key={cat.id} value={String(cat.id)}>
-                  {cat.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <SearchableSelect
+            options={[
+              { label: "All Categories", value: "all" },
+              ...serviceCategories.map((cat) => ({
+                label: cat.name,
+                value: String(cat.id)
+              }))
+            ]}
+            value={categoryFilter}
+            onValueChange={(v) => { setCategoryFilter(v); setPage(1); }}
+            placeholder="All Categories"
+            searchPlaceholder="Search category..."
+            className="h-9 w-44 text-sm"
+          />
         }
         pagination={{
           page: meta.current_page ?? page,

@@ -28,6 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/utils/cn';
 import {
@@ -172,20 +173,17 @@ const SubProjectForm = () => {
                           <FormLabel className="text-[11px] text-muted-foreground font-medium">
                             <span className="text-destructive mr-0.5">*</span> Service PO
                           </FormLabel>
-                          <Select value={field.value} onValueChange={field.onChange}>
-                            <FormControl>
-                              <SelectTrigger className="h-8 text-sm border-gray-200">
-                                <SelectValue placeholder="Select a Service PO" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {activePOs.map((po) => (
-                                <SelectItem key={po.id} value={String(po.id)}>
-                                  {po.po_number ?? po.service_po_name ?? po.id}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <SearchableSelect
+                            options={activePOs.map((po) => ({
+                              value: String(po.id),
+                              label: po.po_number ?? po.service_po_name ?? String(po.id)
+                            }))}
+                            value={field.value ? String(field.value) : ''}
+                            onValueChange={(v) => field.onChange(v ? Number(v) : undefined)}
+                            placeholder="Select a Service PO"
+                            searchPlaceholder="Search PO..."
+                            className="h-8 text-sm border-gray-200"
+                          />
                           <FormMessage className="text-[10px]" />
                         </FormItem>
                       )}

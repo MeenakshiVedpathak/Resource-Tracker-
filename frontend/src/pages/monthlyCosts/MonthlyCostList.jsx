@@ -22,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import {
   Dialog,
   DialogContent,
@@ -245,42 +246,35 @@ const MonthlyCostList = () => {
         isLoading={isPending}
         toolbar={
           <>
-            <Select
+            <SearchableSelect
+              options={[
+                { label: "All months", value: "all" },
+                ...MONTH_OPTIONS
+              ]}
               value={monthFilter}
               onValueChange={(v) => {
                 setMonthFilter(v);
                 setPage(1);
               }}
-            >
-              <SelectTrigger className="h-9 w-36 text-sm bg-white">
-                <SelectValue placeholder="All months" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All months</SelectItem>
-                {MONTH_OPTIONS.map((m) => (
-                  <SelectItem key={m.value} value={m.value}>
-                    {m.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              placeholder="All months"
+              searchPlaceholder="Search month..."
+              className="h-9 w-36 text-sm bg-white"
+            />
 
-            <Select
+            <SearchableSelect
+              options={Array.from({ length: 10 }, (_, i) => {
+                const y = new Date().getFullYear() - 5 + i;
+                return { label: String(y), value: String(y) };
+              })}
               value={yearFilter}
               onValueChange={(v) => {
                 setYearFilter(v);
                 setPage(1);
               }}
-            >
-              <SelectTrigger className="h-9 w-24 text-sm bg-white">
-                <SelectValue placeholder="Year" />
-              </SelectTrigger>
-              <SelectContent>
-                {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i).map(y => (
-                  <SelectItem key={y} value={String(y)}>{y}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              placeholder="Year"
+              searchPlaceholder="Search year..."
+              className="h-9 w-24 text-sm bg-white"
+            />
           </>
         }
         pagination={
@@ -323,32 +317,29 @@ const MonthlyCostList = () => {
           <div className="grid grid-cols-2 gap-4 py-2">
             <div className="space-y-2">
               <Label htmlFor="calc-month">Month</Label>
-              <Select value={calcMonth} onValueChange={setCalcMonth}>
-                <SelectTrigger id="calc-month" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {MONTH_OPTIONS.map((m) => (
-                    <SelectItem key={m.value} value={m.value}>
-                      {m.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                options={MONTH_OPTIONS}
+                value={calcMonth}
+                onValueChange={setCalcMonth}
+                placeholder="Select month"
+                searchPlaceholder="Search month..."
+                className="w-full"
+              />
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="calc-year">Year</Label>
-              <Select value={calcYear} onValueChange={(v) => setCalcYear(v)}>
-                <SelectTrigger id="calc-year" className="w-full">
-                  <SelectValue placeholder="Year" />
-                </SelectTrigger>
-                <SelectContent>
-                  {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i).map(y => (
-                    <SelectItem key={y} value={String(y)}>{y}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                options={Array.from({ length: 10 }, (_, i) => {
+                  const y = new Date().getFullYear() - 5 + i;
+                  return { label: String(y), value: String(y) };
+                })}
+                value={calcYear}
+                onValueChange={setCalcYear}
+                placeholder="Year"
+                searchPlaceholder="Search year..."
+                className="w-full"
+              />
             </div>
           </div>
 

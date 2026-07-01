@@ -29,7 +29,7 @@ const DropdownMenuContent = ({ className, sideOffset = 4, ...props }) => (
 const DropdownMenuItem = ({ className, inset, ...props }) => (
   <DropdownMenuPrimitive.Item
     className={cn(
-      'relative flex cursor-default select-none items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none',
+      'relative flex cursor-default select-none items-center gap-2 px-2 py-1.5 text-sm outline-none border-b border-border/50 last:border-b-0',
       'transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
       inset && 'pl-8',
       '[&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',

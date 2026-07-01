@@ -13,8 +13,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select, SelectContent, SelectItem,  SelectTrigger,
+  SelectValue,
 } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 const columnHelper = createColumnHelper();
@@ -137,30 +139,29 @@ const MonthlyCostSummary = () => {
       <div className="mb-5 flex flex-wrap items-end gap-4 w-full">
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Year</Label>
-          <Select value={year} onValueChange={(v) => { setYear(v); setPage(1); }}>
-            <SelectTrigger className="h-9 text-sm w-24">
-              <SelectValue placeholder="Year" />
-            </SelectTrigger>
-            <SelectContent>
-              {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i).map(y => (
-                <SelectItem key={y} value={String(y)}>{y}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <SearchableSelect
+            options={Array.from({ length: 10 }, (_, i) => {
+              const y = new Date().getFullYear() - 5 + i;
+              return { label: String(y), value: String(y) };
+            })}
+            value={year}
+            onValueChange={(v) => { setYear(v); setPage(1); }}
+            placeholder="Year"
+            searchPlaceholder="Search year..."
+            className="h-9 w-24 text-sm"
+          />
         </div>
 
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Month</Label>
-          <Select value={month} onValueChange={(v) => { setMonth(v); setPage(1); }}>
-            <SelectTrigger className="h-9 text-sm w-36">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {MONTH_OPTIONS.map((m) => (
-                <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <SearchableSelect
+            options={MONTH_OPTIONS}
+            value={month}
+            onValueChange={(v) => { setMonth(v); setPage(1); }}
+            placeholder="Select month"
+            searchPlaceholder="Search month..."
+            className="h-9 w-36 text-sm"
+          />
         </div>
       </div>
 

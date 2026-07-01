@@ -13,7 +13,8 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Sheet,
@@ -140,29 +141,17 @@ const MonthlyCostFormContent = ({ id, isEdit, record, activeEmployees }) => {
                 render={({ field }) => (
                   <FormItem className="sm:col-span-2 lg:col-span-3">
                     <FormLabel>Employee <span className="text-destructive">*</span></FormLabel>
-                    <Select
+                    <SearchableSelect
+                      options={activeEmployees.map(e => ({
+                        value: String(e.id),
+                        label: `${e.full_name}${e.employee_code ? ` (${e.employee_code})` : ''}`
+                      }))}
                       value={field.value}
                       onValueChange={field.onChange}
                       disabled={isEdit}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select an employee" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {activeEmployees.map((e) => (
-                          <SelectItem key={e.id} value={String(e.id)}>
-                            {e.full_name}
-                            {e.employee_code && (
-                              <span className="ml-2 text-xs text-muted-foreground font-mono">
-                                ({e.employee_code})
-                              </span>
-                            )}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      placeholder="Select an employee"
+                      searchPlaceholder="Search employee..."
+                    />
                     <FormMessage />
                   </FormItem>
                 )}
@@ -175,16 +164,14 @@ const MonthlyCostFormContent = ({ id, isEdit, record, activeEmployees }) => {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Month <span className="text-destructive">*</span></FormLabel>
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <FormControl>
-                        <SelectTrigger><SelectValue placeholder="Select month" /></SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {MONTH_OPTIONS.map((m) => (
-                          <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                      options={MONTH_OPTIONS}
+                      value={field.value}
+                      onValueChange={field.onChange}
+                      placeholder="Select month"
+                      searchPlaceholder="Search month..."
+                      className="w-full"
+                    />
                     <FormMessage />
                   </FormItem>
                 )}

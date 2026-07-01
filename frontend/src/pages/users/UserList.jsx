@@ -18,6 +18,7 @@ import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Badge } from '@/components/ui/badge';
 
 const columnHelper = createColumnHelper();
@@ -213,27 +214,32 @@ const UserList = () => {
         isLoading={isPending}
         toolbar={
           <>
-            <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
-              <SelectTrigger className="h-9 w-32 text-sm bg-white">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All status</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="inactive">Inactive</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={roleFilter} onValueChange={(v) => { setRoleFilter(v); setPage(1); }}>
-              <SelectTrigger className="h-9 w-36 text-sm bg-white">
-                <SelectValue placeholder="All roles" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All roles</SelectItem>
-                {roles.map((r) => (
-                  <SelectItem key={r.id} value={String(r.id)}>{r.role_name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              options={[
+                { label: "All status", value: "all" },
+                { label: "Active", value: "active" },
+                { label: "Inactive", value: "inactive" }
+              ]}
+              value={statusFilter}
+              onValueChange={(v) => { setStatusFilter(v); setPage(1); }}
+              placeholder="All status"
+              searchPlaceholder="Search status..."
+              className="h-9 w-32 text-sm bg-white"
+            />
+            <SearchableSelect
+              options={[
+                { label: "All roles", value: "all" },
+                ...roles.map((r) => ({
+                  label: r.role_name,
+                  value: String(r.id)
+                }))
+              ]}
+              value={roleFilter}
+              onValueChange={(v) => { setRoleFilter(v); setPage(1); }}
+              placeholder="All roles"
+              searchPlaceholder="Search role..."
+              className="h-9 w-36 text-sm bg-white"
+            />
           </>
         }
         pagination={

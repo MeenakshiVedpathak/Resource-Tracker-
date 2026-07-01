@@ -58,7 +58,7 @@ const SelectContent = ({ className, children, position = 'popper', ...props }) =
     >
       <SelectScrollUpButton />
       <SelectPrimitive.Viewport
-        className={cn('p-1', position === 'popper' && 'h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)]')}
+        className={cn('p-1', position === 'popper' && 'w-full min-w-[var(--radix-select-trigger-width)]')}
       >
         {children}
       </SelectPrimitive.Viewport>
@@ -77,7 +77,7 @@ const SelectLabel = ({ className, ...props }) => (
 const SelectItem = ({ className, children, ...props }) => (
   <SelectPrimitive.Item
     className={cn(
-      'relative flex w-full cursor-default select-none items-center rounded-md py-1.5 pl-2 pr-8 text-sm outline-none',
+      'relative flex w-full cursor-default select-none items-center py-1.5 pl-2 pr-8 text-sm outline-none border-b border-border/50 last:border-b-0',
       'focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
       className
     )}

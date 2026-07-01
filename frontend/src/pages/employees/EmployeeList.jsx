@@ -23,7 +23,9 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -603,16 +605,18 @@ const EmployeeList = () => {
           data={employees}
           isLoading={isPending}
           toolbar={
-            <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
-              <SelectTrigger className="h-9 w-32 text-sm bg-white">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All status</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="inactive">Inactive</SelectItem>
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              options={[
+                { label: "All status", value: "all" },
+                { label: "Active", value: "active" },
+                { label: "Inactive", value: "inactive" }
+              ]}
+              value={statusFilter}
+              onValueChange={(v) => { setStatusFilter(v); setPage(1); }}
+              placeholder="All status"
+              searchPlaceholder="Search status..."
+              className="h-9 w-32 text-sm bg-white"
+            />
           }
           pagination={meta.total != null ? {
             page: meta.current_page ?? page,
