@@ -3,6 +3,8 @@ import * as XLSX from 'xlsx';
 import { Download, Search } from 'lucide-react';
 import { useMonthlyResourceUtilization } from '@/hooks/useReports';
 import { useActiveEmployees } from '@/hooks/useEmployees';
+import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
+import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
 import { formatMonthYear } from '@/utils/formatters';
 import PageHeader from '@/components/common/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -136,11 +138,15 @@ const MonthlyResourceUtilization = () => {
     year: new Date().getFullYear(),
   });
   const [employeeId, setEmployeeId] = useState('all');
+  const [serviceTypeId, setServiceTypeId] = useState('all');
+  const [serviceCategoryId, setServiceCategoryId] = useState('all');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
 
-  const { data: activeEmployees = [] } = useActiveEmployees();
+  const { data: activeEmployees = [] }         = useActiveEmployees();
+  const { data: activeServiceCategories = [] } = useActiveServiceCategories();
+  const { data: activeServiceTypes = [] }      = useActiveServiceTypes();
 
   const enabled = !!(monthYear?.year >= 2000 && monthYear?.year <= 2100);
 
@@ -185,7 +191,8 @@ const MonthlyResourceUtilization = () => {
 
     return {
       ...staticCat,
-      category_id: dynCat ? dynCat.category_id : staticCat.category_id,
+      // Keep the static category_id for colors/keys; store the backend id separately for filtering
+      dynCategoryId: dynCat ? dynCat.category_id : null,
       service_types: mergedServiceTypes
     };
   });
@@ -195,6 +202,27 @@ const MonthlyResourceUtilization = () => {
       columns.push(dynCat);
     }
   });
+
+  // Dropdown options from master data (all categories/types, not just current month)
+  const serviceTypeOptions = activeServiceTypes
+    .filter(st => serviceCategoryId === 'all' || String(st.service_category_id) === serviceCategoryId)
+    .map(st => ({ label: st.service_type_name, value: String(st.id) }));
+
+  // Frontend-only filtering — does not affect the API call
+  // Use dynCategoryId (backend id) for category filter so "Customer Non-Billable" and
+  // "Non-Billable" never collide (they have different static category_ids for colors/keys)
+  const filteredColumns = columns
+    .filter(cat => {
+      if (serviceCategoryId === 'all') return true;
+      return cat.dynCategoryId != null && String(cat.dynCategoryId) === serviceCategoryId;
+    })
+    .map(cat => ({
+      ...cat,
+      service_types: cat.service_types.filter(st =>
+        serviceTypeId === 'all' || String(st.id) === serviceTypeId
+      ),
+    }))
+    .filter(cat => cat.service_types.length > 0);
 
   const records = Array.isArray(data?.data?.records) ? data.data.records : [];
   const meta    = data?.meta    ?? {};
@@ -229,7 +257,7 @@ const MonthlyResourceUtilization = () => {
         description="Detailed resource utilization based on service categories"
         actions={
           records.length > 0 ? (
-            <Button variant="outline" size="sm" onClick={() => exportToExcel(records, columns, monthYear?.month, monthYear?.year)}>
+            <Button variant="outline" size="sm" onClick={() => exportToExcel(records, filteredColumns, monthYear?.month, monthYear?.year)}>
               <Download className="mr-1.5 h-4 w-4" />
               Export Excel
             </Button>
@@ -267,6 +295,30 @@ const MonthlyResourceUtilization = () => {
           />
         </div>
 
+        <div className="flex flex-col gap-1.5 flex-1 min-w-[180px]">
+          <Label className="text-xs font-medium">Service Category</Label>
+          <SearchableSelect
+            options={[{ label: "All Categories", value: "all" }, ...activeServiceCategories.map(sc => ({ label: sc.name, value: String(sc.id) }))]}
+            value={serviceCategoryId}
+            onValueChange={(v) => { setServiceCategoryId(v); setServiceTypeId('all'); setPage(1); }}
+            placeholder="All Categories"
+            searchPlaceholder="Search category..."
+            className="h-9 text-sm"
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5 flex-1 min-w-[180px]">
+          <Label className="text-xs font-medium">Service Type</Label>
+          <SearchableSelect
+            options={[{ label: "All Service Types", value: "all" }, ...serviceTypeOptions]}
+            value={serviceTypeId}
+            onValueChange={(v) => { setServiceTypeId(v); setPage(1); }}
+            placeholder="All Service Types"
+            searchPlaceholder="Search service type..."
+            className="h-9 text-sm"
+          />
+        </div>
+
         <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
           <Label className="text-xs font-medium">Search Employee</Label>
           <div className="relative">
@@ -275,7 +327,7 @@ const MonthlyResourceUtilization = () => {
               placeholder="Name…"
               value={search}
               onChange={handleSearchChange}
-              className="h-9 pl-8 sm: text-sm w-full"
+              className="h-9 pl-8 sm:text-sm w-full"
               disabled={!enabled}
             />
           </div>
@@ -333,10 +385,10 @@ const MonthlyResourceUtilization = () => {
                   <tr className="border-b bg-muted/60">
                     <th colSpan={2} className="sticky left-0 z-30 bg-muted" />
                     <th colSpan={7} className="border-r border-border" />
-                    {columns.map(cat => (
-                      <th 
-                        key={cat.category_id} 
-                        colSpan={cat.service_types.length} 
+                    {filteredColumns.map(cat => (
+                      <th
+                        key={cat.category_id}
+                        colSpan={cat.service_types.length}
                         className={cn('px-3 py-1.5 text-center text-xs font-semibold border-r border-border', getCategoryColorClass(cat.category_id))}
                       >
                         {cat.category_name}
@@ -358,7 +410,7 @@ const MonthlyResourceUtilization = () => {
                     <th className={th('w-[100px] text-right')}>Bill. Cap.</th>
                     <th className={th('min-w-[180px]')}>Client(s)</th>
                     
-                    {columns.map(cat => 
+                    {filteredColumns.map(cat =>
                       cat.service_types.map(st => (
                         <th key={st.id} className={th('w-[110px] text-right', getCellColorClass(cat.category_id))}>
                           {st.name}
@@ -392,7 +444,7 @@ const MonthlyResourceUtilization = () => {
                       <td className={td('text-right tabular-nums')}>{row.monthly_billing_capacity ?? '—'}</td>
                       <td className={td('max-w-[200px] truncate')} title={row.clients}>{row.clients || <span className="text-muted-foreground">—</span>}</td>
                       
-                      {columns.map(cat => 
+                      {filteredColumns.map(cat =>
                         cat.service_types.map(st => (
                           <td key={st.id} className={td('text-right', getCellColorClass(cat.category_id))}>
                             <HoursCell value={row.hours?.[st.id]} />

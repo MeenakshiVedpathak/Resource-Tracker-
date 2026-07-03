@@ -180,7 +180,7 @@ const Sidebar = () => {
               transition={{ duration: 0.15 }}
               className="font-bold text-lg text-white whitespace-nowrap overflow-hidden"
             >
-              Finance Portal
+              PMS Portal
             </motion.span>
           )}
         </AnimatePresence>

@@ -88,25 +88,25 @@ const TimesheetList = () => {
         <span className="tabular-nums text-sm">{info.getValue() ?? '—'}</span>
       ),
     }),
-    columnHelper.accessor('valid_rows', {
-      header: 'Valid',
-      size: 70,
-      cell: (info) => (
-        <span className="tabular-nums text-sm text-green-600 font-medium">{info.getValue() ?? '—'}</span>
-      ),
-    }),
-    columnHelper.accessor('error_rows', {
-      header: 'Errors',
-      size: 70,
-      cell: (info) => {
-        const v = info.getValue();
-        return (
-          <span className={`tabular-nums text-sm font-medium ${v > 0 ? 'text-destructive' : 'text-muted-foreground'}`}>
-            {v ?? '—'}
-          </span>
-        );
-      },
-    }),
+    // columnHelper.accessor('valid_rows', {
+    //   header: 'Valid',
+    //   size: 70,
+    //   cell: (info) => (
+    //     <span className="tabular-nums text-sm text-green-600 font-medium">{info.getValue() ?? '—'}</span>
+    //   ),
+    // }),
+    // columnHelper.accessor('error_rows', {
+    //   header: 'Errors',
+    //   size: 70,
+    //   cell: (info) => {
+    //     const v = info.getValue();
+    //     return (
+    //       <span className={`tabular-nums text-sm font-medium ${v > 0 ? 'text-destructive' : 'text-muted-foreground'}`}>
+    //         {v ?? '—'}
+    //       </span>
+    //     );
+    //   },
+    // }),
     columnHelper.accessor('total_employees', {
       header: 'Employees',
       size: 100,

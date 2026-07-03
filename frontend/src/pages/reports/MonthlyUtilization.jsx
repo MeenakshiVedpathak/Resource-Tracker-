@@ -3,6 +3,8 @@ import * as XLSX from 'xlsx';
 import { Download, Search } from 'lucide-react';
 import { useMonthlyUtilization } from '@/hooks/useReports';
 import { useActiveEmployees } from '@/hooks/useEmployees';
+import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
+import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
 import { formatMonthYear } from '@/utils/formatters';
 import PageHeader from '@/components/common/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -11,22 +13,10 @@ import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/utils/cn';
 
 const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-
-// Non-billable hour columns
-const NON_BILLABLE_COLS = [
-  { key: 'internal_support_hours', label: 'Internal Support' },
-  { key: 'team_management_hours',  label: 'Team Mgmt.' },
-];
-
-// Leave & other columns
-const OTHER_COLS = [
-  { key: 'leaves_hours', label: 'Leaves' },
-  { key: 'lnd_hours',    label: 'L&D' },
-  { key: 'others_hours', label: 'Others' },
-];
 
 const fh = (val) => {
   const n = Number(val);
@@ -41,15 +31,18 @@ const HoursCell = ({ value }) => {
     : <span className="text-muted-foreground/30">—</span>;
 };
 
-const exportToExcel = (records, month, year) => {
+const exportToExcel = (records, columns, month, year) => {
   const monthLabel = MONTH_NAMES[(month - 1)] ?? month;
+
+  const dynamicHeaders = columns.flatMap((cat) =>
+    cat.service_types.map((st) => `${st.name} (hrs)`)
+  );
 
   const header = [
     'Sr. No.', 'Name', 'Designation', 'Total Exp', 'Co. Exp',
     'Monthly Cap (hrs)', 'Billing Cap (hrs)', 'Client(s)',
-    'Internal Support (hrs)', 'Team Mgmt. (hrs)',
-    'Leaves (hrs)', 'L&D (hrs)', 'Others (hrs)',
-    'Billable Total (hrs)', 'Non-Billable Total (hrs)', 'Total Utilization excl. Leaves (hrs)',
+    ...dynamicHeaders,
+    'Billable Total (hrs)', 'Non-Billable Total (hrs)', 'Leaves (hrs)', 'Total (hrs)', 'Total Utilization (hrs)',
   ];
 
   const dataRows = records.map((r, i) => [
@@ -61,14 +54,12 @@ const exportToExcel = (records, month, year) => {
     r.monthly_capacity ?? '',
     r.monthly_billing_capacity ?? '',
     r.clients ?? '',
-    r.internal_support_hours ?? 0,
-    r.team_management_hours ?? 0,
-    r.leaves_hours ?? 0,
-    r.lnd_hours ?? 0,
-    r.others_hours ?? 0,
+    ...columns.flatMap((cat) => cat.service_types.map((st) => r.hours?.[st.id] ?? 0)),
     r.billable_total ?? 0,
     r.non_billable_total ?? 0,
-    r.total_utilization_excl_leaves_pct ?? 0,
+    r.leaves_hours ?? 0,
+    r.total_hours ?? 0,
+    r.total_utilization ?? 0,
   ]);
 
   const ws = XLSX.utils.aoa_to_sheet([header, ...dataRows]);
@@ -83,6 +74,16 @@ const th = (...cls) =>
 const td = (...cls) =>
   cn('px-2.5 py-2 text-xs border-r border-border last:border-r-0', ...cls);
 
+const CATEGORY_STYLES = {
+  billable:     { header: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400', cell: 'bg-emerald-500/[0.02]' },
+  'non-billable': { header: 'bg-orange-500/10 text-orange-700 dark:text-orange-400', cell: 'bg-orange-500/[0.02]' },
+};
+
+function getCategoryStyle(name = '') {
+  const key = name.toLowerCase().replace(/\s+/g, '-');
+  return CATEGORY_STYLES[key] ?? { header: '', cell: '' };
+}
+
 // ─── component ───────────────────────────────────────────────────────────────
 const MonthlyUtilization = () => {
   const [monthYear, setMonthYear] = useState({
@@ -90,18 +91,24 @@ const MonthlyUtilization = () => {
     year: new Date().getFullYear(),
   });
   const [employeeId, setEmployeeId] = useState('all');
+  const [serviceTypeId, setServiceTypeId] = useState('all');
+  const [serviceCategoryId, setServiceCategoryId] = useState('all');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
 
-  const { data: activeEmployees = [] } = useActiveEmployees();
+  const { data: activeEmployees = [] }         = useActiveEmployees();
+  const { data: activeServiceTypes = [] }      = useActiveServiceTypes();
+  const { data: activeServiceCategories = [] } = useActiveServiceCategories();
 
   const enabled = !!(monthYear?.year >= 2000 && monthYear?.year <= 2100);
 
   const params = enabled ? {
     month: monthYear.month,
     year:  monthYear.year,
-    ...(employeeId !== 'all' && { employeeId }),
+    ...(employeeId !== 'all'        && { employeeId }),
+    ...(serviceTypeId !== 'all'     && { serviceTypeId }),
+    ...(serviceCategoryId !== 'all' && { serviceCategoryId }),
     page,
     limit,
     ...(search.trim() && { search: search.trim() }),
@@ -109,7 +116,7 @@ const MonthlyUtilization = () => {
 
   const { data, isPending } = useMonthlyUtilization(params);
 
-  // data.data = { records: [...], summary: {...} }
+  const columns = Array.isArray(data?.data?.columns) ? data.data.columns : [];
   const records = Array.isArray(data?.data?.records) ? data.data.records : [];
   const meta    = data?.meta    ?? {};
   const summary = data?.data?.summary ?? {};
@@ -118,7 +125,6 @@ const MonthlyUtilization = () => {
 
   const handleSearchChange = (e) => { setSearch(e.target.value); setPage(1); };
 
-  // Total columns: 8 fixed + 2 non-billable + 3 other + 3 summary = 16
   return (
     <div>
       <PageHeader
@@ -126,7 +132,7 @@ const MonthlyUtilization = () => {
         description="Employee utilization summary for a selected month"
         actions={
           records.length > 0 ? (
-            <Button variant="outline" size="sm" onClick={() => exportToExcel(records, monthYear?.month, monthYear?.year)}>
+            <Button variant="outline" size="sm" onClick={() => exportToExcel(records, columns, monthYear?.month, monthYear?.year)}>
               <Download className="mr-1.5 h-4 w-4" />
               Export Excel
             </Button>
@@ -146,15 +152,12 @@ const MonthlyUtilization = () => {
           />
         </div>
 
-        <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
+        <div className="flex flex-col gap-1.5 flex-1 min-w-[180px]">
           <Label className="text-xs font-medium">Employee</Label>
           <SearchableSelect
             options={[
               { label: "All Employees", value: "all" },
-              ...activeEmployees.map((e) => ({
-                label: e.full_name,
-                value: String(e.id)
-              }))
+              ...activeEmployees.map((e) => ({ label: e.full_name, value: String(e.id) }))
             ]}
             value={employeeId}
             onValueChange={(v) => { setEmployeeId(v); setPage(1); }}
@@ -164,7 +167,37 @@ const MonthlyUtilization = () => {
           />
         </div>
 
-        <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
+        <div className="flex flex-col gap-1.5 flex-1 min-w-[180px]">
+          <Label className="text-xs font-medium">Service Category</Label>
+          <SearchableSelect
+            options={[
+              { label: "All Categories", value: "all" },
+              ...activeServiceCategories.map((sc) => ({ label: sc.name, value: String(sc.id) }))
+            ]}
+            value={serviceCategoryId}
+            onValueChange={(v) => { setServiceCategoryId(v); setPage(1); }}
+            placeholder="All Categories"
+            searchPlaceholder="Search category..."
+            className="h-9 text-sm"
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5 flex-1 min-w-[180px]">
+          <Label className="text-xs font-medium">Service Type</Label>
+          <SearchableSelect
+            options={[
+              { label: "All Service Types", value: "all" },
+              ...activeServiceTypes.map((st) => ({ label: st.service_type_name, value: String(st.id) }))
+            ]}
+            value={serviceTypeId}
+            onValueChange={(v) => { setServiceTypeId(v); setPage(1); }}
+            placeholder="All Service Types"
+            searchPlaceholder="Search service type..."
+            className="h-9 text-sm"
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5 flex-1 min-w-[180px]">
           <Label className="text-xs font-medium">Search Employee</Label>
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
@@ -172,7 +205,7 @@ const MonthlyUtilization = () => {
               placeholder="Name…"
               value={search}
               onChange={handleSearchChange}
-              className="h-9 pl-8 sm: text-sm w-full"
+              className="h-9 pl-8 sm:text-sm w-full"
               disabled={!enabled}
             />
           </div>
@@ -214,6 +247,12 @@ const MonthlyUtilization = () => {
                 <span className="font-semibold tabular-nums">{Number(summary.leaves_hours).toFixed(1)} hrs</span>
               </div>
             )}
+            {summary.total_hours != null && (
+              <div className="rounded-md border bg-blue-500/10 px-3 py-1.5 text-xs text-blue-700 dark:text-blue-400">
+                Total Hours&nbsp;
+                <span className="font-semibold tabular-nums">{Number(summary.total_hours).toFixed(1)} hrs</span>
+              </div>
+            )}
           </div>
 
           {/* ── Table ── */}
@@ -226,13 +265,19 @@ const MonthlyUtilization = () => {
                   <tr className="border-b bg-muted/60">
                     <th colSpan={2} className="sticky left-0 z-30 bg-muted" />
                     <th colSpan={6} className="border-r border-border" />
-                    <th colSpan={2} className="px-3 py-1.5 text-center text-xs font-semibold border-r border-border bg-orange-500/10 text-orange-700 dark:text-orange-400">
-                      Non-Billable
-                    </th>
-                    <th colSpan={3} className="px-3 py-1.5 text-center text-xs font-semibold border-r border-border text-muted-foreground">
-                      Leave &amp; Others
-                    </th>
-                    <th colSpan={3} className="px-3 py-1.5 text-center text-xs font-semibold bg-blue-500/10 text-blue-700 dark:text-blue-400">
+                    {columns.map((cat) => {
+                      const style = getCategoryStyle(cat.category_name);
+                      return (
+                        <th
+                          key={cat.category_id}
+                          colSpan={cat.service_types.length}
+                          className={cn('px-3 py-1.5 text-center text-xs font-semibold border-r border-border', style.header)}
+                        >
+                          {cat.category_name}
+                        </th>
+                      );
+                    })}
+                    <th colSpan={5} className="px-3 py-1.5 text-center text-xs font-semibold bg-blue-500/10 text-blue-700 dark:text-blue-400">
                       Summary
                     </th>
                   </tr>
@@ -247,15 +292,19 @@ const MonthlyUtilization = () => {
                     <th className={th('w-[100px] text-right')}>Cap. (hrs)</th>
                     <th className={th('w-[100px] text-right')}>Bill. Cap.</th>
                     <th className={th('min-w-[180px]')}>Client(s)</th>
-                    {NON_BILLABLE_COLS.map((c) => (
-                      <th key={c.key} className={th('w-[130px] text-right bg-orange-500/[0.04]')}>{c.label}</th>
-                    ))}
-                    {OTHER_COLS.map((c) => (
-                      <th key={c.key} className={th('w-[90px] text-right')}>{c.label}</th>
-                    ))}
+                    {columns.flatMap((cat) => {
+                      const style = getCategoryStyle(cat.category_name);
+                      return cat.service_types.map((st) => (
+                        <th key={st.id} className={th('w-[110px] text-right', style.cell)}>
+                          {st.name}
+                        </th>
+                      ));
+                    })}
                     <th className={th('w-[120px] text-right bg-blue-500/[0.04] font-bold')}>Billable (hrs)</th>
-                    <th className={th('w-[120px] text-right bg-blue-500/[0.04] font-bold')}>Non-Bill. (hrs)</th>
-                    <th className={th('w-[180px] text-right bg-blue-500/[0.04] font-bold border-r-0')}>Total Utilization (excl. Leaves)</th>
+                    <th className={th('w-[130px] text-right bg-blue-500/[0.04] font-bold')}>Non-Bill. (hrs)</th>
+                    <th className={th('w-[90px] text-right bg-blue-500/[0.04]')}>Leaves (hrs)</th>
+                    <th className={th('w-[90px] text-right bg-blue-500/[0.04]')}>Total (hrs)</th>
+                    <th className={th('w-[170px] text-right bg-blue-500/[0.04] font-bold border-r-0')}>Total Utilization (hrs)</th>
                   </tr>
                 </thead>
 
@@ -279,18 +328,15 @@ const MonthlyUtilization = () => {
                       <td className={td('text-right tabular-nums')}>{row.monthly_capacity ?? '—'}</td>
                       <td className={td('text-right tabular-nums')}>{row.monthly_billing_capacity ?? '—'}</td>
                       <td className={td('max-w-[200px] truncate')} title={row.clients}>{row.clients || <span className="text-muted-foreground">—</span>}</td>
-                      {/* Non-Billable */}
-                      {NON_BILLABLE_COLS.map((c) => (
-                        <td key={c.key} className={td('text-right bg-orange-500/[0.02]')}>
-                          <HoursCell value={row[c.key]} />
-                        </td>
-                      ))}
-                      {/* Leave & Others */}
-                      {OTHER_COLS.map((c) => (
-                        <td key={c.key} className={td('text-right')}>
-                          <HoursCell value={row[c.key]} />
-                        </td>
-                      ))}
+                      {/* Dynamic service type columns */}
+                      {columns.flatMap((cat) => {
+                        const style = getCategoryStyle(cat.category_name);
+                        return cat.service_types.map((st) => (
+                          <td key={st.id} className={td('text-right', style.cell)}>
+                            <HoursCell value={row.hours?.[st.id]} />
+                          </td>
+                        ));
+                      })}
                       {/* Summary */}
                       <td className={td('text-right font-semibold bg-blue-500/[0.02]')}>
                         <HoursCell value={row.billable_total} />
@@ -298,8 +344,14 @@ const MonthlyUtilization = () => {
                       <td className={td('text-right font-semibold bg-blue-500/[0.02]')}>
                         <HoursCell value={row.non_billable_total} />
                       </td>
+                      <td className={td('text-right bg-blue-500/[0.02]')}>
+                        <HoursCell value={row.leaves_hours} />
+                      </td>
+                      <td className={td('text-right bg-blue-500/[0.02]')}>
+                        <HoursCell value={row.total_hours} />
+                      </td>
                       <td className={td('text-right font-semibold bg-blue-500/[0.02] border-r-0')}>
-                        <HoursCell value={row.total_utilization_excl_leaves_pct} />
+                        <HoursCell value={row.total_utilization} />
                       </td>
                     </tr>
                   ))}
