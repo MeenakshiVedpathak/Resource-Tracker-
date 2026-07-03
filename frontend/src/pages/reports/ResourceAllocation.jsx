@@ -6,6 +6,8 @@ import { useResourceAllocationReport } from '@/hooks/useReports';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useActiveEmployees } from '@/hooks/useEmployees';
 import { useActiveServicePOs } from '@/hooks/useServicePOs';
+import { useActiveClients } from '@/hooks/useClients';
+import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
 import { formatHours } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
@@ -13,24 +15,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SearchableSelect } from '@/components/ui/searchable-select';
+import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import { cn } from '@/utils/cn';
 
 const columnHelper = createColumnHelper();
 
-const MONTH_OPTIONS = [
-  { value: '1', label: 'January' },
-  { value: '2', label: 'February' },
-  { value: '3', label: 'March' },
-  { value: '4', label: 'April' },
-  { value: '5', label: 'May' },
-  { value: '6', label: 'June' },
-  { value: '7', label: 'July' },
-  { value: '8', label: 'August' },
-  { value: '9', label: 'September' },
-  { value: '10', label: 'October' },
-  { value: '11', label: 'November' },
-  { value: '12', label: 'December' },
-];
 
 const exportToExcel = (rows) => {
   const header = ['Code', 'Employee', 'Designation', 'Client', 'Service PO', 'PO Code', 'Service Type', 'PO Status', 'Billable', 'Hours Logged'];
@@ -130,14 +119,28 @@ const columns = [
     size: 150,
     cell: (info) => {
       const v = info.getValue();
+      const PO_STATUS_COLORS = {
+        'in-progress': 'bg-blue-500/10 text-blue-700 dark:text-blue-400',
+        completed:     'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
+        'on-hold':     'bg-amber-500/10 text-amber-700 dark:text-amber-400',
+        pending:       'bg-violet-500/10 text-violet-700 dark:text-violet-400',
+        cancelled:     'bg-red-500/10 text-red-700 dark:text-red-400',
+        closed:        'bg-muted text-muted-foreground',
+      };
+      const PO_STATUS_LABELS = {
+        'in-progress': 'In Progress',
+        completed:     'Completed',
+        'on-hold':     'On Hold',
+        pending:       'Pending',
+        cancelled:     'Cancelled',
+        closed:        'Closed',
+      };
       return v ? (
         <span className={cn(
-          'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium capitalize',
-          v === 'active'
-            ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
-            : 'bg-muted text-muted-foreground'
+          'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium',
+          PO_STATUS_COLORS[v] ?? 'bg-muted text-muted-foreground'
         )}>
-          {v}
+          {PO_STATUS_LABELS[v] ?? v}
         </span>
       ) : <span className="text-muted-foreground text-xs">—</span>;
     },
@@ -170,10 +173,16 @@ const columns = [
 const now = new Date();
 
 const ResourceAllocation = () => {
-  const [month, setMonth] = useState(String(now.getMonth() + 1));
-  const [year, setYear] = useState(String(now.getFullYear()));
+  const [monthYear, setMonthYear] = useState({
+    month: now.getMonth() + 1,
+    year: now.getFullYear(),
+  });
   const [employeeId, setEmployeeId] = useState('all');
   const [poId, setPoId] = useState('all');
+  const [clientId, setClientId] = useState('all');
+  const [billable, setBillable] = useState('all');
+  const [serviceTypeId, setServiceTypeId] = useState('all');
+  const [poStatus, setPoStatus] = useState('all');
 
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -182,15 +191,19 @@ const ResourceAllocation = () => {
   const debouncedSearch = useDebounce(search, 400);
   const { data: activeEmployees = [] } = useActiveEmployees();
   const { data: activePOs = [] } = useActiveServicePOs();
+  const { data: activeClients = [] } = useActiveClients();
+  const { data: activeServiceTypes = [] } = useActiveServiceTypes();
 
   const params = {
     page,
     limit,
-    ...(month && month !== 'all' && { month: Number(month) }),
-    ...(year && year !== 'all' && { year: Number(year) }),
+    ...(monthYear && { month: monthYear.month, year: monthYear.year }),
     ...(employeeId !== 'all' && { employeeId }),
     ...(poId !== 'all' && { poId }),
-
+    ...(clientId !== 'all' && { clientId }),
+    ...(billable !== 'all' && { isBillable: billable === 'yes' }),
+    ...(poStatus !== 'all' && { status: poStatus }),
+    ...(serviceTypeId !== 'all' && { serviceTypeId }),
     ...(debouncedSearch && { search: debouncedSearch }),
   };
 
@@ -214,32 +227,30 @@ const ResourceAllocation = () => {
       {/* Filter bar */}
       <div className="mb-5 flex flex-wrap items-end gap-4 w-full">
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">Month</Label>
-          <SearchableSelect showSearch={false}
-            options={MONTH_OPTIONS}
-            value={month}
-            onValueChange={(v) => { setMonth(v); setPage(1); }}
+          <Label className="text-xs">Month &amp; Year</Label>
+          <MonthYearPicker
+            value={monthYear}
+            onChange={(val) => { setMonthYear(val); setPage(1); }}
             placeholder="All months"
-            searchPlaceholder="Search month..."
-            className="h-9 w-36 text-sm"
+            className="w-44"
           />
         </div>
 
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">Year</Label>
-          <SearchableSelect showSearch={false}
+        <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
+          <Label className="text-xs">Client</Label>
+          <SearchableSelect
             options={[
-              { label: "All", value: "all" },
-              ...Array.from({ length: 10 }, (_, i) => {
-                const y = new Date().getFullYear() - 5 + i;
-                return { label: String(y), value: String(y) };
-              })
+              { label: "All Clients", value: "all" },
+              ...activeClients.map((c) => ({
+                label: c.client_name,
+                value: String(c.id)
+              }))
             ]}
-            value={year}
-            onValueChange={(v) => { setYear(v); setPage(1); }}
-            placeholder="Year"
-            searchPlaceholder="Search year..."
-            className="h-9 w-24 text-sm"
+            value={clientId}
+            onValueChange={(v) => { setClientId(v); setPage(1); }}
+            placeholder="All Clients"
+            searchPlaceholder="Search client..."
+            className="h-9 text-sm"
           />
         </div>
 
@@ -279,7 +290,57 @@ const ResourceAllocation = () => {
           />
         </div>
 
+        <div className="flex flex-col gap-1.5 flex-1 min-w-[180px]">
+          <Label className="text-xs">Service Type</Label>
+          <SearchableSelect
+            options={[
+              { label: "All Service Types", value: "all" },
+              ...activeServiceTypes.map((st) => ({
+                label: st.service_type_name,
+                value: String(st.id)
+              }))
+            ]}
+            value={serviceTypeId}
+            onValueChange={(v) => { setServiceTypeId(v); setPage(1); }}
+            placeholder="All Service Types"
+            searchPlaceholder="Search type..."
+            className="h-9 text-sm"
+          />
+        </div>
 
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">PO Status</Label>
+          <SearchableSelect showSearch={false}
+            options={[
+              { label: "All status", value: "all" },
+              { label: "In Progress", value: "in-progress" },
+              { label: "Completed", value: "completed" },
+              { label: "On Hold", value: "on-hold" },
+              { label: "Pending", value: "pending" },
+              { label: "Cancelled", value: "cancelled" },
+              { label: "Closed", value: "closed" },
+            ]}
+            value={poStatus}
+            onValueChange={(v) => { setPoStatus(v); setPage(1); }}
+            placeholder="All status"
+            className="h-9 w-36 text-sm"
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Billable</Label>
+          <SearchableSelect showSearch={false}
+            options={[
+              { label: "All", value: "all" },
+              { label: "Yes", value: "yes" },
+              { label: "No", value: "no" },
+            ]}
+            value={billable}
+            onValueChange={(v) => { setBillable(v); setPage(1); }}
+            placeholder="All"
+            className="h-9 w-28 text-sm"
+          />
+        </div>
 
         <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
           <Label className="text-xs">Search</Label>

@@ -107,6 +107,18 @@ const TimesheetList = () => {
         );
       },
     }),
+    columnHelper.accessor('total_employees', {
+      header: 'Employees',
+      size: 100,
+      cell: (info) => {
+        const v = info.getValue();
+        return (
+          <span className="tabular-nums text-sm font-medium text-blue-600">
+            {v ?? '—'}
+          </span>
+        );
+      },
+    }),
     columnHelper.accessor('created_at', {
       header: 'Imported At',
       size: 150,

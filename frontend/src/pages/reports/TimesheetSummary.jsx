@@ -6,6 +6,7 @@ import { useTimesheetSummary } from '@/hooks/useReports';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useActiveEmployees } from '@/hooks/useEmployees';
 import { useActiveServicePOs } from '@/hooks/useServicePOs';
+import { useActiveClients } from '@/hooks/useClients';
 import { formatDate, formatHours } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
@@ -126,6 +127,8 @@ const TimesheetSummary = () => {
   const [endDate, setEndDate] = useState('');
   const [employeeId, setEmployeeId] = useState('all');
   const [poId, setPoId] = useState('all');
+  const [clientId, setClientId] = useState('all');
+  const [billable, setBillable] = useState('all');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
@@ -133,6 +136,7 @@ const TimesheetSummary = () => {
   const debouncedSearch = useDebounce(search, 400);
   const { data: activeEmployees = [] } = useActiveEmployees();
   const { data: activePOs = [] } = useActiveServicePOs();
+  const { data: activeClients = [] } = useActiveClients();
 
   const params = {
     page,
@@ -141,6 +145,8 @@ const TimesheetSummary = () => {
     ...(endDate && { endDate }),
     ...(employeeId !== 'all' && { employeeId }),
     ...(poId !== 'all' && { poId }),
+    ...(clientId !== 'all' && { clientId }),
+    ...(billable !== 'all' && { isBillable: billable === 'yes' }),
     ...(debouncedSearch && { search: debouncedSearch }),
   };
 
@@ -218,6 +224,39 @@ const TimesheetSummary = () => {
             placeholder="All POs"
             searchPlaceholder="Search PO..."
             className="h-9 text-sm"
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
+          <Label className="text-xs">Client</Label>
+          <SearchableSelect
+            options={[
+              { label: "All Clients", value: "all" },
+              ...activeClients.map((c) => ({
+                label: c.client_name,
+                value: String(c.id)
+              }))
+            ]}
+            value={clientId}
+            onValueChange={(v) => { setClientId(v); setPage(1); }}
+            placeholder="All Clients"
+            searchPlaceholder="Search client..."
+            className="h-9 text-sm"
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Billable</Label>
+          <SearchableSelect showSearch={false}
+            options={[
+              { label: "All", value: "all" },
+              { label: "Yes", value: "yes" },
+              { label: "No", value: "no" },
+            ]}
+            value={billable}
+            onValueChange={(v) => { setBillable(v); setPage(1); }}
+            placeholder="All"
+            className="h-9 w-28 text-sm"
           />
         </div>
 

@@ -562,6 +562,7 @@ async function getResourceAllocation(filters) {
   const {
     employeeId,
     poId,
+    serviceTypeId,
     month,
     year,
     status,
@@ -590,6 +591,10 @@ async function getResourceAllocation(filters) {
   if (poId) {
     conditions.push('sp.id = :poId');
     replacements.poId = poId;
+  }
+  if (serviceTypeId) {
+    conditions.push('st.id = :serviceTypeId');
+    replacements.serviceTypeId = serviceTypeId;
   }
   if (status && status !== 'all') {
     conditions.push('sp.status = :status');

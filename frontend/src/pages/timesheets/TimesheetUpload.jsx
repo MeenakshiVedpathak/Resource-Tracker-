@@ -34,6 +34,7 @@ const TimesheetUpload = () => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [preview, setPreview] = useState(null); // { importId, valid_rows, error_rows }
+  const [removedDuplicates, setRemovedDuplicates] = useState(0);
   
   const currentDate = new Date();
   const month = location.state?.month || String(currentDate.getMonth() + 1);
@@ -43,7 +44,54 @@ const TimesheetUpload = () => {
 
   // ── Dropzone ────────────────────────────────────────────────────────────────
   const onDrop = useCallback((accepted) => {
-    if (accepted.length > 0) setSelectedFile(accepted[0]);
+    if (!accepted.length) return;
+    const file = accepted[0];
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const wb = XLSX.read(e.target.result, { type: 'array', cellDates: false });
+        let totalRemoved = 0;
+
+        wb.SheetNames.forEach((sheetName) => {
+          const ws = wb.Sheets[sheetName];
+          const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+          if (rows.length < 2) return;
+
+          const header = rows[0];
+          const dataRows = rows.slice(1);
+          const seen = new Set();
+          const deduped = dataRows.filter((row) => {
+            const key = row.join('|||');
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          });
+
+          totalRemoved += dataRows.length - deduped.length;
+
+          if (dataRows.length !== deduped.length) {
+            const newWs = XLSX.utils.aoa_to_sheet([header, ...deduped]);
+            wb.Sheets[sheetName] = newWs;
+          }
+        });
+
+        setRemovedDuplicates(totalRemoved);
+
+        if (totalRemoved > 0) {
+          const wbOut = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+          const blob = new Blob([wbOut], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+          const cleanFile = new File([blob], file.name, { type: blob.type });
+          setSelectedFile(cleanFile);
+        } else {
+          setSelectedFile(file);
+        }
+      } catch {
+        setRemovedDuplicates(0);
+        setSelectedFile(file);
+      }
+    };
+    reader.readAsArrayBuffer(file);
   }, []);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -124,6 +172,7 @@ const TimesheetUpload = () => {
     setStep(1);
     setSelectedFile(null);
     setPreview(null);
+    setRemovedDuplicates(0);
   };
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -205,12 +254,19 @@ const TimesheetUpload = () => {
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{selectedFile.name}</p>
-                  <p className="text-xs text-muted-foreground">{formatFileSize(selectedFile.size)}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs text-muted-foreground">{formatFileSize(selectedFile.size)}</p>
+                    {removedDuplicates > 0 && (
+                      <p className="text-xs font-medium text-amber-600">
+                        · {removedDuplicates} duplicate{removedDuplicates !== 1 ? 's' : ''} removed
+                      </p>
+                    )}
+                  </div>
                 </div>
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  onClick={() => setSelectedFile(null)}
+                  onClick={() => { setSelectedFile(null); setRemovedDuplicates(0); }}
                   title="Remove file"
                 >
                   <X className="h-4 w-4" />
@@ -243,6 +299,12 @@ const TimesheetUpload = () => {
               <div className="flex items-center gap-1.5 rounded-lg border bg-card px-3 py-2">
                 <span className="text-xs text-muted-foreground">Total rows:</span>
                 <span className="font-mono text-xs font-semibold">{preview.totalRows}</span>
+              </div>
+              <div className="flex items-center gap-1.5 rounded-lg border bg-card px-3 py-2">
+                <span className="text-xs text-muted-foreground">Employees:</span>
+                <span className="font-mono text-xs font-semibold">
+                  {new Set(preview.valid_rows.map(r => r.employeeId ?? r.resourceName).filter(Boolean)).size}
+                </span>
               </div>
               <Badge className="gap-1.5 bg-green-100 text-green-700 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400">
                 <CheckCircle2 className="h-3.5 w-3.5" />

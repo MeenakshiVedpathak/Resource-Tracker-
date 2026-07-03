@@ -5,6 +5,7 @@ import { Download, Search } from 'lucide-react';
 import { useSubProjectHours } from '@/hooks/useReports';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useActiveServicePOs } from '@/hooks/useServicePOs';
+import { useActiveClients } from '@/hooks/useClients';
 import { formatHours, formatDate } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
@@ -135,6 +136,8 @@ const columns = [
 
 const SubProjectHours = () => {
   const [poId, setPoId] = useState('all');
+  const [clientId, setClientId] = useState('all');
+  const [status, setStatus] = useState('all');
 
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -142,9 +145,12 @@ const SubProjectHours = () => {
 
   const debouncedSearch = useDebounce(search, 400);
   const { data: activePOs = [] } = useActiveServicePOs();
+  const { data: activeClients = [] } = useActiveClients();
 
   const params = {
     ...(poId !== 'all' && { poId }),
+    ...(clientId !== 'all' && { clientId }),
+    ...(status !== 'all' && { status }),
 
     page,
     limit,
@@ -173,6 +179,24 @@ const SubProjectHours = () => {
       {/* Filter bar */}
       <div className="mb-5 flex flex-wrap items-end gap-4 w-full">
         <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
+          <Label className="text-xs">Client</Label>
+          <SearchableSelect
+            options={[
+              { label: "All Clients", value: "all" },
+              ...activeClients.map((c) => ({
+                label: c.client_name,
+                value: String(c.id)
+              }))
+            ]}
+            value={clientId}
+            onValueChange={(v) => { setClientId(v); setPage(1); }}
+            placeholder="All Clients"
+            searchPlaceholder="Search client..."
+            className="h-9 text-sm"
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
           <Label className="text-xs">Service PO</Label>
           <SearchableSelect
             options={[
@@ -190,7 +214,22 @@ const SubProjectHours = () => {
           />
         </div>
 
-
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Status</Label>
+          <SearchableSelect showSearch={false}
+            options={[
+              { label: "All Status", value: "all" },
+              { label: "Active", value: "active" },
+              { label: "Completed", value: "completed" },
+              { label: "On Hold", value: "on_hold" },
+              { label: "Cancelled", value: "cancelled" },
+            ]}
+            value={status}
+            onValueChange={(v) => { setStatus(v); setPage(1); }}
+            placeholder="All Status"
+            className="h-9 w-36 text-sm"
+          />
+        </div>
 
         <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
           <Label className="text-xs">Search</Label>

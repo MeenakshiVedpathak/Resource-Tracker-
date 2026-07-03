@@ -13,24 +13,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { SearchableSelect } from '@/components/ui/searchable-select';
+import { MonthYearPicker } from '@/components/ui/month-year-picker';
 
 const columnHelper = createColumnHelper();
 
-const MONTH_OPTIONS = [
-  { value: 'all', label: 'All months' },
-  { value: '1', label: 'January' },
-  { value: '2', label: 'February' },
-  { value: '3', label: 'March' },
-  { value: '4', label: 'April' },
-  { value: '5', label: 'May' },
-  { value: '6', label: 'June' },
-  { value: '7', label: 'July' },
-  { value: '8', label: 'August' },
-  { value: '9', label: 'September' },
-  { value: '10', label: 'October' },
-  { value: '11', label: 'November' },
-  { value: '12', label: 'December' },
-];
 
 const exportToExcel = (rows) => {
   const header = ['Code', 'Employee', 'Designation', 'Month / Year', 'Salary Cost', 'Salary %', 'Ops Cost', 'Ops %', 'Billable Cost', 'Billable %', 'Total Cost'];
@@ -144,8 +130,10 @@ const columns = [
 const now = new Date();
 
 const OperationalCost = () => {
-  const [year, setYear] = useState(String(now.getFullYear()));
-  const [month, setMonth] = useState(String(now.getMonth() + 1));
+  const [monthYear, setMonthYear] = useState({
+    month: now.getMonth() + 1,
+    year: now.getFullYear(),
+  });
   const [employeeId, setEmployeeId] = useState('all');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -157,8 +145,7 @@ const OperationalCost = () => {
   const params = {
     page,
     limit,
-    ...(year && { year }),
-    ...(month && month !== 'all' && { month }),
+    ...(monthYear && { month: monthYear.month, year: monthYear.year }),
     ...(employeeId !== 'all' && { employeeId }),
     ...(debouncedSearch && { search: debouncedSearch }),
   };
@@ -185,29 +172,12 @@ const OperationalCost = () => {
       {/* Filter bar */}
       <div className="mb-5 flex flex-wrap items-end gap-4 w-full">
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">Year</Label>
-          <SearchableSelect showSearch={false}
-            options={Array.from({ length: 10 }, (_, i) => {
-              const y = new Date().getFullYear() - 5 + i;
-              return { label: String(y), value: String(y) };
-            })}
-            value={year}
-            onValueChange={(v) => { setYear(v); setPage(1); }}
-            placeholder="Year"
-            searchPlaceholder="Search year..."
-            className="h-9 w-24 text-sm"
-          />
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">Month</Label>
-          <SearchableSelect showSearch={false}
-            options={MONTH_OPTIONS}
-            value={month}
-            onValueChange={(v) => { setMonth(v); setPage(1); }}
-            placeholder="Select month"
-            searchPlaceholder="Search month..."
-            className="h-9 w-36 text-sm"
+          <Label className="text-xs">Month &amp; Year</Label>
+          <MonthYearPicker
+            value={monthYear}
+            onChange={(val) => { setMonthYear(val); setPage(1); }}
+            placeholder="All months"
+            className="w-44"
           />
         </div>
 

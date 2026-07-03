@@ -180,6 +180,10 @@ const TimesheetImportDetail = () => {
                 <span className="text-muted-foreground"> / {importRecord.total_rows}</span>
               </p>
             </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Employees</p>
+              <p className="text-sm font-semibold tabular-nums">{employees.length}</p>
+            </div>
           </CardContent>
         </Card>
       )}

@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useNavigate, Outlet } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Plus, Pencil, Trash2, Calculator, Upload, Search } from 'lucide-react';
+import * as XLSX from 'xlsx';
+import { Pencil, Trash2, Calculator, Download, Upload, Search } from 'lucide-react';
 import { useMonthlyCosts, useDeleteMonthlyCost, useCalculateMonthlyCosts } from '@/hooks/useMonthlyCosts';
 import { useAuth } from '@/hooks/useAuth';
 import { useNotification } from '@/hooks/useNotification';
@@ -15,14 +16,7 @@ import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { SearchableSelect } from '@/components/ui/searchable-select';
+import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import {
   Dialog,
   DialogContent,
@@ -34,20 +28,6 @@ import {
 
 const columnHelper = createColumnHelper();
 
-const MONTH_OPTIONS = [
-  { value: '1', label: 'January' },
-  { value: '2', label: 'February' },
-  { value: '3', label: 'March' },
-  { value: '4', label: 'April' },
-  { value: '5', label: 'May' },
-  { value: '6', label: 'June' },
-  { value: '7', label: 'July' },
-  { value: '8', label: 'August' },
-  { value: '9', label: 'September' },
-  { value: '10', label: 'October' },
-  { value: '11', label: 'November' },
-  { value: '12', label: 'December' },
-];
 
 const MonthlyCostList = () => {
   const navigate = useNavigate();
@@ -57,14 +37,18 @@ const MonthlyCostList = () => {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [search, setSearch] = useState('');
-  const [monthFilter, setMonthFilter] = useState(String(new Date().getMonth() + 1));
-  const [yearFilter, setYearFilter] = useState(String(new Date().getFullYear()));
+  const [monthYearFilter, setMonthYearFilter] = useState({
+    month: new Date().getMonth() + 1,
+    year: new Date().getFullYear(),
+  });
   const [deleteTarget, setDeleteTarget] = useState(null);
 
   // Calculate dialog state
   const [calcOpen, setCalcOpen] = useState(false);
-  const [calcMonth, setCalcMonth] = useState(String(new Date().getMonth() + 1));
-  const [calcYear, setCalcYear] = useState(String(new Date().getFullYear()));
+  const [calcMonthYear, setCalcMonthYear] = useState({
+    month: new Date().getMonth() + 1,
+    year: new Date().getFullYear(),
+  });
 
   const debouncedSearch = useDebounce(search, 400);
   const canManage = hasRole('Finance', 'Management');
@@ -72,8 +56,8 @@ const MonthlyCostList = () => {
   const params = {
     page,
     limit,
-    ...(monthFilter !== 'all' && { month: Number(monthFilter) }),
-    ...(yearFilter && { year: Number(yearFilter) }),
+    ...(monthYearFilter && { month: monthYearFilter.month }),
+    ...(monthYearFilter && { year: monthYearFilter.year }),
     ...(debouncedSearch && { search: debouncedSearch }),
   };
 
@@ -180,12 +164,24 @@ const MonthlyCostList = () => {
     });
   };
 
+  const handleDownloadSample = () => {
+    const wsData = [
+      ['Name', 'Month Year', 'Salary Cost', 'Ops Cost', 'Total Cost', 'Billable Cost'],
+      ['Rajdoot Herlekar', 'Jul 2026', 284.09, 0, 422.88, 0],
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    ws['!cols'] = [{ wch: 25 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 14 }, { wch: 14 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'MonthlyCosts');
+    XLSX.writeFile(wb, 'MonthlyCost_Sample.xlsx');
+  };
+
   const handleCalculate = () => {
     calculateMutation.mutate(
-      { month: Number(calcMonth), year: Number(calcYear) },
+      { month: calcMonthYear.month, year: calcMonthYear.year },
       {
         onSuccess: () => {
-          success(`Monthly costs calculated for ${formatMonthYear(Number(calcMonth), Number(calcYear))}.`);
+          success(`Monthly costs calculated for ${formatMonthYear(calcMonthYear.month, calcMonthYear.year)}.`);
           setCalcOpen(false);
         },
         onError: (err) => showError(extractApiError(err)),
@@ -212,14 +208,12 @@ const MonthlyCostList = () => {
                 }}
               />
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCalcOpen(true)}
-            >
-              <Calculator className="mr-1.5 h-4 w-4" />
-              Calculate Month
+           
+            <Button variant="outline" size="sm" onClick={handleDownloadSample}>
+              <Download className="mr-1.5 h-4 w-4" />
+              Download Sample
             </Button>
+
             {canManage && (
               <Button
                 variant="outline"
@@ -230,12 +224,7 @@ const MonthlyCostList = () => {
                 Import Excel
               </Button>
             )}
-            {canManage && (
-              <Button size="sm" onClick={() => navigate(ROUTES.MONTHLY_COST_NEW)}>
-                <Plus className="mr-1.5 h-4 w-4" />
-                Add Monthly Cost
-              </Button>
-            )}
+           
           </div>
         }
       />
@@ -245,37 +234,15 @@ const MonthlyCostList = () => {
         data={records}
         isLoading={isPending}
         toolbar={
-          <>
-            <SearchableSelect showSearch={false}
-              options={[
-                { label: "All months", value: "all" },
-                ...MONTH_OPTIONS
-              ]}
-              value={monthFilter}
-              onValueChange={(v) => {
-                setMonthFilter(v);
-                setPage(1);
-              }}
-              placeholder="All months"
-              searchPlaceholder="Search month..."
-              className="h-9 w-36 text-sm bg-white"
-            />
-
-            <SearchableSelect showSearch={false}
-              options={Array.from({ length: 10 }, (_, i) => {
-                const y = new Date().getFullYear() - 5 + i;
-                return { label: String(y), value: String(y) };
-              })}
-              value={yearFilter}
-              onValueChange={(v) => {
-                setYearFilter(v);
-                setPage(1);
-              }}
-              placeholder="Year"
-              searchPlaceholder="Search year..."
-              className="h-9 w-24 text-sm bg-white"
-            />
-          </>
+          <MonthYearPicker
+            value={monthYearFilter}
+            onChange={(val) => {
+              setMonthYearFilter(val);
+              setPage(1);
+            }}
+            placeholder="All months"
+            className="w-44"
+          />
         }
         pagination={
           meta.total != null
@@ -314,33 +281,14 @@ const MonthlyCostList = () => {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid grid-cols-2 gap-4 py-2">
-            <div className="space-y-2">
-              <Label htmlFor="calc-month">Month</Label>
-              <SearchableSelect showSearch={false}
-                options={MONTH_OPTIONS}
-                value={calcMonth}
-                onValueChange={setCalcMonth}
-                placeholder="Select month"
-                searchPlaceholder="Search month..."
-                className="w-full"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="calc-year">Year</Label>
-              <SearchableSelect showSearch={false}
-                options={Array.from({ length: 10 }, (_, i) => {
-                  const y = new Date().getFullYear() - 5 + i;
-                  return { label: String(y), value: String(y) };
-                })}
-                value={calcYear}
-                onValueChange={setCalcYear}
-                placeholder="Year"
-                searchPlaceholder="Search year..."
-                className="w-full"
-              />
-            </div>
+          <div className="py-2">
+            <Label className="mb-2 block">Month &amp; Year</Label>
+            <MonthYearPicker
+              value={calcMonthYear}
+              onChange={(val) => val && setCalcMonthYear(val)}
+              clearable={false}
+              className="w-full"
+            />
           </div>
 
           <DialogFooter className="gap-2">
@@ -355,7 +303,7 @@ const MonthlyCostList = () => {
             <Button
               size="sm"
               onClick={handleCalculate}
-              disabled={calculateMutation.isPending || !calcMonth || !calcYear}
+              disabled={calculateMutation.isPending || !calcMonthYear}
             >
               <Calculator className="mr-1.5 h-4 w-4" />
               {calculateMutation.isPending ? 'Calculating…' : 'Calculate'}

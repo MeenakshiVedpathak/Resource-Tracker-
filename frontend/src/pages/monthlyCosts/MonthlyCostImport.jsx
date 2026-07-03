@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useDropzone } from 'react-dropzone';
 import * as XLSX from 'xlsx';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Upload, FileSpreadsheet, CheckCircle2, XCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { ArrowLeft, Download, Upload, FileSpreadsheet, CheckCircle2, XCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { useImportMonthlyCosts } from '@/hooks/useMonthlyCosts';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
@@ -121,6 +121,26 @@ const MonthlyCostImport = () => {
   const [fileName, setFileName] = useState('');
   const [importDone, setImportDone] = useState(false);
   const [importResult, setImportResult] = useState(null);
+  const [removedDuplicates, setRemovedDuplicates] = useState(0);
+
+  const handleDownloadSample = () => {
+    const wsData = [
+      ['Name', 'Month Year', 'Salary Cost', 'Ops Cost', 'Total Cost', 'Billable Cost'],
+      ['Rajdoot Herlekar', 'Jul 2026', 284.09, 0, 422.88, 0],
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    ws['!cols'] = [
+      { wch: 25 },
+      { wch: 12 },
+      { wch: 14 },
+      { wch: 12 },
+      { wch: 14 },
+      { wch: 14 },
+    ];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'MonthlyCosts');
+    XLSX.writeFile(wb, 'MonthlyCost_Sample.xlsx');
+  };
 
   const parseFile = useCallback((file) => {
     const reader = new FileReader();
@@ -159,7 +179,24 @@ const MonthlyCostImport = () => {
           );
         }).filter((r) => r.employee_name || r.monthly_salary || r.month);
 
-        setRows(parsed);
+        const seen = new Set();
+        const deduped = parsed.filter((r) => {
+          const key = [
+            r.employee_name,
+            r.month,
+            r.year,
+            r.monthly_salary,
+            r.ops_cost_per_employee,
+            r.total_cost,
+            r.billable_cost,
+          ].join('|');
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+
+        setRemovedDuplicates(parsed.length - deduped.length);
+        setRows(deduped);
         setFile(file);
         setFileName(file.name);
         setImportDone(false);
@@ -191,11 +228,23 @@ const MonthlyCostImport = () => {
   const handleImport = () => {
     importMutation.mutate(file, {
       onSuccess: (res) => {
-        const imported = res?.data?.imported ?? res?.imported ?? validRows.length;
-        const skipped  = res?.data?.skipped  ?? res?.skipped  ?? 0;
-        setImportResult({ imported, skipped });
+        const data     = res?.data ?? res ?? {};
+        const imported = data.imported ?? 0;
+        const updated  = data.updated  ?? 0;
+        const failed   = data.failed   ?? 0;
+        const results  = data.results  ?? [];
+
+        if (failed > 0) {
+          const failedRows = results.filter((r) => r.status === 'error');
+          setImportResult({ failed, failedRows, hasError: true });
+          setImportDone(true);
+          showError(`Import failed: ${failed} row${failed !== 1 ? 's' : ''} could not be imported.`);
+          return;
+        }
+
+        setImportResult({ imported, updated, hasError: false });
         setImportDone(true);
-        success(`${imported} record${imported !== 1 ? 's' : ''} imported successfully.`);
+        success(`${imported + updated} record${imported + updated !== 1 ? 's' : ''} imported successfully.`);
       },
       onError: (err) => showError(extractApiError(err)),
     });
@@ -211,10 +260,16 @@ const MonthlyCostImport = () => {
         title="Import Monthly Costs"
         description="Upload an Excel or CSV file to bulk-import monthly cost records"
         actions={
-          <Button variant="outline" size="sm" onClick={() => navigate(ROUTES.MONTHLY_COSTS)}>
-            <ArrowLeft className="mr-1.5 h-4 w-4" />
-            Back
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={handleDownloadSample}>
+              <Download className="mr-1.5 h-4 w-4" />
+              Download Sample
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => navigate(ROUTES.MONTHLY_COSTS)}>
+              <ArrowLeft className="mr-1.5 h-4 w-4" />
+              Back
+            </Button>
+          </div>
         }
       />
 
@@ -257,23 +312,27 @@ const MonthlyCostImport = () => {
             )}
           </div>
           {fileName && !importDone && (
-            <p className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
               <FileSpreadsheet className="h-4 w-4 shrink-0" />
               <span className="truncate">{fileName}</span>
               <span className="shrink-0">— {rows.length} row{rows.length !== 1 ? 's' : ''} detected</span>
-            </p>
+              {removedDuplicates > 0 && (
+                <span className="shrink-0 text-amber-600 font-medium">
+                  · {removedDuplicates} duplicate{removedDuplicates !== 1 ? 's' : ''} removed
+                </span>
+              )}
+            </div>
           )}
         </CardContent>
       </Card>
 
       {/* Import result banner */}
-      {importDone && importResult && (
+      {importDone && importResult && !importResult.hasError && (
         <div className="flex items-center gap-3 rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-950/30">
           <CheckCircle2 className="h-5 w-5 shrink-0 text-green-600" />
           <div className="text-sm">
             <p className="font-medium text-green-700 dark:text-green-400">
-              Import complete — {importResult.imported} record{importResult.imported !== 1 ? 's' : ''} imported
-              {importResult.skipped > 0 && `, ${importResult.skipped} skipped`}
+              Import complete — {importResult.imported} inserted, {importResult.updated} updated
             </p>
             <button
               className="mt-1 text-xs underline text-green-600 dark:text-green-500"
@@ -282,6 +341,30 @@ const MonthlyCostImport = () => {
               View Monthly Costs →
             </button>
           </div>
+        </div>
+      )}
+
+      {importDone && importResult?.hasError && (
+        <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-4 space-y-3">
+          <div className="flex items-center gap-2 text-destructive">
+            <XCircle className="h-5 w-5 shrink-0" />
+            <p className="text-sm font-medium">
+              Import failed — {importResult.failed} row{importResult.failed !== 1 ? 's' : ''} could not be processed. Please fix the errors and re-import the file.
+            </p>
+          </div>
+          {importResult.failedRows?.length > 0 && (
+            <div className="space-y-1.5">
+              {importResult.failedRows.map((r) => (
+                <div key={r.row} className="flex items-start gap-2 text-xs text-destructive/80">
+                  <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <span>
+                    <strong>Row {r.row}:</strong> {r.errors?.join(', ')}
+                    {r.data?.['Employee Code'] && ` (${r.data['Employee Code']} — ${r.data?.Name ?? ''})`}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -301,7 +384,7 @@ const MonthlyCostImport = () => {
             <Button
               size="sm"
               onClick={handleImport}
-              disabled={importMutation.isPending || !file || validRows.length === 0}
+              disabled={importMutation.isPending || !file || validRows.length === 0 || invalidRows.length > 0}
             >
               {importMutation.isPending ? (
                 <>
@@ -371,11 +454,10 @@ const MonthlyCostImport = () => {
             </div>
 
             {invalidRows.length > 0 && (
-              <div className="flex items-start gap-2 border-t bg-amber-50 p-4 text-xs text-amber-800 dark:bg-amber-950/30 dark:text-amber-400">
-                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <div className="flex items-start gap-2 border-t bg-destructive/5 p-4 text-xs text-destructive">
+                <XCircle className="mt-0.5 h-4 w-4 shrink-0" />
                 <span>
-                  {invalidRows.length} row{invalidRows.length !== 1 ? 's' : ''} with errors will be skipped.
-                  Only {validRows.length} valid row{validRows.length !== 1 ? 's' : ''} will be imported.
+                  <strong>Import blocked.</strong> Fix the {invalidRows.length} row{invalidRows.length !== 1 ? 's' : ''} with errors before importing. All rows must be valid to proceed.
                 </span>
               </div>
             )}

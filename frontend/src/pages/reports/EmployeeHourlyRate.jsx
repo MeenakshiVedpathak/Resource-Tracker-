@@ -15,6 +15,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { SearchableSelect } from '@/components/ui/searchable-select';
+import { MonthYearPicker } from '@/components/ui/month-year-picker';
 
 const columnHelper = createColumnHelper();
 
@@ -37,20 +38,6 @@ const exportToExcel = (rows, month, year) => {
   XLSX.writeFile(wb, `Employee_Hourly_Rate_${month}_${year}.xlsx`);
 };
 
-const MONTH_OPTIONS = [
-  { value: '1', label: 'January' },
-  { value: '2', label: 'February' },
-  { value: '3', label: 'March' },
-  { value: '4', label: 'April' },
-  { value: '5', label: 'May' },
-  { value: '6', label: 'June' },
-  { value: '7', label: 'July' },
-  { value: '8', label: 'August' },
-  { value: '9', label: 'September' },
-  { value: '10', label: 'October' },
-  { value: '11', label: 'November' },
-  { value: '12', label: 'December' },
-];
 
 const CostCell = ({ value }) =>
   value != null ? (
@@ -135,8 +122,10 @@ const columns = [
 const now = new Date();
 
 const EmployeeHourlyRate = () => {
-  const [month, setMonth] = useState(String(now.getMonth() + 1));
-  const [year, setYear] = useState(String(now.getFullYear()));
+  const [monthYear, setMonthYear] = useState({
+    month: now.getMonth() + 1,
+    year: now.getFullYear(),
+  });
   const [employeeId, setEmployeeId] = useState('all');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -146,8 +135,8 @@ const EmployeeHourlyRate = () => {
   const { data: activeEmployees = [] } = useActiveEmployees();
 
   const params = {
-    month,
-    year,
+    month: monthYear.month,
+    year: monthYear.year,
     ...(employeeId && employeeId !== 'all' && { employeeId }),
     page,
     limit,
@@ -165,7 +154,7 @@ const EmployeeHourlyRate = () => {
         title="Employee Hourly Rate"
         description="View the effective hourly cost per employee based on salary and hours logged."
         actions={rows.length > 0 ? (
-          <Button variant="outline" size="sm" onClick={() => exportToExcel(rows, month, year)}>
+          <Button variant="outline" size="sm" onClick={() => exportToExcel(rows, monthYear?.month, monthYear?.year)}>
             <Download className="mr-1.5 h-4 w-4" />Export Excel
           </Button>
         ) : null}
@@ -174,29 +163,12 @@ const EmployeeHourlyRate = () => {
       {/* Filter bar */}
       <div className="mb-5 flex flex-wrap items-end gap-4 w-full">
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">Month <span className="text-destructive">*</span></Label>
-          <SearchableSelect showSearch={false}
-            options={MONTH_OPTIONS}
-            value={month}
-            onValueChange={(v) => { setMonth(v); setPage(1); }}
+          <Label className="text-xs">Month &amp; Year <span className="text-destructive">*</span></Label>
+          <MonthYearPicker
+            value={monthYear}
+            onChange={(val) => { setMonthYear(val); setPage(1); }}
             placeholder="Select month"
-            searchPlaceholder="Search month..."
-            className="h-9 w-36 text-sm"
-          />
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">Year <span className="text-destructive">*</span></Label>
-          <SearchableSelect showSearch={false}
-            options={Array.from({ length: 10 }, (_, i) => {
-              const y = new Date().getFullYear() - 5 + i;
-              return { label: String(y), value: String(y) };
-            })}
-            value={year}
-            onValueChange={(v) => { setYear(v); setPage(1); }}
-            placeholder="Year"
-            searchPlaceholder="Search year..."
-            className="h-9 w-24 text-sm"
+            className="w-44"
           />
         </div>
 

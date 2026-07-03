@@ -3,7 +3,9 @@ export const QUERY_KEYS = {
   AUTH_PROFILE: ['auth', 'profile'],
 
   // Dashboard
-  DASHBOARD_STATS: ['dashboard', 'stats'],
+  DASHBOARD_STATS: (params) => ['dashboard', 'stats', params],
+  DASHBOARD_EMPLOYEE_BILLABLE: (params) => ['dashboard', 'employee-billable-breakdown', params],
+  DASHBOARD_TOP_EMPLOYEES_BY_PO: (params) => ['dashboard', 'top-employees-by-po', params],
 
   // Employees
   EMPLOYEES: (params) => ['employees', params],

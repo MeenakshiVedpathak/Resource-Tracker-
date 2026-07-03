@@ -242,9 +242,12 @@ async function getResourceAllocation(query) {
 
   logger.info('Report: getResourceAllocation', { filters, page, limit });
 
+  const serviceTypeId = query.serviceTypeId ? parseInt(query.serviceTypeId, 10) : undefined;
+
   const { rows, count } = await reportRepo.getResourceAllocation({
     employeeId: filters.employeeId,
     poId: filters.poId,
+    serviceTypeId,
     month: filters.month,
     year: filters.year,
     status: filters.status,

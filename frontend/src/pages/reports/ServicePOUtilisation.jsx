@@ -5,6 +5,7 @@ import { Download, Search } from 'lucide-react';
 import { useServicePOUtilisationReport } from '@/hooks/useReports';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useActiveServicePOs } from '@/hooks/useServicePOs';
+import { useActiveClients } from '@/hooks/useClients';
 import { formatHours, formatPercentage } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
@@ -91,6 +92,7 @@ const columns = [
 
 const ServicePOUtilisation = () => {
   const [poId, setPoId] = useState('all');
+  const [clientId, setClientId] = useState('all');
 
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -98,9 +100,10 @@ const ServicePOUtilisation = () => {
 
   const debouncedSearch = useDebounce(search, 400);
   const { data: activePOs = [] } = useActiveServicePOs();
+  const { data: activeClients = [] } = useActiveClients();
 
   const params = {
-
+    ...(clientId !== 'all' && { clientId }),
     ...(poId !== 'all' && { poId }),
     page,
     limit,
@@ -128,6 +131,24 @@ const ServicePOUtilisation = () => {
 
       {/* Filter bar */}
       <div className="mb-5 flex flex-wrap items-end gap-4 w-full">
+        <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
+          <Label className="text-xs">Client</Label>
+          <SearchableSelect
+            options={[
+              { label: "All Clients", value: "all" },
+              ...activeClients.map((c) => ({
+                label: c.client_name,
+                value: String(c.id)
+              }))
+            ]}
+            value={clientId}
+            onValueChange={(v) => { setClientId(v); setPage(1); }}
+            placeholder="All Clients"
+            searchPlaceholder="Search client..."
+            className="h-9 text-sm"
+          />
+        </div>
+
         <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
           <Label className="text-xs">Service PO</Label>
           <SearchableSelect

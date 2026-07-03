@@ -7,25 +7,13 @@ import { formatMonthYear } from '@/utils/formatters';
 import PageHeader from '@/components/common/PageHeader';
 import { Button } from '@/components/ui/button';
 import { SearchableSelect } from '@/components/ui/searchable-select';
+import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/utils/cn';
 
-const MONTH_OPTIONS = [
-  { value: '1',  label: 'January' },
-  { value: '2',  label: 'February' },
-  { value: '3',  label: 'March' },
-  { value: '4',  label: 'April' },
-  { value: '5',  label: 'May' },
-  { value: '6',  label: 'June' },
-  { value: '7',  label: 'July' },
-  { value: '8',  label: 'August' },
-  { value: '9',  label: 'September' },
-  { value: '10', label: 'October' },
-  { value: '11', label: 'November' },
-  { value: '12', label: 'December' },
-];
+const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
 // Non-billable hour columns
 const NON_BILLABLE_COLS = [
@@ -54,7 +42,7 @@ const HoursCell = ({ value }) => {
 };
 
 const exportToExcel = (records, month, year) => {
-  const monthLabel = MONTH_OPTIONS.find((m) => m.value === String(month))?.label ?? month;
+  const monthLabel = MONTH_NAMES[(month - 1)] ?? month;
 
   const header = [
     'Sr. No.', 'Name', 'Designation', 'Total Exp', 'Co. Exp',
@@ -97,8 +85,10 @@ const td = (...cls) =>
 
 // ─── component ───────────────────────────────────────────────────────────────
 const MonthlyUtilization = () => {
-  const [month,  setMonth]  = useState(String(new Date().getMonth() + 1));
-  const [year,   setYear]   = useState(String(new Date().getFullYear()));
+  const [monthYear, setMonthYear] = useState({
+    month: new Date().getMonth() + 1,
+    year: new Date().getFullYear(),
+  });
   const [employeeId, setEmployeeId] = useState('all');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -106,11 +96,11 @@ const MonthlyUtilization = () => {
 
   const { data: activeEmployees = [] } = useActiveEmployees();
 
-  const enabled = !!(month && year && Number(year) >= 2000 && Number(year) <= 2100);
+  const enabled = !!(monthYear?.year >= 2000 && monthYear?.year <= 2100);
 
   const params = enabled ? {
-    month: Number(month),
-    year:  Number(year),
+    month: monthYear.month,
+    year:  monthYear.year,
     ...(employeeId !== 'all' && { employeeId }),
     page,
     limit,
@@ -124,7 +114,7 @@ const MonthlyUtilization = () => {
   const meta    = data?.meta    ?? {};
   const summary = data?.data?.summary ?? {};
 
-  const monthLabel = month ? formatMonthYear(Number(month), Number(year)) : '';
+  const monthLabel = monthYear ? formatMonthYear(monthYear.month, monthYear.year) : '';
 
   const handleSearchChange = (e) => { setSearch(e.target.value); setPage(1); };
 
@@ -136,7 +126,7 @@ const MonthlyUtilization = () => {
         description="Employee utilization summary for a selected month"
         actions={
           records.length > 0 ? (
-            <Button variant="outline" size="sm" onClick={() => exportToExcel(records, month, year)}>
+            <Button variant="outline" size="sm" onClick={() => exportToExcel(records, monthYear?.month, monthYear?.year)}>
               <Download className="mr-1.5 h-4 w-4" />
               Export Excel
             </Button>
@@ -147,29 +137,12 @@ const MonthlyUtilization = () => {
       {/* ── Filters ── */}
       <div className="mb-5 flex flex-wrap items-end gap-4 w-full">
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs font-medium">Month <span className="text-destructive">*</span></Label>
-          <SearchableSelect showSearch={false}
-            options={MONTH_OPTIONS}
-            value={month}
-            onValueChange={(v) => { setMonth(v); setPage(1); }}
+          <Label className="text-xs font-medium">Month &amp; Year <span className="text-destructive">*</span></Label>
+          <MonthYearPicker
+            value={monthYear}
+            onChange={(val) => { setMonthYear(val); setPage(1); }}
             placeholder="Select month"
-            searchPlaceholder="Search month..."
-            className="h-9 w-36 text-sm"
-          />
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">Year <span className="text-destructive">*</span></Label>
-          <SearchableSelect showSearch={false}
-            options={Array.from({ length: 10 }, (_, i) => {
-              const y = new Date().getFullYear() - 5 + i;
-              return { label: String(y), value: String(y) };
-            })}
-            value={year}
-            onValueChange={(v) => { setYear(v); setPage(1); }}
-            placeholder="Year"
-            searchPlaceholder="Search year..."
-            className="h-9 w-24 text-sm"
+            className="w-44"
           />
         </div>
 

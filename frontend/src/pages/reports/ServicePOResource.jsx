@@ -4,31 +4,19 @@ import { Download } from 'lucide-react';
 import { useServicePOResourceReport } from '@/hooks/useReports';
 import { useActiveEmployees } from '@/hooks/useEmployees';
 import { useActiveServicePOs } from '@/hooks/useServicePOs';
+import { useActiveClients } from '@/hooks/useClients';
 import { formatMonthYear } from '@/utils/formatters';
 import PageHeader from '@/components/common/PageHeader';
 import { Button } from '@/components/ui/button';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/utils/cn';
 
-const MONTH_OPTIONS = [
-  { value: '1',  label: 'January' },
-  { value: '2',  label: 'February' },
-  { value: '3',  label: 'March' },
-  { value: '4',  label: 'April' },
-  { value: '5',  label: 'May' },
-  { value: '6',  label: 'June' },
-  { value: '7',  label: 'July' },
-  { value: '8',  label: 'August' },
-  { value: '9',  label: 'September' },
-  { value: '10', label: 'October' },
-  { value: '11', label: 'November' },
-  { value: '12', label: 'December' },
-];
 
 const SERVICE_TYPE_COLORS = {
   staffaugmentation:    'bg-blue-500/10 text-blue-700 dark:text-blue-400',
@@ -73,8 +61,10 @@ const groupRows = (rows) => {
   return Array.from(map.values());
 };
 
+const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
 const exportToExcel = (rows, month, year) => {
-  const monthLabel = MONTH_OPTIONS.find((m) => m.value === String(month))?.label ?? month;
+  const monthLabel = MONTH_NAMES[(month - 1)] ?? month;
 
   const header = ['Sr. No.', 'Customer Name', 'Service PO Summary', 'Service Type', 'Resource', 'Time in Hrs', 'Remarks'];
   let srNo = 1;
@@ -107,23 +97,27 @@ const exportToExcel = (rows, month, year) => {
 
 // ─── main component ──────────────────────────────────────────────────────────
 const ServicePOResource = () => {
-  const [month, setMonth] = useState(String(new Date().getMonth() + 1));
-  const [year,  setYear]  = useState(String(new Date().getFullYear()));
+  const [monthYear, setMonthYear] = useState({
+    month: new Date().getMonth() + 1,
+    year: new Date().getFullYear(),
+  });
   const [employeeId, setEmployeeId] = useState('all');
   const [poId, setPoId] = useState('all');
+  const [clientId, setClientId] = useState('all');
 
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
 
   const { data: activeEmployees = [] } = useActiveEmployees();
   const { data: activePOs = [] } = useActiveServicePOs();
+  const { data: activeClients = [] } = useActiveClients();
 
   const params = {
-    ...(month && month !== 'all' && { month: Number(month) }),
-    ...(year && year !== 'all' && Number(year) >= 2000 && { year: Number(year) }),
+    ...(monthYear && { month: monthYear.month }),
+    ...(monthYear && { year: monthYear.year }),
     ...(employeeId !== 'all' && { employeeId }),
     ...(poId !== 'all' && { poId }),
-
+    ...(clientId !== 'all' && { clientId }),
     page,
     limit,
   };
@@ -134,7 +128,7 @@ const ServicePOResource = () => {
   const meta   = data?.meta ?? {};
   const groups = useMemo(() => groupRows(rows), [rows]);
 
-  const monthLabel  = month ? formatMonthYear(Number(month), Number(year)) : '';
+  const monthLabel  = monthYear ? formatMonthYear(monthYear.month, monthYear.year) : '';
   const totalHours  = rows.reduce((sum, r) => {
     const h = getField(r, 'total_hours_logged', 'hours_logged', 'hours', 'time_in_hrs');
     return sum + (h ? Number(h) : 0);
@@ -147,7 +141,7 @@ const ServicePOResource = () => {
         description="Resources allocated per Service PO for a selected month"
         actions={
           rows.length > 0 ? (
-            <Button variant="outline" size="sm" onClick={() => exportToExcel(rows, month, year)}>
+            <Button variant="outline" size="sm" onClick={() => exportToExcel(rows, monthYear?.month, monthYear?.year)}>
               <Download className="mr-1.5 h-4 w-4" />
               Export Excel
             </Button>
@@ -158,32 +152,30 @@ const ServicePOResource = () => {
       {/* ── Filters ── */}
       <div className="mb-5 flex flex-wrap items-end gap-4 w-full">
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs font-medium">Month</Label>
-          <SearchableSelect showSearch={false}
-            options={MONTH_OPTIONS}
-            value={month}
-            onValueChange={(v) => { setMonth(v); setPage(1); }}
-            placeholder="Select month"
-            searchPlaceholder="Search month..."
-            className="h-9 w-36 text-sm"
+          <Label className="text-xs font-medium">Month &amp; Year</Label>
+          <MonthYearPicker
+            value={monthYear}
+            onChange={(val) => { setMonthYear(val); setPage(1); }}
+            placeholder="All months"
+            className="w-44"
           />
         </div>
 
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-xs font-medium">Year</Label>
-          <SearchableSelect showSearch={false}
+        <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
+          <Label className="text-xs font-medium">Client</Label>
+          <SearchableSelect
             options={[
-              { label: "All", value: "all" },
-              ...Array.from({ length: 10 }, (_, i) => {
-                const y = new Date().getFullYear() - 5 + i;
-                return { label: String(y), value: String(y) };
-              })
+              { label: "All Clients", value: "all" },
+              ...activeClients.map((c) => ({
+                label: c.client_name,
+                value: String(c.id)
+              }))
             ]}
-            value={year}
-            onValueChange={(v) => { setYear(v); setPage(1); }}
-            placeholder="Year"
-            searchPlaceholder="Search year..."
-            className="h-9 w-24 text-sm"
+            value={clientId}
+            onValueChange={(v) => { setClientId(v); setPage(1); }}
+            placeholder="All Clients"
+            searchPlaceholder="Search client..."
+            className="h-9 text-sm"
           />
         </div>
 

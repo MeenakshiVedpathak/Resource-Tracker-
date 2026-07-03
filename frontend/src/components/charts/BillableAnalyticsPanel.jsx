@@ -1,0 +1,452 @@
+import { useState } from 'react';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  PieChart, Pie, Cell, ResponsiveContainer, Legend,
+} from 'recharts';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
+import EmptyState from '@/components/common/EmptyState';
+import { Users, Calendar, Coffee, ShieldAlert, CheckCircle2, LayoutGrid, List } from 'lucide-react';
+import { cn } from '@/utils/cn';
+
+/* ── colour palette (hex — safe in recharts) ── */
+const C = {
+  billable : '#6366f1',
+  leaves   : '#3b82f6',
+  idle     : '#f97316',
+};
+
+/* ── tier helper ── */
+const getTier = (pct) => {
+  if (pct >= 90) return { label: 'Healthy',  color: '#10b981', text: 'text-emerald-600 dark:text-emerald-400' };
+  if (pct >= 75) return { label: 'Good',     color: '#6366f1', text: 'text-primary' };
+  if (pct >= 60) return { label: 'At Risk',  color: '#f59e0b', text: 'text-amber-500' };
+  return          { label: 'Critical', color: '#ef4444', text: 'text-red-500' };
+};
+
+const trunc = (str, n = 14) => str.length > n ? str.slice(0, n - 1) + '…' : str;
+
+/* ── custom tooltips ── */
+const BarTip = ({ active, payload }) => {
+  if (!active || !payload?.length) return null;
+  const { fullName, billablePct } = payload[0].payload;
+  const tier = getTier(billablePct);
+  return (
+    <div className="rounded-lg border bg-popover p-2.5 shadow-md text-xs space-y-1 min-w-[150px]">
+      <p className="font-semibold text-foreground leading-tight">{fullName}</p>
+      <p className={cn('text-xs font-bold mb-1', tier.text)}>{billablePct?.toFixed(1)}% billable</p>
+      {payload.map((p) => (
+        <div key={p.name} className="flex items-center gap-2">
+          <span className="h-2 w-2 rounded-full shrink-0" style={{ background: p.fill }} />
+          <span className="text-muted-foreground">{p.name}:</span>
+          <span className="font-medium tabular-nums">{p.value}h</span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const PieTip = ({ active, payload }) => {
+  if (!active || !payload?.length) return null;
+  const entry = payload[0];
+  const name    = entry.name;
+  const value   = entry.value;
+  const percent = entry.percent ?? entry.payload?.percent;
+  const pctStr  = percent != null ? (percent * 100).toFixed(1) : null;
+  return (
+    <div className="rounded-lg border bg-popover p-2.5 shadow-md text-xs">
+      <p className="font-semibold">{name}</p>
+      <p className="text-muted-foreground">
+        {value}h{pctStr ? ` · ${pctStr}%` : ''}
+      </p>
+    </div>
+  );
+};
+
+/* ── sub-components ── */
+const Stat = ({ label, value, icon: Icon, colorClass, subtext }) => (
+  <div className="flex items-center gap-3 rounded-lg border bg-muted/20 px-3.5 py-2.5">
+    <div className={cn('rounded-md p-1.5 bg-muted/50', colorClass)}>
+      <Icon className="h-3.5 w-3.5" />
+    </div>
+    <div className="min-w-0">
+      <p className="text-[10px] text-muted-foreground uppercase tracking-wide leading-none mb-0.5 whitespace-nowrap">{label}</p>
+      <p className={cn('text-sm font-bold tabular-nums leading-none', colorClass)}>{value}</p>
+      {subtext && <p className="text-[10px] text-muted-foreground mt-0.5 leading-none">{subtext}</p>}
+    </div>
+  </div>
+);
+
+const TierRow = ({ label, count, color }) => (
+  <div className="flex items-center justify-between py-2 text-xs">
+    <div className="flex items-center gap-1.5">
+      <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: color }} />
+      <span className="text-muted-foreground">{label}</span>
+    </div>
+    <span className="font-bold tabular-nums text-foreground">{count}</span>
+  </div>
+);
+
+const NBBadge = ({ name, hours, type }) => (
+  <span className={cn(
+    'inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium leading-none',
+    type === 'Leaves'
+      ? 'bg-blue-500/10 text-blue-700 dark:text-blue-400'
+      : 'bg-orange-500/10 text-orange-700 dark:text-orange-400'
+  )}>
+    {name}: {hours}h
+  </span>
+);
+
+/* ── main component ── */
+const BillableAnalyticsPanel = ({ data = [], meta = {}, isLoading, month, year }) => {
+  const [view, setView] = useState('charts');
+
+  const monthLabel = month && year
+    ? new Date(year, month - 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' })
+    : 'This Month';
+
+  const records = data.filter((r) => r.total_hours > 0);
+
+  /* ── totals ── */
+  const totalBillable    = records.reduce((s, r) => s + (r.billable_hours     || 0), 0);
+  const totalHours       = records.reduce((s, r) => s + (r.total_hours        || 0), 0);
+  const overallPct       = totalHours > 0 ? (totalBillable / totalHours) * 100 : 0;
+
+  let totalLeaves = 0, totalIdle = 0;
+  records.forEach((r) =>
+    (r.non_billable_reasons ?? []).forEach((nb) => {
+      if (nb.service_type_name === 'Leaves') totalLeaves += nb.hours;
+      else totalIdle += nb.hours;
+    })
+  );
+
+  /* ── tier counts ── */
+  const tiers = { Healthy: 0, Good: 0, 'At Risk': 0, Critical: 0 };
+  records.forEach((r) => { tiers[getTier(r.billable_pct || 0).label]++; });
+  const atRiskCount = tiers['At Risk'] + tiers['Critical'];
+
+  /* ── bar chart data ── */
+  const barData = [...records]
+    .sort((a, b) => (b.non_billable_hours || 0) - (a.non_billable_hours || 0))
+    .map((r) => {
+      let leaves = 0, idle = 0;
+      (r.non_billable_reasons ?? []).forEach((nb) => {
+        if (nb.service_type_name === 'Leaves') leaves += nb.hours;
+        else idle += nb.hours;
+      });
+      return {
+        name       : trunc(r.full_name),
+        fullName   : r.full_name,
+        Billable   : r.billable_hours || 0,
+        Leaves     : leaves,
+        Idle       : idle,
+        billablePct: r.billable_pct   || 0,
+      };
+    });
+
+  /* ── donut data ── */
+  const pieData = [
+    { name: 'Billable', value: totalBillable, fill: C.billable },
+    { name: 'Leaves',   value: totalLeaves,   fill: C.leaves   },
+    { name: 'Idle',     value: totalIdle,     fill: C.idle     },
+  ].filter((d) => d.value > 0);
+
+  const barChartHeight = Math.max(280, barData.length * 38);
+
+  const th = 'px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground whitespace-nowrap';
+  const td = 'px-3 py-2.5 text-xs align-middle';
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <CardTitle>Billable Analytics</CardTitle>
+            <CardDescription>
+              Billable vs non-billable with reasons per employee · {monthLabel}
+            </CardDescription>
+          </div>
+
+          {/* View toggle */}
+          <div className="flex rounded-lg border overflow-hidden text-xs shrink-0">
+            <button
+              onClick={() => setView('charts')}
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-1.5 transition-colors',
+                view === 'charts'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'hover:bg-muted/50 text-muted-foreground'
+              )}
+            >
+              <LayoutGrid className="h-3 w-3" /> Charts
+            </button>
+            <button
+              onClick={() => setView('table')}
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-1.5 border-l transition-colors',
+                view === 'table'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'hover:bg-muted/50 text-muted-foreground'
+              )}
+            >
+              <List className="h-3 w-3" /> Table
+            </button>
+          </div>
+        </div>
+      </CardHeader>
+
+      <CardContent>
+        {/* ── Loading ── */}
+        {isLoading && (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-14 rounded-lg" />)}
+            </div>
+            <Skeleton className="h-72 rounded-lg" />
+          </div>
+        )}
+
+        {/* ── Empty ── */}
+        {!isLoading && records.length === 0 && (
+          <EmptyState
+            icon={Users}
+            title="No data for this period"
+            description="Employee breakdown will appear once timesheets are submitted."
+          />
+        )}
+
+        {!isLoading && records.length > 0 && (
+          <>
+            {/* ── Summary stats ── */}
+            <div className="mb-5 grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <Stat
+                label="Billable Efficiency"
+                value={`${overallPct.toFixed(1)}%`}
+                icon={CheckCircle2}
+                colorClass={getTier(overallPct).text}
+                subtext={`${totalBillable}h of ${totalHours}h`}
+              />
+              <Stat
+                label="Leave Hours"
+                value={`${totalLeaves}h`}
+                icon={Calendar}
+                colorClass="text-blue-600 dark:text-blue-400"
+                subtext={totalHours > 0 ? `${((totalLeaves / totalHours) * 100).toFixed(1)}% of total` : undefined}
+              />
+              <Stat
+                label="Idle Hours"
+                value={`${totalIdle}h`}
+                icon={Coffee}
+                colorClass="text-orange-500"
+                subtext={totalHours > 0 ? `${((totalIdle / totalHours) * 100).toFixed(1)}% of total` : undefined}
+              />
+              <Stat
+                label="At-Risk Employees"
+                value={atRiskCount}
+                icon={ShieldAlert}
+                colorClass={atRiskCount > 0 ? 'text-red-500' : 'text-emerald-600 dark:text-emerald-400'}
+                subtext="below 75% billable"
+              />
+            </div>
+
+            {/* ── CHARTS VIEW ── */}
+            {view === 'charts' && (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                {/* Horizontal stacked bar chart */}
+                <div className="lg:col-span-2">
+                  <p className="text-xs font-semibold text-foreground mb-3">
+                    Hours by Employee
+                    <span className="ml-1.5 text-muted-foreground font-normal">sorted by non-billable</span>
+                  </p>
+                  <ResponsiveContainer width="100%" height={barChartHeight}>
+                    <BarChart
+                      data={barData}
+                      layout="vertical"
+                      margin={{ top: 0, right: 12, left: 0, bottom: 24 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
+                      <XAxis
+                        type="number"
+                        tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                        tickLine={false}
+                        axisLine={false}
+                        tickFormatter={(v) => `${v}h`}
+                      />
+                      <YAxis
+                        type="category"
+                        dataKey="name"
+                        width={104}
+                        tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                        tickLine={false}
+                        axisLine={false}
+                      />
+                      <Tooltip content={<BarTip />} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }} />
+                      <Legend
+                        iconType="circle"
+                        iconSize={8}
+                        wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
+                      />
+                      <Bar dataKey="Billable" stackId="a" fill={C.billable} radius={[0, 0, 0, 0]} maxBarSize={22} />
+                      <Bar dataKey="Leaves"   stackId="a" fill={C.leaves}   radius={[0, 0, 0, 0]} maxBarSize={22} />
+                      <Bar dataKey="Idle"     stackId="a" fill={C.idle}     radius={[0, 4, 4, 0]} maxBarSize={22} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* Right column: donut + tier table */}
+                <div className="flex flex-col gap-5">
+                  {/* Donut */}
+                  <div>
+                    <p className="text-xs font-semibold text-foreground mb-2">Hours Breakdown</p>
+                    <div className="relative" style={{ height: 190 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={pieData}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={52}
+                            outerRadius={78}
+                            paddingAngle={2}
+                            dataKey="value"
+                          >
+                            {pieData.map((entry) => (
+                              <Cell key={entry.name} fill={entry.fill} />
+                            ))}
+                          </Pie>
+                          <Tooltip content={<PieTip />} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                      {/* Center label */}
+                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                        <span className={cn('text-xl font-bold tabular-nums', getTier(overallPct).text)}>
+                          {overallPct.toFixed(1)}%
+                        </span>
+                        <span className="text-[10px] text-muted-foreground">Billable</span>
+                      </div>
+                    </div>
+                    {/* Donut legend */}
+                    <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 mt-1">
+                      {pieData.map((d) => (
+                        <div key={d.name} className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                          <span className="h-2 w-2 rounded-full inline-block shrink-0" style={{ background: d.fill }} />
+                          {d.name}: {d.value}h
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Tier breakdown */}
+                  <div>
+                    <p className="text-xs font-semibold text-foreground mb-2">Employee Health Tiers</p>
+                    <div className="rounded-md border px-3 divide-y divide-border">
+                      <TierRow label="Healthy (≥ 90%)"   count={tiers['Healthy']}  color="#10b981" />
+                      <TierRow label="Good (75 – 89%)"   count={tiers['Good']}     color={C.billable} />
+                      <TierRow label="At Risk (60 – 74%)" count={tiers['At Risk']} color="#f59e0b" />
+                      <TierRow label="Critical (< 60%)"  count={tiers['Critical']} color="#ef4444" />
+                    </div>
+                    <p className="mt-2 text-[10px] text-muted-foreground">
+                      Showing {records.length} of {meta.total ?? records.length} employees
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ── TABLE VIEW ── */}
+            {view === 'table' && (
+              <>
+                <div className="rounded-md border overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse text-sm">
+                      <thead className="bg-muted/50 border-b">
+                        <tr>
+                          <th className={cn(th, 'w-8 text-center')}>#</th>
+                          <th className={cn(th, 'min-w-[160px]')}>Employee</th>
+                          <th className={cn(th, 'min-w-[140px]')}>Billable %</th>
+                          <th className={cn(th, 'min-w-[170px]')}>Top Billable Projects</th>
+                          <th className={cn(th, 'min-w-[160px]')}>Non-Billable Reasons</th>
+                          <th className={cn(th, 'text-right')}>Total</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {records.map((row, idx) => {
+                          const pct    = row.billable_pct || 0;
+                          const tier   = getTier(pct);
+                          const topB   = (row.billable_reasons ?? []).filter((r) => r.hours > 0).slice(0, 2);
+                          const nbR    = (row.non_billable_reasons ?? []).filter((r) => r.hours > 0);
+                          const offset = ((meta.page ?? 1) - 1) * (meta.limit ?? 10);
+
+                          return (
+                            <tr key={row.employee_id} className="hover:bg-muted/30 transition-colors">
+                              <td className={cn(td, 'text-center text-muted-foreground w-8')}>{offset + idx + 1}</td>
+                              <td className={td}>
+                                <p className="font-medium text-foreground leading-tight">{row.full_name}</p>
+                                <p className="text-[10px] text-muted-foreground mt-0.5">
+                                  {row.employee_code} · {row.designation}
+                                </p>
+                              </td>
+                              <td className={td}>
+                                <div className="flex items-center gap-2">
+                                  <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden min-w-[60px]">
+                                    <div
+                                      className="h-full rounded-full"
+                                      style={{ width: `${Math.min(pct, 100)}%`, background: tier.color }}
+                                    />
+                                  </div>
+                                  <span className={cn('tabular-nums font-semibold text-xs w-[42px] text-right', tier.text)}>
+                                    {pct.toFixed(1)}%
+                                  </span>
+                                </div>
+                                <p className="text-[10px] text-muted-foreground mt-0.5 tabular-nums">
+                                  {row.billable_hours}h / {row.total_hours}h
+                                </p>
+                              </td>
+                              <td className={td}>
+                                {topB.length > 0 ? (
+                                  <div className="flex flex-col gap-0.5">
+                                    {topB.map((r) => (
+                                      <span key={r.service_po_id} className="inline-flex items-center gap-1 text-[10px] text-foreground">
+                                        <span className="inline-block h-1.5 w-1.5 rounded-full shrink-0" style={{ background: C.billable }} />
+                                        <span className="truncate max-w-[130px]" title={r.service_po_name}>{r.service_po_name}</span>
+                                        <span className="text-muted-foreground shrink-0">{r.hours}h</span>
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <span className="text-muted-foreground/40">—</span>
+                                )}
+                              </td>
+                              <td className={td}>
+                                {nbR.length > 0 ? (
+                                  <div className="flex flex-wrap gap-1">
+                                    {nbR.map((r) => (
+                                      <NBBadge key={r.service_po_id} name={r.service_po_name} hours={r.hours} type={r.service_type_name} />
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <span className="text-[10px] text-emerald-600 font-medium">Fully billable</span>
+                                )}
+                              </td>
+                              <td className={cn(td, 'text-right tabular-nums font-medium')}>{row.total_hours}h</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Showing {records.length} of {meta.total ?? records.length} employees
+                </p>
+              </>
+            )}
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
+
+export default BillableAnalyticsPanel;

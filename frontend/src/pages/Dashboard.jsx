@@ -1,6 +1,7 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Users, Briefcase, Clock, DollarSign, TrendingUp, TrendingDown, RefreshCw } from 'lucide-react';
-import { useDashboard } from '@/hooks/useDashboard';
+import { useDashboard, useEmployeeBillableBreakdown, useTopEmployeesByPO } from '@/hooks/useDashboard';
 import PageHeader from '@/components/common/PageHeader';
 import StatCard from '@/components/common/StatCard';
 import MonthlyHoursTrendChart from '@/components/charts/MonthlyHoursTrendChart';
@@ -12,7 +13,11 @@ import BillableByClientChart from '@/components/charts/BillableByClientChart';
 import CustomerNonBillableChart from '@/components/charts/CustomerNonBillableChart';
 import ActivityFeed from '@/components/dashboard/ActivityFeed';
 import PortfolioCard from '@/components/dashboard/PortfolioCard';
+import BillableAnalyticsPanel from '@/components/charts/BillableAnalyticsPanel';
+import TopEmployeesByPOPanel from '@/components/charts/TopEmployeesByPOPanel';
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { formatCurrency, formatHours, formatPercentage, formatDate } from '@/utils/formatters';
 
 const containerVariants = {
@@ -25,8 +30,46 @@ const itemVariants = {
   show: { opacity: 1, y: 0, transition: { duration: 0.25 } },
 };
 
+const MONTH_OPTIONS = [
+  { value: '1',  label: 'January' },
+  { value: '2',  label: 'February' },
+  { value: '3',  label: 'March' },
+  { value: '4',  label: 'April' },
+  { value: '5',  label: 'May' },
+  { value: '6',  label: 'June' },
+  { value: '7',  label: 'July' },
+  { value: '8',  label: 'August' },
+  { value: '9',  label: 'September' },
+  { value: '10', label: 'October' },
+  { value: '11', label: 'November' },
+  { value: '12', label: 'December' },
+];
+
+const YEAR_OPTIONS = Array.from({ length: 10 }, (_, i) => {
+  const y = new Date().getFullYear() - 5 + i;
+  return { label: String(y), value: String(y) };
+});
+
+const now = new Date();
+
 const Dashboard = () => {
-  const { data: stats, isPending, refetch, isFetching, dataUpdatedAt } = useDashboard();
+  const [month, setMonth] = useState(String(now.getMonth() + 1));
+  const [year, setYear] = useState(String(now.getFullYear()));
+
+  const { data: stats, isPending, refetch, isFetching, dataUpdatedAt } = useDashboard({ month, year });
+
+  const { data: topEmployeesByPOData, isPending: isTopEmployeesByPOPending } = useTopEmployeesByPO({
+    month: Number(month),
+    year: Number(year),
+    limit: 10,
+  });
+
+  const { data: billableBreakdownData, isPending: isBillableBreakdownPending } = useEmployeeBillableBreakdown({
+    month: Number(month),
+    year: Number(year),
+    limit: 10,
+  });
+
 
   const workforce = stats?.workforce ?? {};
   const portfolio = stats?.portfolio ?? {};
@@ -36,9 +79,9 @@ const Dashboard = () => {
   const activity = stats?.activity ?? {};
 
   const nonBillableBreakdown = charts.non_billable_breakdown ?? {};
-  const currentMonthNonBillable = parseFloat(nonBillableBreakdown.total_non_billable) || 0;
   const currentMonthTotal = parseFloat(currentMonth.total_hours_logged) || 0;
-  const currentMonthBillable = currentMonthTotal - currentMonthNonBillable;
+  const currentMonthBillable = parseFloat(currentMonth.billable_hours_logged) || 0;
+  const currentMonthNonBillable = parseFloat(currentMonth.non_billable_hours_logged) || 0;
   const nonBillablePct = currentMonthTotal > 0
     ? ((currentMonthNonBillable / currentMonthTotal) * 100).toFixed(1)
     : null;
@@ -50,21 +93,48 @@ const Dashboard = () => {
   const utilisationPct = currentMonth.overall_utilisation_pct;
   const lastUpdated = dataUpdatedAt ? formatDate(new Date(dataUpdatedAt), 'DD MMM YYYY, hh:mm A') : null;
 
+  const selectedMonthLabel = MONTH_OPTIONS.find((m) => m.value === month)?.label ?? '';
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Dashboard"
         description={lastUpdated ? `Last refreshed ${lastUpdated}` : 'Overview of resources, costs, and activity'}
         actions={
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => refetch()}
-            disabled={isFetching}
-          >
-            <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${isFetching ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
+          <div className="flex items-end gap-3">
+            <div className="flex flex-col gap-1">
+              <Label className="text-xs">Month</Label>
+              <SearchableSelect
+                showSearch={false}
+                options={MONTH_OPTIONS}
+                value={month}
+                onValueChange={setMonth}
+                placeholder="Month"
+                className="h-8 w-32 text-sm"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label className="text-xs">Year</Label>
+              <SearchableSelect
+                showSearch={false}
+                options={YEAR_OPTIONS}
+                value={year}
+                onValueChange={setYear}
+                placeholder="Year"
+                className="h-8 w-24 text-sm"
+              />
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => refetch()}
+              disabled={isFetching}
+              className="h-8"
+            >
+              <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${isFetching ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+          </div>
         }
       />
 
@@ -97,7 +167,7 @@ const Dashboard = () => {
         </motion.div>
         <motion.div variants={itemVariants}>
           <StatCard
-            title="Hours This Month"
+            title={`Hours (${selectedMonthLabel} ${year})`}
             value={isPending ? '—' : formatHours(currentMonth.total_hours_logged ?? 0)}
             icon={Clock}
             gradient="orange"
@@ -106,7 +176,7 @@ const Dashboard = () => {
         </motion.div>
         <motion.div variants={itemVariants}>
           <StatCard
-            title="Billable This Month"
+            title={`Billable (${selectedMonthLabel} ${year})`}
             value={isPending ? '—' : formatHours(currentMonthBillable)}
             icon={TrendingUp}
             gradient="green"
@@ -122,7 +192,7 @@ const Dashboard = () => {
         </motion.div>
         <motion.div variants={itemVariants}>
           <StatCard
-            title="Non-Billable This Month"
+            title={`Non-Billable (${selectedMonthLabel} ${year})`}
             value={isPending ? '—' : formatHours(currentMonthNonBillable)}
             icon={TrendingDown}
             gradient="red"
@@ -158,7 +228,7 @@ const Dashboard = () => {
           <TrendingUp className="h-4 w-4 text-primary shrink-0" />
           <p className="text-sm">
             <span className="font-semibold text-primary">{formatPercentage(utilisationPct)}</span>
-            {' '}overall resource utilisation this month across all active Service POs.
+            {' '}overall resource utilisation for {selectedMonthLabel} {year} across all active Service POs.
           </p>
         </motion.div>
       )}
@@ -184,48 +254,41 @@ const Dashboard = () => {
         </motion.div>
       </motion.div>
 
-      {/* ── Non-billable analytics row ── */}
+     
+     
+
+   
+
+      {/* ── Employee billable breakdown ── */}
       <motion.div
         variants={containerVariants}
         initial="hidden"
         animate="show"
-        className="grid grid-cols-1 gap-4 lg:grid-cols-2"
       >
         <motion.div variants={itemVariants}>
-          <NonBillableTrendChart
-            data={charts.non_billable_trend ?? []}
-            isLoading={isPending}
-          />
-        </motion.div>
-        <motion.div variants={itemVariants}>
-          <NonBillableBreakdownChart
-            breakdown={nonBillableBreakdown}
-            isLoading={isPending}
+          <BillableAnalyticsPanel
+            data={billableBreakdownData?.data ?? []}
+            meta={billableBreakdownData?.meta ?? {}}
+            isLoading={isBillableBreakdownPending}
+            month={Number(month)}
+            year={Number(year)}
           />
         </motion.div>
       </motion.div>
 
-      {/* ── Client-level billable & non-billable row ── */}
+      {/* ── Top employees by Service PO ── */}
       <motion.div
         variants={containerVariants}
         initial="hidden"
         animate="show"
-        className="grid grid-cols-1 gap-4 lg:grid-cols-2"
       >
         <motion.div variants={itemVariants}>
-          <BillableByClientChart
-            data={charts.top_clients_billable ?? []}
-            isLoading={isPending}
-            month={currentPeriod.month}
-            year={currentPeriod.year}
-          />
-        </motion.div>
-        <motion.div variants={itemVariants}>
-          <CustomerNonBillableChart
-            data={charts.top_clients_non_billable ?? []}
-            isLoading={isPending}
-            month={currentPeriod.month}
-            year={currentPeriod.year}
+          <TopEmployeesByPOPanel
+            data={topEmployeesByPOData?.data ?? []}
+            meta={topEmployeesByPOData?.meta ?? {}}
+            isLoading={isTopEmployeesByPOPending}
+            month={Number(month)}
+            year={Number(year)}
           />
         </motion.div>
       </motion.div>

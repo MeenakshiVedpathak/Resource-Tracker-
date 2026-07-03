@@ -4,6 +4,7 @@ import { createColumnHelper } from '@tanstack/react-table';
 import { Download, Search } from 'lucide-react';
 import { useServicePOSummary } from '@/hooks/useReports';
 import { useActiveClients } from '@/hooks/useClients';
+import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
 import { useDebounce } from '@/hooks/useDebounce';
 import { formatCurrency, formatDate, formatHours } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
@@ -13,21 +14,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SearchableSelect } from '@/components/ui/searchable-select';
+import { MonthYearPicker } from '@/components/ui/month-year-picker';
+import { DateRangePicker } from '@/components/ui/date-range-picker';
 
-const MONTH_OPTIONS = [
-  { value: '1', label: 'January' },
-  { value: '2', label: 'February' },
-  { value: '3', label: 'March' },
-  { value: '4', label: 'April' },
-  { value: '5', label: 'May' },
-  { value: '6', label: 'June' },
-  { value: '7', label: 'July' },
-  { value: '8', label: 'August' },
-  { value: '9', label: 'September' },
-  { value: '10', label: 'October' },
-  { value: '11', label: 'November' },
-  { value: '12', label: 'December' },
-];
 
 const columnHelper = createColumnHelper();
 
@@ -154,25 +143,43 @@ const columns = [
   }),
 ];
 
+const SummaryItem = ({ label, value, highlight = false, negative = false }) => (
+  <div className="flex flex-col gap-0.5">
+    <span className="text-[11px] text-muted-foreground">{label}</span>
+    <span className={`text-sm font-semibold tabular-nums ${negative ? 'text-destructive' : highlight ? 'text-foreground' : 'text-foreground'}`}>
+      {value}
+    </span>
+  </div>
+);
+
 const ServicePOSummary = () => {
-  const [month, setMonth] = useState(String(now.getMonth() + 1));
-  const [year, setYear] = useState(String(now.getFullYear()));
+  const [monthYear, setMonthYear] = useState({
+    month: now.getMonth() + 1,
+    year: now.getFullYear(),
+  });
   const [clientId, setClientId] = useState('all');
+  const [serviceTypeId, setServiceTypeId] = useState('all');
 
   const [billable, setBillable] = useState('all');
+  const [status, setStatus] = useState('all');
+  const [dateRange, setDateRange] = useState(null);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
 
   const debouncedSearch = useDebounce(search, 400);
   const { data: activeClients = [] } = useActiveClients();
+  const { data: activeServiceTypes = [] } = useActiveServiceTypes();
 
   const params = {
-    month,
-    year,
+    ...(monthYear && { month: monthYear.month, year: monthYear.year }),
     ...(clientId && clientId !== 'all' && { clientId }),
+    ...(serviceTypeId && serviceTypeId !== 'all' && { serviceTypeId }),
 
     ...(billable && billable !== 'all' && { isBillable: billable === 'yes' }),
+    ...(status && status !== 'all' && { status }),
+    ...(dateRange?.startDate && { startDate: dateRange.startDate }),
+    ...(dateRange?.endDate && { endDate: dateRange.endDate }),
     page,
     limit,
     ...(debouncedSearch && { search: debouncedSearch }),
@@ -181,6 +188,7 @@ const ServicePOSummary = () => {
   const { data, isPending } = useServicePOSummary(params);
 
   const records = Array.isArray(data?.data?.records) ? data.data.records : Array.isArray(data?.data) ? data.data : [];
+  const summary = data?.data?.summary ?? null;
   const meta = data?.meta ?? {};
 
   return (
@@ -198,29 +206,22 @@ const ServicePOSummary = () => {
       {/* Filter bar */}
       <div className="mb-5 flex flex-wrap items-end gap-4 w-full">
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">Month <span className="text-destructive">*</span></Label>
-          <SearchableSelect showSearch={false}
-            options={MONTH_OPTIONS}
-            value={month}
-            onValueChange={(v) => { setMonth(v); setPage(1); }}
+          <Label className="text-xs">Month &amp; Year <span className="text-destructive">*</span></Label>
+          <MonthYearPicker
+            value={monthYear}
+            onChange={(val) => { setMonthYear(val); setPage(1); }}
             placeholder="Select month"
-            searchPlaceholder="Search month..."
-            className="h-9 w-36 text-sm"
+            className="w-44"
           />
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">Year <span className="text-destructive">*</span></Label>
-          <SearchableSelect showSearch={false}
-            options={Array.from({ length: 10 }, (_, i) => {
-              const y = new Date().getFullYear() - 5 + i;
-              return { label: String(y), value: String(y) };
-            })}
-            value={year}
-            onValueChange={(v) => { setYear(v); setPage(1); }}
-            placeholder="Year"
-            searchPlaceholder="Search year..."
-            className="h-9 w-24 text-sm"
+          <Label className="text-xs">PO Start &amp; End Date</Label>
+          <DateRangePicker
+            value={dateRange}
+            onChange={(val) => { setDateRange(val); setPage(1); }}
+            placeholder="PO start → end date"
+            className="w-52"
           />
         </div>
 
@@ -242,9 +243,25 @@ const ServicePOSummary = () => {
           />
         </div>
 
+        <div className="flex flex-col gap-1.5 min-w-[180px]">
+          <Label className="text-xs">Service Type</Label>
+          <SearchableSelect
+            options={[
+              { label: 'All Service Types', value: 'all' },
+              ...activeServiceTypes.map((st) => ({
+                label: st.service_type_name,
+                value: String(st.id),
+              })),
+            ]}
+            value={serviceTypeId}
+            onValueChange={(v) => { setServiceTypeId(v); setPage(1); }}
+            placeholder="All Service Types"
+            searchPlaceholder="Search service type..."
+            className="h-9 text-sm"
+          />
+        </div>
 
-
-        <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
+        <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Billable</Label>
           <SearchableSelect showSearch={false}
             options={[
@@ -255,8 +272,24 @@ const ServicePOSummary = () => {
             value={billable}
             onValueChange={(v) => { setBillable(v); setPage(1); }}
             placeholder="All"
-            searchPlaceholder="Search billable..."
             className="h-9 w-24 text-sm"
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Status</Label>
+          <SearchableSelect showSearch={false}
+            options={[
+              { label: "All", value: "all" },
+              { label: "Active", value: "active" },
+              { label: "Expired", value: "expired" },
+              { label: "On Hold", value: "on_hold" },
+              { label: "Cancelled", value: "cancelled" },
+            ]}
+            value={status}
+            onValueChange={(v) => { setStatus(v); setPage(1); }}
+            placeholder="All"
+            className="h-9 w-32 text-sm"
           />
         </div>
 
@@ -288,6 +321,26 @@ const ServicePOSummary = () => {
         onPageChange={setPage}
         onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
       />
+
+      {summary && (
+        <div className="mt-4 rounded-lg border bg-muted/40 px-4 py-3">
+          <p className="mb-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Totals (all pages)</p>
+          <div className="flex flex-wrap gap-x-6 gap-y-2">
+            <SummaryItem label="PO Value" value={formatCurrency(summary.total_po_value)} />
+            <SummaryItem label="Exp. Hours" value={formatHours(summary.total_expected_man_hours)} />
+            <SummaryItem label="Delivered Before Month" value={formatHours(summary.total_hours_delivered_before_month)} />
+            <SummaryItem label="Available Hours" value={formatHours(summary.total_available_hours)} />
+            <SummaryItem label="Billable Amount" value={formatCurrency(summary.total_monthly_billable_amount)} highlight />
+            <SummaryItem label="Invoiced Amount" value={formatCurrency(summary.total_invoiced_amount)} highlight />
+            <SummaryItem
+              label="Unbilled Amount"
+              value={formatCurrency(summary.total_unbilled_amount)}
+              highlight
+              negative={summary.total_unbilled_amount < 0}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };
