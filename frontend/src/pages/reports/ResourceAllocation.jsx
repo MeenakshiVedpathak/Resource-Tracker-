@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import * as XLSX from 'xlsx';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Download, Search } from 'lucide-react';
+import { Download, Search, SlidersHorizontal } from 'lucide-react';
 import { useResourceAllocationReport } from '@/hooks/useReports';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useActiveEmployees } from '@/hooks/useEmployees';
@@ -187,6 +187,7 @@ const ResourceAllocation = () => {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const debouncedSearch = useDebounce(search, 400);
   const { data: activeEmployees = [] } = useActiveEmployees();
@@ -212,145 +213,170 @@ const ResourceAllocation = () => {
   const rows = Array.isArray(data?.data) ? data.data : [];
   const meta = data?.meta ?? {};
 
+  const activeFilterCount = [
+    employeeId !== 'all' ? 1 : 0,
+    poId !== 'all' ? 1 : 0,
+    clientId !== 'all' ? 1 : 0,
+    billable !== 'all' ? 1 : 0,
+    serviceTypeId !== 'all' ? 1 : 0,
+    poStatus !== 'all' ? 1 : 0,
+  ].reduce((a, b) => a + b, 0);
+
   return (
     <div>
       <PageHeader
         title="Resource Allocation"
         description="View employee-to-PO assignments and hours logged."
-        actions={rows.length > 0 ? (
-          <Button variant="outline" size="sm" onClick={() => exportToExcel(rows)}>
-            <Download className="mr-1.5 h-4 w-4" />Export Excel
-          </Button>
-        ) : null}
+        actions={
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Employee, PO…"
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                className="h-9 w-56 pl-9 text-sm"
+              />
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 gap-2"
+              onClick={() => setFiltersOpen((prev) => !prev)}
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+              Filters
+              {activeFilterCount > 0 && (
+                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+                  {activeFilterCount}
+                </span>
+              )}
+            </Button>
+            {rows.length > 0 && (
+              <Button variant="outline" size="sm" className="h-9" onClick={() => exportToExcel(rows)}>
+                <Download className="mr-1.5 h-4 w-4" />Export Excel
+              </Button>
+            )}
+          </div>
+        }
       />
 
-      {/* Filter bar */}
-      <div className="mb-5 flex flex-wrap items-end gap-4 w-full">
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">Month &amp; Year</Label>
-          <MonthYearPicker
-            value={monthYear}
-            onChange={(val) => { setMonthYear(val); setPage(1); }}
-            placeholder="All months"
-            className="w-44"
-          />
-        </div>
+      {/* Collapsible filter panel */}
+      <div className={`overflow-hidden transition-all duration-500 ease-in-out ${filtersOpen ? 'max-h-[220px] opacity-100 mb-5' : 'max-h-0 opacity-0 mb-0'}`}>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full rounded-lg border bg-muted/30 p-4">
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Month &amp; Year</Label>
+            <MonthYearPicker
+              value={monthYear}
+              onChange={(val) => { setMonthYear(val); setPage(1); }}
+              placeholder="All months"
+              className="w-full"
+            />
+          </div>
 
-        <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
-          <Label className="text-xs">Client</Label>
-          <SearchableSelect
-            options={[
-              { label: "All Clients", value: "all" },
-              ...activeClients.map((c) => ({
-                label: c.client_name,
-                value: String(c.id)
-              }))
-            ]}
-            value={clientId}
-            onValueChange={(v) => { setClientId(v); setPage(1); }}
-            placeholder="All Clients"
-            searchPlaceholder="Search client..."
-            className="h-9 text-sm"
-          />
-        </div>
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Client</Label>
+            <SearchableSelect
+              options={[
+                { label: "All Clients", value: "all" },
+                ...activeClients.map((c) => ({
+                  label: c.client_name,
+                  value: String(c.id)
+                }))
+              ]}
+              value={clientId}
+              onValueChange={(v) => { setClientId(v); setPage(1); }}
+              placeholder="All Clients"
+              searchPlaceholder="Search client..."
+              className="h-9 text-sm w-full"
+            />
+          </div>
 
-        <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
-          <Label className="text-xs">Employee</Label>
-          <SearchableSelect
-            options={[
-              { label: "All Employees", value: "all" },
-              ...activeEmployees.map((e) => ({
-                label: e.full_name,
-                value: String(e.id)
-              }))
-            ]}
-            value={employeeId}
-            onValueChange={(v) => { setEmployeeId(v); setPage(1); }}
-            placeholder="All Employees"
-            searchPlaceholder="Search employee..."
-            className="h-9 text-sm"
-          />
-        </div>
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Employee</Label>
+            <SearchableSelect
+              options={[
+                { label: "All Employees", value: "all" },
+                ...activeEmployees.map((e) => ({
+                  label: e.full_name,
+                  value: String(e.id)
+                }))
+              ]}
+              value={employeeId}
+              onValueChange={(v) => { setEmployeeId(v); setPage(1); }}
+              placeholder="All Employees"
+              searchPlaceholder="Search employee..."
+              className="h-9 text-sm w-full"
+            />
+          </div>
 
-        <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
-          <Label className="text-xs">Service PO</Label>
-          <SearchableSelect
-            options={[
-              { label: "All POs", value: "all" },
-              ...activePOs.map((po) => ({
-                label: po.service_po_name || po.service_po_code || String(po.id),
-                value: String(po.id)
-              }))
-            ]}
-            value={poId}
-            onValueChange={(v) => { setPoId(v); setPage(1); }}
-            placeholder="All POs"
-            searchPlaceholder="Search PO..."
-            className="h-9 text-sm"
-          />
-        </div>
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Service PO</Label>
+            <SearchableSelect
+              options={[
+                { label: "All POs", value: "all" },
+                ...activePOs.map((po) => ({
+                  label: po.service_po_name || po.service_po_code || String(po.id),
+                  value: String(po.id)
+                }))
+              ]}
+              value={poId}
+              onValueChange={(v) => { setPoId(v); setPage(1); }}
+              placeholder="All POs"
+              searchPlaceholder="Search PO..."
+              className="h-9 text-sm w-full"
+            />
+          </div>
 
-        <div className="flex flex-col gap-1.5 flex-1 min-w-[180px]">
-          <Label className="text-xs">Service Type</Label>
-          <SearchableSelect
-            options={[
-              { label: "All Service Types", value: "all" },
-              ...activeServiceTypes.map((st) => ({
-                label: st.service_type_name,
-                value: String(st.id)
-              }))
-            ]}
-            value={serviceTypeId}
-            onValueChange={(v) => { setServiceTypeId(v); setPage(1); }}
-            placeholder="All Service Types"
-            searchPlaceholder="Search type..."
-            className="h-9 text-sm"
-          />
-        </div>
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Service Type</Label>
+            <SearchableSelect
+              options={[
+                { label: "All Service Types", value: "all" },
+                ...activeServiceTypes.map((st) => ({
+                  label: st.service_type_name,
+                  value: String(st.id)
+                }))
+              ]}
+              value={serviceTypeId}
+              onValueChange={(v) => { setServiceTypeId(v); setPage(1); }}
+              placeholder="All Service Types"
+              searchPlaceholder="Search type..."
+              className="h-9 text-sm w-full"
+            />
+          </div>
 
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">PO Status</Label>
-          <SearchableSelect showSearch={false}
-            options={[
-              { label: "All status", value: "all" },
-              { label: "In Progress", value: "in-progress" },
-              { label: "Completed", value: "completed" },
-              { label: "On Hold", value: "on-hold" },
-              { label: "Pending", value: "pending" },
-              { label: "Cancelled", value: "cancelled" },
-              { label: "Closed", value: "closed" },
-            ]}
-            value={poStatus}
-            onValueChange={(v) => { setPoStatus(v); setPage(1); }}
-            placeholder="All status"
-            className="h-9 w-36 text-sm"
-          />
-        </div>
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">PO Status</Label>
+            <SearchableSelect showSearch={false}
+              options={[
+                { label: "All status", value: "all" },
+                { label: "In Progress", value: "in-progress" },
+                { label: "Completed", value: "completed" },
+                { label: "On Hold", value: "on-hold" },
+                { label: "Pending", value: "pending" },
+                { label: "Cancelled", value: "cancelled" },
+                { label: "Closed", value: "closed" },
+              ]}
+              value={poStatus}
+              onValueChange={(v) => { setPoStatus(v); setPage(1); }}
+              placeholder="All status"
+              className="h-9 text-sm w-full"
+            />
+          </div>
 
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">Billable</Label>
-          <SearchableSelect showSearch={false}
-            options={[
-              { label: "All", value: "all" },
-              { label: "Yes", value: "yes" },
-              { label: "No", value: "no" },
-            ]}
-            value={billable}
-            onValueChange={(v) => { setBillable(v); setPage(1); }}
-            placeholder="All"
-            className="h-9 w-28 text-sm"
-          />
-        </div>
-
-        <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
-          <Label className="text-xs">Search</Label>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Employee, PO…"
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-              className="h-9 pl-9 w-full  text-sm"
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Billable</Label>
+            <SearchableSelect showSearch={false}
+              options={[
+                { label: "All", value: "all" },
+                { label: "Yes", value: "yes" },
+                { label: "No", value: "no" },
+              ]}
+              value={billable}
+              onValueChange={(v) => { setBillable(v); setPage(1); }}
+              placeholder="All"
+              className="h-9 text-sm w-full"
             />
           </div>
         </div>

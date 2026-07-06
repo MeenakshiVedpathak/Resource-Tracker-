@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 import store from '@/store';
 import { ThemeProvider } from '@/contexts/ThemeContext';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { registerLogoutCallback } from '@/services/apiClient';
 import { logout } from '@/store/slices/authSlice';
 import App from './App';
@@ -38,7 +39,9 @@ createRoot(document.getElementById('root')).render(
     <Provider store={store}>
       <QueryClientProvider client={queryClient}>
         <ThemeProvider>
+          <TooltipProvider delayDuration={300}>
           <App />
+          </TooltipProvider>
           <Toaster
             position="top-right"
             gutter={8}

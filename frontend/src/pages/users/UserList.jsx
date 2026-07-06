@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useNavigate, Outlet } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
 import { Plus, Pencil, Trash2, Search } from 'lucide-react';
-import { useUsers, useDeleteUser } from '@/hooks/useUsers';
+import { useUsers, useDeleteUser, useToggleUserStatus } from '@/hooks/useUsers';
 import { useRoles } from '@/hooks/useRoles';
 import { useAuth } from '@/hooks/useAuth';
 import { useNotification } from '@/hooks/useNotification';
@@ -17,6 +17,7 @@ import StatusBadge from '@/components/common/StatusBadge';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Badge } from '@/components/ui/badge';
@@ -28,6 +29,25 @@ const TruncatedCell = ({ value, maxWidth = '150px', className }) => {
   return (
     <div className={cn("text-sm truncate", className)} style={{ maxWidth }} title={value}>
       {value}
+    </div>
+  );
+};
+
+const StatusToggle = ({ user }) => {
+  const { mutate, isPending } = useToggleUserStatus();
+  const isActive = user.status === 'active';
+  return (
+    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+      <Switch
+        checked={isActive}
+        disabled={isPending}
+        onCheckedChange={(checked) =>
+          mutate({ id: user.id, status: checked ? 'active' : 'inactive' })
+        }
+      />
+      <span className={cn('text-xs font-medium', isActive ? 'text-green-600' : 'text-slate-400')}>
+        {isActive ? 'Active' : 'Inactive'}
+      </span>
     </div>
   );
 };
@@ -158,8 +178,8 @@ const UserList = () => {
     }),
     columnHelper.accessor('status', {
       header: 'Status',
-      size: 100,
-      cell: (info) => <StatusBadge status={info.getValue()} />,
+      size: 140,
+      cell: (info) => <StatusToggle user={info.row.original} />,
     }),
     columnHelper.accessor('last_login', {
       header: 'Last Login',
@@ -214,18 +234,26 @@ const UserList = () => {
         isLoading={isPending}
         toolbar={
           <>
-            <SearchableSelect showSearch={false}
-              options={[
-                { label: "All status", value: "all" },
-                { label: "Active", value: "active" },
-                { label: "Inactive", value: "inactive" }
-              ]}
-              value={statusFilter}
-              onValueChange={(v) => { setStatusFilter(v); setPage(1); }}
-              placeholder="All status"
-              searchPlaceholder="Search status..."
-              className="h-9 w-32 text-sm bg-white"
-            />
+            <div className="flex items-center rounded-md border overflow-hidden h-9 text-sm">
+              {[
+                { label: 'All', value: 'all' },
+                { label: 'Active', value: 'active' },
+                { label: 'Inactive', value: 'inactive' },
+              ].map(({ label, value }) => (
+                <button
+                  key={value}
+                  onClick={() => { setStatusFilter(value); setPage(1); }}
+                  className={cn(
+                    'px-3 h-full font-medium transition-colors border-r last:border-r-0',
+                    statusFilter === value
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-background text-muted-foreground hover:bg-muted'
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
             <SearchableSelect
               options={[
                 { label: "All roles", value: "all" },

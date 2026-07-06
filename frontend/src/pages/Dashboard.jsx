@@ -17,7 +17,7 @@ import BillableAnalyticsPanel from '@/components/charts/BillableAnalyticsPanel';
 import TopEmployeesByPOPanel from '@/components/charts/TopEmployeesByPOPanel';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { SearchableSelect } from '@/components/ui/searchable-select';
+import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import { formatCurrency, formatHours, formatPercentage, formatDate } from '@/utils/formatters';
 
 const containerVariants = {
@@ -30,44 +30,35 @@ const itemVariants = {
   show: { opacity: 1, y: 0, transition: { duration: 0.25 } },
 };
 
-const MONTH_OPTIONS = [
-  { value: '1',  label: 'January' },
-  { value: '2',  label: 'February' },
-  { value: '3',  label: 'March' },
-  { value: '4',  label: 'April' },
-  { value: '5',  label: 'May' },
-  { value: '6',  label: 'June' },
-  { value: '7',  label: 'July' },
-  { value: '8',  label: 'August' },
-  { value: '9',  label: 'September' },
-  { value: '10', label: 'October' },
-  { value: '11', label: 'November' },
-  { value: '12', label: 'December' },
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
 ];
-
-const YEAR_OPTIONS = Array.from({ length: 10 }, (_, i) => {
-  const y = new Date().getFullYear() - 5 + i;
-  return { label: String(y), value: String(y) };
-});
 
 const now = new Date();
 
 const Dashboard = () => {
-  const [month, setMonth] = useState(String(now.getMonth() + 1));
-  const [year, setYear] = useState(String(now.getFullYear()));
+  const [monthYear, setMonthYear] = useState({ month: now.getMonth() + 1, year: now.getFullYear() });
+  const [billablePage, setBillablePage] = useState(1);
+
+  const month = String(monthYear.month);
+  const year  = String(monthYear.year);
+
+  const handleMonthYearChange = (v) => { if (v) { setMonthYear(v); setBillablePage(1); } };
 
   const { data: stats, isPending, refetch, isFetching, dataUpdatedAt } = useDashboard({ month, year });
 
   const { data: topEmployeesByPOData, isPending: isTopEmployeesByPOPending } = useTopEmployeesByPO({
     month: Number(month),
     year: Number(year),
-    limit: 10,
+    limit: 100,
   });
 
   const { data: billableBreakdownData, isPending: isBillableBreakdownPending } = useEmployeeBillableBreakdown({
     month: Number(month),
     year: Number(year),
     limit: 10,
+    page: billablePage,
   });
 
 
@@ -93,7 +84,7 @@ const Dashboard = () => {
   const utilisationPct = currentMonth.overall_utilisation_pct;
   const lastUpdated = dataUpdatedAt ? formatDate(new Date(dataUpdatedAt), 'DD MMM YYYY, hh:mm A') : null;
 
-  const selectedMonthLabel = MONTH_OPTIONS.find((m) => m.value === month)?.label ?? '';
+  const selectedMonthLabel = MONTH_NAMES[Number(month) - 1] ?? '';
 
   return (
     <div className="space-y-6">
@@ -102,26 +93,13 @@ const Dashboard = () => {
         description={lastUpdated ? `Last refreshed ${lastUpdated}` : 'Overview of resources, costs, and activity'}
         actions={
           <div className="flex items-end gap-3">
-            <div className="flex flex-col gap-1">
-              <Label className="text-xs">Month</Label>
-              <SearchableSelect
-                showSearch={false}
-                options={MONTH_OPTIONS}
-                value={month}
-                onValueChange={setMonth}
-                placeholder="Month"
-                className="h-8 w-32 text-sm"
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <Label className="text-xs">Year</Label>
-              <SearchableSelect
-                showSearch={false}
-                options={YEAR_OPTIONS}
-                value={year}
-                onValueChange={setYear}
-                placeholder="Year"
-                className="h-8 w-24 text-sm"
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs font-medium">Month & Year</Label>
+              <MonthYearPicker
+                value={monthYear}
+                onChange={handleMonthYearChange}
+                clearable={false}
+                className="w-44"
               />
             </div>
             <Button
@@ -143,7 +121,7 @@ const Dashboard = () => {
         variants={containerVariants}
         initial="hidden"
         animate="show"
-        className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6"
+        className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6"
       >
         <motion.div variants={itemVariants}>
           <StatCard
@@ -167,16 +145,17 @@ const Dashboard = () => {
         </motion.div>
         <motion.div variants={itemVariants}>
           <StatCard
-            title={`Hours (${selectedMonthLabel} ${year})`}
+            title="Total Hours"
             value={isPending ? '—' : formatHours(currentMonth.total_hours_logged ?? 0)}
             icon={Clock}
             gradient="orange"
+            description={isPending ? undefined : `${selectedMonthLabel} ${year}`}
             isLoading={isPending}
           />
         </motion.div>
         <motion.div variants={itemVariants}>
           <StatCard
-            title={`Billable (${selectedMonthLabel} ${year})`}
+            title="Billable Hours"
             value={isPending ? '—' : formatHours(currentMonthBillable)}
             icon={TrendingUp}
             gradient="green"
@@ -192,7 +171,7 @@ const Dashboard = () => {
         </motion.div>
         <motion.div variants={itemVariants}>
           <StatCard
-            title={`Non-Billable (${selectedMonthLabel} ${year})`}
+            title="Non-Billable Hours"
             value={isPending ? '—' : formatHours(currentMonthNonBillable)}
             icon={TrendingDown}
             gradient="red"
@@ -232,6 +211,40 @@ const Dashboard = () => {
           </p>
         </motion.div>
       )}
+       {/* ── Employee billable breakdown ── */}
+      <motion.div
+        variants={containerVariants}
+        initial="hidden"
+        animate="show"
+      >
+        <motion.div variants={itemVariants}>
+          <BillableAnalyticsPanel
+            data={billableBreakdownData?.data ?? []}
+            meta={billableBreakdownData?.meta ?? {}}
+            isLoading={isBillableBreakdownPending}
+            month={Number(month)}
+            year={Number(year)}
+            page={billablePage}
+            onPageChange={setBillablePage}
+          />
+        </motion.div>
+      </motion.div>
+
+      {/* ── Top employees by Service PO ── */}
+      <motion.div
+        variants={containerVariants}
+        initial="hidden"
+        animate="show"
+      >
+        <motion.div variants={itemVariants}>
+          <TopEmployeesByPOPanel
+            data={topEmployeesByPOData?.data ?? []}
+            isLoading={isTopEmployeesByPOPending}
+            month={Number(month)}
+            year={Number(year)}
+          />
+        </motion.div>
+      </motion.div>
 
       {/* ── Charts row ── */}
       <motion.div
@@ -259,39 +272,7 @@ const Dashboard = () => {
 
    
 
-      {/* ── Employee billable breakdown ── */}
-      <motion.div
-        variants={containerVariants}
-        initial="hidden"
-        animate="show"
-      >
-        <motion.div variants={itemVariants}>
-          <BillableAnalyticsPanel
-            data={billableBreakdownData?.data ?? []}
-            meta={billableBreakdownData?.meta ?? {}}
-            isLoading={isBillableBreakdownPending}
-            month={Number(month)}
-            year={Number(year)}
-          />
-        </motion.div>
-      </motion.div>
-
-      {/* ── Top employees by Service PO ── */}
-      <motion.div
-        variants={containerVariants}
-        initial="hidden"
-        animate="show"
-      >
-        <motion.div variants={itemVariants}>
-          <TopEmployeesByPOPanel
-            data={topEmployeesByPOData?.data ?? []}
-            meta={topEmployeesByPOData?.meta ?? {}}
-            isLoading={isTopEmployeesByPOPending}
-            month={Number(month)}
-            year={Number(year)}
-          />
-        </motion.div>
-      </motion.div>
+     
 
       {/* ── Bottom row: workforce donut + portfolio card + activity feed ── */}
       <motion.div
@@ -312,12 +293,12 @@ const Dashboard = () => {
             isLoading={isPending}
           />
         </motion.div>
-        <motion.div variants={itemVariants} className="md:col-span-2 lg:col-span-1">
+        {/* <motion.div variants={itemVariants} className="md:col-span-2 lg:col-span-1">
           <ActivityFeed
             entries={activity.recent_timesheet_entries ?? []}
             isLoading={isPending}
           />
-        </motion.div>
+        </motion.div> */}
       </motion.div>
     </div>
   );

@@ -1,8 +1,16 @@
+import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import EmptyState from '@/components/common/EmptyState';
-import { Briefcase, Users, AlertTriangle } from 'lucide-react';
+import { Briefcase, Users, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/utils/cn';
+import { Label } from '@/components/ui/label';
+import { SearchableSelect } from '@/components/ui/searchable-select';
+import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
+import { useActiveServicePOs, useServicePOs } from '@/hooks/useServicePOs';
+import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
+
+const PAGE_SIZE = 9;
 
 const EMP_COLORS = ['#6366f1', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6'];
 
@@ -31,14 +39,10 @@ const POCard = ({ po, rank }) => {
 
   return (
     <div className="rounded-xl border bg-card flex flex-col overflow-hidden hover:shadow-md transition-shadow">
-
-      {/* ── Card header ── */}
       <div className="px-4 pt-4 pb-3 flex items-start gap-3 border-b bg-muted/20">
-        {/* Rank badge */}
         <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
           <span className="text-[11px] font-bold text-primary">{rank}</span>
         </div>
-
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-sm leading-snug text-foreground line-clamp-2">
             {po.service_po_name}
@@ -47,7 +51,6 @@ const POCard = ({ po, rank }) => {
             {po.client_name}
           </p>
         </div>
-
         <div className="flex flex-col items-end gap-1.5 shrink-0">
           <span className={cn(
             'text-[10px] font-semibold px-2 py-0.5 rounded-full leading-none',
@@ -58,14 +61,11 @@ const POCard = ({ po, rank }) => {
             {po.is_billable ? 'Billable' : 'Non-Billable'}
           </span>
           {totalH > 0 && (
-            <span className="text-xs font-bold tabular-nums text-foreground">
-              {totalH}h
-            </span>
+            <span className="text-xs font-bold tabular-nums text-foreground">{totalH}h</span>
           )}
         </div>
       </div>
 
-      {/* ── Employee list ── */}
       <div className="px-4 py-3 flex-1">
         {active.length === 0 ? (
           <p className="text-xs text-muted-foreground italic py-2">No hours logged this month</p>
@@ -75,10 +75,8 @@ const POCard = ({ po, rank }) => {
               const pct   = totalH > 0 ? (e.hours / totalH) * 100 : 0;
               const color = EMP_COLORS[i % EMP_COLORS.length];
               const isTop = i === 0;
-
               return (
                 <div key={e.employee_id}>
-                  {/* Name + hours row */}
                   <div className="flex items-center justify-between gap-2 mb-1.5">
                     <div className="flex items-center gap-1.5 min-w-0">
                       {isTop && (
@@ -94,16 +92,12 @@ const POCard = ({ po, rank }) => {
                       </span>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-xs font-semibold tabular-nums" style={{ color }}>
-                        {e.hours}h
-                      </span>
+                      <span className="text-xs font-semibold tabular-nums" style={{ color }}>{e.hours}h</span>
                       <span className="text-[10px] text-muted-foreground tabular-nums w-8 text-right">
                         {pct.toFixed(0)}%
                       </span>
                     </div>
                   </div>
-
-                  {/* Individual progress bar */}
                   <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
                     <div
                       className="h-full rounded-full transition-all duration-500"
@@ -117,7 +111,6 @@ const POCard = ({ po, rank }) => {
         )}
       </div>
 
-      {/* ── Footer ── */}
       {active.length > 0 && (
         <div className="px-4 py-2.5 border-t bg-muted/10 flex items-center justify-between">
           <span className="text-[10px] text-muted-foreground">
@@ -136,7 +129,7 @@ const POCard = ({ po, rank }) => {
 /* ── Skeleton grid ── */
 const SkeletonGrid = () => (
   <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-    {Array.from({ length: 6 }).map((_, i) => (
+    {Array.from({ length: PAGE_SIZE }).map((_, i) => (
       <div key={i} className="rounded-xl border overflow-hidden">
         <div className="px-4 pt-4 pb-3 border-b bg-muted/20 flex gap-3">
           <Skeleton className="h-7 w-7 rounded-full shrink-0" />
@@ -163,23 +156,100 @@ const SkeletonGrid = () => (
 );
 
 /* ── Main component ── */
-const TopEmployeesByPOPanel = ({ data = [], meta = {}, isLoading, month, year }) => {
+const TopEmployeesByPOPanel = ({ data = [], isLoading, month, year }) => {
+  const [categoryId, setCategoryId]   = useState('all');
+  const [poFilterId, setPoFilterId]   = useState('all');
+  const [clientPage, setClientPage]   = useState(1);
+
+  /* ── Dropdown data ── */
+  const { data: activeCategories = [] } = useActiveServiceCategories();
+  const { data: activePOOptions = [] }  = useActiveServicePOs();
+
+  /* ── Service types + full PO list for category → type → PO mapping ── */
+  const { data: serviceTypes = [] }  = useActiveServiceTypes();
+  const { data: allPOsResponse }     = useServicePOs({ limit: 500 });
+  const allPOs                       = useMemo(() => allPOsResponse?.data ?? [], [allPOsResponse]);
+
+  /* ── poTypeMap: String(poId) → Number(service_type_id) ── */
+  const poTypeMap = useMemo(() => {
+    const map = {};
+    allPOs.forEach((po) => {
+      // API returns nested camelCase: po.serviceType.id (not flat po.service_type_id)
+      const typeId = po.service_type_id ?? po.serviceType?.id ?? po.service_type?.id;
+      if (po.id != null && typeId != null) map[String(po.id)] = Number(typeId);
+    });
+    return map;
+  }, [allPOs]);
+
+  /* ── DEBUG ── */
+  useEffect(() => {
+    console.group('[TopEmp] Data shapes');
+    console.log('allPOs count:', allPOs.length);
+    if (allPOs.length > 0) console.log('allPOs[0]:', allPOs[0]);
+    console.log('serviceTypes count:', serviceTypes.length);
+    if (serviceTypes.length > 0) console.log('serviceTypes[0]:', serviceTypes[0]);
+    console.log('poTypeMap:', poTypeMap);
+    console.groupEnd();
+  }, [allPOs, serviceTypes, poTypeMap]);
+
+  /* ── Set of type IDs belonging to the selected category (null = no filter) ── */
+  const selectedTypeIds = useMemo(() => {
+    if (categoryId === 'all') return null;
+    return new Set(
+      serviceTypes
+        .filter((st) => st.service_category_id != null && String(st.service_category_id) === categoryId)
+        .map((st) => Number(st.id))
+    );
+  }, [categoryId, serviceTypes]);
+
+  /* ── Reset page on filter change ── */
+  useEffect(() => { setClientPage(1); }, [poFilterId, categoryId]);
+
+  /* ── Client-side filtering ── */
+  const filteredData = useMemo(() => {
+    let result = data;
+
+    if (poFilterId !== 'all') {
+      result = result.filter((po) => String(po.service_po_id) === poFilterId);
+    }
+
+    if (selectedTypeIds !== null) {
+      console.group('[TopEmp] Category filter active');
+      console.log('selectedTypeIds:', [...selectedTypeIds]);
+      console.log('poTypeMap size:', Object.keys(poTypeMap).length);
+      result = result.filter((po) => {
+        const typeId = poTypeMap[String(po.service_po_id)];
+        const passes = typeId != null && selectedTypeIds.has(typeId);
+        console.log(`PO ${po.service_po_id} "${po.service_po_name}": typeId=${typeId}, passes=${passes}`);
+        return passes;
+      });
+      console.groupEnd();
+    }
+
+    return result;
+  }, [data, poFilterId, selectedTypeIds, poTypeMap]);
+
+  /* ── Client-side pagination ── */
+  const totalPages   = Math.ceil(filteredData.length / PAGE_SIZE);
+  const paginatedData = filteredData.slice((clientPage - 1) * PAGE_SIZE, clientPage * PAGE_SIZE);
+
   const monthLabel = month && year
     ? new Date(year, month - 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' })
     : 'This Month';
 
-  const activePOs = data.filter((po) =>
+  /* ── Summary stats (from filtered data) ── */
+  const activePOs = filteredData.filter((po) =>
     (po.top_employees ?? []).some((e) => e.hours > 0)
   );
-
   const singleContributorCount = activePOs.filter(
     (po) => (po.top_employees ?? []).filter((e) => e.hours > 0).length === 1
   ).length;
-
-  const totalHours = data.reduce(
+  const totalHours = filteredData.reduce(
     (s, po) => s + (po.top_employees ?? []).reduce((ps, e) => ps + (e.hours || 0), 0),
     0
   );
+
+  const isFiltered = categoryId !== 'all' || poFilterId !== 'all';
 
   return (
     <Card>
@@ -191,17 +261,54 @@ const TopEmployeesByPOPanel = ({ data = [], meta = {}, isLoading, month, year })
       </CardHeader>
 
       <CardContent>
+        {/* ── Filters ── */}
+        <div className="mb-5 flex flex-wrap items-end gap-3">
+          <div className="flex flex-col gap-1">
+            <Label className="text-xs">Service Category</Label>
+            <SearchableSelect
+              options={[
+                { label: 'All Categories', value: 'all' },
+                ...activeCategories.map((c) => ({ label: c.name, value: String(c.id) })),
+              ]}
+              value={categoryId}
+              onValueChange={setCategoryId}
+              placeholder="All Categories"
+              className="h-8 w-44 text-sm"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <Label className="text-xs">Service PO</Label>
+            <SearchableSelect
+              options={[
+                { label: 'All POs', value: 'all' },
+                ...activePOOptions.map((po) => ({
+                  label: po.service_po_name || po.service_po_code || String(po.id),
+                  value: String(po.id),
+                })),
+              ]}
+              value={poFilterId}
+              onValueChange={setPoFilterId}
+              placeholder="All POs"
+              className="h-8 w-56 text-sm"
+            />
+          </div>
+        </div>
+
         {isLoading && <SkeletonGrid />}
 
-        {!isLoading && data.length === 0 && (
+        {!isLoading && filteredData.length === 0 && (
           <EmptyState
             icon={Briefcase}
-            title="No PO data for this period"
-            description="Data will appear once timesheets are submitted against Service POs."
+            title={isFiltered ? 'No results for this filter' : 'No PO data for this period'}
+            description={
+              isFiltered
+                ? 'Try changing or clearing the filters above.'
+                : 'Data will appear once timesheets are submitted against Service POs.'
+            }
           />
         )}
 
-        {!isLoading && data.length > 0 && (
+        {!isLoading && filteredData.length > 0 && (
           <>
             {/* Summary pills */}
             <div className="mb-5 flex flex-wrap gap-2">
@@ -231,15 +338,42 @@ const TopEmployeesByPOPanel = ({ data = [], meta = {}, isLoading, month, year })
 
             {/* PO cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-              {data.map((po, idx) => (
-                <POCard key={po.service_po_id} po={po} rank={idx + 1} />
+              {paginatedData.map((po, idx) => (
+                <POCard
+                  key={po.service_po_id}
+                  po={po}
+                  rank={(clientPage - 1) * PAGE_SIZE + idx + 1}
+                />
               ))}
             </div>
 
-            <p className="mt-4 text-xs text-muted-foreground">
-              Showing {data.length} of {meta.total ?? data.length} service POs
-              {(meta.total ?? 0) > data.length && ` · ${(meta.total ?? 0) - data.length} more on next page`}
-            </p>
+            {/* Pagination */}
+            <div className="mt-4 flex items-center justify-between gap-3">
+              <p className="text-xs text-muted-foreground">
+                Showing {Math.min((clientPage - 1) * PAGE_SIZE + 1, filteredData.length)}–{Math.min(clientPage * PAGE_SIZE, filteredData.length)} of {filteredData.length} service POs
+              </p>
+              {totalPages > 1 && (
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setClientPage((p) => p - 1)}
+                    disabled={clientPage <= 1}
+                    className="flex items-center gap-1 rounded border px-2 py-1 text-xs transition-colors disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted/50"
+                  >
+                    <ChevronLeft className="h-3 w-3" /> Prev
+                  </button>
+                  <span className="text-xs text-muted-foreground tabular-nums">
+                    {clientPage} / {totalPages}
+                  </span>
+                  <button
+                    onClick={() => setClientPage((p) => p + 1)}
+                    disabled={clientPage >= totalPages}
+                    className="flex items-center gap-1 rounded border px-2 py-1 text-xs transition-colors disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted/50"
+                  >
+                    Next <ChevronRight className="h-3 w-3" />
+                  </button>
+                </div>
+              )}
+            </div>
           </>
         )}
       </CardContent>
