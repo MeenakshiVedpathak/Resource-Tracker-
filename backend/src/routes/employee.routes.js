@@ -11,6 +11,7 @@ const {
   updateEmployeeSchema,
 } = require('../validations/employeeValidation');
 const employeeController = require('../controllers/employeeController');
+const { handleEmployeeUpload } = require('../middlewares/upload');
 
 /**
  * @swagger
@@ -31,8 +32,74 @@ const employeeController = require('../controllers/employeeController');
  *       200:
  *         description: Active employee list
  */
-// NOTE: This specific route must be declared BEFORE /:id to avoid "active" being
-// parsed as an id parameter.
+// NOTE: Static routes must be declared BEFORE /:id to avoid being parsed as an id parameter.
+
+/**
+ * @swagger
+ * /employees/import:
+ *   post:
+ *     summary: Bulk-import employees from an Excel or CSV file
+ *     tags: [Employees]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required: [file]
+ *             properties:
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *                 description: >
+ *                   .xlsx or .csv file. Expected columns (header row flexible):
+ *                   Employee Code*, Full Name*, Designation, Total Experience,
+ *                   Company Experience, Email ID, Resource Description,
+ *                   Date of Joining, Date of Leaving, Status
+ *     responses:
+ *       200:
+ *         description: Import summary
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 total:
+ *                   type: integer
+ *                   description: Total rows in the file
+ *                 imported:
+ *                   type: integer
+ *                   description: Rows successfully inserted
+ *                 skipped:
+ *                   type: integer
+ *                   description: Rows skipped due to validation or DB errors
+ *                 error_rows:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       row:
+ *                         type: integer
+ *                         description: 1-based row number in the file
+ *                       errors:
+ *                         type: array
+ *                         items:
+ *                           type: string
+ *       400:
+ *         description: No file attached
+ *       422:
+ *         description: File format error (unreadable or no recognised header)
+ */
+router.post(
+  '/import',
+  authenticate,
+  authorize(['HR']),
+  handleEmployeeUpload,
+  employeeController.importEmployees
+);
+
 router.get(
   '/active/list',
   authenticate,

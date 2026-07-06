@@ -22,7 +22,7 @@ const MONTH_YEAR_SQL = {
 /**
  * Get employee hourly rate by joining employees with monthly_costs.
  * per_hour_rate = total_cost / (standard working hours in the month)
- * We use 160 hrs/month (20 working days × 8 hrs) as the standard divisor.
+ * We use 176 hrs/month (22 working days × 8 hrs) as the standard divisor.
  *
  * @param {object} filters
  * @param {number} filters.month
@@ -47,7 +47,7 @@ async function getEmployeeHourlyRate(filters) {
     offset,
   } = filters;
 
-  const STANDARD_HOURS = 160;
+  const STANDARD_HOURS = 176;
   const allowedSortColumns = [
     'e.full_name', 'e.employee_code', 'e.designation',
     'mc.salary_cost', 'mc.total_cost', 'per_hour_rate',
@@ -562,10 +562,12 @@ async function getResourceAllocation(filters) {
   const {
     employeeId,
     poId,
-    serviceTypeId,
+    clientId,
     month,
     year,
     status,
+    isBillable,
+    serviceTypeId,
     search,
     sortBy = 'e.full_name',
     sortOrder = 'ASC',
@@ -592,31 +594,35 @@ async function getResourceAllocation(filters) {
     conditions.push('sp.id = :poId');
     replacements.poId = poId;
   }
-  if (serviceTypeId) {
-    conditions.push('st.id = :serviceTypeId');
-    replacements.serviceTypeId = serviceTypeId;
+  if (clientId) {
+    conditions.push('c.id = :clientId');
+    replacements.clientId = clientId;
   }
   if (status && status !== 'all') {
     conditions.push('sp.status = :status');
     replacements.status = status;
+  }
+  if (isBillable !== undefined) {
+    conditions.push('sp.is_billable = :isBillable');
+    replacements.isBillable = isBillable;
+  }
+  if (serviceTypeId) {
+    conditions.push('st.id = :serviceTypeId');
+    replacements.serviceTypeId = serviceTypeId;
   }
   if (search) {
     conditions.push('(e.full_name ILIKE :search OR e.employee_code ILIKE :search OR sp.service_po_name ILIKE :search OR c.client_name ILIKE :search)');
     replacements.search = `%${search}%`;
   }
 
-  // Date filter applied to timesheet join (does not exclude the employee-PO pair,
-  // only scopes the hours aggregation to the selected period)
-  const tsDateConditions = [];
   if (month) {
-    tsDateConditions.push('EXTRACT(MONTH FROM t.timesheet_date) = :month');
+    conditions.push('EXTRACT(MONTH FROM t.timesheet_date) = :month');
     replacements.month = parseInt(month, 10);
   }
   if (year) {
-    tsDateConditions.push('EXTRACT(YEAR FROM t.timesheet_date) = :year');
+    conditions.push('EXTRACT(YEAR FROM t.timesheet_date) = :year');
     replacements.year = parseInt(year, 10);
   }
-  const tsDateFilter = tsDateConditions.length ? `AND ${tsDateConditions.join(' AND ')}` : '';
 
   const whereClause = `WHERE ${conditions.join(' AND ')}`;
 
@@ -639,17 +645,18 @@ async function getResourceAllocation(filters) {
       c.id                                     AS client_id,
       c.client_name,
       st.service_type_name,
-      COALESCE(SUM(CASE WHEN t.id IS NOT NULL ${tsDateFilter} THEN t.hours_logged ELSE 0 END), 0) AS total_hours_logged
+      COALESCE(SUM(t.hours_logged), 0) AS total_hours_logged
     FROM timesheets t
-    INNER JOIN employees e    ON e.id  = t.employee_id
-    INNER JOIN service_pos sp ON sp.id = t.service_po_id
-    INNER JOIN clients c      ON c.id  = sp.client_id
+    INNER JOIN employees e      ON e.id  = t.employee_id
+    INNER JOIN service_pos sp   ON sp.id = t.service_po_id
+    INNER JOIN clients c        ON c.id  = sp.client_id
     INNER JOIN service_types st ON st.id = sp.service_type_id
     ${whereClause}
     GROUP BY e.id, e.employee_code, e.full_name,
              e.designation, e.total_experience, e.company_experience, e.status,
              sp.id, sp.service_po_code, sp.service_po_name, sp.status, sp.is_billable,
              sp.start_date, sp.end_date, c.id, c.client_name, st.service_type_name
+    HAVING COALESCE(SUM(t.hours_logged), 0) > 0
     ORDER BY ${safeSort} ${safeOrder}
     LIMIT :limit OFFSET :offset
   `;
@@ -659,12 +666,13 @@ async function getResourceAllocation(filters) {
     FROM (
       SELECT t.employee_id, t.service_po_id
       FROM timesheets t
-      INNER JOIN employees e    ON e.id  = t.employee_id
-      INNER JOIN service_pos sp ON sp.id = t.service_po_id
-      INNER JOIN clients c      ON c.id  = sp.client_id
+      INNER JOIN employees e      ON e.id  = t.employee_id
+      INNER JOIN service_pos sp   ON sp.id = t.service_po_id
+      INNER JOIN clients c        ON c.id  = sp.client_id
       INNER JOIN service_types st ON st.id = sp.service_type_id
       ${whereClause}
       GROUP BY t.employee_id, t.service_po_id
+      HAVING COALESCE(SUM(t.hours_logged), 0) > 0
     ) sub
   `;
 
@@ -953,6 +961,7 @@ async function getEmployeeUtilizationSummary(filters) {
  * @param {string} [filters.status]        - PO status filter (active|closed|all)
  * @param {number} [filters.clientId]
  * @param {boolean} [filters.isBillable]
+ * @param {number} [filters.serviceTypeId]
  * @param {string} [filters.search]        - client_name or service_po_name
  * @param {string} [filters.sortBy]
  * @param {string} [filters.sortOrder]
@@ -967,6 +976,9 @@ async function getServicePOSummary(filters) {
     status,
     clientId,
     isBillable,
+    serviceTypeId,
+    startDate,
+    endDate,
     search,
     sortBy = 'c.client_name',
     sortOrder = 'ASC',
@@ -1003,6 +1015,18 @@ async function getServicePOSummary(filters) {
     conditions.push('sp.is_billable = :isBillable');
     replacements.isBillable = isBillable;
   }
+  if (serviceTypeId) {
+    conditions.push('st.id = :serviceTypeId');
+    replacements.serviceTypeId = serviceTypeId;
+  }
+  if (startDate) {
+    conditions.push('sp.start_date >= :startDate');
+    replacements.startDate = startDate;
+  }
+  if (endDate) {
+    conditions.push('sp.end_date <= :endDate');
+    replacements.endDate = endDate;
+  }
   if (search) {
     conditions.push('(c.client_name ILIKE :search OR sp.service_po_name ILIKE :search OR sp.service_po_code ILIKE :search)');
     replacements.search = `%${search}%`;
@@ -1033,7 +1057,19 @@ async function getServicePOSummary(filters) {
         WHEN sp.is_billable = true
           THEN ROUND(COALESCE(curr.billable_amount, 0)::numeric, 2)
         ELSE NULL
-      END                                                                AS monthly_billable_amount
+      END                                                                AS monthly_billable_amount,
+      CASE
+        WHEN sp.is_billable = true
+          THEN ROUND(COALESCE(sp.invoice_amount, 0)::numeric, 2)
+        ELSE NULL
+      END                                                                AS invoiced_amount,
+      CASE
+        WHEN sp.is_billable = true
+          THEN ROUND(
+            (COALESCE(prev_bill.prev_billable_amount, 0) + COALESCE(curr.billable_amount, 0)
+            - COALESCE(sp.invoice_amount, 0))::numeric, 2)
+        ELSE NULL
+      END                                                                AS unbilled_amount
     FROM service_pos sp
     INNER JOIN clients c        ON c.id  = sp.client_id
     INNER JOIN service_types st ON st.id = sp.service_type_id
@@ -1046,7 +1082,18 @@ async function getServicePOSummary(filters) {
     LEFT JOIN (
       SELECT
         t.service_po_id,
-        SUM(t.hours_logged * COALESCE(mc.total_cost, 0) / :stdHours) AS billable_amount
+        SUM(t.hours_logged * COALESCE(mc.total_cost, 0)) AS prev_billable_amount
+      FROM timesheets t
+      LEFT JOIN monthly_costs mc
+             ON mc.employee_id = t.employee_id
+            AND mc.month_year  = TO_CHAR(t.timesheet_date, 'MM-YYYY')
+      WHERE t.timesheet_date < MAKE_DATE(:yearNum, :monthNum, 1)
+      GROUP BY t.service_po_id
+    ) prev_bill ON prev_bill.service_po_id = sp.id
+    INNER JOIN (
+      SELECT
+        t.service_po_id,
+        SUM(t.hours_logged * COALESCE(mc.total_cost, 0)) AS billable_amount
       FROM timesheets t
       LEFT JOIN monthly_costs mc
              ON mc.employee_id = t.employee_id
@@ -1065,6 +1112,12 @@ async function getServicePOSummary(filters) {
     FROM service_pos sp
     INNER JOIN clients c        ON c.id  = sp.client_id
     INNER JOIN service_types st ON st.id = sp.service_type_id
+    INNER JOIN (
+      SELECT DISTINCT service_po_id
+      FROM timesheets
+      WHERE EXTRACT(MONTH FROM timesheet_date) = :monthNum
+        AND EXTRACT(YEAR  FROM timesheet_date) = :yearNum
+    ) curr ON curr.service_po_id = sp.id
     ${whereClause}
   `;
 
@@ -1074,6 +1127,258 @@ async function getServicePOSummary(filters) {
   ]);
 
   return { rows, count: parseInt(countResult[0].total, 10) };
+}
+
+/**
+ * Resource Utilization Report
+ * Returns employee × service-type hours pivoted by service category for a given month/year.
+ *
+ * Two result sets are returned:
+ *  - columns: distinct service categories + their service types that have timesheet data in the period
+ *  - rows:    flat employee × service_type hour records (service layer does the pivot)
+ *
+ * @param {object} filters
+ * @param {number} filters.month
+ * @param {number} filters.year
+ * @param {number} [filters.employeeId]
+ * @param {string} [filters.search]
+ * @param {number} filters.limit
+ * @param {number} filters.offset
+ * @returns {{ columns: object[], rows: object[], count: number }}
+ */
+async function getResourceUtilization(filters) {
+  const { month, year, employeeId, search, limit, offset } = filters;
+
+  const replacements = {
+    month: parseInt(month, 10),
+    year:  parseInt(year,  10),
+    limit,
+    offset,
+  };
+
+  const empConditions = [];
+  if (employeeId) {
+    empConditions.push('e.id = :employeeId');
+    replacements.employeeId = parseInt(employeeId, 10);
+  }
+  if (search) {
+    empConditions.push('(e.full_name ILIKE :search OR e.employee_code ILIKE :search)');
+    replacements.search = `%${search}%`;
+  }
+  const empFilter = empConditions.length ? `AND ${empConditions.join(' AND ')}` : '';
+
+  // Service categories + types that actually have timesheet data in the period
+  const columnsQuery = `
+    SELECT DISTINCT
+      sc.id               AS category_id,
+      sc.name             AS category_name,
+      st.id               AS service_type_id,
+      st.service_type_name
+    FROM timesheets t
+    JOIN service_pos sp        ON sp.id  = t.service_po_id
+    JOIN service_types st      ON st.id  = sp.service_type_id  AND st.is_deleted = false
+    JOIN service_categories sc ON sc.id  = st.service_category_id AND sc.is_deleted = false
+    WHERE EXTRACT(MONTH FROM t.timesheet_date) = :month
+      AND EXTRACT(YEAR  FROM t.timesheet_date) = :year
+    ORDER BY sc.name, st.service_type_name
+  `;
+
+  // Total distinct employees matching the filters
+  const countQuery = `
+    SELECT COUNT(DISTINCT t.employee_id) AS total
+    FROM timesheets t
+    JOIN employees e           ON e.id  = t.employee_id  AND e.is_deleted = false
+    JOIN service_pos sp        ON sp.id = t.service_po_id AND sp.is_deleted = false
+    JOIN service_types st      ON st.id = sp.service_type_id AND st.is_deleted = false
+    JOIN service_categories sc ON sc.id = st.service_category_id AND sc.is_deleted = false
+    WHERE EXTRACT(MONTH FROM t.timesheet_date) = :month
+      AND EXTRACT(YEAR  FROM t.timesheet_date) = :year
+      ${empFilter}
+  `;
+
+  // Paginated data: one row per employee × service_type, paged at the employee level via CTE
+  const dataQuery = `
+    WITH emp_page AS (
+      SELECT DISTINCT e.id AS employee_id, e.full_name
+      FROM timesheets t
+      JOIN employees e           ON e.id  = t.employee_id  AND e.is_deleted = false
+      JOIN service_pos sp        ON sp.id = t.service_po_id AND sp.is_deleted = false
+      JOIN service_types st      ON st.id = sp.service_type_id AND st.is_deleted = false
+      JOIN service_categories sc ON sc.id = st.service_category_id AND sc.is_deleted = false
+      WHERE EXTRACT(MONTH FROM t.timesheet_date) = :month
+        AND EXTRACT(YEAR  FROM t.timesheet_date) = :year
+        ${empFilter}
+      ORDER BY e.full_name
+      LIMIT :limit OFFSET :offset
+    )
+    SELECT
+      e.id             AS employee_id,
+      e.employee_code,
+      e.full_name,
+      e.designation,
+      st.id            AS service_type_id,
+      st.service_type_name,
+      sc.id            AS category_id,
+      sc.name          AS category_name,
+      ROUND(SUM(t.hours_logged)::NUMERIC, 4) AS hours
+    FROM timesheets t
+    JOIN employees e           ON e.id  = t.employee_id  AND e.is_deleted = false
+    JOIN service_pos sp        ON sp.id = t.service_po_id AND sp.is_deleted = false
+    JOIN service_types st      ON st.id = sp.service_type_id AND st.is_deleted = false
+    JOIN service_categories sc ON sc.id = st.service_category_id AND sc.is_deleted = false
+    JOIN emp_page ep           ON ep.employee_id = e.id
+    WHERE EXTRACT(MONTH FROM t.timesheet_date) = :month
+      AND EXTRACT(YEAR  FROM t.timesheet_date) = :year
+    GROUP BY e.id, e.employee_code, e.full_name, e.designation, st.id, st.service_type_name, sc.id, sc.name
+    ORDER BY e.full_name, sc.name, st.service_type_name
+  `;
+
+  const [columns, countResult, rows] = await Promise.all([
+    sequelize.query(columnsQuery, { replacements, type: QueryTypes.SELECT }),
+    sequelize.query(countQuery,   { replacements, type: QueryTypes.SELECT }),
+    sequelize.query(dataQuery,    { replacements, type: QueryTypes.SELECT }),
+  ]);
+
+  return {
+    columns,
+    rows,
+    count: parseInt(countResult[0].total, 10),
+  };
+}
+
+/**
+ * Monthly Resource Utilization Report
+ * Full employee detail (experience, resource description, client, capacity) × service-type hours.
+ * Only active employees with timesheet entries in the selected month/year appear.
+ * Paged at the employee level.
+ *
+ * @param {object} filters
+ * @param {number} filters.month       - required
+ * @param {number} filters.year        - required
+ * @param {number} [filters.employeeId]
+ * @param {string} [filters.search]
+ * @param {number} filters.limit
+ * @param {number} filters.offset
+ * @returns {{ columns: object[], rows: object[], count: number }}
+ */
+async function getMonthlyResourceUtilization(filters) {
+  const { month, year, employeeId, search, limit, offset } = filters;
+
+  const replacements = {
+    month: parseInt(month, 10),
+    year:  parseInt(year,  10),
+    limit,
+    offset,
+  };
+
+  const conditions = [
+    "EXTRACT(MONTH FROM t.timesheet_date) = :month",
+    "EXTRACT(YEAR  FROM t.timesheet_date) = :year",
+    "e.is_deleted = false",
+    "e.status = 'active'",
+    "sp.is_deleted = false",
+    "st.is_deleted = false",
+    "sc.is_deleted = false",
+  ];
+
+  if (employeeId) {
+    conditions.push('e.id = :employeeId');
+    replacements.employeeId = parseInt(employeeId, 10);
+  }
+  if (search) {
+    conditions.push('(e.full_name ILIKE :search OR e.employee_code ILIKE :search)');
+    replacements.search = `%${search}%`;
+  }
+
+  const baseFrom = `
+    FROM timesheets t
+    JOIN employees e           ON e.id  = t.employee_id
+    JOIN service_pos sp        ON sp.id = t.service_po_id
+    JOIN service_types st      ON st.id = sp.service_type_id
+    JOIN service_categories sc ON sc.id = st.service_category_id
+  `;
+  const whereClause = `WHERE ${conditions.join(' AND ')}`;
+
+  // Dynamic column headers: categories + service types with data in the period
+  const columnsQuery = `
+    SELECT DISTINCT
+      sc.id               AS category_id,
+      sc.name             AS category_name,
+      st.id               AS service_type_id,
+      st.service_type_name
+    ${baseFrom}
+    ${whereClause}
+    ORDER BY sc.name, st.service_type_name
+  `;
+
+  // Count distinct employees
+  const countQuery = `
+    SELECT COUNT(DISTINCT t.employee_id) AS total
+    ${baseFrom}
+    ${whereClause}
+  `;
+
+  // CTE 1: paged employee list
+  // CTE 2: aggregated client names per employee for the period
+  // Main SELECT: employee × service_type hours with full employee detail
+  const dataQuery = `
+    WITH emp_page AS (
+      SELECT DISTINCT e.id AS employee_id, e.full_name
+      ${baseFrom}
+      ${whereClause}
+      ORDER BY e.full_name
+      LIMIT :limit OFFSET :offset
+    ),
+    emp_clients AS (
+      SELECT
+        t.employee_id,
+        STRING_AGG(DISTINCT c.client_name, ', ' ORDER BY c.client_name) AS clients
+      FROM timesheets t
+      JOIN service_pos sp ON sp.id = t.service_po_id AND sp.is_deleted = false
+      JOIN clients c      ON c.id  = sp.client_id
+      WHERE t.employee_id IN (SELECT employee_id FROM emp_page)
+        AND EXTRACT(MONTH FROM t.timesheet_date) = :month
+        AND EXTRACT(YEAR  FROM t.timesheet_date) = :year
+      GROUP BY t.employee_id
+    )
+    SELECT
+      e.id                      AS employee_id,
+      e.employee_code,
+      e.full_name,
+      e.designation,
+      e.total_experience,
+      e.company_experience,
+      e.resource_description,
+      176                       AS monthly_capacity,
+      176                       AS monthly_billing_capacity,
+      COALESCE(ec.clients, '')  AS clients,
+      st.id                     AS service_type_id,
+      st.service_type_name,
+      sc.id                     AS category_id,
+      sc.name                   AS category_name,
+      ROUND(SUM(t.hours_logged)::NUMERIC, 4) AS hours
+    ${baseFrom}
+    JOIN emp_page ep  ON ep.employee_id = e.id
+    LEFT JOIN emp_clients ec ON ec.employee_id = e.id
+    ${whereClause}
+    GROUP BY
+      e.id, e.employee_code, e.full_name, e.designation,
+      e.total_experience, e.company_experience, e.resource_description,
+      ec.clients, st.id, st.service_type_name, sc.id, sc.name
+    ORDER BY e.full_name, sc.name, st.service_type_name
+  `;
+
+  const [columns, countResult, rows] = await Promise.all([
+    sequelize.query(columnsQuery, { replacements, type: QueryTypes.SELECT }),
+    sequelize.query(countQuery,   { replacements, type: QueryTypes.SELECT }),
+    sequelize.query(dataQuery,    { replacements, type: QueryTypes.SELECT }),
+  ]);
+
+  return {
+    columns,
+    rows,
+    count: parseInt(countResult[0].total, 10),
+  };
 }
 
 module.exports = {
@@ -1086,4 +1391,6 @@ module.exports = {
   getOperationalCostBreakdown,
   getEmployeeUtilizationSummary,
   getServicePOSummary,
+  getResourceUtilization,
+  getMonthlyResourceUtilization,
 };

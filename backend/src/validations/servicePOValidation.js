@@ -16,11 +16,9 @@ const createServicePOSchema = Joi.object({
     .trim()
     .uppercase()
     .pattern(poCodePattern)
-    .required()
+    .optional()
     .messages({
       'string.pattern.base': 'PO code must be 2-30 uppercase alphanumeric characters (hyphens, underscores, slashes allowed).',
-      'string.empty': 'Service PO code is required.',
-      'any.required': 'Service PO code is required.',
     }),
 
   service_po_name: Joi.string()
@@ -143,10 +141,10 @@ const createServicePOSchema = Joi.object({
   status: Joi.string()
     .trim()
     .lowercase()
-    .valid('active', 'inactive', 'completed', 'on-hold')
-    .default('active')
+    .valid('in-progress', 'completed', 'on-hold', 'pending', 'cancelled', 'closed')
+    .default('pending')
     .messages({
-      'any.only': 'Status must be one of: active, inactive, completed, on-hold.',
+      'any.only': 'Status must be one of: in-progress, completed, on-hold, pending, cancelled, closed.',
     }),
 });
 
@@ -235,7 +233,7 @@ const updateServicePOSchema = Joi.object({
   status: Joi.string()
     .trim()
     .lowercase()
-    .valid('active', 'inactive', 'completed', 'on-hold')
+    .valid('in-progress', 'completed', 'on-hold', 'pending', 'cancelled', 'closed')
     .optional(),
 })
   .min(1)
@@ -291,7 +289,7 @@ const removeResourcesSchema = Joi.object({
 const listServicePOsQuerySchema = Joi.object({
   page: Joi.number().integer().min(1).default(1),
   limit: Joi.number().integer().min(1).max(200).default(20),
-  status: Joi.string().valid('active', 'inactive', 'completed', 'on-hold', 'all').default('active'),
+  status: Joi.string().valid('in-progress', 'completed', 'on-hold', 'pending', 'cancelled', 'closed', 'all').default('all'),
   client_id: Joi.number().integer().positive().optional(),
   service_type_id: Joi.number().integer().positive().optional(),
   is_billable: Joi.boolean().optional(),

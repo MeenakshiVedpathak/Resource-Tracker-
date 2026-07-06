@@ -30,7 +30,7 @@ const findAll = async (filters = {}, pagination = {}, sort = {}) => {
   const { limit = 10, offset = 0 } = pagination;
   const { sortBy = 'created_at', sortOrder = 'DESC' } = sort;
 
-  const where = {};
+  const where = { is_deleted: false };
 
   if (status && status !== 'all') {
     where.status = status;
@@ -99,7 +99,7 @@ const findAll = async (filters = {}, pagination = {}, sort = {}) => {
  */
 const findById = async (id) => {
   return ServicePO.findOne({
-    where: { id },
+    where: { id, is_deleted: false },
     include: [
       {
         model: Client,
@@ -122,7 +122,9 @@ const findById = async (id) => {
 };
 
 /**
- * Find a Service PO by its unique code.
+ * Find a Service PO by its unique code, regardless of status or soft-delete
+ * state — used for uniqueness checks so a code held by a closed/cancelled/
+ * deleted PO can never be reassigned.
  *
  * @param {string} code
  * @returns {Promise<ServicePO|null>}
@@ -174,7 +176,7 @@ const update = async (id, data) => {
 const close = async (id, updatedBy) => {
   const [affectedRows] = await ServicePO.update(
     { status: 'closed', updated_by: updatedBy },
-    { where: { id } }
+    { where: { id, is_deleted: false } }
   );
   return affectedRows > 0;
 };
@@ -272,7 +274,7 @@ const getUtilisation = async (poId) => {
  */
 const getActivePOs = async () => {
   return ServicePO.findAll({
-    where: { status: 'active' },
+    where: { status: { [Op.in]: ['in-progress', 'on-hold', 'pending'] }, is_deleted: false },
     include: [
       {
         model: Client,
@@ -290,6 +292,12 @@ const getActivePOs = async () => {
   });
 };
 
+const softDelete = async (id, updatedBy) => {
+  const po = await ServicePO.findOne({ where: { id, is_deleted: false } });
+  if (!po) return null;
+  return po.update({ status: 'cancelled', is_deleted: true, updated_by: updatedBy });
+};
+
 module.exports = {
   findAll,
   findById,
@@ -297,6 +305,7 @@ module.exports = {
   create,
   update,
   close,
+  softDelete,
   allocateResources,
   deallocateResource,
   getResources,

@@ -85,6 +85,11 @@ module.exports = (sequelize) => {
           isIn: { args: [['active', 'inactive']], msg: 'Status must be active or inactive.' },
         },
       },
+      is_deleted: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+      },
       created_by: {
         type: DataTypes.INTEGER,
         allowNull: true,

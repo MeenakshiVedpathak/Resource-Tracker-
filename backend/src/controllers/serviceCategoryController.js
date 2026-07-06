@@ -1,7 +1,7 @@
 'use strict';
 
 const serviceCategoryService = require('../services/serviceCategoryService');
-const { sendSuccess, sendCreated, sendNotFound, sendError } = require('../utils/response');
+const { sendSuccess, sendCreated, sendNoContent, sendNotFound, sendError } = require('../utils/response');
 const logger = require('../utils/logger');
 
 const getAllServiceCategories = async (req, res) => {
@@ -54,9 +54,24 @@ const updateServiceCategory = async (req, res) => {
   }
 };
 
+const deleteServiceCategory = async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id) || id < 1) return sendError(res, 'Invalid service category ID.', 400);
+
+    await serviceCategoryService.delete(id, req.userId);
+    return sendNoContent(res);
+  } catch (error) {
+    if (error.statusCode === 404) return sendNotFound(res, 'Service category');
+    logger.error('deleteServiceCategory error', { error: error.message, id: req.params.id });
+    return sendError(res, error.message, error.statusCode || 500);
+  }
+};
+
 module.exports = {
   getAllServiceCategories,
   getServiceCategoryById,
   createServiceCategory,
   updateServiceCategory,
+  deleteServiceCategory,
 };

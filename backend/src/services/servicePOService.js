@@ -96,17 +96,28 @@ const create = async (data, userId, req) => {
     throw err;
   }
 
-  // Generate a unique PO code — retry up to 5 times on collision
-  let service_po_code = generatePOCode();
-  let attempts = 0;
-  while (await servicePORepository.findByCode(service_po_code)) {
-    if (attempts >= 5) {
-      const err = new Error('Failed to generate a unique PO code. Please try again.');
-      err.statusCode = 500;
+  // Use the caller-supplied code if provided; otherwise auto-generate one
+  let service_po_code = data.service_po_code || null;
+
+  if (!service_po_code) {
+    service_po_code = generatePOCode();
+    let attempts = 0;
+    while (await servicePORepository.findByCode(service_po_code)) {
+      if (attempts >= 5) {
+        const err = new Error('Failed to generate a unique PO code. Please try again.');
+        err.statusCode = 500;
+        throw err;
+      }
+      service_po_code = generatePOCode();
+      attempts++;
+    }
+  } else {
+    const existing = await servicePORepository.findByCode(service_po_code);
+    if (existing) {
+      const err = new Error(`Service PO code "${service_po_code}" already exists.`);
+      err.statusCode = 409;
       throw err;
     }
-    service_po_code = generatePOCode();
-    attempts++;
   }
 
   const payload = {
@@ -155,6 +166,17 @@ const update = async (id, data, userId, req) => {
     const err = new Error(`Cannot update a Service PO with status "${existing.status}".`);
     err.statusCode = 400;
     throw err;
+  }
+
+  // If the caller is changing the service_po_code, ensure it is not taken by
+  // any other PO, regardless of its status or soft-delete state.
+  if (data.service_po_code && data.service_po_code !== existing.service_po_code) {
+    const taken = await servicePORepository.findByCode(data.service_po_code);
+    if (taken && taken.id !== id) {
+      const err = new Error(`Service PO code "${data.service_po_code}" is already in use.`);
+      err.statusCode = 409;
+      throw err;
+    }
   }
 
   // If client_id is being changed, validate the new client
@@ -405,12 +427,23 @@ const getActivePOs = async () => {
   return servicePORepository.getActivePOs();
 };
 
+const deleteServicePO = async (id, userId) => {
+  const existing = await servicePORepository.findById(id);
+  if (!existing) {
+    const err = new Error('Service PO not found.');
+    err.statusCode = 404;
+    throw err;
+  }
+  await servicePORepository.softDelete(id, userId);
+};
+
 module.exports = {
   getAll,
   getById,
   create,
   update,
   close,
+  delete: deleteServicePO,
   allocateResources,
   deallocateResource,
   getUtilisation,

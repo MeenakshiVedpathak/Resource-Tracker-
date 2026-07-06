@@ -74,8 +74,14 @@ const createServicePO = async (req, res) => {
     if (error.statusCode === 404) {
       return sendNotFound(res, error.message.includes('Client') ? 'Client' : 'Service type');
     }
-    logger.error('createServicePO error', { error: error.message, userId: req.userId });
-    return sendError(res, error.message, error.statusCode || 500);
+    const details = error.errors ? error.errors.map((e) => e.message) : [];
+    logger.error('createServicePO error', {
+      error: error.message,
+      details,
+      fields: error.errors ? error.errors.map((e) => e.path) : [],
+      userId: req.userId,
+    });
+    return sendError(res, error.message, error.statusCode || 500, details);
   }
 };
 
@@ -191,6 +197,20 @@ const getUtilisation = async (req, res) => {
   }
 };
 
+const deleteServicePO = async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id) || id < 1) return sendError(res, 'Invalid Service PO ID.', 400);
+
+    await servicePOService.delete(id, req.userId);
+    return sendNoContent(res);
+  } catch (error) {
+    if (error.statusCode === 404) return sendNotFound(res, 'Service PO');
+    logger.error('deleteServicePO error', { error: error.message, id: req.params.id });
+    return sendError(res, error.message, error.statusCode || 500);
+  }
+};
+
 module.exports = {
   getAllServicePOs,
   getActivePOs,
@@ -198,6 +218,7 @@ module.exports = {
   createServicePO,
   updateServicePO,
   closeServicePO,
+  deleteServicePO,
   allocateResources,
   deallocateResource,
   getUtilisation,

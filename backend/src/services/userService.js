@@ -26,7 +26,7 @@ const getAll = async (query = {}) => {
 
   const filters = {
     search: query.search || '',
-    status: query.status || 'active',
+    status: query.status || 'all',
     role_id: query.role_id || null,
   };
 

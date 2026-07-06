@@ -36,9 +36,20 @@ const timesheetController = require('../controllers/timesheetController');
  *       - in: query
  *         name: limit
  *         schema: { type: integer, default: 10 }
+ *       - in: query
+ *         name: month
+ *         schema: { type: integer, minimum: 1, maximum: 12 }
+ *         description: Filter to imports whose import_month matches
+ *       - in: query
+ *         name: year
+ *         schema: { type: integer }
+ *         description: Filter to imports whose import_year matches
  *     responses:
  *       200:
- *         description: Paginated list of import history records
+ *         description: >
+ *           Paginated list of import history records. Each record includes
+ *           total_employees — the count of distinct employees covered by that
+ *           import batch.
  *       401:
  *         description: Unauthorized
  */
@@ -115,12 +126,21 @@ router.get(
  *         multipart/form-data:
  *           schema:
  *             type: object
- *             required: [file]
+ *             required: [file, month, year]
  *             properties:
  *               file:
  *                 type: string
  *                 format: binary
  *                 description: .xlsx or .csv file (max 10 MB)
+ *               month:
+ *                 type: integer
+ *                 minimum: 1
+ *                 maximum: 12
+ *                 description: Month the timesheet covers (1–12)
+ *               year:
+ *                 type: integer
+ *                 minimum: 2000
+ *                 description: Year the timesheet covers (e.g. 2025)
  *     responses:
  *       200:
  *         description: Preview data with valid rows, error rows, and importId
@@ -129,7 +149,7 @@ router.get(
  *       403:
  *         description: Forbidden — Finance or HR role required
  *       422:
- *         description: File could not be parsed
+ *         description: File could not be parsed, or month/year is missing or invalid
  */
 router.post(
   '/upload',

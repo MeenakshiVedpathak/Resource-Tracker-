@@ -34,9 +34,6 @@ const HEADER_MAP = {
   'hours':            'hours',
   'hours logged':     'hours',
   'logged hours':     'hours',
-  'is working':       'isWorking',
-  'isworking':        'isWorking',
-  'is_working':       'isWorking',
 };
 
 /**
@@ -48,19 +45,6 @@ function normaliseHeader(header) {
   if (!header) return null;
   const key = String(header).trim().toLowerCase();
   return HEADER_MAP[key] || null;
-}
-
-/**
- * Parse an "Is Working" cell value (t/f/true/false/1/0/yes/no) to boolean.
- * Absent or unrecognised values default to true (employee is considered working).
- * @param {*} raw
- * @returns {boolean}
- */
-function parseIsWorking(raw) {
-  if (raw === undefined || raw === null || raw === '') return true;
-  const v = String(raw).trim().toLowerCase();
-  if (v === 'f' || v === 'false' || v === '0' || v === 'no') return false;
-  return true;
 }
 
 /**
@@ -272,9 +256,6 @@ function parsePivotFile(rawRows, formattedRows, headerRow, headerIndex, fileName
     throw Object.assign(new Error('Pivot-style import requires a header for employee name in the first row.'), { statusCode: 422 });
   }
 
-  // Column index for "Is Working" flag (-1 if absent)
-  const isWorkingIndex = headerRow.findIndex((cell) => normaliseHeader(cell) === 'isWorking');
-
   const projectColumns = headerRow
     .map((cell, idx) => ({ header: String(cell || '').trim(), index: idx }))
     .filter((col) => {
@@ -282,8 +263,6 @@ function parsePivotFile(rawRows, formattedRows, headerRow, headerIndex, fileName
       if (col.index === resourceIndex) return false;
       // Skip any other employee-metadata column (e.g. "Name" when "Employee Code" is the identifier)
       if (normaliseHeader(col.header) === 'resourceName') return false;
-      // Skip the "Is Working" metadata column — not a project
-      if (col.index === isWorkingIndex) return false;
       return true;
     });
 
@@ -314,9 +293,6 @@ function parsePivotFile(rawRows, formattedRows, headerRow, headerIndex, fileName
     const resourceName = String(row[resourceIndex] ?? '').trim();
     if (!resourceName || isSummaryRow(resourceName)) return;
 
-    // Per-employee "Is Working" flag (true if column absent)
-    const isWorking = isWorkingIndex !== -1 ? parseIsWorking(row[isWorkingIndex]) : true;
-
     projectColumns.forEach((column) => {
       const rawVal = row[column.index];
       const formattedVal = (formattedRows && formattedRows[headerIndex + 1 + rowIndex])
@@ -340,7 +316,6 @@ function parsePivotFile(rawRows, formattedRows, headerRow, headerIndex, fileName
         date: inferredDate,
         hoursRaw: formattedVal !== undefined && formattedVal !== '' ? formattedVal : rawVal,
         hours,
-        isWorking,
       });
     });
   });
@@ -535,7 +510,6 @@ const parseFile = async (filePath, fileName, mimetype) => {
       date:          parseDate(get('date')),
       hoursRaw:      get('hours'),
       hours:         parseHours(get('hours')) || 0,
-      isWorking:     parseIsWorking(get('isWorking')),
     });
   });
 
@@ -544,22 +518,18 @@ const parseFile = async (filePath, fileName, mimetype) => {
 
 const MONTHLY_TARGET_HOURS = 176;
 
-// Returns true for rows that must NOT be scaled (kept as original Excel value):
+// Returns true for rows that must NOT be scaled:
 //   - zero hours (00:00)
-//   - Leaves / vacation / holiday
-//   - On Bench
-//   - Idle
-// Detection checks both the resolved project label (Excel column header) and
-// the service type name from the DB so pivot and flat formats both work.
+//   - service type contains leave / vacation / holiday keywords
+//   - service type or PO name contains "bench" (On Bench)
 function isExcludedFromAdjustment(row) {
   if (row.hours <= 0) return true;
-  const st  = (row.serviceTypeName || '').toLowerCase();
-  const prj = (row.projectLabel    || row.servicePOName || '').toLowerCase();
+  const st = (row.serviceTypeName || '').toLowerCase();
+  const po = (row.servicePOName  || '').toLowerCase();
   return (
-    prj.includes('leave')   || prj.includes('vacation') || prj.includes('holiday') ||
-    prj.includes('bench')   || prj.includes('idle') ||
-    st.includes('leave')    || st.includes('vacation') || st.includes('holiday') ||
-    st.includes('bench')    || st.includes('idle')
+    st.includes('leave') || st.includes('vacation') || st.includes('holiday') ||
+    st.includes('bench') ||
+    po.includes('leave') || po.includes('bench')
   );
 }
 
@@ -583,37 +553,23 @@ function adjustHoursTo176(validRows) {
   const result = [];
 
   for (const [, rows] of empGroups) {
-    // If any row for this employee is marked "Is Working = false", keep all
-    // their hours exactly as uploaded — do not adjust to 176.
-    if (rows.some(r => r.isWorking === false)) {
-      result.push(...rows);
-      continue;
-    }
-
     const adjustable = rows.filter(r => !isExcludedFromAdjustment(r));
     const excluded   = rows.filter(r =>  isExcludedFromAdjustment(r));
 
-    // Hours already consumed by idle / leaves / bench rows
-    const excludedTotal   = excluded.reduce((sum, r) => sum + r.hours, 0);
-    // Project rows must fill the remainder so the grand total = 176
-    const targetHours     = MONTHLY_TARGET_HOURS - excludedTotal;
     const adjustableTotal = adjustable.reduce((sum, r) => sum + r.hours, 0);
 
-    // Nothing to scale:
-    //  - no adjustable project rows
-    //  - excluded rows already fill or exceed 176 (targetHours <= 0)
-    //  - project hours already exactly match the target
-    if (adjustable.length === 0 || adjustableTotal === 0 || targetHours <= 0 || adjustableTotal === targetHours) {
+    // Nothing to scale — either no adjustable rows or already exactly 176
+    if (adjustable.length === 0 || adjustableTotal === 0 || adjustableTotal === MONTHLY_TARGET_HOURS) {
       result.push(...rows);
       continue;
     }
 
-    const scale = targetHours / adjustableTotal;
+    const scale = MONTHLY_TARGET_HOURS / adjustableTotal;
     const rawScaled = adjustable.map(r => r.hours * scale);
 
-    // Largest-remainder method: distribute exactly targetHours whole hours
+    // Largest-remainder method: distribute exactly 176 whole hours
     const floored = rawScaled.map(v => Math.floor(v));
-    const deficit = targetHours - floored.reduce((a, b) => a + b, 0);
+    const deficit = MONTHLY_TARGET_HOURS - floored.reduce((a, b) => a + b, 0);
     const byRemainder = rawScaled
       .map((v, i) => ({ i, rem: v - floored[i] }))
       .sort((a, b) => b.rem - a.rem);
@@ -628,43 +584,6 @@ function adjustHoursTo176(validRows) {
   }
 
   return result;
-}
-
-/**
- * Detect rows within the same file that share the same employee + Service PO
- * + date — the exact combination the database's own unique constraint
- * enforces on the timesheets table. Reporting only: does not remove or alter
- * any row, so callers can surface these for review without blocking import.
- *
- * @param {object[]} validRows - Output from validateRows() (post-adjustment)
- * @returns {object[]} duplicates: [{ employeeId, resourceName, poId, servicePOName, date, rows, occurrences }]
- */
-function detectDuplicateRows(validRows) {
-  const keyMap = new Map(); // "employeeId|poId|date" -> [rowNumber, ...]
-
-  for (const row of validRows) {
-    const key = `${row.employeeId}|${row.poId}|${row.date}`;
-    if (!keyMap.has(key)) keyMap.set(key, []);
-    keyMap.get(key).push(row.rowNumber);
-  }
-
-  const duplicates = [];
-  for (const [key, rowNumbers] of keyMap) {
-    if (rowNumbers.length <= 1) continue;
-    const [employeeIdStr, poIdStr, date] = key.split('|');
-    const sample = validRows.find((r) => r.rowNumber === rowNumbers[0]);
-    duplicates.push({
-      employeeId: parseInt(employeeIdStr, 10),
-      resourceName: sample.resourceName,
-      poId: parseInt(poIdStr, 10),
-      servicePOName: sample.projectLabel || sample.servicePOName,
-      date,
-      rows: rowNumbers,
-      occurrences: rowNumbers.length,
-    });
-  }
-
-  return duplicates;
 }
 
 /**
@@ -728,7 +647,7 @@ const validateRows = async (rows) => {
 
   for (const row of rows) {
     const errors = [];
-    const { rowNumber, resourceName, servicePOName, subProject, projectHeader, date, hours, isWorking } = row;
+    const { rowNumber, resourceName, servicePOName, subProject, projectHeader, date, hours } = row;
     const projectLabel = servicePOName || projectHeader;
 
     // 1. Required fields
@@ -834,10 +753,8 @@ const validateRows = async (rows) => {
         // Original display data for preview
         resourceName,
         servicePOName,
-        projectLabel,    // resolved label (servicePOName for flat, projectHeader for pivot)
         serviceTypeName: po.serviceType ? po.serviceType.service_type_name : '',
         subProjectName:  subProjectRecord ? subProjectRecord.sub_project_name : null,
-        isWorking:       isWorking !== false, // default true if column was absent
       });
     }
   }
@@ -878,15 +795,6 @@ const previewImport = async (filePath, fileName, userId, mimetype, importMonth, 
   // 3. Adjust each employee's adjustable hours to sum to 176
   const validRows = adjustHoursTo176(rawValidRows);
 
-  // 3b. Detect (not block) rows sharing the same employee + PO + date
-  const duplicates = detectDuplicateRows(validRows);
-  if (duplicates.length > 0) {
-    logger.warn('Timesheet import preview: duplicate employee+PO+date rows detected', {
-      duplicateCount: duplicates.length,
-      duplicates,
-    });
-  }
-
   // 4. Create import history record (status = pending)
   const importRecord = await timesheetImportRepository.createImportHistory({
     imported_by:  userId,
@@ -926,7 +834,6 @@ const previewImport = async (filePath, fileName, userId, mimetype, importMonth, 
     errorRows: errorRows.length,
     preview:   validRows,
     errors:    errorRows,
-    duplicates,
     canConfirm: validRows.length > 0,
   };
 };
@@ -981,19 +888,6 @@ const confirmImport = async (importId, userId, ipAddress = null) => {
 
   const { validRows: rawValidRows, errorRows } = await validateRows(parsedRows);
   const validRows = adjustHoursTo176(rawValidRows);
-
-  // Detect (not block) rows sharing the same employee + PO + date. Note this
-  // combination is also enforced by the timesheets table's own unique
-  // constraint, so if duplicates remain unresolved the bulk insert below will
-  // fail — this is reported for visibility only, it does not deduplicate.
-  const duplicates = detectDuplicateRows(validRows);
-  if (duplicates.length > 0) {
-    logger.warn('Timesheet import confirm: duplicate employee+PO+date rows detected', {
-      importId,
-      duplicateCount: duplicates.length,
-      duplicates,
-    });
-  }
 
   if (validRows.length === 0) {
     await timesheetImportRepository.updateImportHistory(importId, {
@@ -1082,7 +976,6 @@ const confirmImport = async (importId, userId, ipAddress = null) => {
       importId,
       insertedRows: inserted.length,
       errorRows:    errorRows.length,
-      duplicates,
     };
   } catch (err) {
     await t.rollback();
@@ -1096,35 +989,15 @@ const confirmImport = async (importId, userId, ipAddress = null) => {
 };
 
 /**
- * Return a paginated list of all import history records, optionally filtered
- * by month/year, each annotated with total_employees — the count of distinct
- * employees covered by that import batch.
- *
- * @param {object} query - Express req.query, may include { month, year }
+ * Return a paginated list of all import history records.
+ * @param {object} query - Express req.query
  * @returns {Promise<{ data, meta }>}
  */
 const getImportHistory = async (query = {}) => {
   const { page, limit, offset } = getPaginationParams(query);
-
-  const month = query.month ? parseInt(query.month, 10) : undefined;
-  const year = query.year ? parseInt(query.year, 10) : undefined;
-
-  const { rows, count } = await timesheetImportRepository.findAllImports(
-    { limit, offset },
-    { month, year }
-  );
-
-  const importIds = rows.map((r) => r.id);
-  const employeeCounts = await timesheetImportRepository.getEmployeeCountsByImportIds(importIds);
-
-  const data = rows.map((r) => {
-    const plain = r.toJSON();
-    plain.total_employees = employeeCounts.get(r.id) || 0;
-    return plain;
-  });
-
+  const { rows, count } = await timesheetImportRepository.findAllImports({ limit, offset });
   return {
-    data,
+    data: rows,
     meta: getPaginationMeta(count, page, limit),
   };
 };

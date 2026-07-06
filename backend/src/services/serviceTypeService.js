@@ -14,11 +14,14 @@ const logger = require('../utils/logger');
 /**
  * Return all service types, with an optional search filter.
  *
- * @param {object} query - { search }
+ * @param {object} query - { search, service_category_id }
  * @returns {Promise<ServiceType[]>}
  */
 const getAll = async (query = {}) => {
-  return serviceTypeRepository.findAll({ search: query.search });
+  return serviceTypeRepository.findAll({
+    search: query.search,
+    service_category_id: query.service_category_id,
+  });
 };
 
 /**
@@ -105,9 +108,23 @@ const update = async (id, data, userId) => {
   return updated;
 };
 
+const deleteServiceType = async (id, userId) => {
+  const existing = await serviceTypeRepository.findById(id);
+  if (!existing) {
+    const err = new Error('Service type not found.');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  await serviceTypeRepository.softDelete(id, userId);
+
+  logger.info('Service type soft-deleted', { serviceTypeId: id, userId });
+};
+
 module.exports = {
   getAll,
   getById,
   create,
   update,
+  delete: deleteServiceType,
 };

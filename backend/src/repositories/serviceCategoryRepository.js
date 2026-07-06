@@ -11,7 +11,7 @@ const { ServiceCategory } = require('../models');
 const findAll = async (filters = {}) => {
   const { search, status } = filters;
 
-  const where = {};
+  const where = { is_deleted: false };
 
   if (search && search.trim()) {
     where.name = { [Op.iLike]: `%${search.trim()}%` };
@@ -29,16 +29,23 @@ const findAll = async (filters = {}) => {
 };
 
 const findById = async (id) => {
-  return ServiceCategory.findByPk(id, {
+  return ServiceCategory.findOne({
+    where: { id, is_deleted: false },
     attributes: ['id', 'name', 'status', 'created_at', 'updated_at', 'created_by', 'updated_by'],
   });
 };
 
 const findByName = async (name) => {
   return ServiceCategory.findOne({
-    where: { name: { [Op.iLike]: name.trim() } },
+    where: { name: { [Op.iLike]: name.trim() }, is_deleted: false },
     attributes: ['id', 'name'],
   });
+};
+
+const softDelete = async (id, updatedBy) => {
+  const record = await ServiceCategory.findOne({ where: { id, is_deleted: false } });
+  if (!record) return null;
+  return record.update({ status: 'inactive', is_deleted: true, updated_by: updatedBy });
 };
 
 const create = async (data) => {
@@ -62,4 +69,5 @@ module.exports = {
   findByName,
   create,
   update,
+  softDelete,
 };

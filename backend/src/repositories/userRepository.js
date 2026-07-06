@@ -47,7 +47,7 @@ const findAll = async (filters = {}, pagination = {}, sort = {}) => {
   const { limit = 20, offset = 0 } = pagination;
   const { sortBy = 'created_at', sortOrder = 'DESC' } = sort;
 
-  const where = {};
+  const where = { is_deleted: false };
 
   if (status && status !== 'all') {
     where.status = status;
@@ -62,6 +62,8 @@ const findAll = async (filters = {}, pagination = {}, sort = {}) => {
     through: inc.through ? { ...inc.through } : undefined,
   }));
 
+  let subQuery;
+
   if (role_id) {
     include.forEach((inc) => {
       if (inc.as === 'roles') {
@@ -74,6 +76,12 @@ const findAll = async (filters = {}, pagination = {}, sort = {}) => {
       { role_id: parseInt(role_id, 10) },
       { '$roles.id$': parseInt(role_id, 10) },
     ];
+
+    // Referencing the joined "roles" table in a top-level where is incompatible
+    // with Sequelize's default subQuery pagination (the inner LIMIT/OFFSET
+    // subquery has no join to "roles" yet), which raises a Postgres
+    // "missing FROM-clause entry for table roles" error. Disable it here.
+    subQuery = false;
   }
 
   return User.findAndCountAll({
@@ -83,6 +91,7 @@ const findAll = async (filters = {}, pagination = {}, sort = {}) => {
     offset,
     order: [[sortBy, sortOrder.toUpperCase()]],
     distinct: true,
+    subQuery,
   });
 };
 
@@ -92,7 +101,7 @@ const findAll = async (filters = {}, pagination = {}, sort = {}) => {
  * @returns {Promise<User|null>}
  */
 const findById = async (id) => {
-  return User.findByPk(id, { include: DEFAULT_INCLUDE });
+  return User.findOne({ where: { id, is_deleted: false }, include: DEFAULT_INCLUDE });
 };
 
 /**
@@ -101,7 +110,7 @@ const findById = async (id) => {
  * @returns {Promise<User|null>}
  */
 const findByEmail = async (email) => {
-  return User.findOne({ where: { email: email.toLowerCase() } });
+  return User.findOne({ where: { email: email.toLowerCase(), is_deleted: false } });
 };
 
 /**
@@ -111,7 +120,7 @@ const findByEmail = async (email) => {
  * @returns {Promise<User|null>}
  */
 const findByEmailWithPassword = async (email) => {
-  return User.scope('withPassword').findOne({ where: { email: email.toLowerCase() } });
+  return User.scope('withPassword').findOne({ where: { email: email.toLowerCase(), is_deleted: false } });
 };
 
 /**
@@ -144,9 +153,9 @@ const update = async (id, data, options = {}) => {
  * @returns {Promise<User|null>}
  */
 const softDelete = async (id, updatedBy) => {
-  const user = await User.findByPk(id);
+  const user = await User.findOne({ where: { id, is_deleted: false } });
   if (!user) return null;
-  return user.update({ status: 'inactive', updated_by: updatedBy });
+  return user.update({ status: 'inactive', is_deleted: true, updated_by: updatedBy });
 };
 
 module.exports = {

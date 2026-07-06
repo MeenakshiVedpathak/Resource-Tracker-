@@ -78,7 +78,7 @@ module.exports = (sequelize) => {
         },
       },
       hours_logged: {
-        type: DataTypes.DECIMAL(5, 2),
+        type: DataTypes.DECIMAL(8, 4),
         allowNull: false,
         validate: {
           notNull: { msg: 'Hours logged is required.' },

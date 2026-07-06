@@ -11,16 +11,20 @@ const { ServiceType, ServiceCategory } = require('../models');
 /**
  * Return all service types, optionally filtered by a search term.
  *
- * @param {{ search?: string }} filters
+ * @param {{ search?: string, service_category_id?: number }} filters
  * @returns {Promise<ServiceType[]>}
  */
 const findAll = async (filters = {}) => {
-  const { search } = filters;
+  const { search, service_category_id } = filters;
 
-  const where = {};
+  const where = { is_deleted: false };
 
   if (search && search.trim()) {
     where.service_type_name = { [Op.iLike]: `%${search.trim()}%` };
+  }
+
+  if (service_category_id) {
+    where.service_category_id = parseInt(service_category_id, 10);
   }
 
   return ServiceType.findAll({
@@ -38,7 +42,8 @@ const findAll = async (filters = {}) => {
  * @returns {Promise<ServiceType|null>}
  */
 const findById = async (id) => {
-  return ServiceType.findByPk(id, {
+  return ServiceType.findOne({
+    where: { id, is_deleted: false },
     attributes: ['id', 'service_type_name', 'service_category_id', 'created_at', 'updated_at', 'created_by', 'updated_by'],
     include: [{ model: ServiceCategory, as: 'serviceCategory', attributes: ['id', 'name', 'status'] }],
   });
@@ -52,9 +57,15 @@ const findById = async (id) => {
  */
 const findByName = async (name) => {
   return ServiceType.findOne({
-    where: { service_type_name: { [Op.iLike]: name.trim() } },
+    where: { service_type_name: { [Op.iLike]: name.trim() }, is_deleted: false },
     attributes: ['id', 'service_type_name'],
   });
+};
+
+const softDelete = async (id, updatedBy) => {
+  const record = await ServiceType.findOne({ where: { id, is_deleted: false } });
+  if (!record) return null;
+  return record.update({ is_deleted: true, updated_by: updatedBy });
 };
 
 /**
@@ -93,4 +104,5 @@ module.exports = {
   findByName,
   create,
   update,
+  softDelete,
 };

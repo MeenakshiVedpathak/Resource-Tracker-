@@ -555,7 +555,7 @@ const importFromExcel = async (filePath, userId, ip = null) => {
   const headerMap = {};
   const sampleKeys = Object.keys(rows[0] || {});
   const COLUMN_ALIASES = {
-    employee_code: ['employeecode', 'empcode', 'empid', 'employeeid', 'id', 'employee code', 'emp code', 'emp id'],
+    employee_id:   ['employeeid', 'empid', 'employeecode', 'empcode', 'id'],
     // allow employee name variants: "name", "employee", "employee name", "emp name"
     employee_name: ['name', 'employee', 'employeename', 'empname', 'empname'],
     month_year:    ['monthyear', 'monthyr', 'period', 'month/year'],
@@ -575,74 +575,19 @@ const importFromExcel = async (filePath, userId, ip = null) => {
   }
 
   // Validate required columns present
-  // Require Month Year and Salary Cost. Employee identifier must be employee code or employee name.
+  // Require Month Year and Salary Cost. Employee identifier may be numeric ID or employee name.
   const missingCols = [];
   if (!headerMap.month_year) missingCols.push('month_year');
   if (!headerMap.salary_cost) missingCols.push('salary_cost');
-  if (!headerMap.employee_code && !headerMap.employee_name) missingCols.push('employee identifier (Employee Code or Employee Name)');
+  if (!headerMap.employee_id && !headerMap.employee_name) missingCols.push('employee identifier (Employee ID or Employee Name)');
 
   if (missingCols.length > 0) {
     const error = new Error(
       `Required column(s) not found in the Excel file: ${missingCols.join(', ')}. ` +
-      `Please include: Employee Code (or Employee Name), Month Year, Salary Cost.`
+      `Please include: Employee ID (or Employee Name), Month Year, Salary Cost.`
     );
     error.statusCode = 422;
     throw error;
-  }
-
-  // 2b. Pre-scan for duplicate employee+month/year combinations within this
-  // file (reporting only — does not block processing). Keyed by employee
-  // identifier + month/year rather than identifier alone, since a single
-  // file can legitimately cover multiple months for the same employee.
-  const duplicateKeyMap = new Map(); // "identifier|month|year" -> [rowNum, ...]
-  for (let i = 0; i < rows.length; i++) {
-    const rowNum = i + 2;
-    const row = rows[i];
-    const rawRow = rawRows[i];
-
-    let identifier = null;
-    if (headerMap.employee_code) {
-      const v = row[headerMap.employee_code];
-      identifier = v !== null && v !== '' ? String(v).trim().toLowerCase() : null;
-    }
-    if (!identifier && headerMap.employee_name) {
-      const v = row[headerMap.employee_name];
-      identifier = v !== null && v !== '' ? String(v).trim().toLowerCase() : null;
-    }
-    if (!identifier) continue;
-
-    const rawMonthYearValue = rawRow[headerMap.month_year];
-    const parsedMY = parseMonthYear(
-      typeof rawMonthYearValue === 'number' ? rawMonthYearValue : row[headerMap.month_year]
-    );
-    if (!parsedMY) continue;
-
-    const key = `${identifier}|${parsedMY.month}|${parsedMY.year}`;
-    if (!duplicateKeyMap.has(key)) duplicateKeyMap.set(key, []);
-    duplicateKeyMap.get(key).push(rowNum);
-  }
-
-  const duplicateRowNumbers = new Set();
-  const duplicates = [];
-  for (const [key, rowNums] of duplicateKeyMap) {
-    if (rowNums.length > 1) {
-      const [identifier, dupMonth, dupYear] = key.split('|');
-      duplicates.push({
-        employee_identifier: identifier,
-        month: parseInt(dupMonth, 10),
-        year: parseInt(dupYear, 10),
-        rows: rowNums,
-        occurrences: rowNums.length,
-      });
-      rowNums.forEach((r) => duplicateRowNumbers.add(r));
-    }
-  }
-
-  if (duplicates.length > 0) {
-    logger.warn('MonthlyCostService.importFromExcel duplicate employee+month/year rows detected', {
-      duplicateCount: duplicates.length,
-      duplicates,
-    });
   }
 
   // 3. Process rows
@@ -657,17 +602,23 @@ const importFromExcel = async (filePath, userId, ip = null) => {
     const rawRow = rawRows[i];
     const rowErrors = [];
 
-    // — employee identifier: prefer employee code, fall back to employee name
-    let employeeCode = null;
+    // — employee identifier: prefer numeric Employee ID, fall back to Employee Name
+    let employeeId = null;
     let employeeNameProvided = null;
-    if (headerMap.employee_code) {
-      const rawEmpCode = row[headerMap.employee_code];
-      employeeCode = rawEmpCode !== null && rawEmpCode !== '' ? String(rawEmpCode).trim() : null;
+    if (headerMap.employee_id) {
+      const rawEmpId = row[headerMap.employee_id];
+      employeeId = rawEmpId !== null && rawEmpId !== '' ? parseInt(String(rawEmpId).trim(), 10) : null;
+      if (employeeId && (isNaN(employeeId) || employeeId <= 0)) {
+        employeeId = null;
+      }
     }
 
-    if (!employeeCode && headerMap.employee_name) {
+    if (!employeeId && headerMap.employee_name) {
       const rawEmpName = row[headerMap.employee_name];
       employeeNameProvided = rawEmpName !== null && rawEmpName !== '' ? String(rawEmpName).trim() : null;
+      if (!employeeNameProvided) {
+        // will validate existence later
+      }
     }
 
     // — month_year: try raw value first (handles Excel date serials)
@@ -714,56 +665,40 @@ const importFromExcel = async (filePath, userId, ip = null) => {
     // Skip row if validation failed
     if (rowErrors.length > 0) {
       failed++;
-      logger.warn('MonthlyCostService.importFromExcel row validation failed', {
-        rowNum, errors: rowErrors, row,
-      });
-      results.push({ row: rowNum, status: 'error', errors: rowErrors, data: row, duplicate_in_file: duplicateRowNumbers.has(rowNum) });
+      results.push({ row: rowNum, status: 'error', errors: rowErrors, data: row });
       continue;
     }
 
     // — Verify employee exists in DB (active only)
     try {
       let employee = null;
-      if (employeeCode) {
+      if (employeeId) {
         employee = await Employee.findOne({
-          where: sequelize.where(
-            sequelize.fn('lower', sequelize.col('employee_code')),
-            employeeCode.toLowerCase()
-          ),
-          attributes: ['id', 'full_name', 'employee_code', 'status'],
+          where: { id: employeeId },
+          attributes: ['id', 'full_name', 'status'],
         });
       } else if (employeeNameProvided) {
         employee = await Employee.findOne({
           where: sequelize.where(sequelize.fn('lower', sequelize.col('full_name')), employeeNameProvided.toLowerCase()),
-          attributes: ['id', 'full_name', 'employee_code', 'status'],
+          attributes: ['id', 'full_name', 'status'],
         });
       }
 
       if (!employee) {
         failed++;
-        const notFoundError = employeeCode
-          ? `Employee with code "${employeeCode}" was not found in the system.`
-          : employeeNameProvided
-            ? `Employee "${employeeNameProvided}" not found.`
-            : 'Employee identifier not found.';
-        logger.warn('MonthlyCostService.importFromExcel employee not found', {
-          rowNum, employeeCode, employeeNameProvided, error: notFoundError,
-        });
-        results.push({ row: rowNum, status: 'error', errors: [notFoundError], data: row, duplicate_in_file: duplicateRowNumbers.has(rowNum) });
+        results.push({ row: rowNum, status: 'error', errors: [employeeNameProvided ? `Employee "${employeeNameProvided}" not found.` : 'Employee identifier not found.'], data: row });
         continue;
       }
 
       if (employee.status !== 'active') {
         failed++;
-        logger.warn('MonthlyCostService.importFromExcel employee not active', {
-          rowNum, employeeId: employee.id, employeeCode: employee.employee_code, status: employee.status,
-        });
-        results.push({ row: rowNum, status: 'error', errors: [`Employee "${employee.full_name}" is not active.`], data: row, duplicate_in_file: duplicateRowNumbers.has(rowNum) });
+        results.push({ row: rowNum, status: 'error', errors: [`Employee "${employee.full_name}" is not active.`], data: row });
         continue;
       }
 
       // — Upsert: check existing record
-      const employeeId = employee.id;
+      // Ensure we have the employeeId for subsequent upsert
+      employeeId = employee.id;
       const existing = await monthlyCostRepository.findByEmployeeMonthYear(employeeId, month, year);
 
       const payload = {
@@ -793,7 +728,6 @@ const importFromExcel = async (filePath, userId, ip = null) => {
           month,
           year,
           record_id: existing.id,
-          duplicate_in_file: duplicateRowNumbers.has(rowNum),
         });
       } else {
         payload.created_by = userId;
@@ -806,7 +740,6 @@ const importFromExcel = async (filePath, userId, ip = null) => {
           month,
           year,
           record_id: created.id,
-          duplicate_in_file: duplicateRowNumbers.has(rowNum),
         });
       }
     } catch (dbErr) {
@@ -814,7 +747,7 @@ const importFromExcel = async (filePath, userId, ip = null) => {
       logger.error('MonthlyCostService.importFromExcel row error', {
         rowNum, employeeId, error: dbErr.message,
       });
-      results.push({ row: rowNum, status: 'error', errors: [dbErr.message], data: row, duplicate_in_file: duplicateRowNumbers.has(rowNum) });
+      results.push({ row: rowNum, status: 'error', errors: [dbErr.message], data: row });
     }
   }
 
@@ -838,29 +771,11 @@ const importFromExcel = async (filePath, userId, ip = null) => {
     total_rows: rows.length, imported, updated, failed,
   });
 
-  if (failed > 0) {
-    // Aggregate failure reasons so a large batch of failures is diagnosable
-    // from the terminal at a glance, instead of scrolling through every row.
-    const reasonCounts = {};
-    for (const r of results) {
-      if (r.status !== 'error') continue;
-      for (const msg of r.errors) {
-        reasonCounts[msg] = (reasonCounts[msg] || 0) + 1;
-      }
-    }
-    logger.warn('MonthlyCostService.importFromExcel failure breakdown', {
-      total_rows: rows.length,
-      failed,
-      reasonCounts,
-    });
-  }
-
   return {
     total_rows: rows.length,
     imported,
     updated,
     failed,
-    duplicates,
     results,
   };
 };

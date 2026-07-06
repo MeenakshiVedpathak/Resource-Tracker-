@@ -4,6 +4,7 @@ const serviceTypeService = require('../services/serviceTypeService');
 const {
   sendSuccess,
   sendCreated,
+  sendNoContent,
   sendNotFound,
   sendError,
 } = require('../utils/response');
@@ -89,9 +90,24 @@ const updateServiceType = async (req, res) => {
   }
 };
 
+const deleteServiceType = async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id) || id < 1) return sendError(res, 'Invalid service type ID.', 400);
+
+    await serviceTypeService.delete(id, req.userId);
+    return sendNoContent(res);
+  } catch (error) {
+    if (error.statusCode === 404) return sendNotFound(res, 'Service type');
+    logger.error('deleteServiceType error', { error: error.message, id: req.params.id });
+    return sendError(res, error.message, error.statusCode || 500);
+  }
+};
+
 module.exports = {
   getAllServiceTypes,
   getServiceTypeById,
   createServiceType,
   updateServiceType,
+  deleteServiceType,
 };

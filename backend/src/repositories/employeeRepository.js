@@ -19,9 +19,9 @@ const { Employee, ServicePOResource, ServicePO } = require('../models');
 const findAll = async (filters = {}, pagination = {}, sort = {}) => {
   const { search, status, designation } = filters;
   const { limit = 20, offset = 0 } = pagination;
-  const { sortBy = 'full_name', sortOrder = 'ASC' } = sort;
+  const { sortBy = 'created_at', sortOrder = 'DESC' } = sort;
 
-  const where = {};
+  const where = { is_deleted: false };
 
   // Status filter — omit clause entirely when 'all' is requested
   if (status && status !== 'all') {
@@ -40,6 +40,7 @@ const findAll = async (filters = {}, pagination = {}, sort = {}) => {
       { full_name: { [Op.iLike]: term } },
       { employee_code: { [Op.iLike]: term } },
       { designation: { [Op.iLike]: term } },
+      { email_id: { [Op.iLike]: term } },
     ];
   }
 
@@ -58,16 +59,22 @@ const findAll = async (filters = {}, pagination = {}, sort = {}) => {
  * @returns {Promise<Employee|null>}
  */
 const findById = async (id) => {
-  return Employee.findByPk(id);
+  return Employee.findOne({ where: { id, is_deleted: false } });
 };
 
 /**
- * Find a single employee by employee_code.
+ * Find a single employee by employee_code, regardless of status or
+ * soft-delete state — used for uniqueness checks so a code held by an
+ * inactive or deleted employee can never be reassigned.
  * @param {string} code
  * @returns {Promise<Employee|null>}
  */
 const findByCode = async (code) => {
   return Employee.findOne({ where: { employee_code: code } });
+};
+
+const findByEmail = async (email) => {
+  return Employee.findOne({ where: { email_id: email.toLowerCase(), is_deleted: false } });
 };
 
 /**
@@ -98,9 +105,9 @@ const update = async (id, data) => {
  * @returns {Promise<Employee|null>}
  */
 const softDelete = async (id, updatedBy) => {
-  const employee = await Employee.findByPk(id);
+  const employee = await Employee.findOne({ where: { id, is_deleted: false } });
   if (!employee) return null;
-  return employee.update({ status: 'inactive', updated_by: updatedBy });
+  return employee.update({ status: 'inactive', is_deleted: true, updated_by: updatedBy });
 };
 
 /**
@@ -109,7 +116,7 @@ const softDelete = async (id, updatedBy) => {
  */
 const getActiveEmployees = async () => {
   return Employee.findAll({
-    where: { status: 'active' },
+    where: { status: 'active', is_deleted: false },
     order: [['full_name', 'ASC']],
     attributes: [
       'id',
@@ -132,7 +139,7 @@ const getActiveEmployees = async () => {
 const findByIds = async (ids) => {
   if (!ids || ids.length === 0) return [];
   return Employee.findAll({
-    where: { id: { [Op.in]: ids } },
+    where: { id: { [Op.in]: ids }, is_deleted: false },
     order: [['full_name', 'ASC']],
   });
 };
@@ -158,14 +165,30 @@ const findActiveAllocations = async (employeeId) => {
   });
 };
 
+/**
+ * Lightweight fetch of ALL employees (including inactive/soft-deleted) for
+ * bulk import validation, so a code or email held by a deleted employee is
+ * still flagged as taken rather than silently reused.
+ * Returns only employee_code and email_id to avoid loading full records.
+ * @returns {Promise<{ employee_code: string, email_id: string|null }[]>}
+ */
+const findAllForImport = async () => {
+  return Employee.findAll({
+    attributes: ['employee_code', 'email_id'],
+    raw: true,
+  });
+};
+
 module.exports = {
   findAll,
   findById,
   findByCode,
+  findByEmail,
   create,
   update,
   softDelete,
   getActiveEmployees,
   findByIds,
   findActiveAllocations,
+  findAllForImport,
 };

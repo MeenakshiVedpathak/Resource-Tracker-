@@ -162,6 +162,17 @@ const update = async (id, data, userId, ip = null) => {
     throw error;
   }
 
+  // If the caller is changing the sub_project_code, ensure it is not taken by
+  // any other sub-project, regardless of its status or soft-delete state.
+  if (data.sub_project_code && data.sub_project_code !== existing.sub_project_code) {
+    const taken = await subProjectRepository.findByCode(data.sub_project_code);
+    if (taken && taken.id !== id) {
+      const error = new Error(`Sub-project code "${data.sub_project_code}" is already in use.`);
+      error.statusCode = 409;
+      throw error;
+    }
+  }
+
   // If changing PO reference, validate the new PO
   if (data.service_po_id && data.service_po_id !== existing.service_po_id) {
     const servicePO = await ServicePO.findOne({

@@ -44,10 +44,6 @@ module.exports = (sequelize) => {
       service_po_code: {
         type: DataTypes.STRING(30),
         allowNull: false,
-        unique: {
-          name: 'service_pos_service_po_code_key',
-          msg: 'Service PO code must be unique.',
-        },
         validate: {
           notEmpty: { msg: 'Service PO code cannot be empty.' },
           len: { args: [1, 30], msg: 'Service PO code must be between 1 and 30 characters.' },
@@ -150,15 +146,20 @@ module.exports = (sequelize) => {
         },
       },
       status: {
-        type: DataTypes.ENUM('active', 'closed', 'cancelled'),
+        type: DataTypes.STRING(20),
         allowNull: false,
-        defaultValue: 'active',
+        defaultValue: 'pending',
         validate: {
           isIn: {
-            args: [['active', 'closed', 'cancelled']],
-            msg: 'Status must be active, closed, or cancelled.',
+            args: [['in-progress', 'completed', 'on-hold', 'pending', 'cancelled', 'closed']],
+            msg: 'Status must be one of: in-progress, completed, on-hold, pending, cancelled, closed.',
           },
         },
+      },
+      is_deleted: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
       },
       created_by: {
         type: DataTypes.INTEGER,
