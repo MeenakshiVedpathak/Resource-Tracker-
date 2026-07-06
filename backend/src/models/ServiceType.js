@@ -30,10 +30,6 @@ module.exports = (sequelize) => {
       service_type_name: {
         type: DataTypes.STRING(100),
         allowNull: false,
-        unique: {
-          name: 'service_types_service_type_name_key',
-          msg: 'Service type name must be unique.',
-        },
         validate: {
           notEmpty: { msg: 'Service type name cannot be empty.' },
           len: { args: [1, 100], msg: 'Service type name must be between 1 and 100 characters.' },
@@ -43,6 +39,11 @@ module.exports = (sequelize) => {
         type: DataTypes.INTEGER,
         allowNull: true,
         references: { model: 'service_categories', key: 'id' },
+      },
+      is_deleted: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
       },
       created_by: {
         type: DataTypes.INTEGER,

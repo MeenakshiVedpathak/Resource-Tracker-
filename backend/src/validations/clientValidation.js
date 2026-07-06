@@ -16,11 +16,9 @@ const createClientSchema = Joi.object({
     .trim()
     .uppercase()
     .pattern(clientCodePattern)
-    .required()
+    .optional()
     .messages({
       'string.pattern.base': 'Client code must be 2-20 uppercase alphanumeric characters (hyphens and underscores allowed).',
-      'string.empty': 'Client code is required.',
-      'any.required': 'Client code is required.',
     }),
 
   client_name: Joi.string()

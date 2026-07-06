@@ -34,10 +34,6 @@ module.exports = (sequelize) => {
       employee_code: {
         type: DataTypes.STRING(20),
         allowNull: false,
-        unique: {
-          name: 'employees_employee_code_key',
-          msg: 'Employee code must be unique.',
-        },
         validate: {
           notEmpty: { msg: 'Employee code cannot be empty.' },
           len: { args: [1, 20], msg: 'Employee code must be between 1 and 20 characters.' },
@@ -67,6 +63,13 @@ module.exports = (sequelize) => {
         allowNull: true,
         validate: {
           min: { args: [0], msg: 'Company experience cannot be negative.' },
+        },
+      },
+      email_id: {
+        type: DataTypes.STRING(150),
+        allowNull: true,
+        validate: {
+          isEmail: { msg: 'Email address must be a valid email.' },
         },
       },
       resource_description: {
@@ -99,6 +102,11 @@ module.exports = (sequelize) => {
         validate: {
           isIn: { args: [['active', 'inactive']], msg: 'Status must be active or inactive.' },
         },
+      },
+      is_deleted: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
       },
       created_by: {
         type: DataTypes.INTEGER,

@@ -9,61 +9,60 @@ const { sequelize } = require('./src/config/database');
 const PORT = process.env.PORT || 5000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
+// NOTE: SSL/HTTPS is terminated by IIS. Node always listens on plain HTTP.
+console.log(`[startup] NODE_ENV=${NODE_ENV}  PORT=${PORT}`);
+
 let server;
 
 async function startServer() {
   try {
-    // Authenticate and sync database
     await sequelize.authenticate();
     logger.info('Database connection established successfully.');
+    console.log('[startup] Database connection OK');
 
-    // In development, sync models (alter: true is safe for dev; never use force: true in prod)
     if (NODE_ENV === 'development') {
       await sequelize.sync({ alter: false });
       logger.info('Database models synchronized.');
     }
 
     server = app.listen(PORT, () => {
-      logger.info(`RUT Portal API server running on port ${PORT} [${NODE_ENV}]`);
-      logger.info(`Swagger docs available at https://633b17xt-5555.inc1.devtunnels.ms/api-docs`);
-      logger.info(`Health check available at http://localhost:${PORT}/health`);
+      const msg = `RUT Portal API running on port ${PORT} [${NODE_ENV}]`;
+      logger.info(msg);
+      console.log(`[startup] ${msg}`);
     });
 
     server.on('error', (err) => {
-      if (err.code === 'EADDRINUSE') {
-        logger.error(`Port ${PORT} is already in use. Exiting.`);
-      } else {
-        logger.error('Server error:', err);
-      }
+      const msg = err.code === 'EADDRINUSE'
+        ? `Port ${PORT} is already in use.`
+        : `Server error: ${err.message}`;
+      logger.error(msg);
+      console.error(`[startup] ERROR: ${msg}`);
       process.exit(1);
     });
 
   } catch (err) {
     logger.error('Failed to start server:', err);
+    console.error('[startup] FATAL:', err.message);
     process.exit(1);
   }
 }
 
-// Graceful shutdown handler
 function gracefulShutdown(signal) {
   logger.info(`Received ${signal}. Shutting down gracefully...`);
 
   if (server) {
     server.close(async () => {
       logger.info('HTTP server closed.');
-
       try {
         await sequelize.close();
         logger.info('Database connection closed.');
       } catch (err) {
         logger.error('Error closing database connection:', err);
       }
-
       logger.info('Shutdown complete.');
       process.exit(0);
     });
 
-    // Force exit if graceful shutdown takes too long
     setTimeout(() => {
       logger.error('Graceful shutdown timed out. Forcing exit.');
       process.exit(1);
@@ -74,15 +73,17 @@ function gracefulShutdown(signal) {
 }
 
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGINT',  () => gracefulShutdown('SIGINT'));
 
 process.on('uncaughtException', (err) => {
   logger.error('Uncaught Exception:', err);
+  console.error('[runtime] Uncaught Exception:', err.message);
   gracefulShutdown('uncaughtException');
 });
 
-process.on('unhandledRejection', (reason, promise) => {
-  logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
+process.on('unhandledRejection', (reason) => {
+  logger.error('Unhandled Rejection:', reason);
+  console.error('[runtime] Unhandled Rejection:', reason);
   gracefulShutdown('unhandledRejection');
 });
 

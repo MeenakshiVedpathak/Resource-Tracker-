@@ -17,7 +17,7 @@ const logger = require('../utils/logger');
 const getAll = async (query = {}) => {
   const filters = {
     search: query.search || '',
-    status: query.status || 'active',
+    status: query.status || 'all',
   };
 
   const sort = {
@@ -144,7 +144,7 @@ const deleteRole = async (id, userId, ipAddress = null) => {
   }
 
   const oldValues = existing.toJSON();
-  const deleted = await roleRepository.update(id, { status: 'inactive', updated_by: userId });
+  const deleted = await roleRepository.update(id, { status: 'inactive', is_deleted: true, updated_by: userId });
 
   await createAuditLog(
     userId,

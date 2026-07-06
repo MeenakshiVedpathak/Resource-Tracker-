@@ -101,6 +101,11 @@ module.exports = (sequelize) => {
         type: DataTypes.DATE,
         allowNull: true,
       },
+      is_deleted: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+      },
       created_by: {
         type: DataTypes.INTEGER,
         allowNull: true,

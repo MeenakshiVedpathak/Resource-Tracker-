@@ -126,8 +126,7 @@ async function getSubProjectHours(req, res, next) {
  * Roles: HR, Management, Division Head
  *
  * Query params:
- *   employeeId, poId, status, search,
- *   sortBy, sortOrder, page, limit
+ *   employeeId, poId, month, year, status, search, sortBy, sortOrder, page, limit
  */
 async function getResourceAllocation(req, res, next) {
   try {
@@ -212,6 +211,49 @@ async function getServicePOSummary(req, res, next) {
   }
 }
 
+/**
+ * GET /api/v1/reports/resource-utilization
+ * Roles: HR, Management, Division Head
+ *
+ * Query params:
+ *   month (required), year (required), employeeId, search, page, limit
+ */
+async function getResourceUtilization(req, res, next) {
+  try {
+    const { columns, data, meta, summary } = await reportService.getResourceUtilization(req.query);
+    return sendPaginated(res, { columns, records: data, summary }, meta, 'Resource utilization report fetched successfully.');
+  } catch (err) {
+    if (err.statusCode) {
+      return sendError(res, err.message, err.statusCode);
+    }
+    logger.error('getResourceUtilization error', { error: err.message, stack: err.stack });
+    next(err);
+  }
+}
+
+/**
+ * GET /api/v1/reports/monthly-resource-utilization
+ * Roles: HR, Management, Division Head
+ *
+ * Returns full employee detail (experience, resource description, client, capacity)
+ * pivoted with dynamic service-category → service-type hour columns.
+ *
+ * Query params:
+ *   month (required), year (required), employeeId, search, page, limit
+ */
+async function getMonthlyResourceUtilization(req, res, next) {
+  try {
+    const { columns, data, meta, summary } = await reportService.getMonthlyResourceUtilization(req.query);
+    return sendPaginated(res, { columns, records: data, summary }, meta, 'Monthly resource utilization report fetched successfully.');
+  } catch (err) {
+    if (err.statusCode) {
+      return sendError(res, err.message, err.statusCode);
+    }
+    logger.error('getMonthlyResourceUtilization error', { error: err.message, stack: err.stack });
+    next(err);
+  }
+}
+
 module.exports = {
   getEmployeeHourlyRate,
   getMonthlyCostSummary,
@@ -222,4 +264,6 @@ module.exports = {
   getOperationalCostBreakdown,
   getEmployeeUtilizationSummary,
   getServicePOSummary,
+  getResourceUtilization,
+  getMonthlyResourceUtilization,
 };

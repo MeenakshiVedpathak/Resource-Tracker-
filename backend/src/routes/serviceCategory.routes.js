@@ -170,4 +170,30 @@ router.put(
   serviceCategoryController.updateServiceCategory
 );
 
+/**
+ * @swagger
+ * /service-categories/{id}:
+ *   delete:
+ *     summary: Soft-delete a service category
+ *     tags: [ServiceCategories]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       204:
+ *         description: Deleted successfully
+ *       404:
+ *         description: Not found
+ */
+router.delete(
+  '/:id',
+  authenticate,
+  authorize(WRITE_ROLES),
+  serviceCategoryController.deleteServiceCategory
+);
+
 module.exports = router;

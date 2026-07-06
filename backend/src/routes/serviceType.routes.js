@@ -54,6 +54,10 @@ const updateServiceTypeSchema = Joi.object({
 
 const listServiceTypeQuerySchema = Joi.object({
   search: Joi.string().trim().max(100).optional().allow(''),
+  service_category_id: Joi.number().integer().positive().optional().messages({
+    'number.base': 'Service category ID must be a number.',
+    'number.positive': 'Service category ID must be a positive integer.',
+  }),
 });
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
@@ -178,6 +182,32 @@ router.put(
   authorize(['Finance', 'Management']),
   validate(updateServiceTypeSchema),
   serviceTypeController.updateServiceType
+);
+
+/**
+ * @swagger
+ * /service-types/{id}:
+ *   delete:
+ *     summary: Soft-delete a service type
+ *     tags: [ServiceTypes]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       204:
+ *         description: Deleted successfully
+ *       404:
+ *         description: Not found
+ */
+router.delete(
+  '/:id',
+  authenticate,
+  authorize(['Finance', 'Management']),
+  serviceTypeController.deleteServiceType
 );
 
 module.exports = router;

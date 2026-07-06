@@ -47,7 +47,7 @@ const servicePOInclude = {
  */
 const findAll = async (filters = {}, pagination = {}, sort = {}) => {
   try {
-    const where = {};
+    const where = { is_deleted: false };
 
     if (filters.service_po_id) {
       where.service_po_id = parseInt(filters.service_po_id, 10);
@@ -108,7 +108,7 @@ const findAll = async (filters = {}, pagination = {}, sort = {}) => {
 const findById = async (id) => {
   try {
     return await SubProject.findOne({
-      where: { id: parseInt(id, 10) },
+      where: { id: parseInt(id, 10), is_deleted: false },
       include: [servicePOInclude],
     });
   } catch (error) {
@@ -126,7 +126,7 @@ const findById = async (id) => {
 const findByPO = async (poId) => {
   try {
     return await SubProject.findAll({
-      where: { service_po_id: parseInt(poId, 10) },
+      where: { service_po_id: parseInt(poId, 10), is_deleted: false },
       include: [servicePOInclude],
       order: [['created_at', 'DESC']],
     });
@@ -137,7 +137,9 @@ const findByPO = async (poId) => {
 };
 
 /**
- * Find a sub-project by its unique code.
+ * Find a sub-project by its unique code, regardless of status or soft-delete
+ * state — used for uniqueness checks so a code held by an inactive/deleted
+ * sub-project can never be reassigned.
  *
  * @param {string} code
  * @returns {Promise<SubProject|null>}
@@ -197,8 +199,8 @@ const update = async (id, data) => {
 const softDelete = async (id) => {
   try {
     const [affectedCount] = await SubProject.update(
-      { status: 'inactive' },
-      { where: { id: parseInt(id, 10) } }
+      { status: 'inactive', is_deleted: true },
+      { where: { id: parseInt(id, 10), is_deleted: false } }
     );
     return { affectedCount };
   } catch (error) {

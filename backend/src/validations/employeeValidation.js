@@ -6,7 +6,7 @@ const Joi = require('joi');
  * Employee Validation Schemas
  */
 
-const employeeCodePattern = /^[A-Z0-9_-]{2,20}$/;
+const employeeCodePattern = /^[A-Z0-9_/#-]{2,20}$/;
 
 // Reusable sub-schemas
 const experienceField = Joi.number()
@@ -29,7 +29,7 @@ const createEmployeeSchema = Joi.object({
     .pattern(employeeCodePattern)
     .required()
     .messages({
-      'string.pattern.base': 'Employee code must be 2-20 uppercase alphanumeric characters (hyphens and underscores allowed).',
+      'string.pattern.base': 'Employee code must be 2-20 uppercase alphanumeric characters (- / # _ allowed).',
       'any.required': 'Employee code is required.',
     }),
 
@@ -65,6 +65,18 @@ const createEmployeeSchema = Joi.object({
         .messages({
           'number.max': 'Company experience cannot exceed total experience.',
         }),
+    }),
+
+  email_id: Joi.string()
+    .trim()
+    .lowercase()
+    .email({ tlds: { allow: false } })
+    .max(150)
+    .optional()
+    .allow('', null)
+    .messages({
+      'string.email': 'Email must be a valid email address.',
+      'string.max': 'Email cannot exceed 150 characters.',
     }),
 
   resource_description: Joi.string()
@@ -119,7 +131,7 @@ const updateEmployeeSchema = Joi.object({
     .pattern(employeeCodePattern)
     .optional()
     .messages({
-      'string.pattern.base': 'Employee code must be 2-20 uppercase alphanumeric characters (hyphens and underscores allowed).',
+      'string.pattern.base': 'Employee code must be 2-20 uppercase alphanumeric characters (- / # _ allowed).',
     }),
 
   full_name: Joi.string()
@@ -141,6 +153,18 @@ const updateEmployeeSchema = Joi.object({
   total_experience: experienceField.optional().allow(null),
 
   company_experience: experienceField.optional().allow(null),
+
+  email_id: Joi.string()
+    .trim()
+    .lowercase()
+    .email({ tlds: { allow: false } })
+    .max(150)
+    .optional()
+    .allow('', null)
+    .messages({
+      'string.email': 'Email must be a valid email address.',
+      'string.max': 'Email cannot exceed 150 characters.',
+    }),
 
   resource_description: Joi.string()
     .trim()

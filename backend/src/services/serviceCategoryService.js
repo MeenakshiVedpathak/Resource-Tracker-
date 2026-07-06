@@ -61,4 +61,17 @@ const update = async (id, data, userId) => {
   return updated;
 };
 
-module.exports = { getAll, getById, create, update };
+const deleteCategory = async (id, userId) => {
+  const existing = await serviceCategoryRepository.findById(id);
+  if (!existing) {
+    const err = new Error('Service category not found.');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  await serviceCategoryRepository.softDelete(id, userId);
+
+  logger.info('Service category soft-deleted', { categoryId: id, userId });
+};
+
+module.exports = { getAll, getById, create, update, delete: deleteCategory };

@@ -19,7 +19,7 @@ const findAll = async (filters = {}, sort = {}) => {
   const { search, status } = filters;
   const { sortBy = 'role_name', sortOrder = 'ASC' } = sort;
 
-  const where = {};
+  const where = { is_deleted: false };
 
   if (status && status !== 'all') {
     where.status = status;
@@ -41,7 +41,7 @@ const findAll = async (filters = {}, sort = {}) => {
  * @returns {Promise<Role|null>}
  */
 const findById = async (id) => {
-  return Role.findByPk(id);
+  return Role.findOne({ where: { id, is_deleted: false } });
 };
 
 /**
@@ -51,7 +51,7 @@ const findById = async (id) => {
  */
 const findByName = async (name) => {
   return Role.findOne({
-    where: { role_name: { [Op.iLike]: name.trim() } },
+    where: { role_name: { [Op.iLike]: name.trim() }, is_deleted: false },
   });
 };
 

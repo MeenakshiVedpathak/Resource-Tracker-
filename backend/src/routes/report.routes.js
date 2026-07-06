@@ -289,9 +289,21 @@ router.get(
  *         name: poId
  *         schema: { type: integer }
  *       - in: query
+ *         name: clientId
+ *         schema: { type: integer }
+ *         description: Filter by client
+ *       - in: query
  *         name: status
- *         schema: { type: string, enum: [active, closed, all] }
+ *         schema: { type: string, enum: [in-progress, completed, on-hold, pending, cancelled, closed, all] }
  *         description: Filter by PO status
+ *       - in: query
+ *         name: isBillable
+ *         schema: { type: boolean }
+ *         description: Filter by the PO's billable flag
+ *       - in: query
+ *         name: serviceTypeId
+ *         schema: { type: integer }
+ *         description: Filter by service type
  *       - in: query
  *         name: search
  *         schema: { type: string }
@@ -481,7 +493,7 @@ router.get(
  *         description: Four-digit year
  *       - in: query
  *         name: status
- *         schema: { type: string, enum: [active, closed, cancelled, all] }
+ *         schema: { type: string, enum: [in-progress, completed, on-hold, pending, cancelled, closed, all] }
  *         description: Filter by PO status
  *       - in: query
  *         name: clientId
@@ -491,6 +503,18 @@ router.get(
  *         name: is_billable
  *         schema: { type: boolean }
  *         description: Filter by billable flag
+ *       - in: query
+ *         name: serviceTypeId
+ *         schema: { type: integer }
+ *         description: Filter by service type
+ *       - in: query
+ *         name: startDate
+ *         schema: { type: string, format: date }
+ *         description: Only include POs whose start_date is on or after this date (YYYY-MM-DD)
+ *       - in: query
+ *         name: endDate
+ *         schema: { type: string, format: date }
+ *         description: Only include POs whose end_date is on or before this date (YYYY-MM-DD)
  *       - in: query
  *         name: search
  *         schema: { type: string }
@@ -540,6 +564,130 @@ router.get(
   authenticate,
   authorize(['Finance', 'Management', 'Division Head']),
   reportController.getServicePOSummary
+);
+
+/**
+ * @swagger
+ * /reports/resource-utilization:
+ *   get:
+ *     summary: Employee hours pivot by service category and service type
+ *     description: >
+ *       Returns dynamic columns (service categories → service types) and one row per employee
+ *       with hours logged in each service type for the given month/year.
+ *       Also computes billable_total, non_billable_total, total_hours, leaves_hours,
+ *       and total_utilization (total_hours minus leaves) per employee.
+ *       Paged at the employee level.
+ *     tags: [Reports]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: month
+ *         required: true
+ *         schema: { type: integer, minimum: 1, maximum: 12 }
+ *         description: Month number (1-12)
+ *       - in: query
+ *         name: year
+ *         required: true
+ *         schema: { type: integer }
+ *         description: Four-digit year
+ *       - in: query
+ *         name: employeeId
+ *         schema: { type: integer }
+ *       - in: query
+ *         name: search
+ *         schema: { type: string }
+ *         description: Search by employee name or code
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, minimum: 1 }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, minimum: 1, maximum: 200 }
+ *     responses:
+ *       200:
+ *         description: >
+ *           columns: array of { category_id, category_name, service_types: [{id, name}] }.
+ *           records: array of employee rows with hours map { [service_type_id]: hours }
+ *           plus billable_total, non_billable_total, total_hours, leaves_hours, total_utilization.
+ *           summary: page-level totals for all hour columns.
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       422:
+ *         description: Validation error – month and year are required
+ */
+router.get(
+  '/resource-utilization',
+  authenticate,
+  authorize(['HR', 'Management', 'Division Head']),
+  reportController.getResourceUtilization
+);
+
+/**
+ * @swagger
+ * /reports/monthly-resource-utilization:
+ *   get:
+ *     summary: Full employee detail × service-type hours pivot for a given month/year
+ *     description: >
+ *       Matches the Excel resource utilization report.
+ *       Fixed employee columns: full_name, designation, total_experience,
+ *       company_experience (UVTech/GTT DATA), resource_description,
+ *       monthly_capacity (160), monthly_billing_capacity (160), clients.
+ *       Dynamic columns (service category → service types) hold decimal hours.
+ *       Computed totals per row: billable_total, non_billable_total, leaves_hours,
+ *       total_utilization (total_hours - leaves_hours).
+ *       Only active employees with timesheet entries in the period appear.
+ *     tags: [Reports]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: month
+ *         required: true
+ *         schema: { type: integer, minimum: 1, maximum: 12 }
+ *         description: Month number (1-12)
+ *       - in: query
+ *         name: year
+ *         required: true
+ *         schema: { type: integer }
+ *         description: Four-digit year
+ *       - in: query
+ *         name: employeeId
+ *         schema: { type: integer }
+ *       - in: query
+ *         name: search
+ *         schema: { type: string }
+ *         description: Search by employee name or code
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, minimum: 1 }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, minimum: 1, maximum: 200 }
+ *     responses:
+ *       200:
+ *         description: >
+ *           columns: [{ category_id, category_name, service_types: [{id, name}] }].
+ *           records: employee rows — full_name, designation, total_experience,
+ *           company_experience, resource_description, monthly_capacity (160),
+ *           monthly_billing_capacity (160), clients (comma-separated string),
+ *           hours { [service_type_id]: decimal_hours },
+ *           billable_total, non_billable_total, leaves_hours, total_utilization.
+ *           summary: page-level totals.
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       422:
+ *         description: Validation error – month and year are required
+ */
+router.get(
+  '/monthly-resource-utilization',
+  authenticate,
+  authorize(['HR', 'Management', 'Division Head']),
+  reportController.getMonthlyResourceUtilization
 );
 
 module.exports = router;

@@ -41,11 +41,23 @@ const upload = async (req, res, next) => {
     const { path: filePath, originalname, mimetype } = req.file;
     const userId = req.userId;
 
+    const month = parseInt(req.body.month, 10);
+    const year  = parseInt(req.body.year,  10);
+
+    if (!month || month < 1 || month > 12) {
+      return sendError(res, 'month is required and must be between 1 and 12.', 422);
+    }
+    if (!year || year < 2000) {
+      return sendError(res, 'year is required and must be 2000 or later.', 422);
+    }
+
     const result = await timesheetService.previewImport(
       filePath,
       originalname,
       userId,
-      mimetype
+      mimetype,
+      month,
+      year
     );
 
     return sendSuccess(

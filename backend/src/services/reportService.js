@@ -231,6 +231,127 @@ async function getSubProjectHours(query) {
 }
 
 /**
+ * Shared pivot helper: converts flat employee × service_type repo rows into
+ * per-employee objects with an `hours` map, billable/non-billable totals,
+ * leave hours, and total utilization.
+ *
+ * @param {object[]} rawColumns - from repo (category_id, category_name, service_type_id, service_type_name)
+ * @param {object[]} rawRows    - from repo (employee_id … service_type_id, category_id, hours)
+ * @param {number}   count      - total distinct employee count
+ * @param {number}   page
+ * @param {number}   limit
+ * @returns {{ columns, data, meta, summary }}
+ */
+function buildPivotResponse(rawColumns, rawRows, count, page, limit) {
+  const round2 = (n) => Math.round(n * 100) / 100;
+
+  // Column headers grouped by category
+  const catMap = new Map();
+  for (const col of rawColumns) {
+    if (!catMap.has(col.category_id)) {
+      catMap.set(col.category_id, {
+        category_id:   col.category_id,
+        category_name: col.category_name,
+        service_types: [],
+      });
+    }
+    catMap.get(col.category_id).service_types.push({
+      id:   col.service_type_id,
+      name: col.service_type_name,
+    });
+  }
+  const columns = Array.from(catMap.values());
+
+  // Identify billable category IDs and leave service type IDs by name
+  const billableCategoryIds = new Set();
+  const leaveServiceTypeIds = new Set();
+  for (const col of rawColumns) {
+    const catLower = col.category_name.toLowerCase();
+    if (catLower.includes('billable') && !catLower.includes('non')) {
+      billableCategoryIds.add(col.category_id);
+    }
+    const stLower = col.service_type_name.toLowerCase();
+    if (stLower.includes('leave') || stLower.includes('vacation') || stLower.includes('holiday')) {
+      leaveServiceTypeIds.add(col.service_type_id);
+    }
+  }
+
+  // Pivot flat rows into per-employee objects.
+  // All fields that are NOT pivot-specific are captured as employee fields so
+  // extra columns (total_experience, clients, etc.) flow through automatically.
+  const PIVOT_KEYS = new Set(['service_type_id', 'service_type_name', 'category_id', 'category_name', 'hours']);
+  const empMap = new Map();
+  for (const row of rawRows) {
+    if (!empMap.has(row.employee_id)) {
+      const empFields = {};
+      for (const [k, v] of Object.entries(row)) {
+        if (!PIVOT_KEYS.has(k)) empFields[k] = v;
+      }
+      empMap.set(row.employee_id, { ...empFields, hours: {} });
+    }
+    empMap.get(row.employee_id).hours[row.service_type_id] = parseFloat(row.hours) || 0;
+  }
+
+  // Compute per-employee totals
+  const data = Array.from(empMap.values()).map((emp) => {
+    let billable_total     = 0;
+    let non_billable_total = 0;
+    let leaves_hours       = 0;
+
+    for (const col of rawColumns) {
+      const h = emp.hours[col.service_type_id] || 0;
+      if (billableCategoryIds.has(col.category_id)) {
+        billable_total += h;
+      } else {
+        non_billable_total += h;
+      }
+      if (leaveServiceTypeIds.has(col.service_type_id)) {
+        leaves_hours += h;
+      }
+    }
+
+    const total_hours       = billable_total + non_billable_total;
+    const total_utilization = total_hours - leaves_hours;
+
+    return {
+      ...emp,
+      billable_total:     round2(billable_total),
+      non_billable_total: round2(non_billable_total),
+      total_hours:        round2(total_hours),
+      leaves_hours:       round2(leaves_hours),
+      total_utilization:  round2(total_utilization),
+    };
+  });
+
+  const meta = getPaginationMeta(count, page, limit);
+
+  const pageSummary = data.reduce(
+    (acc, r) => {
+      acc.billable_total     += r.billable_total;
+      acc.non_billable_total += r.non_billable_total;
+      acc.total_hours        += r.total_hours;
+      acc.leaves_hours       += r.leaves_hours;
+      acc.total_utilization  += r.total_utilization;
+      return acc;
+    },
+    { billable_total: 0, non_billable_total: 0, total_hours: 0, leaves_hours: 0, total_utilization: 0 }
+  );
+
+  return {
+    columns,
+    data,
+    meta,
+    summary: {
+      billable_total:     round2(pageSummary.billable_total),
+      non_billable_total: round2(pageSummary.non_billable_total),
+      total_hours:        round2(pageSummary.total_hours),
+      leaves_hours:       round2(pageSummary.leaves_hours),
+      total_utilization:  round2(pageSummary.total_utilization),
+    },
+  };
+}
+
+/**
  * Resource Allocation Report
  *
  * @param {object} query - req.query
@@ -240,20 +361,26 @@ async function getResourceAllocation(query) {
   const { page, limit, offset } = getPaginationParams(query);
   const filters = parseCommonFilters(query);
 
-  logger.info('Report: getResourceAllocation', { filters, page, limit });
-
+  const isBillable = query.isBillable !== undefined
+    ? query.isBillable === 'true' || query.isBillable === true
+    : undefined;
   const serviceTypeId = query.serviceTypeId ? parseInt(query.serviceTypeId, 10) : undefined;
+  const clientId = query.clientId ? parseInt(query.clientId, 10) : undefined;
+
+  logger.info('Report: getResourceAllocation', { filters, isBillable, serviceTypeId, clientId, page, limit });
 
   const { rows, count } = await reportRepo.getResourceAllocation({
     employeeId: filters.employeeId,
-    poId: filters.poId,
+    poId:       filters.poId,
+    clientId,
+    month:      filters.month,
+    year:       filters.year,
+    status:     filters.status,
+    isBillable,
     serviceTypeId,
-    month: filters.month,
-    year: filters.year,
-    status: filters.status,
-    search: filters.search,
-    sortBy: query.sortBy,
-    sortOrder: filters.sortOrder,
+    search:     filters.search,
+    sortBy:     query.sortBy,
+    sortOrder:  filters.sortOrder,
     limit,
     offset,
   });
@@ -407,6 +534,7 @@ async function getServicePOSummary(query) {
     : undefined;
 
   const clientId = query.clientId ? parseInt(query.clientId, 10) : undefined;
+  const serviceTypeId = query.serviceTypeId ? parseInt(query.serviceTypeId, 10) : undefined;
 
   logger.info('Report: getServicePOSummary', { filters, page, limit });
 
@@ -416,6 +544,9 @@ async function getServicePOSummary(query) {
     status:     filters.status,
     clientId,
     isBillable,
+    serviceTypeId,
+    startDate:  filters.startDate,
+    endDate:    filters.endDate,
     search:     filters.search,
     sortBy:     query.sortBy,
     sortOrder:  filters.sortOrder,
@@ -434,6 +565,8 @@ async function getServicePOSummary(query) {
       acc.total_hours_delivered         += round2(row.hours_delivered_before_month);
       acc.total_available_hours         += round2(row.available_hours);
       acc.total_monthly_billable_amount += round2(row.monthly_billable_amount);
+      acc.total_invoiced_amount         += round2(row.invoiced_amount);
+      acc.total_unbilled_amount         += round2(row.unbilled_amount);
       return acc;
     },
     {
@@ -442,6 +575,8 @@ async function getServicePOSummary(query) {
       total_hours_delivered: 0,
       total_available_hours: 0,
       total_monthly_billable_amount: 0,
+      total_invoiced_amount: 0,
+      total_unbilled_amount: 0,
     }
   );
 
@@ -449,13 +584,93 @@ async function getServicePOSummary(query) {
     data: rows,
     meta,
     summary: {
-      total_po_value:                round2(pageTotals.total_po_value),
-      total_expected_man_hours:      round2(pageTotals.total_expected_man_hours),
+      total_po_value:                     round2(pageTotals.total_po_value),
+      total_expected_man_hours:           round2(pageTotals.total_expected_man_hours),
       total_hours_delivered_before_month: round2(pageTotals.total_hours_delivered),
-      total_available_hours:         round2(pageTotals.total_available_hours),
-      total_monthly_billable_amount: round2(pageTotals.total_monthly_billable_amount),
+      total_available_hours:              round2(pageTotals.total_available_hours),
+      total_monthly_billable_amount:      round2(pageTotals.total_monthly_billable_amount),
+      total_invoiced_amount:              round2(pageTotals.total_invoiced_amount),
+      total_unbilled_amount:              round2(pageTotals.total_unbilled_amount),
     },
   };
+}
+
+/**
+ * Resource Utilization Report — same pivot format as resource-allocation,
+ * but month and year are required.
+ *
+ * @param {object} query - req.query (month, year required)
+ * @returns {Promise<{ columns, data, meta, summary }>}
+ */
+async function getResourceUtilization(query) {
+  const filters = parseCommonFilters(query);
+
+  if (!filters.month || !filters.year) {
+    const err = new Error('month and year query parameters are required for this report.');
+    err.statusCode = 422;
+    throw err;
+  }
+  if (filters.month < 1 || filters.month > 12) {
+    const err = new Error('month must be between 1 and 12.');
+    err.statusCode = 422;
+    throw err;
+  }
+
+  const { page, limit, offset } = getPaginationParams(query);
+
+  logger.info('Report: getResourceUtilization', { filters, page, limit });
+
+  const { columns: rawColumns, rows: rawRows, count } = await reportRepo.getResourceUtilization({
+    month:      filters.month,
+    year:       filters.year,
+    employeeId: filters.employeeId,
+    search:     filters.search,
+    limit,
+    offset,
+  });
+
+  return buildPivotResponse(rawColumns, rawRows, count, page, limit);
+}
+
+/**
+ * Monthly Resource Utilization Report
+ * Full employee detail + dynamic service-type hours pivot for a given month/year.
+ * Columns: Name, Designation, Total Experience, UVTech/GTT DATA (company_experience),
+ *          Resource Description, Monthly Capacity (160), Monthly Billing Capacity (160),
+ *          Client, [dynamic service-type columns], Billable Total, Non-Billable Total,
+ *          Total Utilization (excl Leaves).
+ *
+ * @param {object} query - req.query (month, year required)
+ * @returns {Promise<{ columns, data, meta, summary }>}
+ */
+async function getMonthlyResourceUtilization(query) {
+  const filters = parseCommonFilters(query);
+
+  if (!filters.month || !filters.year) {
+    const err = new Error('month and year query parameters are required for this report.');
+    err.statusCode = 422;
+    throw err;
+  }
+  if (filters.month < 1 || filters.month > 12) {
+    const err = new Error('month must be between 1 and 12.');
+    err.statusCode = 422;
+    throw err;
+  }
+
+  const { page, limit, offset } = getPaginationParams(query);
+
+  logger.info('Report: getMonthlyResourceUtilization', { filters, page, limit });
+
+  const { columns: rawColumns, rows: rawRows, count } = await reportRepo.getMonthlyResourceUtilization({
+    month:      filters.month,
+    year:       filters.year,
+    employeeId: filters.employeeId,
+    search:     filters.search,
+    limit,
+    offset,
+  });
+
+  return buildPivotResponse(rawColumns, rawRows, count, page, limit);
 }
 
 module.exports = {
@@ -468,4 +683,6 @@ module.exports = {
   getOperationalCostBreakdown,
   getEmployeeUtilizationSummary,
   getServicePOSummary,
+  getResourceUtilization,
+  getMonthlyResourceUtilization,
 };

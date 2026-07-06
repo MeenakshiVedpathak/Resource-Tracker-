@@ -1,6 +1,7 @@
 'use strict';
 
 const employeeService = require('../services/employeeService');
+const employeeImportService = require('../services/employeeImportService');
 const {
   sendSuccess,
   sendCreated,
@@ -120,6 +121,21 @@ const getActiveEmployees = async (req, res, next) => {
   }
 };
 
+/**
+ * POST /api/v1/employees/import
+ * Upload an Excel/CSV file and bulk-import employees.
+ * Valid rows are inserted; invalid rows are reported in error_rows.
+ */
+const importEmployees = async (req, res, next) => {
+  try {
+    const result = await employeeImportService.importEmployees(req.file.path, req.userId);
+    const message = `Import complete. ${result.imported} employee(s) imported, ${result.skipped} skipped.`;
+    return sendSuccess(res, result, message);
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getAll,
   getById,
@@ -127,4 +143,5 @@ module.exports = {
   update,
   delete: deleteEmployee,
   getActiveEmployees,
+  importEmployees,
 };

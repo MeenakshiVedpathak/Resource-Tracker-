@@ -26,8 +26,8 @@ const getAll = async (query = {}) => {
   };
 
   const sort = {
-    sortBy: query.sort_by || 'full_name',
-    sortOrder: query.sort_order || 'ASC',
+    sortBy: query.sort_by || 'created_at',
+    sortOrder: query.sort_order || 'DESC',
   };
 
   const { rows, count } = await employeeRepository.findAll(filters, { limit, offset }, sort);
@@ -64,11 +64,21 @@ const getById = async (id) => {
  * @returns {Promise<Employee>}
  */
 const create = async (data, userId, ipAddress = null) => {
-  // If a code is explicitly provided, ensure it is not already taken
+  // If a code is explicitly provided, ensure it is not already taken by any
+  // employee, regardless of active/inactive/deleted status.
   if (data.employee_code) {
     const existing = await employeeRepository.findByCode(data.employee_code);
     if (existing) {
       const err = new Error(`Employee code "${data.employee_code}" is already in use.`);
+      err.statusCode = 409;
+      throw err;
+    }
+  }
+
+  if (data.email_id) {
+    const existing = await employeeRepository.findByEmail(data.email_id);
+    if (existing) {
+      const err = new Error(`Email "${data.email_id}" is already registered to another employee.`);
       err.statusCode = 409;
       throw err;
     }
@@ -110,11 +120,21 @@ const create = async (data, userId, ipAddress = null) => {
 const update = async (id, data, userId, ipAddress = null) => {
   const existing = await getById(id); // throws 404 if not found
 
-  // If the caller is changing the employee_code, ensure uniqueness
+  // If the caller is changing the employee_code, ensure it is not taken by
+  // any other employee, regardless of active/inactive/deleted status.
   if (data.employee_code && data.employee_code !== existing.employee_code) {
     const taken = await employeeRepository.findByCode(data.employee_code);
     if (taken && taken.id !== id) {
       const err = new Error(`Employee code "${data.employee_code}" is already in use.`);
+      err.statusCode = 409;
+      throw err;
+    }
+  }
+
+  if (data.email_id && data.email_id !== existing.email_id) {
+    const taken = await employeeRepository.findByEmail(data.email_id);
+    if (taken && taken.id !== id) {
+      const err = new Error(`Email "${data.email_id}" is already registered to another employee.`);
       err.statusCode = 409;
       throw err;
     }

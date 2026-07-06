@@ -6,8 +6,10 @@ const fs = require('fs');
 const dateHelper = require('../helpers/dateHelper');
 
 // ── Upload Directories ────────────────────────────────────────────────────────
-const UPLOAD_DIR = path.resolve(__dirname, '../uploads/timesheets');
-const FINANCE_UPLOAD_DIR = path.resolve(__dirname, '../uploads/finance');
+const UPLOAD_DIR          = path.resolve(__dirname, '../uploads/timesheets');
+const FINANCE_UPLOAD_DIR  = path.resolve(__dirname, '../uploads/finance');
+const EMPLOYEE_UPLOAD_DIR = path.resolve(__dirname, '../uploads/employees');
+const CLIENT_UPLOAD_DIR   = path.resolve(__dirname, '../uploads/clients');
 
 // Ensure upload directories exist at startup
 if (!fs.existsSync(UPLOAD_DIR)) {
@@ -15,6 +17,12 @@ if (!fs.existsSync(UPLOAD_DIR)) {
 }
 if (!fs.existsSync(FINANCE_UPLOAD_DIR)) {
   fs.mkdirSync(FINANCE_UPLOAD_DIR, { recursive: true });
+}
+if (!fs.existsSync(EMPLOYEE_UPLOAD_DIR)) {
+  fs.mkdirSync(EMPLOYEE_UPLOAD_DIR, { recursive: true });
+}
+if (!fs.existsSync(CLIENT_UPLOAD_DIR)) {
+  fs.mkdirSync(CLIENT_UPLOAD_DIR, { recursive: true });
 }
 
 // ── Allowed MIME Types & Extensions ──────────────────────────────────────────
@@ -162,6 +170,82 @@ const handleMonthlyCostUpload = (req, res, next) => {
   });
 };
 
+// ── Disk Storage: Employee Import uploads ─────────────────────────────────────
+const employeeStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, EMPLOYEE_UPLOAD_DIR);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const baseName = path
+      .basename(file.originalname, ext)
+      .replace(/[^a-z0-9_\-]/gi, '_')
+      .toLowerCase()
+      .slice(0, 60);
+    const datePrefix = dateHelper.nowFilenamePrefix();
+    const userId = req.userId ? `_u${req.userId}` : '';
+    cb(null, `${datePrefix}${userId}_${baseName}${ext}`);
+  },
+});
+
+const uploadEmployeeExcel = multer({
+  storage: employeeStorage,
+  fileFilter: timesheetFileFilter,
+  limits: { fileSize: MAX_FILE_SIZE_BYTES, files: 1 },
+});
+
+const handleEmployeeUpload = (req, res, next) => {
+  uploadEmployeeExcel.single('file')(req, res, (err) => {
+    if (err) return next(err);
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        code: 'NO_FILE',
+        message: 'No file was uploaded. Please attach a .xlsx or .csv file in the "file" field.',
+      });
+    }
+    next();
+  });
+};
+
+// ── Disk Storage: Client Import uploads ───────────────────────────────────────
+const clientStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, CLIENT_UPLOAD_DIR);
+  },
+  filename: (req, file, cb) => {
+    const ext      = path.extname(file.originalname).toLowerCase();
+    const baseName = path
+      .basename(file.originalname, ext)
+      .replace(/[^a-z0-9_\-]/gi, '_')
+      .toLowerCase()
+      .slice(0, 60);
+    const datePrefix = dateHelper.nowFilenamePrefix();
+    const userId     = req.userId ? `_u${req.userId}` : '';
+    cb(null, `${datePrefix}${userId}_${baseName}${ext}`);
+  },
+});
+
+const uploadClientExcel = multer({
+  storage: clientStorage,
+  fileFilter: timesheetFileFilter,
+  limits: { fileSize: MAX_FILE_SIZE_BYTES, files: 1 },
+});
+
+const handleClientUpload = (req, res, next) => {
+  uploadClientExcel.single('file')(req, res, (err) => {
+    if (err) return next(err);
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        code: 'NO_FILE',
+        message: 'No file was uploaded. Please attach a .xlsx or .csv file in the "file" field.',
+      });
+    }
+    next();
+  });
+};
+
 module.exports = {
   uploadExcel,
   handleTimesheetUpload,
@@ -169,4 +253,10 @@ module.exports = {
   uploadFinanceExcel,
   handleMonthlyCostUpload,
   FINANCE_UPLOAD_DIR,
+  uploadEmployeeExcel,
+  handleEmployeeUpload,
+  EMPLOYEE_UPLOAD_DIR,
+  uploadClientExcel,
+  handleClientUpload,
+  CLIENT_UPLOAD_DIR,
 };

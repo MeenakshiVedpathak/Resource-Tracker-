@@ -1,7 +1,8 @@
 'use strict';
 
 const { Op } = require('sequelize');
-const { TimesheetImportHistory, TimesheetImportError, User, Employee } = require('../models');
+const { TimesheetImportHistory, TimesheetImportError, User, Employee, sequelize } = require('../models');
+const { QueryTypes } = require('sequelize');
 
 /**
  * Timesheet Import Repository
@@ -89,13 +90,20 @@ const findImportById = async (id) => {
 /**
  * Fetch a paginated list of all import history records, newest first.
  *
- * @param {object} pagination - { limit, offset }
+ * @param {object} pagination     - { limit, offset }
+ * @param {object} [filters]      - { month, year } — filters on import_month/import_year
  * @returns {Promise<{ rows: TimesheetImportHistory[], count: number }>}
  */
-const findAllImports = async (pagination = {}) => {
+const findAllImports = async (pagination = {}, filters = {}) => {
   const { limit = 20, offset = 0 } = pagination;
+  const { month, year } = filters;
+
+  const where = {};
+  if (month) where.import_month = month;
+  if (year) where.import_year = year;
 
   return TimesheetImportHistory.findAndCountAll({
+    where,
     include: [
       {
         model: User,
@@ -117,6 +125,33 @@ const findAllImports = async (pagination = {}) => {
     order: [['created_at', 'DESC']],
     distinct: true,
   });
+};
+
+/**
+ * Count distinct employees covered by each import batch, for a given set of
+ * import IDs. Used to annotate the import history list with a total_employees
+ * figure without an N+1 query per row.
+ *
+ * @param {number[]} importIds
+ * @returns {Promise<Map<number, number>>} import_id -> distinct employee count
+ */
+const getEmployeeCountsByImportIds = async (importIds) => {
+  const counts = new Map();
+  if (!importIds || importIds.length === 0) return counts;
+
+  const rows = await sequelize.query(
+    `SELECT timesheet_import_id, COUNT(DISTINCT employee_id) AS total_employees
+     FROM timesheets
+     WHERE timesheet_import_id IN (:importIds)
+     GROUP BY timesheet_import_id`,
+    { replacements: { importIds }, type: QueryTypes.SELECT }
+  );
+
+  rows.forEach((r) => {
+    counts.set(r.timesheet_import_id, parseInt(r.total_employees, 10));
+  });
+
+  return counts;
 };
 
 /**
@@ -143,5 +178,6 @@ module.exports = {
   createImportErrors,
   findImportById,
   findAllImports,
+  getEmployeeCountsByImportIds,
   deleteImportsByIds,
 };

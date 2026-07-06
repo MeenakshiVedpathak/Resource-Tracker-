@@ -246,6 +246,33 @@ router.put(
   servicePOController.updateServicePO
 );
 
+// ─── Delete (soft-delete) Service PO ─────────────────────────────────────────
+/**
+ * @swagger
+ * /service-pos/{id}:
+ *   delete:
+ *     summary: Soft-delete a Service PO (marks as cancelled + is_deleted)
+ *     tags: [ServicePOs]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       204:
+ *         description: Deleted successfully
+ *       404:
+ *         description: Service PO not found
+ */
+router.delete(
+  '/:id',
+  authenticate,
+  authorize(WRITE_ROLES),
+  servicePOController.deleteServicePO
+);
+
 // ─── Close Service PO ─────────────────────────────────────────────────────────
 /**
  * @swagger

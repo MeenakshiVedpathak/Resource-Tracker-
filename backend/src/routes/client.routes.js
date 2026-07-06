@@ -19,6 +19,67 @@ const {
   updateClientSchema,
   listClientsQuerySchema,
 } = require('../validations/clientValidation');
+const { handleClientUpload } = require('../middlewares/upload');
+
+// ─── Import clients from Excel/CSV (before /:id to avoid route shadowing) ────
+/**
+ * @swagger
+ * /clients/import:
+ *   post:
+ *     summary: Import clients from an Excel or CSV file
+ *     tags: [Clients]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required: [file]
+ *             properties:
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *                 description: .xlsx or .csv file. Required column - "Client Name". Optional columns - "Client Code", "Industry", "Status".
+ *     responses:
+ *       200:
+ *         description: Import summary
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 total:
+ *                   type: integer
+ *                   description: Total non-empty rows in file
+ *                 imported:
+ *                   type: integer
+ *                   description: Successfully inserted rows
+ *                 skipped:
+ *                   type: integer
+ *                   description: Duplicate rows skipped
+ *                 error_rows:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       row_number: { type: integer }
+ *                       row_data:   { type: object }
+ *                       errors:     { type: array, items: { type: string } }
+ *                       skipped:    { type: boolean }
+ *       400:
+ *         description: No file uploaded
+ *       422:
+ *         description: File parse or header error
+ */
+router.post(
+  '/import',
+  authenticate,
+  authorize(['Finance', 'Management']),
+  handleClientUpload,
+  clientController.importClients
+);
 
 // ─── Active clients dropdown (must come before /:id to avoid route shadowing) ──
 /**

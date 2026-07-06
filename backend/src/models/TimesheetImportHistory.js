@@ -69,6 +69,21 @@ module.exports = (sequelize) => {
           min:   { args: [0], msg: 'Error rows cannot be negative.' },
         },
       },
+      import_month: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        validate: {
+          min: { args: [1],  msg: 'Month must be between 1 and 12.' },
+          max: { args: [12], msg: 'Month must be between 1 and 12.' },
+        },
+      },
+      import_year: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        validate: {
+          min: { args: [2000], msg: 'Year must be 2000 or later.' },
+        },
+      },
       status: {
         type: DataTypes.ENUM('pending', 'processing', 'completed', 'failed'),
         allowNull: false,

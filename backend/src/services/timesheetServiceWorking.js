@@ -593,27 +593,20 @@ function adjustHoursTo176(validRows) {
     const adjustable = rows.filter(r => !isExcludedFromAdjustment(r));
     const excluded   = rows.filter(r =>  isExcludedFromAdjustment(r));
 
-    // Hours already consumed by idle / leaves / bench rows
-    const excludedTotal   = excluded.reduce((sum, r) => sum + r.hours, 0);
-    // Project rows must fill the remainder so the grand total = 176
-    const targetHours     = MONTHLY_TARGET_HOURS - excludedTotal;
     const adjustableTotal = adjustable.reduce((sum, r) => sum + r.hours, 0);
 
-    // Nothing to scale:
-    //  - no adjustable project rows
-    //  - excluded rows already fill or exceed 176 (targetHours <= 0)
-    //  - project hours already exactly match the target
-    if (adjustable.length === 0 || adjustableTotal === 0 || targetHours <= 0 || adjustableTotal === targetHours) {
+    // Nothing to scale — either no adjustable rows or already exactly 176
+    if (adjustable.length === 0 || adjustableTotal === 0 || adjustableTotal === MONTHLY_TARGET_HOURS) {
       result.push(...rows);
       continue;
     }
 
-    const scale = targetHours / adjustableTotal;
+    const scale = MONTHLY_TARGET_HOURS / adjustableTotal;
     const rawScaled = adjustable.map(r => r.hours * scale);
 
-    // Largest-remainder method: distribute exactly targetHours whole hours
+    // Largest-remainder method: distribute exactly 176 whole hours
     const floored = rawScaled.map(v => Math.floor(v));
-    const deficit = targetHours - floored.reduce((a, b) => a + b, 0);
+    const deficit = MONTHLY_TARGET_HOURS - floored.reduce((a, b) => a + b, 0);
     const byRemainder = rawScaled
       .map((v, i) => ({ i, rem: v - floored[i] }))
       .sort((a, b) => b.rem - a.rem);
@@ -628,43 +621,6 @@ function adjustHoursTo176(validRows) {
   }
 
   return result;
-}
-
-/**
- * Detect rows within the same file that share the same employee + Service PO
- * + date — the exact combination the database's own unique constraint
- * enforces on the timesheets table. Reporting only: does not remove or alter
- * any row, so callers can surface these for review without blocking import.
- *
- * @param {object[]} validRows - Output from validateRows() (post-adjustment)
- * @returns {object[]} duplicates: [{ employeeId, resourceName, poId, servicePOName, date, rows, occurrences }]
- */
-function detectDuplicateRows(validRows) {
-  const keyMap = new Map(); // "employeeId|poId|date" -> [rowNumber, ...]
-
-  for (const row of validRows) {
-    const key = `${row.employeeId}|${row.poId}|${row.date}`;
-    if (!keyMap.has(key)) keyMap.set(key, []);
-    keyMap.get(key).push(row.rowNumber);
-  }
-
-  const duplicates = [];
-  for (const [key, rowNumbers] of keyMap) {
-    if (rowNumbers.length <= 1) continue;
-    const [employeeIdStr, poIdStr, date] = key.split('|');
-    const sample = validRows.find((r) => r.rowNumber === rowNumbers[0]);
-    duplicates.push({
-      employeeId: parseInt(employeeIdStr, 10),
-      resourceName: sample.resourceName,
-      poId: parseInt(poIdStr, 10),
-      servicePOName: sample.projectLabel || sample.servicePOName,
-      date,
-      rows: rowNumbers,
-      occurrences: rowNumbers.length,
-    });
-  }
-
-  return duplicates;
 }
 
 /**
@@ -878,15 +834,6 @@ const previewImport = async (filePath, fileName, userId, mimetype, importMonth, 
   // 3. Adjust each employee's adjustable hours to sum to 176
   const validRows = adjustHoursTo176(rawValidRows);
 
-  // 3b. Detect (not block) rows sharing the same employee + PO + date
-  const duplicates = detectDuplicateRows(validRows);
-  if (duplicates.length > 0) {
-    logger.warn('Timesheet import preview: duplicate employee+PO+date rows detected', {
-      duplicateCount: duplicates.length,
-      duplicates,
-    });
-  }
-
   // 4. Create import history record (status = pending)
   const importRecord = await timesheetImportRepository.createImportHistory({
     imported_by:  userId,
@@ -926,7 +873,6 @@ const previewImport = async (filePath, fileName, userId, mimetype, importMonth, 
     errorRows: errorRows.length,
     preview:   validRows,
     errors:    errorRows,
-    duplicates,
     canConfirm: validRows.length > 0,
   };
 };
@@ -981,19 +927,6 @@ const confirmImport = async (importId, userId, ipAddress = null) => {
 
   const { validRows: rawValidRows, errorRows } = await validateRows(parsedRows);
   const validRows = adjustHoursTo176(rawValidRows);
-
-  // Detect (not block) rows sharing the same employee + PO + date. Note this
-  // combination is also enforced by the timesheets table's own unique
-  // constraint, so if duplicates remain unresolved the bulk insert below will
-  // fail — this is reported for visibility only, it does not deduplicate.
-  const duplicates = detectDuplicateRows(validRows);
-  if (duplicates.length > 0) {
-    logger.warn('Timesheet import confirm: duplicate employee+PO+date rows detected', {
-      importId,
-      duplicateCount: duplicates.length,
-      duplicates,
-    });
-  }
 
   if (validRows.length === 0) {
     await timesheetImportRepository.updateImportHistory(importId, {
@@ -1082,7 +1015,6 @@ const confirmImport = async (importId, userId, ipAddress = null) => {
       importId,
       insertedRows: inserted.length,
       errorRows:    errorRows.length,
-      duplicates,
     };
   } catch (err) {
     await t.rollback();
@@ -1096,35 +1028,15 @@ const confirmImport = async (importId, userId, ipAddress = null) => {
 };
 
 /**
- * Return a paginated list of all import history records, optionally filtered
- * by month/year, each annotated with total_employees — the count of distinct
- * employees covered by that import batch.
- *
- * @param {object} query - Express req.query, may include { month, year }
+ * Return a paginated list of all import history records.
+ * @param {object} query - Express req.query
  * @returns {Promise<{ data, meta }>}
  */
 const getImportHistory = async (query = {}) => {
   const { page, limit, offset } = getPaginationParams(query);
-
-  const month = query.month ? parseInt(query.month, 10) : undefined;
-  const year = query.year ? parseInt(query.year, 10) : undefined;
-
-  const { rows, count } = await timesheetImportRepository.findAllImports(
-    { limit, offset },
-    { month, year }
-  );
-
-  const importIds = rows.map((r) => r.id);
-  const employeeCounts = await timesheetImportRepository.getEmployeeCountsByImportIds(importIds);
-
-  const data = rows.map((r) => {
-    const plain = r.toJSON();
-    plain.total_employees = employeeCounts.get(r.id) || 0;
-    return plain;
-  });
-
+  const { rows, count } = await timesheetImportRepository.findAllImports({ limit, offset });
   return {
-    data,
+    data: rows,
     meta: getPaginationMeta(count, page, limit),
   };
 };

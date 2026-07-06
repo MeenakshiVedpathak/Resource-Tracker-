@@ -1,6 +1,7 @@
 'use strict';
 
-const clientService = require('../services/clientService');
+const clientService       = require('../services/clientService');
+const clientImportService = require('../services/clientImportService');
 const {
   sendSuccess,
   sendCreated,
@@ -134,6 +135,31 @@ const getActiveClients = async (req, res) => {
   }
 };
 
+/**
+ * POST /api/v1/clients/import
+ * Import clients from an uploaded Excel/CSV file.
+ * Returns a summary: total rows, imported, skipped, and any error rows.
+ */
+const importClients = async (req, res) => {
+  try {
+    const { path: filePath } = req.file;
+    const result = await clientImportService.importClients(filePath, req.userId);
+
+    const message =
+      `Import complete. ${result.imported} client(s) imported, ` +
+      `${result.skipped} duplicate(s) skipped, ` +
+      `${result.error_rows.length - result.skipped} error(s).`;
+
+    return sendSuccess(res, result, message, 200);
+  } catch (error) {
+    if (error.statusCode) {
+      return sendError(res, error.message, error.statusCode);
+    }
+    logger.error('importClients error', { error: error.message, userId: req.userId });
+    return sendError(res, error.message, 500);
+  }
+};
+
 module.exports = {
   getAllClients,
   getClientById,
@@ -141,4 +167,5 @@ module.exports = {
   updateClient,
   deleteClient,
   getActiveClients,
+  importClients,
 };
