@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
-import { Download, SlidersHorizontal } from 'lucide-react';
+import { Download, Filter } from 'lucide-react';
 import { useServicePOResourceReport } from '@/hooks/useReports';
 import { useActiveEmployees } from '@/hooks/useEmployees';
 import { useActiveServicePOs } from '@/hooks/useServicePOs';
@@ -149,12 +149,11 @@ const ServicePOResource = () => {
         actions={
           <div className="flex items-center gap-2">
             <Button
-              variant="outline"
               size="sm"
-              className="h-9 gap-2"
+              className="h-9 gap-2 bg-blue-600 hover:bg-blue-700 text-white"
               onClick={() => setFiltersOpen((o) => !o)}
             >
-              <SlidersHorizontal className="h-4 w-4" />
+              <Filter className="h-4 w-4" />
               Filters
               {activeFilterCount > 0 && (
                 <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">

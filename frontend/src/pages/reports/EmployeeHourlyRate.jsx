@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import * as XLSX from 'xlsx';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Download, Search, SlidersHorizontal } from 'lucide-react';
+import { Download, Filter, Search } from 'lucide-react';
 import { useEmployeeHourlyRate } from '@/hooks/useReports';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useActiveEmployees } from '@/hooks/useEmployees';
@@ -172,12 +172,11 @@ const EmployeeHourlyRate = () => {
           />
         </div>
         <Button
-          variant="outline"
           size="sm"
-          className="h-9 gap-2"
+          className="h-9 gap-2 bg-blue-600 hover:bg-blue-700 text-white"
           onClick={() => setFiltersOpen((prev) => !prev)}
         >
-          <SlidersHorizontal className="h-4 w-4" />
+          <Filter className="h-4 w-4" />
           Filters
           {activeFilterCount > 0 && (
             <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">

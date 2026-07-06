@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Outlet } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Filter } from 'lucide-react';
 import { useServiceTypes, useDeleteServiceType } from '@/hooks/useServiceTypes';
 import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
 import { useAuth } from '@/hooks/useAuth';
@@ -11,7 +11,8 @@ import { formatDate } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { useNotification } from '@/hooks/useNotification';
@@ -38,6 +39,8 @@ const ServiceTypeList = () => {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const debouncedSearch = useDebounce(search, 400);
   const canManage = hasRole('Finance', 'Management');
@@ -54,7 +57,6 @@ const ServiceTypeList = () => {
 
   const { data, isPending } = useServiceTypes(params);
   const deleteMutation = useDeleteServiceType();
-  const [deleteTarget, setDeleteTarget] = useState(null);
 
   const handleDelete = () => {
     if (!deleteTarget) return;
@@ -73,7 +75,6 @@ const ServiceTypeList = () => {
   const rows = Array.isArray(data?.data) ? data.data : [];
   const meta = data?.meta ?? {};
 
-  // Since backend doesn't support pagination for service types, we slice it client-side
   const total = meta.total ?? rows.length;
   const paginatedRows = rows.slice((page - 1) * limit, page * limit);
 
@@ -130,43 +131,71 @@ const ServiceTypeList = () => {
   ];
 
   return (
-    <div>
+    <div className="space-y-4">
       <PageHeader
         title="Service Types"
         description="Manage service type master data"
         actions={
-          canManage && (
-            <Button size="sm" onClick={() => navigate(ROUTES.SERVICE_TYPE_NEW)}>
-              <Plus className="mr-1.5 h-4 w-4" />
-              Add Service Type
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search service types…"
+                className="pl-9 w-[250px] h-9 text-sm bg-white"
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              />
+            </div>
+            <Button
+              size="sm"
+              className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+              onClick={() => setFiltersOpen((prev) => !prev)}
+            >
+              <Filter className="h-4 w-4" />
+              Filters
+              {categoryFilter !== 'all' && (
+                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+                  1
+                </span>
+              )}
             </Button>
-          )
+            {canManage && (
+              <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => navigate(ROUTES.SERVICE_TYPE_NEW)}>
+                <Plus className="mr-1.5 h-4 w-4" /> Add Service Type
+              </Button>
+            )}
+          </div>
         }
       />
+
+      {/* Collapsible filter panel */}
+      <div className={`overflow-hidden transition-all duration-500 ease-in-out ${filtersOpen ? 'max-h-[160px] opacity-100 mb-2' : 'max-h-0 opacity-0 mb-0'}`}>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full rounded-lg border bg-muted/30 p-4">
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Service Category</Label>
+            <SearchableSelect
+              options={[
+                { label: "All Categories", value: "all" },
+                ...serviceCategories.map((cat) => ({
+                  label: cat.name,
+                  value: String(cat.id)
+                }))
+              ]}
+              value={categoryFilter}
+              onValueChange={(v) => { setCategoryFilter(v); setPage(1); }}
+              placeholder="All Categories"
+              searchPlaceholder="Search category..."
+              className="h-9 w-full text-sm bg-white"
+            />
+          </div>
+        </div>
+      </div>
 
       <DataTable
         columns={columns}
         data={paginatedRows}
         isLoading={isPending}
-        searchValue={search}
-        onSearchChange={(v) => { setSearch(v); setPage(1); }}
-        searchPlaceholder="Search service types…"
-        toolbar={
-          <SearchableSelect
-            options={[
-              { label: "All Categories", value: "all" },
-              ...serviceCategories.map((cat) => ({
-                label: cat.name,
-                value: String(cat.id)
-              }))
-            ]}
-            value={categoryFilter}
-            onValueChange={(v) => { setCategoryFilter(v); setPage(1); }}
-            placeholder="All Categories"
-            searchPlaceholder="Search category..."
-            className="h-9 w-44 text-sm"
-          />
-        }
+        toolbar={null}
         pagination={{
           page: meta.current_page ?? page,
           limit: meta.per_page ?? limit,

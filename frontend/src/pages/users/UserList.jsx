@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useNavigate, Outlet } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Plus, Pencil, Trash2, Search } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Filter } from 'lucide-react';
 import { useUsers, useDeleteUser, useToggleUserStatus } from '@/hooks/useUsers';
 import { useRoles } from '@/hooks/useRoles';
 import { useAuth } from '@/hooks/useAuth';
@@ -21,6 +21,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
 
 const columnHelper = createColumnHelper();
 
@@ -63,6 +64,7 @@ const UserList = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [roleFilter, setRoleFilter] = useState('all');
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const debouncedSearch = useDebounce(search, 400);
   const isHR = hasRole('HR', 'Management');
@@ -203,6 +205,11 @@ const UserList = () => {
     });
   };
 
+  const activeFilterCount = [
+    statusFilter !== 'all' ? 1 : 0,
+    roleFilter !== 'all' ? 1 : 0,
+  ].reduce((a, b) => a + b, 0);
+
   return (
     <div className="space-y-4">
       <PageHeader
@@ -219,6 +226,19 @@ const UserList = () => {
                 onChange={handleSearch}
               />
             </div>
+            <Button
+              size="sm"
+              className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+              onClick={() => setFiltersOpen((prev) => !prev)}
+            >
+              <Filter className="h-4 w-4" />
+              Filters
+              {activeFilterCount > 0 && (
+                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+                  {activeFilterCount}
+                </span>
+              )}
+            </Button>
             {isHR && (
               <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => navigate(ROUTES.USER_NEW)}>
                 <Plus className="mr-1.5 h-4 w-4" /> Add User
@@ -228,13 +248,12 @@ const UserList = () => {
         }
       />
 
-      <DataTable
-        columns={columns}
-        data={users}
-        isLoading={isPending}
-        toolbar={
-          <>
-            <div className="flex items-center rounded-md border overflow-hidden h-9 text-sm">
+      {/* Collapsible filter panel */}
+      <div className={`overflow-hidden transition-all duration-500 ease-in-out ${filtersOpen ? 'max-h-[160px] opacity-100 mb-2' : 'max-h-0 opacity-0 mb-0'}`}>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full rounded-lg border bg-muted/30 p-4">
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Status</Label>
+            <div className="flex items-center rounded-md border overflow-hidden h-9 text-sm bg-white">
               {[
                 { label: 'All', value: 'all' },
                 { label: 'Active', value: 'active' },
@@ -254,6 +273,9 @@ const UserList = () => {
                 </button>
               ))}
             </div>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Role</Label>
             <SearchableSelect
               options={[
                 { label: "All roles", value: "all" },
@@ -266,10 +288,17 @@ const UserList = () => {
               onValueChange={(v) => { setRoleFilter(v); setPage(1); }}
               placeholder="All roles"
               searchPlaceholder="Search role..."
-              className="h-9 w-36 text-sm bg-white"
+              className="h-9 w-full text-sm bg-white"
             />
-          </>
-        }
+          </div>
+        </div>
+      </div>
+
+      <DataTable
+        columns={columns}
+        data={users}
+        isLoading={isPending}
+        toolbar={null}
         pagination={
           meta.total != null
             ? {

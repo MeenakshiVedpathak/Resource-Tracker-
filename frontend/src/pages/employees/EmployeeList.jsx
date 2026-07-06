@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, Outlet } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
 import { useIsMutating } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2, Search, Download, Upload, CheckCircle2, AlertCircle, FileDown, FileText, Printer, FileSpreadsheet, ChevronDown } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Download, Upload, CheckCircle2, AlertCircle, FileDown, FileText, Printer, FileSpreadsheet, ChevronDown, Filter } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -20,6 +20,7 @@ import PageHeader from '@/components/common/PageHeader';
 import StatusBadge from '@/components/common/StatusBadge';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import {
@@ -81,6 +82,7 @@ const EmployeeList = () => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const debouncedSearch = useDebounce(search, 400);
 
@@ -544,6 +546,19 @@ const EmployeeList = () => {
                 onChange={handleSearch}
               />
             </div>
+            <Button
+              size="sm"
+              className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+              onClick={() => setFiltersOpen((prev) => !prev)}
+            >
+              <Filter className="h-4 w-4" />
+              Filters
+              {statusFilter !== 'all' && (
+                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+                  1
+                </span>
+              )}
+            </Button>
             {isHR && !isPreviewOpen && !importResult && (
               <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => navigate(ROUTES.EMPLOYEE_NEW)}>
                 <Plus className="mr-1.5 h-4 w-4" /> Add Employee
@@ -552,6 +567,35 @@ const EmployeeList = () => {
           </div>
         }
       />
+
+      {/* Collapsible filter panel */}
+      <div className={`overflow-hidden transition-all duration-500 ease-in-out ${filtersOpen ? 'max-h-[160px] opacity-100 mb-2' : 'max-h-0 opacity-0 mb-0'}`}>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full rounded-lg border bg-muted/30 p-4">
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Status</Label>
+            <div className="flex items-center rounded-md border overflow-hidden h-9 text-sm bg-white">
+              {[
+                { label: 'All', value: 'all' },
+                { label: 'Active', value: 'active' },
+                { label: 'Inactive', value: 'inactive' },
+              ].map(({ label, value }) => (
+                <button
+                  key={value}
+                  onClick={() => { setStatusFilter(value); setPage(1); }}
+                  className={cn(
+                    'px-3 h-full font-medium transition-colors border-r last:border-r-0',
+                    statusFilter === value
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-background text-muted-foreground hover:bg-muted'
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
 
       {importResult ? (
         <div className="space-y-6">
@@ -623,28 +667,7 @@ const EmployeeList = () => {
           columns={columns}
           data={employees}
           isLoading={isPending}
-          toolbar={
-            <div className="flex items-center rounded-md border overflow-hidden h-9 text-sm">
-              {[
-                { label: 'All', value: 'all' },
-                { label: 'Active', value: 'active' },
-                { label: 'Inactive', value: 'inactive' },
-              ].map(({ label, value }) => (
-                <button
-                  key={value}
-                  onClick={() => { setStatusFilter(value); setPage(1); }}
-                  className={cn(
-                    'px-3 h-full font-medium transition-colors border-r last:border-r-0',
-                    statusFilter === value
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-background text-muted-foreground hover:bg-muted'
-                  )}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          }
+          toolbar={null}
           pagination={meta.total != null ? {
             page: meta.current_page ?? page,
             limit: meta.per_page ?? limit,
