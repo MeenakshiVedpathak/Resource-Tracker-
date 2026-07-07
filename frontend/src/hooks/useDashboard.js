@@ -24,3 +24,11 @@ export const useTopEmployeesByPO = (params) =>
     enabled: !!(params?.month && params?.year),
     staleTime: 1000 * 60 * 2,
   });
+
+export const useDashboardAnalytics = (params) =>
+  useQuery({
+    queryKey: ['dashboard', 'analytics', params],
+    queryFn: () => dashboardApi.getAnalytics(params),
+    enabled: !!(params?.fiscalYear),
+    staleTime: 0,
+  });

@@ -1,10 +1,11 @@
 import {
-  AreaChart,
-  Area,
+  BarChart,
+  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
+  Legend,
   ResponsiveContainer,
 } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -12,56 +13,81 @@ import { Skeleton } from '@/components/ui/skeleton';
 import EmptyState from '@/components/common/EmptyState';
 import { TrendingUp } from 'lucide-react';
 
+const SERIES = [
+  { key: 'Billable',              color: 'hsl(var(--primary))',  label: 'Billable' },
+  { key: 'Customer Non-Billable', color: '#f59e0b',              label: 'Customer Non-Billable' },
+  { key: 'Non-Billable',          color: '#f97316',              label: 'Non-Billable' },
+  { key: 'Other',                 color: '#94a3b8',              label: 'Other' },
+];
+
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
+  const total = payload.reduce((s, p) => s + (Number(p.value) || 0), 0);
   return (
-    <div className="rounded-lg border bg-popover px-3 py-2 shadow-elevated text-xs">
-      <p className="font-medium text-foreground mb-1">{label}</p>
-      <p className="text-primary">
-        {Number(payload[0].value).toLocaleString('en-IN')} hrs
-      </p>
+    <div className="rounded-lg border bg-popover px-3 py-2.5 shadow-md text-xs space-y-1 min-w-[180px]">
+      <p className="font-semibold text-foreground mb-1.5">{label}</p>
+      {payload.map((p) => p.value > 0 && (
+        <div key={p.dataKey} className="flex items-center justify-between gap-4">
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block h-2 w-2 rounded-sm shrink-0" style={{ background: p.fill }} />
+            <span className="text-muted-foreground">{p.name}</span>
+          </span>
+          <span className="font-medium tabular-nums">{Number(p.value).toLocaleString('en-IN')} hrs</span>
+        </div>
+      ))}
+      {total > 0 && (
+        <div className="border-t pt-1 mt-1 flex justify-between">
+          <span className="text-muted-foreground">Total</span>
+          <span className="font-semibold tabular-nums text-foreground">{total.toLocaleString('en-IN')} hrs</span>
+        </div>
+      )}
     </div>
   );
 };
 
-const MonthlyHoursTrendChart = ({ data = [], isLoading }) => {
+const MonthlyHoursTrendChart = ({ data = [], isLoading, fiscalYear, quarter }) => {
   if (isLoading) {
     return (
       <Card>
         <CardHeader>
-          <Skeleton className="h-5 w-48 mb-1" />
-          <Skeleton className="h-4 w-64" />
+          <Skeleton className="h-5 w-56 mb-1" />
+          <Skeleton className="h-4 w-72" />
         </CardHeader>
         <CardContent>
-          <Skeleton className="h-52 w-full" />
+          <Skeleton className="h-64 w-full" />
         </CardContent>
       </Card>
     );
   }
 
+  const fyLabel = fiscalYear
+    ? `Apr ${fiscalYear} → Mar ${fiscalYear + 1}`
+    : 'Fiscal Year';
+
+  const hasData = data.some((d) =>
+    (d.Billable || 0) + (d['Non-Billable'] || 0) + (d['Customer Non-Billable'] || 0) + (d.Other || 0) > 0
+  );
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>Monthly Hours Trend</CardTitle>
-        <CardDescription>Total hours logged across all projects — last 6 months</CardDescription>
+        <CardDescription>
+          Billable · Non-Billable · Customer Non-Billable ·{' '}
+          {quarter ? `Q${quarter} of ` : ''}{fyLabel}
+        </CardDescription>
       </CardHeader>
       <CardContent>
-        {data.length === 0 ? (
+        {!hasData ? (
           <EmptyState
             icon={TrendingUp}
             title="No timesheet data yet"
             description="Hours will appear here once timesheets are submitted."
-            className="py-10"
+            className="py-12"
           />
         ) : (
-          <ResponsiveContainer width="100%" height={210}>
-            <AreaChart data={data} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
-              <defs>
-                <linearGradient id="hoursGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.15} />
-                  <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                </linearGradient>
-              </defs>
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={data} margin={{ top: 4, right: 8, left: -16, bottom: 0 }} barCategoryGap="28%">
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
               <XAxis
                 dataKey="label"
@@ -73,19 +99,27 @@ const MonthlyHoursTrendChart = ({ data = [], isLoading }) => {
                 tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
                 tickLine={false}
                 axisLine={false}
-                tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
+                tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}
               />
-              <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'hsl(var(--primary))', strokeWidth: 1, strokeDasharray: '4 2' }} />
-              <Area
-                type="monotone"
-                dataKey="total_hours"
-                stroke="hsl(var(--primary))"
-                strokeWidth={2}
-                fill="url(#hoursGradient)"
-                dot={{ r: 3, fill: 'hsl(var(--primary))', strokeWidth: 0 }}
-                activeDot={{ r: 5, fill: 'hsl(var(--primary))', strokeWidth: 2, stroke: 'hsl(var(--background))' }}
+              <Tooltip content={<CustomTooltip />} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.35 }} />
+              <Legend
+                iconSize={8}
+                wrapperStyle={{ fontSize: 11, paddingTop: 10 }}
+                formatter={(value) => (
+                  <span style={{ color: 'hsl(var(--muted-foreground))' }}>{value}</span>
+                )}
               />
-            </AreaChart>
+              {SERIES.map((s, i) => (
+                <Bar
+                  key={s.key}
+                  dataKey={s.key}
+                  name={s.label}
+                  stackId="hrs"
+                  fill={s.color}
+                  radius={i === SERIES.length - 1 ? [3, 3, 0, 0] : [0, 0, 0, 0]}
+                />
+              ))}
+            </BarChart>
           </ResponsiveContainer>
         )}
       </CardContent>
