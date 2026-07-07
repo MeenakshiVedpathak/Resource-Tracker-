@@ -179,7 +179,7 @@ const SubProjectForm = () => {
                               label: po.po_number ?? po.service_po_name ?? String(po.id)
                             }))}
                             value={field.value ? String(field.value) : ''}
-                            onValueChange={(v) => field.onChange(v ? Number(v) : undefined)}
+                            onValueChange={(v) => field.onChange(v ?? '')}
                             placeholder="Select a Service PO"
                             searchPlaceholder="Search PO..."
                             className="h-8 text-sm border-gray-200"

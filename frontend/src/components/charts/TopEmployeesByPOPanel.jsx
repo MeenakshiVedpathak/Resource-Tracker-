@@ -6,9 +6,7 @@ import { Briefcase, Users, AlertTriangle, ChevronLeft, ChevronRight } from 'luci
 import { cn } from '@/utils/cn';
 import { Label } from '@/components/ui/label';
 import { SearchableSelect } from '@/components/ui/searchable-select';
-import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
-import { useActiveServicePOs, useServicePOs } from '@/hooks/useServicePOs';
-import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
+import { useActiveServicePOs } from '@/hooks/useServicePOs';
 
 const PAGE_SIZE = 9;
 
@@ -157,55 +155,20 @@ const SkeletonGrid = () => (
 
 /* ── Main component ── */
 const TopEmployeesByPOPanel = ({ data = [], isLoading, month, year }) => {
-  const [categoryId, setCategoryId]   = useState('all');
-  const [poFilterId, setPoFilterId]   = useState('all');
-  const [clientPage, setClientPage]   = useState(1);
+  const [categoryName, setCategoryName] = useState('all');
+  const [poFilterId, setPoFilterId]     = useState('all');
+  const [clientPage, setClientPage]     = useState(1);
 
   /* ── Dropdown data ── */
-  const { data: activeCategories = [] } = useActiveServiceCategories();
-  const { data: activePOOptions = [] }  = useActiveServicePOs();
+  const { data: activePOOptions = [] } = useActiveServicePOs();
 
-  /* ── Service types + full PO list for category → type → PO mapping ── */
-  const { data: serviceTypes = [] }  = useActiveServiceTypes();
-  const { data: allPOsResponse }     = useServicePOs({ limit: 500 });
-  const allPOs                       = useMemo(() => allPOsResponse?.data ?? [], [allPOsResponse]);
+  /* ── Derive unique category names from the response data ── */
+  const uniqueCategories = useMemo(
+    () => [...new Set(data.map((po) => po.category_name).filter(Boolean))].sort(),
+    [data]
+  );
 
-  /* ── poTypeMap: String(poId) → Number(service_type_id) ── */
-  const poTypeMap = useMemo(() => {
-    const map = {};
-    allPOs.forEach((po) => {
-      // API returns nested camelCase: po.serviceType.id (not flat po.service_type_id)
-      const typeId = po.service_type_id ?? po.serviceType?.id ?? po.service_type?.id;
-      if (po.id != null && typeId != null) map[String(po.id)] = Number(typeId);
-    });
-    return map;
-  }, [allPOs]);
-
-  /* ── DEBUG ── */
-  useEffect(() => {
-    console.group('[TopEmp] Data shapes');
-    console.log('allPOs count:', allPOs.length);
-    if (allPOs.length > 0) console.log('allPOs[0]:', allPOs[0]);
-    console.log('serviceTypes count:', serviceTypes.length);
-    if (serviceTypes.length > 0) console.log('serviceTypes[0]:', serviceTypes[0]);
-    console.log('poTypeMap:', poTypeMap);
-    console.groupEnd();
-  }, [allPOs, serviceTypes, poTypeMap]);
-
-  /* ── Set of type IDs belonging to the selected category (null = no filter) ── */
-  const selectedTypeIds = useMemo(() => {
-    if (categoryId === 'all') return null;
-    return new Set(
-      serviceTypes
-        .filter((st) => st.service_category_id != null && String(st.service_category_id) === categoryId)
-        .map((st) => Number(st.id))
-    );
-  }, [categoryId, serviceTypes]);
-
-  /* ── Reset page on filter change ── */
-  useEffect(() => { setClientPage(1); }, [poFilterId, categoryId]);
-
-  /* ── Client-side filtering ── */
+  /* ── Client-side filtering using fields already present in the response ── */
   const filteredData = useMemo(() => {
     let result = data;
 
@@ -213,21 +176,15 @@ const TopEmployeesByPOPanel = ({ data = [], isLoading, month, year }) => {
       result = result.filter((po) => String(po.service_po_id) === poFilterId);
     }
 
-    if (selectedTypeIds !== null) {
-      console.group('[TopEmp] Category filter active');
-      console.log('selectedTypeIds:', [...selectedTypeIds]);
-      console.log('poTypeMap size:', Object.keys(poTypeMap).length);
-      result = result.filter((po) => {
-        const typeId = poTypeMap[String(po.service_po_id)];
-        const passes = typeId != null && selectedTypeIds.has(typeId);
-        console.log(`PO ${po.service_po_id} "${po.service_po_name}": typeId=${typeId}, passes=${passes}`);
-        return passes;
-      });
-      console.groupEnd();
+    if (categoryName !== 'all') {
+      result = result.filter((po) => po.category_name === categoryName);
     }
 
     return result;
-  }, [data, poFilterId, selectedTypeIds, poTypeMap]);
+  }, [data, poFilterId, categoryName]);
+
+  /* ── Reset page when filters change ── */
+  useEffect(() => { setClientPage(1); }, [poFilterId, categoryName]);
 
   /* ── Client-side pagination ── */
   const totalPages   = Math.ceil(filteredData.length / PAGE_SIZE);
@@ -249,7 +206,7 @@ const TopEmployeesByPOPanel = ({ data = [], isLoading, month, year }) => {
     0
   );
 
-  const isFiltered = categoryId !== 'all' || poFilterId !== 'all';
+  const isFiltered = categoryName !== 'all' || poFilterId !== 'all';
 
   return (
     <Card>
@@ -268,10 +225,10 @@ const TopEmployeesByPOPanel = ({ data = [], isLoading, month, year }) => {
             <SearchableSelect
               options={[
                 { label: 'All Categories', value: 'all' },
-                ...activeCategories.map((c) => ({ label: c.name, value: String(c.id) })),
+                ...uniqueCategories.map((name) => ({ label: name, value: name })),
               ]}
-              value={categoryId}
-              onValueChange={setCategoryId}
+              value={categoryName}
+              onValueChange={setCategoryName}
               placeholder="All Categories"
               className="h-8 w-44 text-sm"
             />
