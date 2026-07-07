@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Outlet } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Filter } from 'lucide-react';
 import { useSubProjects, useDeleteSubProject } from '@/hooks/useSubProjects';
 import { useActiveServicePOs } from '@/hooks/useServicePOs';
 import { useAuth } from '@/hooks/useAuth';
@@ -14,13 +14,8 @@ import PageHeader from '@/components/common/PageHeader';
 import StatusBadge from '@/components/common/StatusBadge';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { Button } from '@/components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { cn } from '@/utils/cn';
 
@@ -46,6 +41,7 @@ const SubProjectList = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [poFilter, setPoFilter] = useState('all');
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const debouncedSearch = useDebounce(search, 400);
   const canManage = hasRole('Finance', 'Management', 'Project Manager');
@@ -64,6 +60,11 @@ const SubProjectList = () => {
 
   const subProjects = data?.data ?? [];
   const meta = data?.meta ?? {};
+
+  const activeFilterCount = [
+    poFilter !== 'all' ? 1 : 0,
+    statusFilter !== 'all' ? 1 : 0,
+  ].reduce((a, b) => a + b, 0);
 
   const columns = [
     columnHelper.display({
@@ -129,32 +130,48 @@ const SubProjectList = () => {
   };
 
   return (
-    <div>
+    <div className="space-y-4">
       <PageHeader
         title="Sub-Projects"
         description="Manage sub-projects linked to Service POs"
         actions={
-          canManage && (
-            <Button size="sm" onClick={() => navigate(ROUTES.SUB_PROJECT_NEW)}>
-              <Plus className="mr-1.5 h-4 w-4" />
-              Add Sub-Project
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search sub-projects…"
+                className="pl-9 w-[250px] h-9 text-sm bg-white"
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              />
+            </div>
+            <Button
+              size="sm"
+              className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+              onClick={() => setFiltersOpen((prev) => !prev)}
+            >
+              <Filter className="h-4 w-4" />
+              Filters
+              {activeFilterCount > 0 && (
+                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+                  {activeFilterCount}
+                </span>
+              )}
             </Button>
-          )
+            {canManage && (
+              <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => navigate(ROUTES.SUB_PROJECT_NEW)}>
+                <Plus className="mr-1.5 h-4 w-4" /> Add Sub-Project
+              </Button>
+            )}
+          </div>
         }
       />
 
-      <DataTable
-        columns={columns}
-        data={subProjects}
-        isLoading={isPending}
-        searchValue={search}
-        onSearchChange={(v) => {
-          setSearch(v);
-          setPage(1);
-        }}
-        searchPlaceholder="Search sub-projects…"
-        toolbar={
-          <>
+      {/* Collapsible filter panel */}
+      <div className={`overflow-hidden transition-all duration-500 ease-in-out ${filtersOpen ? 'max-h-[160px] opacity-100 mb-2' : 'max-h-0 opacity-0 mb-0'}`}>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full rounded-lg border bg-muted/30 p-4">
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Service PO</Label>
             <SearchableSelect
               options={[
                 { label: "All POs", value: "all" },
@@ -164,32 +181,35 @@ const SubProjectList = () => {
                 }))
               ]}
               value={poFilter}
-              onValueChange={(v) => {
-                setPoFilter(v);
-                setPage(1);
-              }}
+              onValueChange={(v) => { setPoFilter(v); setPage(1); }}
               placeholder="All POs"
               searchPlaceholder="Search PO..."
-              className="h-9 w-[280px] text-sm"
+              className="h-9 w-full text-sm bg-white"
             />
-
-            <SearchableSelect showSearch={false}
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Status</Label>
+            <SearchableSelect
+              showSearch={false}
               options={[
                 { label: "All status", value: "all" },
                 { label: "Active", value: "active" },
-                { label: "Inactive", value: "inactive" }
+                { label: "Inactive", value: "inactive" },
               ]}
               value={statusFilter}
-              onValueChange={(v) => {
-                setStatusFilter(v);
-                setPage(1);
-              }}
+              onValueChange={(v) => { setStatusFilter(v); setPage(1); }}
               placeholder="All status"
-              searchPlaceholder="Search status..."
-              className="h-9 w-[160px] text-sm"
+              className="h-9 w-full text-sm bg-white"
             />
-          </>
-        }
+          </div>
+        </div>
+      </div>
+
+      <DataTable
+        columns={columns}
+        data={subProjects}
+        isLoading={isPending}
+        toolbar={null}
         pagination={
           meta.total != null
             ? {
@@ -200,13 +220,8 @@ const SubProjectList = () => {
             : undefined
         }
         onPageChange={setPage}
-        onPageSizeChange={(s) => {
-          setLimit(s);
-          setPage(1);
-        }}
-        onRowClick={(row) =>
-          navigate(buildPath(ROUTES.SUB_PROJECT_EDIT, { id: row.id }))
-        }
+        onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
+        onRowClick={(row) => navigate(buildPath(ROUTES.SUB_PROJECT_EDIT, { id: row.id }))}
       />
 
       <Outlet />

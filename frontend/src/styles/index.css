@@ -187,30 +187,48 @@
     @apply bg-background/80 backdrop-blur-md border border-border/60;
   }
 
-  /* ── Stat card gradient ── */
-  .stat-gradient-blue {
-    background: linear-gradient(135deg, hsl(239 84% 61% / 0.08), hsl(239 84% 61% / 0.02));
-  }
+  /* ── Stat card tinted backgrounds (light + dark mode) ── */
+  .stat-gradient-blue   { background-color: hsl(225 80% 96%); }
+  .stat-gradient-green  { background-color: hsl(142 60% 95%); }
+  .stat-gradient-amber  { background-color: hsl(40  90% 95%); }
+  .stat-gradient-orange { background-color: hsl(25  90% 95%); }
+  .stat-gradient-red    { background-color: hsl(0   70% 96%); }
+  .stat-gradient-purple { background-color: hsl(270 70% 96%); }
+  .stat-gradient-cyan   { background-color: hsl(196 80% 95%); }
 
-  .stat-gradient-green {
-    background: linear-gradient(135deg, hsl(142 71% 45% / 0.08), hsl(142 71% 45% / 0.02));
-  }
+  .dark .stat-gradient-blue   { background-color: hsl(225 60% 18%); }
+  .dark .stat-gradient-green  { background-color: hsl(142 40% 15%); }
+  .dark .stat-gradient-amber  { background-color: hsl(40  60% 16%); }
+  .dark .stat-gradient-orange { background-color: hsl(25  60% 16%); }
+  .dark .stat-gradient-red    { background-color: hsl(0   50% 17%); }
+  .dark .stat-gradient-purple { background-color: hsl(270 50% 18%); }
+  .dark .stat-gradient-cyan   { background-color: hsl(196 60% 16%); }
 
-  .stat-gradient-amber {
-    background: linear-gradient(135deg, hsl(38 92% 50% / 0.08), hsl(38 92% 50% / 0.02));
-  }
+  /* ── Stat card left accent bar ── */
+  .stat-accent-blue   { background-color: hsl(225 75% 55%); }
+  .stat-accent-green  { background-color: hsl(142 65% 42%); }
+  .stat-accent-amber  { background-color: hsl(40  90% 48%); }
+  .stat-accent-orange { background-color: hsl(25  90% 52%); }
+  .stat-accent-red    { background-color: hsl(0   68% 52%); }
+  .stat-accent-purple { background-color: hsl(270 75% 58%); }
+  .stat-accent-cyan   { background-color: hsl(196 80% 45%); }
 
-  .stat-gradient-red {
-    background: linear-gradient(135deg, hsl(0 72% 51% / 0.08), hsl(0 72% 51% / 0.02));
-  }
+  /* ── Stat card colored border ── */
+  .stat-border-blue   { border-color: hsl(225 75% 82%); }
+  .stat-border-green  { border-color: hsl(142 55% 78%); }
+  .stat-border-amber  { border-color: hsl(40  80% 78%); }
+  .stat-border-orange { border-color: hsl(25  80% 78%); }
+  .stat-border-red    { border-color: hsl(0   60% 82%); }
+  .stat-border-purple { border-color: hsl(270 65% 82%); }
+  .stat-border-cyan   { border-color: hsl(196 70% 78%); }
 
-  .stat-gradient-purple {
-    background: linear-gradient(135deg, hsl(270 84% 61% / 0.08), hsl(270 84% 61% / 0.02));
-  }
-
-  .stat-gradient-cyan {
-    background: linear-gradient(135deg, hsl(199 89% 48% / 0.08), hsl(199 89% 48% / 0.02));
-  }
+  .dark .stat-border-blue   { border-color: hsl(225 60% 32%); }
+  .dark .stat-border-green  { border-color: hsl(142 40% 28%); }
+  .dark .stat-border-amber  { border-color: hsl(40  55% 30%); }
+  .dark .stat-border-orange { border-color: hsl(25  55% 30%); }
+  .dark .stat-border-red    { border-color: hsl(0   50% 32%); }
+  .dark .stat-border-purple { border-color: hsl(270 50% 34%); }
+  .dark .stat-border-cyan   { border-color: hsl(196 55% 30%); }
 
   /* ── Table styles ── */
   .data-table th {

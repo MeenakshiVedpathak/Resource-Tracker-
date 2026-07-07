@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { useNavigate, Outlet } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Plus, Pencil, Eye, Trash2 } from 'lucide-react';
+import { Plus, Pencil, Eye, Trash2, Search, Filter } from 'lucide-react';
 import { useServicePOs, useDeleteServicePO } from '@/hooks/useServicePOs';
 import { useActiveClients } from '@/hooks/useClients';
 import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
-
 import { useAuth } from '@/hooks/useAuth';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useNotification } from '@/hooks/useNotification';
@@ -18,7 +17,7 @@ import StatusBadge from '@/components/common/StatusBadge';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { cn } from '@/utils/cn';
 
@@ -43,6 +42,7 @@ const ServicePOList = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [clientFilter, setClientFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const debouncedSearch = useDebounce(search, 400);
 
@@ -66,6 +66,12 @@ const ServicePOList = () => {
 
   const servicePOs = data?.data ?? [];
   const meta = data?.meta ?? {};
+
+  const activeFilterCount = [
+    clientFilter !== 'all' ? 1 : 0,
+    typeFilter !== 'all' ? 1 : 0,
+    statusFilter !== 'all' ? 1 : 0,
+  ].reduce((a, b) => a + b, 0);
 
   const columns = [
     columnHelper.display({
@@ -104,7 +110,6 @@ const ServicePOList = () => {
         </div>
       ),
     }),
-
     columnHelper.accessor('service_po_code', {
       header: 'PO Code',
       size: 180,
@@ -195,29 +200,48 @@ const ServicePOList = () => {
   };
 
   return (
-    <div>
+    <div className="space-y-4">
       <PageHeader
         title="Service POs"
         description="Manage service purchase orders"
         actions={
-          canManage && (
-            <Button size="sm" onClick={() => navigate(ROUTES.SERVICE_PO_NEW)}>
-              <Plus className="mr-1.5 h-4 w-4" />
-              Add Service PO
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search POs…"
+                className="pl-9 w-[250px] h-9 text-sm bg-white"
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              />
+            </div>
+            <Button
+              size="sm"
+              className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+              onClick={() => setFiltersOpen((prev) => !prev)}
+            >
+              <Filter className="h-4 w-4" />
+              Filters
+              {activeFilterCount > 0 && (
+                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+                  {activeFilterCount}
+                </span>
+              )}
             </Button>
-          )
+            {canManage && (
+              <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => navigate(ROUTES.SERVICE_PO_NEW)}>
+                <Plus className="mr-1.5 h-4 w-4" /> Add Service PO
+              </Button>
+            )}
+          </div>
         }
       />
 
-      <DataTable
-        columns={columns}
-        data={servicePOs}
-        isLoading={isPending}
-        searchValue={search}
-        onSearchChange={(v) => { setSearch(v); setPage(1); }}
-        searchPlaceholder="Search POs…"
-        toolbar={
-          <>
+      {/* Collapsible filter panel */}
+      <div className={`overflow-hidden transition-all duration-500 ease-in-out ${filtersOpen ? 'max-h-[220px] opacity-100 mb-2' : 'max-h-0 opacity-0 mb-0'}`}>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full rounded-lg border bg-muted/30 p-4">
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Client</Label>
             <SearchableSelect
               options={[
                 { label: "All Clients", value: "all" },
@@ -230,8 +254,11 @@ const ServicePOList = () => {
               onValueChange={(v) => { setClientFilter(v); setPage(1); }}
               placeholder="All Clients"
               searchPlaceholder="Search client..."
-              className="h-9 w-[240px] text-sm"
+              className="h-9 w-full text-sm bg-white"
             />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Service Type</Label>
             <SearchableSelect
               options={[
                 { label: "All Service Types", value: "all" },
@@ -244,9 +271,13 @@ const ServicePOList = () => {
               onValueChange={(v) => { setTypeFilter(v); setPage(1); }}
               placeholder="All Service Types"
               searchPlaceholder="Search type..."
-              className="h-9 w-[220px] text-sm"
+              className="h-9 w-full text-sm bg-white"
             />
-            <SearchableSelect showSearch={false}
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Status</Label>
+            <SearchableSelect
+              showSearch={false}
               options={[
                 { label: "All status", value: "all" },
                 { label: "In Progress", value: "in-progress" },
@@ -254,16 +285,22 @@ const ServicePOList = () => {
                 { label: "On Hold", value: "on-hold" },
                 { label: "Pending", value: "pending" },
                 { label: "Cancelled", value: "cancelled" },
-                { label: "Closed", value: "closed" }
+                { label: "Closed", value: "closed" },
               ]}
               value={statusFilter}
               onValueChange={(v) => { setStatusFilter(v); setPage(1); }}
               placeholder="All status"
-              searchPlaceholder="Search status..."
-              className="h-9 w-[160px] text-sm"
+              className="h-9 w-full text-sm bg-white"
             />
-          </>
-        }
+          </div>
+        </div>
+      </div>
+
+      <DataTable
+        columns={columns}
+        data={servicePOs}
+        isLoading={isPending}
+        toolbar={null}
         pagination={
           meta.total != null
             ? {

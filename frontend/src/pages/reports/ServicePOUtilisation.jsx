@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import * as XLSX from 'xlsx';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Download, Search } from 'lucide-react';
+import { Download, Filter, Search } from 'lucide-react';
 import { useServicePOUtilisationReport } from '@/hooks/useReports';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useActiveServicePOs } from '@/hooks/useServicePOs';
@@ -97,6 +97,7 @@ const ServicePOUtilisation = () => {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const debouncedSearch = useDebounce(search, 400);
   const { data: activePOs = [] } = useActiveServicePOs();
@@ -117,67 +118,79 @@ const ServicePOUtilisation = () => {
   const rows = data?.data ?? [];
   const meta = data?.meta ?? {};
 
+  const activeFilterCount = [
+    clientId !== 'all' ? clientId : null,
+    poId !== 'all' ? poId : null,
+  ].filter(Boolean).length;
+
   return (
     <div>
       <PageHeader
         title="Service PO Utilisation"
         description="Track hours consumed vs. expected for each Service PO."
-        actions={rows.length > 0 ? (
-          <Button variant="outline" size="sm" onClick={() => exportToExcel(rows)}>
-            <Download className="mr-1.5 h-4 w-4" />Export Excel
-          </Button>
-        ) : null}
       />
 
-      {/* Filter bar */}
-      <div className="mb-5 flex flex-wrap items-end gap-4 w-full">
-        <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
-          <Label className="text-xs">Client</Label>
-          <SearchableSelect
-            options={[
-              { label: "All Clients", value: "all" },
-              ...activeClients.map((c) => ({
-                label: c.client_name,
-                value: String(c.id)
-              }))
-            ]}
-            value={clientId}
-            onValueChange={(v) => { setClientId(v); setPage(1); }}
-            placeholder="All Clients"
-            searchPlaceholder="Search client..."
-            className="h-9 text-sm"
+      {/* Toolbar */}
+      <div className="mb-3 flex items-center gap-2">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="PO code, name, client…"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            className="w-56 h-9 pl-9 text-sm"
           />
         </div>
+        <Button size="sm" className="h-9 gap-2 bg-blue-600 hover:bg-blue-700 text-white" onClick={() => setFiltersOpen((o) => !o)}>
+          <Filter className="h-4 w-4" />
+          Filters
+          {activeFilterCount > 0 && (
+            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">{activeFilterCount}</span>
+          )}
+        </Button>
+        {rows.length > 0 && (
+          <Button variant="outline" size="sm" className="h-9" onClick={() => exportToExcel(rows)}>
+            <Download className="mr-1.5 h-4 w-4" />Export Excel
+          </Button>
+        )}
+      </div>
 
-        <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
-          <Label className="text-xs">Service PO</Label>
-          <SearchableSelect
-            options={[
-              { label: "All POs", value: "all" },
-              ...activePOs.map((po) => ({
-                label: po.service_po_name || po.service_po_code || String(po.id),
-                value: String(po.id)
-              }))
-            ]}
-            value={poId}
-            onValueChange={(v) => { setPoId(v); setPage(1); }}
-            placeholder="All POs"
-            searchPlaceholder="Search PO..."
-            className="h-9 text-sm"
-          />
-        </div>
+      {/* Collapsible filter panel */}
+      <div className={`overflow-hidden transition-all duration-500 ease-in-out ${filtersOpen ? 'max-h-[220px] opacity-100 mb-5' : 'max-h-0 opacity-0 mb-0'}`}>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full rounded-lg border bg-muted/30 p-4">
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Client</Label>
+            <SearchableSelect
+              options={[
+                { label: "All Clients", value: "all" },
+                ...activeClients.map((c) => ({
+                  label: c.client_name,
+                  value: String(c.id)
+                }))
+              ]}
+              value={clientId}
+              onValueChange={(v) => { setClientId(v); setPage(1); }}
+              placeholder="All Clients"
+              searchPlaceholder="Search client..."
+              className="h-9 text-sm w-full"
+            />
+          </div>
 
-
-
-        <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
-          <Label className="text-xs">Search</Label>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="PO code, name, client…"
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-              className="h-9 pl-9 w-full  text-sm"
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Service PO</Label>
+            <SearchableSelect
+              options={[
+                { label: "All POs", value: "all" },
+                ...activePOs.map((po) => ({
+                  label: po.service_po_name || po.service_po_code || String(po.id),
+                  value: String(po.id)
+                }))
+              ]}
+              value={poId}
+              onValueChange={(v) => { setPoId(v); setPage(1); }}
+              placeholder="All POs"
+              searchPlaceholder="Search PO..."
+              className="h-9 text-sm w-full"
             />
           </div>
         </div>

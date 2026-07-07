@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Outlet } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Filter } from 'lucide-react';
 import { useServiceCategories, useDeleteServiceCategory } from '@/hooks/useServiceCategories';
 import { useAuth } from '@/hooks/useAuth';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -11,7 +11,8 @@ import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
 import StatusBadge from '@/components/common/StatusBadge';
 import { Button } from '@/components/ui/button';
-import { SearchableSelect } from '@/components/ui/searchable-select';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
@@ -38,6 +39,7 @@ const ServiceCategoryList = () => {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const debouncedSearch = useDebounce(search, 400);
   const canManage = hasRole('Finance', 'Management');
@@ -69,7 +71,6 @@ const ServiceCategoryList = () => {
   const rows = Array.isArray(data?.data) ? data.data : [];
   const meta = data?.meta ?? {};
 
-  // Since backend doesn't support pagination for categories, we slice it client-side
   const total = meta.total ?? rows.length;
   const paginatedRows = rows.slice((page - 1) * limit, page * limit);
 
@@ -121,41 +122,77 @@ const ServiceCategoryList = () => {
   ];
 
   return (
-    <div>
+    <div className="space-y-4">
       <PageHeader
         title="Service Categories"
         description="Manage service category master data"
         actions={
-          canManage && (
-            <Button size="sm" onClick={() => navigate(ROUTES.SERVICE_CATEGORY_NEW)}>
-              <Plus className="mr-1.5 h-4 w-4" />
-              Add Category
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search categories…"
+                className="pl-9 w-[250px] h-9 text-sm bg-white"
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              />
+            </div>
+            <Button
+              size="sm"
+              className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+              onClick={() => setFiltersOpen((prev) => !prev)}
+            >
+              <Filter className="h-4 w-4" />
+              Filters
+              {statusFilter !== 'all' && (
+                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+                  1
+                </span>
+              )}
             </Button>
-          )
+            {canManage && (
+              <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => navigate(ROUTES.SERVICE_CATEGORY_NEW)}>
+                <Plus className="mr-1.5 h-4 w-4" /> Add Category
+              </Button>
+            )}
+          </div>
         }
       />
+
+      {/* Collapsible filter panel */}
+      <div className={`overflow-hidden transition-all duration-500 ease-in-out ${filtersOpen ? 'max-h-[160px] opacity-100 mb-2' : 'max-h-0 opacity-0 mb-0'}`}>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full rounded-lg border bg-muted/30 p-4">
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Status</Label>
+            <div className="flex items-center rounded-md border overflow-hidden h-9 text-sm bg-white">
+              {[
+                { label: 'All', value: 'all' },
+                { label: 'Active', value: 'active' },
+                { label: 'Inactive', value: 'inactive' },
+              ].map(({ label, value }) => (
+                <button
+                  key={value}
+                  onClick={() => { setStatusFilter(value); setPage(1); }}
+                  className={cn(
+                    'px-3 h-full font-medium transition-colors border-r last:border-r-0',
+                    statusFilter === value
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-background text-muted-foreground hover:bg-muted'
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
 
       <DataTable
         columns={columns}
         data={paginatedRows}
         isLoading={isPending}
-        searchValue={search}
-        onSearchChange={(v) => { setSearch(v); setPage(1); }}
-        searchPlaceholder="Search categories…"
-        toolbar={
-          <SearchableSelect showSearch={false}
-            options={[
-              { label: "All status", value: "all" },
-              { label: "Active", value: "active" },
-              { label: "Inactive", value: "inactive" }
-            ]}
-            value={statusFilter}
-            onValueChange={(v) => { setStatusFilter(v); setPage(1); }}
-            placeholder="All status"
-            searchPlaceholder="Search status..."
-            className="h-9 w-32 text-sm"
-          />
-        }
+        toolbar={null}
         pagination={{
           page: meta.current_page ?? page,
           limit: meta.per_page ?? limit,

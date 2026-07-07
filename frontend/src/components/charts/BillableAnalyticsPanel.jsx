@@ -6,7 +6,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import EmptyState from '@/components/common/EmptyState';
-import { Users, Calendar, Coffee, ShieldAlert, CheckCircle2, LayoutGrid, List } from 'lucide-react';
+import { Users, Calendar, Coffee, ShieldAlert, CheckCircle2, LayoutGrid, List, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/utils/cn';
 
 /* ── colour palette (hex — safe in recharts) ── */
@@ -99,7 +99,7 @@ const NBBadge = ({ name, hours, type }) => (
 );
 
 /* ── main component ── */
-const BillableAnalyticsPanel = ({ data = [], meta = {}, isLoading, month, year }) => {
+const BillableAnalyticsPanel = ({ data = [], meta = {}, isLoading, month, year, page = 1, onPageChange }) => {
   const [view, setView] = useState('charts');
 
   const monthLabel = month && year
@@ -347,8 +347,29 @@ const BillableAnalyticsPanel = ({ data = [], meta = {}, isLoading, month, year }
                       <TierRow label="Critical (< 60%)"  count={tiers['Critical']} color="#ef4444" />
                     </div>
                     <p className="mt-2 text-[10px] text-muted-foreground">
-                      Showing {records.length} of {meta.total ?? records.length} employees
+                      Showing {((page - 1) * (meta.limit ?? 10)) + 1}–{Math.min(page * (meta.limit ?? 10), meta.total ?? records.length)} of {meta.total ?? records.length} employees
                     </p>
+                    {meta.totalPages > 1 && (
+                      <div className="mt-2 flex items-center justify-between gap-2">
+                        <button
+                          onClick={() => onPageChange?.(page - 1)}
+                          disabled={!meta.hasPrev}
+                          className="flex items-center gap-1 rounded border px-2 py-1 text-[10px] transition-colors disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted/50"
+                        >
+                          <ChevronLeft className="h-2.5 w-2.5" /> Prev
+                        </button>
+                        <span className="text-[10px] text-muted-foreground tabular-nums">
+                          {page} / {meta.totalPages}
+                        </span>
+                        <button
+                          onClick={() => onPageChange?.(page + 1)}
+                          disabled={!meta.hasNext}
+                          className="flex items-center gap-1 rounded border px-2 py-1 text-[10px] transition-colors disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted/50"
+                        >
+                          Next <ChevronRight className="h-2.5 w-2.5" />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -437,9 +458,32 @@ const BillableAnalyticsPanel = ({ data = [], meta = {}, isLoading, month, year }
                     </table>
                   </div>
                 </div>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Showing {records.length} of {meta.total ?? records.length} employees
-                </p>
+                <div className="mt-3 flex items-center justify-between gap-3">
+                  <p className="text-xs text-muted-foreground">
+                    Showing {((page - 1) * (meta.limit ?? 10)) + 1}–{Math.min(page * (meta.limit ?? 10), meta.total ?? records.length)} of {meta.total ?? records.length} employees
+                  </p>
+                  {meta.totalPages > 1 && (
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => onPageChange?.(page - 1)}
+                        disabled={!meta.hasPrev}
+                        className="flex items-center gap-1 rounded border px-2 py-1 text-xs transition-colors disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted/50"
+                      >
+                        <ChevronLeft className="h-3 w-3" /> Prev
+                      </button>
+                      <span className="text-xs text-muted-foreground tabular-nums">
+                        {page} / {meta.totalPages}
+                      </span>
+                      <button
+                        onClick={() => onPageChange?.(page + 1)}
+                        disabled={!meta.hasNext}
+                        className="flex items-center gap-1 rounded border px-2 py-1 text-xs transition-colors disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted/50"
+                      >
+                        Next <ChevronRight className="h-3 w-3" />
+                      </button>
+                    </div>
+                  )}
+                </div>
               </>
             )}
           </>

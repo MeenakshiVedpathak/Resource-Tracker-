@@ -11,8 +11,16 @@ const MainLayout = () => (
         <div className="mx-auto max-w-screen-2xl px-6 pt-6 pb-8 flex-1 w-full">
           <Outlet />
         </div>
-        <footer className="w-full text-center py-4 text-xs font-medium text-muted-foreground border-t bg-slate-50/50">
-          Designed and developed by GTT Data solutions
+        <footer className="w-full border-t bg-slate-50/80 py-3 px-6">
+          <div className="mx-auto max-w-screen-2xl flex flex-col sm:flex-row items-center justify-between gap-1">
+            <p className="text-[11px] text-muted-foreground">
+              © {new Date().getFullYear()} GTT Data Solutions. All rights reserved.
+            </p>
+            <p className="text-[11px] text-muted-foreground">
+              Designed &amp; Developed by{' '}
+              <span className="font-semibold text-foreground/70">GTT Data Solutions</span>
+            </p>
+          </div>
         </footer>
       </main>
     </div>

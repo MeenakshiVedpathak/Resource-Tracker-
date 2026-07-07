@@ -57,3 +57,11 @@ export const useImportEmployees = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['employees'] }),
   });
 };
+
+export const useToggleEmployeeStatus = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, status }) => employeesApi.update(id, { status }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['employees'] }),
+  });
+};

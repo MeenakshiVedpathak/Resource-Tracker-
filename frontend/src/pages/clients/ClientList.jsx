@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { useNavigate, Outlet } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Plus, Pencil, Trash2, Download, Upload, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Plus, Pencil, Trash2, Download, Upload, CheckCircle2, AlertCircle, Search, Filter } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useClients, useDeleteClient, useImportClients } from '@/hooks/useClients';
 import { useAuth } from '@/hooks/useAuth';
@@ -14,7 +14,8 @@ import PageHeader from '@/components/common/PageHeader';
 import StatusBadge from '@/components/common/StatusBadge';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { Button } from '@/components/ui/button';
-import { SearchableSelect } from '@/components/ui/searchable-select';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -41,6 +42,7 @@ const ClientList = () => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const debouncedSearch = useDebounce(search, 400);
   const canManage = hasRole('Project Manager', 'HR', 'Management');
@@ -180,7 +182,7 @@ const ClientList = () => {
 
   const handleConfirmImport = () => {
     if (!previewFile) return;
-    
+
     importMutation.mutate(previewFile, {
       onSuccess: (res) => {
         setImportResult(res);
@@ -203,7 +205,7 @@ const ClientList = () => {
 
   const renderImportResults = () => {
     if (!importResult) return null;
-    
+
     const data = importResult.data || importResult;
     const errors = data.error_rows || data.errors || data.failed || [];
     const total = data.total ?? data.total_processed ?? 0;
@@ -265,7 +267,7 @@ const ClientList = () => {
             </CardContent>
           </Card>
         )}
-        
+
         {skipped === 0 && (
           <div className="text-center py-8 text-green-600 bg-green-50 rounded-md border border-green-100">
              All records were imported successfully!
@@ -281,37 +283,90 @@ const ClientList = () => {
         title="Clients"
         description="Manage client accounts"
         actions={
-          canManage && (
-            <div className="flex items-center gap-3">
-              <Button size="sm" variant="outline" className="bg-white" onClick={handleDownloadSample}>
-                <Download className="mr-1.5 h-4 w-4" /> Sample
-              </Button>
-              <input
-                type="file"
-                ref={fileInputRef}
-                className="hidden"
-                accept=".xlsx,.csv"
-                onChange={handleFileUpload}
-              />
-              <Button 
-                size="sm" 
-                variant="outline" 
-                className="bg-white" 
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isImporting}
-              >
-                <Upload className="mr-1.5 h-4 w-4" /> 
-                {isImporting ? 'Uploading...' : 'Upload'}
-              </Button>
-              {!isPreviewOpen && !importResult && (
-                <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => navigate(ROUTES.CLIENT_NEW)}>
-                  <Plus className="mr-1.5 h-4 w-4" /> Add Client
+          <div className="flex items-center gap-3">
+            {canManage && (
+              <>
+                <Button size="sm" variant="outline" className="bg-white" onClick={handleDownloadSample}>
+                  <Download className="mr-1.5 h-4 w-4" /> Sample
                 </Button>
-              )}
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  className="hidden"
+                  accept=".xlsx,.csv"
+                  onChange={handleFileUpload}
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="bg-white"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isImporting}
+                >
+                  <Upload className="mr-1.5 h-4 w-4" />
+                  {isImporting ? 'Uploading...' : 'Upload'}
+                </Button>
+              </>
+            )}
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search clients…"
+                className="pl-9 w-[250px] h-9 text-sm bg-white"
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              />
             </div>
-          )
+            <Button
+              size="sm"
+              className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+              onClick={() => setFiltersOpen((prev) => !prev)}
+            >
+              <Filter className="h-4 w-4" />
+              Filters
+              {statusFilter !== 'all' && (
+                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+                  1
+                </span>
+              )}
+            </Button>
+            {canManage && !isPreviewOpen && !importResult && (
+              <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => navigate(ROUTES.CLIENT_NEW)}>
+                <Plus className="mr-1.5 h-4 w-4" /> Add Client
+              </Button>
+            )}
+          </div>
         }
       />
+
+      {/* Collapsible filter panel */}
+      <div className={`overflow-hidden transition-all duration-500 ease-in-out ${filtersOpen ? 'max-h-[160px] opacity-100 mb-2' : 'max-h-0 opacity-0 mb-0'}`}>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full rounded-lg border bg-muted/30 p-4">
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Status</Label>
+            <div className="flex items-center rounded-md border overflow-hidden h-9 text-sm bg-white">
+              {[
+                { label: 'All', value: 'all' },
+                { label: 'Active', value: 'active' },
+                { label: 'Inactive', value: 'inactive' },
+              ].map(({ label, value }) => (
+                <button
+                  key={value}
+                  onClick={() => { setStatusFilter(value); setPage(1); }}
+                  className={cn(
+                    'px-3 h-full font-medium transition-colors border-r last:border-r-0',
+                    statusFilter === value
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-background text-muted-foreground hover:bg-muted'
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
 
       {importResult ? (
         <div className="space-y-6">
@@ -352,9 +407,9 @@ const ClientList = () => {
                     {previewData.length > previewLimit + 1 && (
                       <TableRow>
                         <TableCell colSpan={previewData[0].length} className="text-center bg-muted/10 py-4">
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                             onClick={() => setPreviewLimit(prev => Math.min(prev + 10, previewData.length - 1))}
                           >
@@ -380,39 +435,23 @@ const ClientList = () => {
         </Card>
       ) : (
         <DataTable
-        columns={columns}
-        data={clients}
-        isLoading={isPending}
-        searchValue={search}
-        onSearchChange={(v) => { setSearch(v); setPage(1); }}
-        searchPlaceholder="Search clients…"
-        toolbar={
-          <SearchableSelect showSearch={false}
-            options={[
-              { label: "All status", value: "all" },
-              { label: "Active", value: "active" },
-              { label: "Inactive", value: "inactive" }
-            ]}
-            value={statusFilter}
-            onValueChange={(v) => { setStatusFilter(v); setPage(1); }}
-            placeholder="All status"
-            searchPlaceholder="Search status..."
-            className="h-9 w-32 text-sm"
-          />
-        }
-        pagination={
-          meta.total != null
-            ? {
-                page: meta.current_page ?? page,
-                limit: meta.per_page ?? limit,
-                total: meta.total,
-              }
-            : undefined
-        }
-        onPageChange={setPage}
-        onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
-        onRowClick={(row) => navigate(buildPath(ROUTES.CLIENT_EDIT, { id: row.id }))}
-      />
+          columns={columns}
+          data={clients}
+          isLoading={isPending}
+          toolbar={null}
+          pagination={
+            meta.total != null
+              ? {
+                  page: meta.current_page ?? page,
+                  limit: meta.per_page ?? limit,
+                  total: meta.total,
+                }
+              : undefined
+          }
+          onPageChange={setPage}
+          onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
+          onRowClick={(row) => navigate(buildPath(ROUTES.CLIENT_EDIT, { id: row.id }))}
+        />
       )}
 
       <ConfirmDialog

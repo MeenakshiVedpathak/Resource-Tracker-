@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import * as XLSX from 'xlsx';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Download } from 'lucide-react';
+import { Download, Filter } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
@@ -91,6 +91,7 @@ const MonthlyCostSummary = () => {
   });
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const params = {
     page,
@@ -110,28 +111,49 @@ const MonthlyCostSummary = () => {
     total_cost: Number(row.total_cost ?? 0),
   }));
 
+  const activeFilterCount = 0;
+
   return (
     <div>
       <PageHeader
         title="Monthly Cost Summary"
         description="Aggregate salary and operational costs grouped by month."
-        actions={rows.length > 0 ? (
-          <Button variant="outline" size="sm" onClick={() => exportToExcel(rows)}>
-            <Download className="mr-1.5 h-4 w-4" />Export Excel
-          </Button>
-        ) : null}
       />
 
-      {/* Filter bar */}
-      <div className="mb-5 flex flex-wrap items-end gap-4 w-full">
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">Month &amp; Year</Label>
-          <MonthYearPicker
-            value={monthYear}
-            onChange={(val) => { setMonthYear(val); setPage(1); }}
-            placeholder="All months"
-            className="w-44"
-          />
+      {/* Toolbar */}
+      <div className="mb-3 flex items-center gap-2">
+        <Button
+          size="sm"
+          className="h-9 gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+          onClick={() => setFiltersOpen((prev) => !prev)}
+        >
+          <Filter className="h-4 w-4" />
+          Filters
+          {activeFilterCount > 0 && (
+            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+              {activeFilterCount}
+            </span>
+          )}
+        </Button>
+        {rows.length > 0 && (
+          <Button variant="outline" size="sm" className="h-9" onClick={() => exportToExcel(rows)}>
+            <Download className="mr-1.5 h-4 w-4" />Export Excel
+          </Button>
+        )}
+      </div>
+
+      {/* Collapsible filter panel */}
+      <div className={`overflow-hidden transition-all duration-500 ease-in-out ${filtersOpen ? 'max-h-[220px] opacity-100 mb-5' : 'max-h-0 opacity-0 mb-0'}`}>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full rounded-lg border bg-muted/30 p-4">
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Month &amp; Year</Label>
+            <MonthYearPicker
+              value={monthYear}
+              onChange={(val) => { setMonthYear(val); setPage(1); }}
+              placeholder="All months"
+              className="w-full"
+            />
+          </div>
         </div>
       </div>
 

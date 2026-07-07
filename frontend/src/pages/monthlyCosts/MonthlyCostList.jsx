@@ -215,14 +215,12 @@ const MonthlyCostList = () => {
             </Button>
 
             {canManage && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => navigate(ROUTES.MONTHLY_COST_IMPORT)}
-              >
-                <Upload className="mr-1.5 h-4 w-4" />
-                Import Excel
-              </Button>
+             
+
+               <Button size="sm" onClick={() => navigate(ROUTES.MONTHLY_COST_IMPORT)}>
+              <Upload className="mr-1.5 h-4 w-4" />
+              Upload Excel
+            </Button>
             )}
            
           </div>

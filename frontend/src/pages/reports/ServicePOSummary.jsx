@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import * as XLSX from 'xlsx';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Download, Search } from 'lucide-react';
+import { Download, Filter, Search } from 'lucide-react';
 import { useServicePOSummary } from '@/hooks/useReports';
 import { useActiveClients } from '@/hooks/useClients';
 import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
@@ -164,6 +164,7 @@ const ServicePOSummary = () => {
   const [status, setStatus] = useState('all');
   const [dateRange, setDateRange] = useState(null);
   const [search, setSearch] = useState('');
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
 
@@ -191,121 +192,143 @@ const ServicePOSummary = () => {
   const summary = data?.data?.summary ?? null;
   const meta = data?.meta ?? {};
 
+  const activeFilterCount = [
+    dateRange !== null,
+    clientId !== 'all',
+    serviceTypeId !== 'all',
+    billable !== 'all',
+    status !== 'all',
+  ].filter(Boolean).length;
+
   return (
     <div>
       <PageHeader
         title="Service PO Summary"
         description="Comprehensive summary of Service POs including hours and billing data."
-        actions={records.length > 0 ? (
-          <Button variant="outline" size="sm" onClick={() => exportToExcel(records)}>
-            <Download className="mr-1.5 h-4 w-4" />Export Excel
-          </Button>
-        ) : null}
+        actions={
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search PO Name, Client…"
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                className="h-9 pl-9 w-56 text-sm"
+              />
+            </div>
+            <Button
+              size="sm"
+              onClick={() => setFiltersOpen((p) => !p)}
+              className="h-9 gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              <Filter className="h-4 w-4" />
+              Filters
+              {activeFilterCount > 0 && (
+                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+                  {activeFilterCount}
+                </span>
+              )}
+            </Button>
+            {records.length > 0 && (
+              <Button variant="outline" size="sm" className="h-9" onClick={() => exportToExcel(records)}>
+                <Download className="mr-1.5 h-4 w-4" />Export Excel
+              </Button>
+            )}
+          </div>
+        }
       />
 
-      {/* Filter bar */}
-      <div className="mb-5 flex flex-wrap items-end gap-4 w-full">
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">Month &amp; Year <span className="text-destructive">*</span></Label>
-          <MonthYearPicker
-            value={monthYear}
-            onChange={(val) => { setMonthYear(val); setPage(1); }}
-            placeholder="Select month"
-            className="w-44"
-          />
-        </div>
+      {/* Collapsible filter panel */}
+      <div className={`overflow-hidden transition-all duration-500 ease-in-out ${filtersOpen ? 'max-h-[220px] opacity-100 mb-5' : 'max-h-0 opacity-0 mb-0'}`}>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full rounded-lg border bg-muted/30 p-4">
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Month &amp; Year <span className="text-destructive">*</span></Label>
+            <MonthYearPicker
+              value={monthYear}
+              onChange={(val) => { setMonthYear(val); setPage(1); }}
+              placeholder="Select month"
+              className="w-full"
+            />
+          </div>
 
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">PO Start &amp; End Date</Label>
-          <DateRangePicker
-            value={dateRange}
-            onChange={(val) => { setDateRange(val); setPage(1); }}
-            placeholder="PO start → end date"
-            className="w-52"
-          />
-        </div>
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">PO Start &amp; End Date</Label>
+            <DateRangePicker
+              value={dateRange}
+              onChange={(val) => { setDateRange(val); setPage(1); }}
+              placeholder="PO start → end date"
+              className="w-full"
+            />
+          </div>
 
-        <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
-          <Label className="text-xs">Client</Label>
-          <SearchableSelect
-            options={[
-              { label: "All Clients", value: "all" },
-              ...activeClients.map((c) => ({
-                label: c.client_name,
-                value: String(c.id)
-              }))
-            ]}
-            value={clientId}
-            onValueChange={(v) => { setClientId(v); setPage(1); }}
-            placeholder="All Clients"
-            searchPlaceholder="Search client..."
-            className="h-9 text-sm"
-          />
-        </div>
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Client</Label>
+            <SearchableSelect
+              options={[
+                { label: "All Clients", value: "all" },
+                ...activeClients.map((c) => ({
+                  label: c.client_name,
+                  value: String(c.id)
+                }))
+              ]}
+              value={clientId}
+              onValueChange={(v) => { setClientId(v); setPage(1); }}
+              placeholder="All Clients"
+              searchPlaceholder="Search client..."
+              className="h-9 w-full text-sm"
+            />
+          </div>
 
-        <div className="flex flex-col gap-1.5 min-w-[180px]">
-          <Label className="text-xs">Service Type</Label>
-          <SearchableSelect
-            options={[
-              { label: 'All Service Types', value: 'all' },
-              ...activeServiceTypes.map((st) => ({
-                label: st.service_type_name,
-                value: String(st.id),
-              })),
-            ]}
-            value={serviceTypeId}
-            onValueChange={(v) => { setServiceTypeId(v); setPage(1); }}
-            placeholder="All Service Types"
-            searchPlaceholder="Search service type..."
-            className="h-9 text-sm"
-          />
-        </div>
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Service Type</Label>
+            <SearchableSelect
+              options={[
+                { label: 'All Service Types', value: 'all' },
+                ...activeServiceTypes.map((st) => ({
+                  label: st.service_type_name,
+                  value: String(st.id),
+                })),
+              ]}
+              value={serviceTypeId}
+              onValueChange={(v) => { setServiceTypeId(v); setPage(1); }}
+              placeholder="All Service Types"
+              searchPlaceholder="Search service type..."
+              className="h-9 w-full text-sm"
+            />
+          </div>
 
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">Billable</Label>
-          <SearchableSelect showSearch={false}
-            options={[
-              { label: "All", value: "all" },
-              { label: "Yes", value: "yes" },
-              { label: "No", value: "no" }
-            ]}
-            value={billable}
-            onValueChange={(v) => { setBillable(v); setPage(1); }}
-            placeholder="All"
-            className="h-9 w-24 text-sm"
-          />
-        </div>
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Billable</Label>
+            <SearchableSelect showSearch={false}
+              options={[
+                { label: "All", value: "all" },
+                { label: "Yes", value: "yes" },
+                { label: "No", value: "no" }
+              ]}
+              value={billable}
+              onValueChange={(v) => { setBillable(v); setPage(1); }}
+              placeholder="All"
+              className="h-9 w-full text-sm"
+            />
+          </div>
 
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">Status</Label>
-          <SearchableSelect showSearch={false}
-            options={[
-              { label: "All", value: "all" },
-              { label: "Active", value: "active" },
-              { label: "Expired", value: "expired" },
-              { label: "On Hold", value: "on_hold" },
-              { label: "Cancelled", value: "cancelled" },
-            ]}
-            value={status}
-            onValueChange={(v) => { setStatus(v); setPage(1); }}
-            placeholder="All"
-            className="h-9 w-32 text-sm"
-          />
-        </div>
-
-        <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
-          <Label className="text-xs">Search</Label>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="PO Name, Client…"
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-              className="h-9 pl-9 w-full  text-sm"
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Status</Label>
+            <SearchableSelect showSearch={false}
+              options={[
+                { label: "All", value: "all" },
+                { label: "Active", value: "active" },
+                { label: "Expired", value: "expired" },
+                { label: "On Hold", value: "on_hold" },
+                { label: "Cancelled", value: "cancelled" },
+              ]}
+              value={status}
+              onValueChange={(v) => { setStatus(v); setPage(1); }}
+              placeholder="All"
+              className="h-9 w-full text-sm"
             />
           </div>
         </div>
-
       </div>
 
       <DataTable

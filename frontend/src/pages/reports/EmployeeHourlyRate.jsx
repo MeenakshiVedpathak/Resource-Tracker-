@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import * as XLSX from 'xlsx';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Download, Search } from 'lucide-react';
+import { Download, Filter, Search } from 'lucide-react';
 import { useEmployeeHourlyRate } from '@/hooks/useReports';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useActiveEmployees } from '@/hooks/useEmployees';
@@ -130,6 +130,7 @@ const EmployeeHourlyRate = () => {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const debouncedSearch = useDebounce(search, 400);
   const { data: activeEmployees = [] } = useActiveEmployees();
@@ -148,61 +149,79 @@ const EmployeeHourlyRate = () => {
   const rows = Array.isArray(data?.data) ? data.data : [];
   const meta = data?.meta ?? {};
 
+  const activeFilterCount = [
+    employeeId !== 'all' ? 1 : 0,
+  ].reduce((a, b) => a + b, 0);
+
   return (
     <div>
       <PageHeader
         title="Employee Hourly Rate"
         description="View the effective hourly cost per employee based on salary and hours logged."
-        actions={rows.length > 0 ? (
-          <Button variant="outline" size="sm" onClick={() => exportToExcel(rows, monthYear?.month, monthYear?.year)}>
-            <Download className="mr-1.5 h-4 w-4" />Export Excel
-          </Button>
-        ) : null}
       />
 
-      {/* Filter bar */}
-      <div className="mb-5 flex flex-wrap items-end gap-4 w-full">
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">Month &amp; Year <span className="text-destructive">*</span></Label>
-          <MonthYearPicker
-            value={monthYear}
-            onChange={(val) => { setMonthYear(val); setPage(1); }}
-            placeholder="Select month"
-            className="w-44"
+      {/* Toolbar */}
+      <div className="mb-3 flex items-center gap-2">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Name, code…"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            className="h-9 pl-9 w-56 text-sm"
           />
         </div>
+        <Button
+          size="sm"
+          className="h-9 gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+          onClick={() => setFiltersOpen((prev) => !prev)}
+        >
+          <Filter className="h-4 w-4" />
+          Filters
+          {activeFilterCount > 0 && (
+            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+              {activeFilterCount}
+            </span>
+          )}
+        </Button>
+        {rows.length > 0 && (
+          <Button variant="outline" size="sm" className="h-9" onClick={() => exportToExcel(rows, monthYear?.month, monthYear?.year)}>
+            <Download className="mr-1.5 h-4 w-4" />Export Excel
+          </Button>
+        )}
+      </div>
 
-        <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
-          <Label className="text-xs">Employee</Label>
-          <SearchableSelect
-            options={[
-              { label: "All Employees", value: "all" },
-              ...activeEmployees.map((e) => ({
-                label: e.full_name,
-                value: String(e.id)
-              }))
-            ]}
-            value={employeeId}
-            onValueChange={(v) => { setEmployeeId(v); setPage(1); }}
-            placeholder="All Employees"
-            searchPlaceholder="Search employee..."
-            className="h-9 text-sm"
-          />
-        </div>
+      {/* Collapsible filter panel */}
+      <div className={`overflow-hidden transition-all duration-500 ease-in-out ${filtersOpen ? 'max-h-[220px] opacity-100 mb-5' : 'max-h-0 opacity-0 mb-0'}`}>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full rounded-lg border bg-muted/30 p-4">
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Month &amp; Year <span className="text-destructive">*</span></Label>
+            <MonthYearPicker
+              value={monthYear}
+              onChange={(val) => { setMonthYear(val); setPage(1); }}
+              placeholder="Select month"
+              className="w-full"
+            />
+          </div>
 
-        <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
-          <Label className="text-xs">Search</Label>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Name, code…"
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-              className="h-9 pl-9 w-full  text-sm"
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Employee</Label>
+            <SearchableSelect
+              options={[
+                { label: "All Employees", value: "all" },
+                ...activeEmployees.map((e) => ({
+                  label: e.full_name,
+                  value: String(e.id)
+                }))
+              ]}
+              value={employeeId}
+              onValueChange={(v) => { setEmployeeId(v); setPage(1); }}
+              placeholder="All Employees"
+              searchPlaceholder="Search employee..."
+              className="h-9 text-sm w-full"
             />
           </div>
         </div>
-
       </div>
 
       <DataTable

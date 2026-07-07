@@ -42,3 +42,11 @@ export const useDeleteUser = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
   });
 };
+
+export const useToggleUserStatus = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, status }) => usersApi.update(id, { status }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
+  });
+};
