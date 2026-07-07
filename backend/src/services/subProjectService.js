@@ -82,13 +82,13 @@ const create = async (data, userId, ip = null) => {
     throw error;
   }
 
-  if (servicePO.status !== 'active') {
-    const error = new Error(
-      `Cannot create a sub-project under Service PO "${servicePO.service_po_name}" because its status is "${servicePO.status}". Only active POs are allowed.`
-    );
-    error.statusCode = 400;
-    throw error;
-  }
+  // if (servicePO.status !== 'active') {
+  //   const error = new Error(
+  //     `Cannot create a sub-project under Service PO "${servicePO.service_po_name}" because its status is "${servicePO.status}". Only active POs are allowed.`
+  //   );
+  //   error.statusCode = 400;
+  //   throw error;
+  // }
 
   // Generate unique code — retry on collision (extremely rare)
   let subProjectCode;
