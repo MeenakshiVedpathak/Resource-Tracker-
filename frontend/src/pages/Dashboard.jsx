@@ -756,22 +756,8 @@ const QUARTERS = [
 const QUARTER_MONTHS = { 1: [4, 5, 6], 2: [7, 8, 9], 3: [10, 11, 12], 4: [1, 2, 3] };
 
 const QUARTER_STYLES = {
-  1: {
-    active:   'bg-emerald-500 text-white border border-emerald-600/40 shadow-md shadow-emerald-300/40 dark:shadow-emerald-900/60 scale-[1.03]',
-    inactive: 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 hover:border-emerald-300 hover:shadow-sm dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800/50 dark:hover:bg-emerald-950/60',
-  },
-  2: {
-    active:   'bg-amber-500 text-white border border-amber-600/40 shadow-md shadow-amber-300/40 dark:shadow-amber-900/60 scale-[1.03]',
-    inactive: 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 hover:border-amber-300 hover:shadow-sm dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800/50 dark:hover:bg-amber-950/60',
-  },
-  3: {
-    active:   'bg-orange-500 text-white border border-orange-600/40 shadow-md shadow-orange-300/40 dark:shadow-orange-900/60 scale-[1.03]',
-    inactive: 'bg-orange-50 text-orange-700 border border-orange-200 hover:bg-orange-100 hover:border-orange-300 hover:shadow-sm dark:bg-orange-950/30 dark:text-orange-400 dark:border-orange-800/50 dark:hover:bg-orange-950/60',
-  },
-  4: {
-    active:   'bg-blue-500 text-white border border-blue-600/40 shadow-md shadow-blue-300/40 dark:shadow-blue-900/60 scale-[1.03]',
-    inactive: 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 hover:border-blue-300 hover:shadow-sm dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-800/50 dark:hover:bg-blue-950/60',
-  },
+  active:   'bg-primary text-primary-foreground font-semibold shadow-sm',
+  inactive: 'bg-background text-muted-foreground hover:text-foreground font-medium',
 };
 
 /* compact number: 1234 → "1.2k", 123456 → "1.2L" */
@@ -1169,20 +1155,17 @@ const Dashboard = () => {
           <FilterPanel open={filtersOpen} onToggle={() => setFiltersOpen((p) => !p)} badge={hasFilters ? activeFilterCount : undefined}>
             <div className="flex flex-wrap items-center gap-2">
 
-              <div className="flex gap-1.5 shrink-0">
+              <div className="flex items-center bg-background border border-input shadow-sm rounded-xl p-1 gap-0.5 shrink-0">
                 {QUARTERS.map((q) => (
                   <button
                     key={q.value}
                     onClick={() => setQuarter(quarter === q.value ? null : q.value)}
-                    title={q.sub}
-                    className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 whitespace-nowrap ${
-                      quarter === q.value
-                        ? QUARTER_STYLES[q.value].active
-                        : QUARTER_STYLES[q.value].inactive
+                    className={`px-3 py-1 rounded-lg text-xs transition-all duration-150 whitespace-nowrap ${
+                      quarter === q.value ? QUARTER_STYLES.active : QUARTER_STYLES.inactive
                     }`}
                   >
                     {q.label}
-                    <span className={`hidden sm:inline text-[10px] font-normal ml-1 ${quarter === q.value ? 'opacity-90' : 'opacity-70'}`}>{q.sub}</span>
+                    <span className={`ml-1 text-[10px] ${quarter === q.value ? 'opacity-60' : 'opacity-50'}`}>{q.sub}</span>
                   </button>
                 ))}
               </div>
