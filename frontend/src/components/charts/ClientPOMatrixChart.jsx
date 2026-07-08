@@ -2,7 +2,9 @@ import { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import EmptyState from '@/components/common/EmptyState';
-import { LayoutGrid, ChevronDown, ChevronRight } from 'lucide-react';
+import { LayoutGrid, ChevronDown, ChevronRight, ChevronLeft } from 'lucide-react';
+
+const PAGE_SIZE = 10;
 
 const PO_COLORS = [
   'hsl(var(--primary))',
@@ -17,6 +19,7 @@ const PO_COLORS = [
 
 const ClientPOMatrixChart = ({ data = [], isLoading, fiscalYear }) => {
   const [expanded, setExpanded] = useState({});
+  const [page, setPage] = useState(1);
 
   const grouped = useMemo(() => {
     const map = new Map();
@@ -40,6 +43,9 @@ const ClientPOMatrixChart = ({ data = [], isLoading, fiscalYear }) => {
       .sort((a, b) => b.total - a.total);
   }, [data]);
 
+  const totalPages = Math.ceil(grouped.length / PAGE_SIZE);
+  const pageData = grouped.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
   const toggle = (clientId) =>
     setExpanded((prev) => ({ ...prev, [clientId]: !prev[clientId] }));
 
@@ -47,12 +53,12 @@ const ClientPOMatrixChart = ({ data = [], isLoading, fiscalYear }) => {
 
   if (isLoading) {
     return (
-      <Card>
+      <Card className="flex flex-col h-full">
         <CardHeader>
           <Skeleton className="h-5 w-48 mb-1" />
           <Skeleton className="h-4 w-64" />
         </CardHeader>
-        <CardContent className="space-y-2">
+        <CardContent className="flex-1 flex flex-col space-y-2">
           {[1, 2, 3].map((i) => (
             <Skeleton key={i} className="h-12 w-full rounded-md" />
           ))}
@@ -62,12 +68,21 @@ const ClientPOMatrixChart = ({ data = [], isLoading, fiscalYear }) => {
   }
 
   return (
-    <Card>
+    <Card className="flex flex-col h-full">
       <CardHeader>
-        <CardTitle>Client × Service PO (Hours)</CardTitle>
-        <CardDescription>Hours breakdown by client and service PO · {fyLabel}</CardDescription>
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <CardTitle>Client × Service PO (Hours)</CardTitle>
+            <CardDescription className="mt-1">Hours breakdown by client and service PO · {fyLabel}</CardDescription>
+          </div>
+          {grouped.length > 0 && (
+            <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground tabular-nums">
+              {grouped.length} clients
+            </span>
+          )}
+        </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex-1 flex flex-col">
         {grouped.length === 0 ? (
           <EmptyState
             icon={LayoutGrid}
@@ -76,74 +91,99 @@ const ClientPOMatrixChart = ({ data = [], isLoading, fiscalYear }) => {
             className="py-10"
           />
         ) : (
-          <div className="space-y-1.5">
-            {grouped.map((client) => {
-              const isOpen = !!expanded[client.client_id];
-              const maxPO = Math.max(...client.pos.map((p) => p.hours), 1);
+          <>
+            <div className="flex-1 space-y-1.5">
+              {pageData.map((client) => {
+                const isOpen = !!expanded[client.client_id];
+                const maxPO = Math.max(...client.pos.map((p) => p.hours), 1);
 
-              return (
-                <div key={client.client_id} className="rounded-md border overflow-hidden">
-                  {/* Client header row */}
+                return (
+                  <div key={client.client_id} className="rounded-md border overflow-hidden">
+                    <button
+                      onClick={() => toggle(client.client_id)}
+                      className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-muted/40 transition-colors text-left"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        {isOpen ? (
+                          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        ) : (
+                          <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        )}
+                        <span className="text-sm font-medium truncate max-w-[200px]">
+                          {client.client_name}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span className="text-xs text-muted-foreground">
+                          {client.pos.length} PO{client.pos.length !== 1 ? 's' : ''}
+                        </span>
+                        <span className="text-sm font-semibold tabular-nums text-foreground">
+                          {client.total.toLocaleString('en-IN')} hrs
+                        </span>
+                      </div>
+                    </button>
+
+                    {isOpen && (
+                      <div className="border-t bg-muted/20 divide-y divide-border/50">
+                        {client.pos
+                          .sort((a, b) => b.hours - a.hours)
+                          .map((po, idx) => {
+                            const pct = maxPO > 0 ? (po.hours / maxPO) * 100 : 0;
+                            const color = PO_COLORS[idx % PO_COLORS.length];
+                            return (
+                              <div key={po.id} className="px-4 py-2.5">
+                                <div className="flex items-center justify-between mb-1.5">
+                                  <span
+                                    className="text-xs font-medium truncate max-w-[220px]"
+                                    title={po.name}
+                                  >
+                                    {po.name}
+                                  </span>
+                                  <span className="text-xs tabular-nums text-muted-foreground ml-2 shrink-0">
+                                    {po.hours.toLocaleString('en-IN')} hrs
+                                  </span>
+                                </div>
+                                <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                                  <div
+                                    className="h-full rounded-full transition-all duration-500"
+                                    style={{ width: `${pct}%`, background: color }}
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {totalPages > 1 && (
+              <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
+                <span>
+                  {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, grouped.length)} of {grouped.length}
+                </span>
+                <div className="flex items-center gap-1.5">
                   <button
-                    onClick={() => toggle(client.client_id)}
-                    className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-muted/40 transition-colors text-left"
+                    onClick={() => setPage((p) => p - 1)}
+                    disabled={page <= 1}
+                    className="flex items-center gap-1 rounded border px-2 py-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted/50"
                   >
-                    <div className="flex items-center gap-2 min-w-0">
-                      {isOpen ? (
-                        <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                      ) : (
-                        <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                      )}
-                      <span className="text-sm font-medium truncate max-w-[200px]">
-                        {client.client_name}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-3 shrink-0">
-                      <span className="text-xs text-muted-foreground">
-                        {client.pos.length} PO{client.pos.length !== 1 ? 's' : ''}
-                      </span>
-                      <span className="text-sm font-semibold tabular-nums text-foreground">
-                        {client.total.toLocaleString('en-IN')} hrs
-                      </span>
-                    </div>
+                    <ChevronLeft className="h-3 w-3" /> Prev
                   </button>
-
-                  {/* PO rows */}
-                  {isOpen && (
-                    <div className="border-t bg-muted/20 divide-y divide-border/50">
-                      {client.pos
-                        .sort((a, b) => b.hours - a.hours)
-                        .map((po, idx) => {
-                          const pct = maxPO > 0 ? (po.hours / maxPO) * 100 : 0;
-                          const color = PO_COLORS[idx % PO_COLORS.length];
-                          return (
-                            <div key={po.id} className="px-4 py-2.5">
-                              <div className="flex items-center justify-between mb-1.5">
-                                <span
-                                  className="text-xs font-medium truncate max-w-[220px]"
-                                  title={po.name}
-                                >
-                                  {po.name}
-                                </span>
-                                <span className="text-xs tabular-nums text-muted-foreground ml-2 shrink-0">
-                                  {po.hours.toLocaleString('en-IN')} hrs
-                                </span>
-                              </div>
-                              <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
-                                <div
-                                  className="h-full rounded-full transition-all duration-500"
-                                  style={{ width: `${pct}%`, background: color }}
-                                />
-                              </div>
-                            </div>
-                          );
-                        })}
-                    </div>
-                  )}
+                  <span className="tabular-nums">{page}/{totalPages}</span>
+                  <button
+                    onClick={() => setPage((p) => p + 1)}
+                    disabled={page >= totalPages}
+                    className="flex items-center gap-1 rounded border px-2 py-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted/50"
+                  >
+                    Next <ChevronRight className="h-3 w-3" />
+                  </button>
                 </div>
-              );
-            })}
-          </div>
+              </div>
+            )}
+          </>
         )}
       </CardContent>
     </Card>

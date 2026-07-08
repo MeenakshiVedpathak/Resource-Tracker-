@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   BarChart,
   Bar,
@@ -11,7 +12,10 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import EmptyState from '@/components/common/EmptyState';
-import { Building2 } from 'lucide-react';
+import { Building2, ChevronLeft, ChevronRight } from 'lucide-react';
+
+const PAGE_SIZE = 10;
+const CHART_HEIGHT = 400;
 
 const COLORS = [
   'hsl(var(--primary))',
@@ -37,6 +41,12 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 const HoursByClientChart = ({ data = [], isLoading, fiscalYear }) => {
+  const [page, setPage] = useState(1);
+
+  const activeData = data.filter((c) => c.hours > 0);
+  const totalPages = Math.ceil(activeData.length / PAGE_SIZE);
+  const pageData = activeData.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
   const fyLabel = fiscalYear ? `FY ${fiscalYear}–${String(fiscalYear + 1).slice(-2)}` : '';
 
   if (isLoading) {
@@ -54,13 +64,22 @@ const HoursByClientChart = ({ data = [], isLoading, fiscalYear }) => {
   }
 
   return (
-    <Card>
+    <Card className="flex flex-col">
       <CardHeader>
-        <CardTitle>Hours by Client</CardTitle>
-        <CardDescription>Total hours logged per client · {fyLabel}</CardDescription>
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <CardTitle>Hours by Client</CardTitle>
+            <CardDescription className="mt-1">Total hours logged per client · {fyLabel}</CardDescription>
+          </div>
+          {activeData.length > 0 && (
+            <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground tabular-nums">
+              {activeData.length} clients
+            </span>
+          )}
+        </div>
       </CardHeader>
-      <CardContent>
-        {data.length === 0 ? (
+      <CardContent className="flex-1 flex flex-col">
+        {activeData.length === 0 ? (
           <EmptyState
             icon={Building2}
             title="No client data"
@@ -68,38 +87,65 @@ const HoursByClientChart = ({ data = [], isLoading, fiscalYear }) => {
             className="py-10"
           />
         ) : (
-          <ResponsiveContainer width="100%" height={Math.max(100, data.length * 48)}>
-            <BarChart
-              data={data}
-              layout="vertical"
-              margin={{ top: 4, right: 48, left: 8, bottom: 0 }}
-              barCategoryGap="30%"
-            >
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
-              <XAxis
-                type="number"
-                tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
-                tickLine={false}
-                axisLine={false}
-                tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}
-              />
-              <YAxis
-                type="category"
-                dataKey="client_name"
-                width={120}
-                tick={{ fontSize: 12, fill: 'hsl(var(--foreground))' }}
-                tickLine={false}
-                axisLine={false}
-                tickFormatter={(v) => v.length > 17 ? `${v.slice(0, 17)}…` : v}
-              />
-              <Tooltip content={<CustomTooltip />} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }} />
-              <Bar dataKey="hours" radius={[0, 4, 4, 0]} label={{ position: 'right', fontSize: 11, fill: 'hsl(var(--muted-foreground))', formatter: (v) => `${Number(v).toLocaleString('en-IN')}` }}>
-                {data.map((_, i) => (
-                  <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+          <>
+            <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
+              <BarChart
+                data={pageData}
+                layout="vertical"
+                margin={{ top: 4, right: 48, left: 8, bottom: 0 }}
+                barCategoryGap="30%"
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
+                <XAxis
+                  type="number"
+                  tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}
+                />
+                <YAxis
+                  type="category"
+                  dataKey="client_name"
+                  width={120}
+                  tick={{ fontSize: 12, fill: 'hsl(var(--foreground))' }}
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={(v) => v.length > 17 ? `${v.slice(0, 17)}…` : v}
+                />
+                <Tooltip content={<CustomTooltip />} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }} />
+                <Bar dataKey="hours" radius={[0, 4, 4, 0]} label={{ position: 'right', fontSize: 11, fill: 'hsl(var(--muted-foreground))', formatter: (v) => `${Number(v).toLocaleString('en-IN')}` }}>
+                  {pageData.map((_, i) => (
+                    <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+
+            {totalPages > 1 && (
+              <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
+                <span>
+                  {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, activeData.length)} of {activeData.length}
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setPage((p) => p - 1)}
+                    disabled={page <= 1}
+                    className="flex items-center gap-1 rounded border px-2 py-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted/50"
+                  >
+                    <ChevronLeft className="h-3 w-3" /> Prev
+                  </button>
+                  <span className="tabular-nums">{page}/{totalPages}</span>
+                  <button
+                    onClick={() => setPage((p) => p + 1)}
+                    disabled={page >= totalPages}
+                    className="flex items-center gap-1 rounded border px-2 py-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted/50"
+                  >
+                    Next <ChevronRight className="h-3 w-3" />
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </CardContent>
     </Card>

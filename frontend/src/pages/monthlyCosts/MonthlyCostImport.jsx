@@ -125,11 +125,12 @@ const MonthlyCostImport = () => {
 
   const handleDownloadSample = () => {
     const wsData = [
-      ['Name', 'Month Year', 'Salary Cost', 'Ops Cost', 'Total Cost', 'Billable Cost'],
-      ['Rajdoot Herlekar', 'Jul 2026', 284.09, 0, 422.88, 0],
+      ['Employee Code', 'Name', 'Month Year', 'Salary Cost', 'Ops Cost', 'Total Cost', 'Billable Cost'],
+      ['EMP-0201', 'Rajdoot Herlekar', 'Jul 2026', 284.09, 0, 422.88, 0],
     ];
     const ws = XLSX.utils.aoa_to_sheet(wsData);
     ws['!cols'] = [
+      { wch: 16 },
       { wch: 25 },
       { wch: 12 },
       { wch: 14 },

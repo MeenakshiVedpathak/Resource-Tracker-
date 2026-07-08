@@ -15,6 +15,7 @@ import EmptyState from '@/components/common/EmptyState';
 import { Users, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const PAGE_SIZE = 10;
+const CHART_HEIGHT = 400;
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
@@ -51,7 +52,7 @@ const HoursByEmployeeChart = ({ data = [], isLoading, fiscalYear }) => {
   }
 
   return (
-    <Card>
+    <Card className="flex flex-col">
       <CardHeader>
         <div className="flex items-start justify-between gap-2">
           <div>
@@ -69,7 +70,7 @@ const HoursByEmployeeChart = ({ data = [], isLoading, fiscalYear }) => {
           )}
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex-1 flex flex-col">
         {activeData.length === 0 ? (
           <EmptyState
             icon={Users}
@@ -79,7 +80,7 @@ const HoursByEmployeeChart = ({ data = [], isLoading, fiscalYear }) => {
           />
         ) : (
           <>
-            <ResponsiveContainer width="100%" height={Math.max(120, pageData.length * 38)}>
+            <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
               <BarChart
                 data={pageData}
                 layout="vertical"

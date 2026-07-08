@@ -36,12 +36,12 @@ const EmployeeBenchChart = ({ data = [], isLoading, fiscalYear }) => {
 
   if (isLoading) {
     return (
-      <Card>
+      <Card className="flex flex-col h-full">
         <CardHeader>
           <Skeleton className="h-5 w-48 mb-1" />
           <Skeleton className="h-4 w-64" />
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="flex-1 flex flex-col space-y-3">
           {Array.from({ length: 5 }).map((_, i) => (
             <Skeleton key={i} className="h-10 w-full" />
           ))}
@@ -51,7 +51,7 @@ const EmployeeBenchChart = ({ data = [], isLoading, fiscalYear }) => {
   }
 
   return (
-    <Card>
+    <Card className="flex flex-col h-full">
       <CardHeader>
         <div className="flex items-start justify-between gap-2">
           <div>
@@ -75,7 +75,7 @@ const EmployeeBenchChart = ({ data = [], isLoading, fiscalYear }) => {
           )}
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex-1 flex flex-col">
         {data.length === 0 ? (
           <EmptyState
             icon={Users}
