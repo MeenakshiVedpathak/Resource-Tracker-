@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Clock, DollarSign, TrendingUp, Users, Building2, Briefcase, BarChart2, RefreshCw, X,
+  Clock, DollarSign, TrendingUp, Users, Building2, Briefcase, BarChart2,
+  RefreshCw, X, ChevronDown, CalendarDays, SlidersHorizontal,
 } from 'lucide-react';
 import {
   useEmployeeBillableBreakdown,
@@ -25,6 +26,41 @@ import { Label } from '@/components/ui/label';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { formatCurrency, formatHours, formatDate } from '@/utils/formatters';
+
+const CollapsibleSection = ({ title, badge, open, onToggle, children }) => (
+  <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
+    <button
+      onClick={onToggle}
+      className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-muted/30 transition-colors text-left group"
+    >
+      <div className="flex items-center gap-2.5">
+        <span className="text-sm font-semibold tracking-tight text-foreground">{title}</span>
+        {badge && (
+          <span className="rounded-full bg-primary/10 text-primary border border-primary/20 px-2.5 py-0.5 text-[10px] font-semibold">
+            {badge}
+          </span>
+        )}
+      </div>
+      <ChevronDown
+        className={`h-4 w-4 text-muted-foreground transition-transform duration-200 group-hover:text-foreground ${open ? '' : '-rotate-90'}`}
+      />
+    </button>
+    <AnimatePresence initial={false}>
+      {open && (
+        <motion.div
+          key="content"
+          initial={{ height: 0, opacity: 0 }}
+          animate={{ height: 'auto', opacity: 1 }}
+          exit={{ height: 0, opacity: 0 }}
+          transition={{ duration: 0.22, ease: 'easeInOut' }}
+          style={{ overflow: 'hidden' }}
+        >
+          <div className="border-t px-5 pb-5 pt-1">{children}</div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  </div>
+);
 
 const containerVariants = {
   hidden: {},
@@ -55,6 +91,15 @@ const QUARTER_MONTHS = { 1: [4, 5, 6], 2: [7, 8, 9], 3: [10, 11, 12], 4: [1, 2, 
 const Dashboard = () => {
   const [fiscalYear, setFiscalYear] = useState(currentFY);
   const [bottomMonthYear, setBottomMonthYear] = useState({ month: now.getMonth() + 1, year: now.getFullYear() });
+  const [open, setOpen] = useState({
+    filters: true,
+    kpis: true,
+    trend: true,
+    hoursCharts: true,
+    matrixCharts: true,
+    monthlyDetail: true,
+  });
+  const toggle = (key) => setOpen((prev) => ({ ...prev, [key]: !prev[key] }));
   const [quarter, setQuarter] = useState(null);
   const [employeeId, setEmployeeId] = useState('');
   const [clientId, setClientId] = useState('');
@@ -137,7 +182,7 @@ const Dashboard = () => {
     : null;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageHeader
         title="Dashboard"
         description={lastUpdated ? `Last refreshed ${lastUpdated}` : `FY ${fiscalYear}–${String(fiscalYear + 1).slice(-2)} overview`}
@@ -169,259 +214,253 @@ const Dashboard = () => {
         }
       />
 
-      {/* ── Filter Bar ── */}
-      <div className="flex flex-wrap items-end gap-3 rounded-xl border bg-muted/30 px-4 py-3">
-        {/* Quarter toggle */}
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-xs font-medium">Quarter <span className="font-normal text-muted-foreground">(click to toggle)</span></Label>
-          <div className="flex gap-1">
-            {QUARTERS.map((q) => (
-              <button
-                key={q.value}
-                onClick={() => setQuarter(quarter === q.value ? null : q.value)}
-                className={`flex flex-col items-center rounded px-2.5 py-1 transition-colors ${
-                  quarter === q.value
-                    ? 'bg-primary text-primary-foreground'
-                    : 'border bg-background hover:bg-muted/60 text-muted-foreground'
-                }`}
-              >
-                <span className="text-xs font-semibold leading-none">{q.label}</span>
-                <span className={`text-[9px] leading-none mt-0.5 ${quarter === q.value ? 'text-primary-foreground/70' : 'text-muted-foreground/70'}`}>{q.sub}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Employee filter */}
-        <div className="flex flex-col gap-1.5 min-w-[180px]">
-          <div className="flex items-center justify-between">
-            <Label className="text-xs font-medium">Employee</Label>
-            {employeeId && (
-              <button onClick={() => setEmployeeId('')} className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-0.5">
-                <X className="h-2.5 w-2.5" /> clear
-              </button>
-            )}
-          </div>
-          <SearchableSelect
-            options={employeeOptions}
-            value={employeeId}
-            onValueChange={setEmployeeId}
-            placeholder="All employees"
-            searchPlaceholder="Search employee..."
-            className="h-8 text-xs"
-          />
-        </div>
-
-        {/* Client filter */}
-        <div className="flex flex-col gap-1.5 min-w-[160px]">
-          <div className="flex items-center justify-between">
-            <Label className="text-xs font-medium">Client</Label>
-            {clientId && (
-              <button onClick={() => setClientId('')} className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-0.5">
-                <X className="h-2.5 w-2.5" /> clear
-              </button>
-            )}
-          </div>
-          <SearchableSelect
-            options={clientOptions}
-            value={clientId}
-            onValueChange={setClientId}
-            placeholder="All clients"
-            searchPlaceholder="Search client..."
-            className="h-8 text-xs"
-          />
-        </div>
-
-        {/* Service PO filter */}
-        <div className="flex flex-col gap-1.5 min-w-[180px]">
-          <div className="flex items-center justify-between">
-            <Label className="text-xs font-medium">Service PO</Label>
-            {servicePOId && (
-              <button onClick={() => setServicePOId('')} className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-0.5">
-                <X className="h-2.5 w-2.5" /> clear
-              </button>
-            )}
-          </div>
-          <SearchableSelect
-            options={servicePOOptions}
-            value={servicePOId}
-            onValueChange={setServicePOId}
-            placeholder="All service POs"
-            searchPlaceholder="Search PO..."
-            className="h-8 text-xs"
-          />
-        </div>
-
-        {hasFilters && (
-          <div className="flex flex-col justify-end">
-            <Button variant="ghost" size="sm" onClick={clearFilters} className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground">
-              <X className="h-3.5 w-3.5" /> Clear filters
-            </Button>
-          </div>
-        )}
-      </div>
-
-      {/* ── 7 KPI Tiles ── */}
-      <motion.div
-        variants={containerVariants}
-        initial="hidden"
-        animate="show"
-        className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-7"
+      {/* ── Filters ── */}
+      <CollapsibleSection
+        title="Filters"
+        badge={hasFilters ? `${[quarter, employeeId, clientId, servicePOId].filter(Boolean).length} active` : undefined}
+        open={open.filters}
+        onToggle={() => toggle('filters')}
       >
-        <motion.div variants={itemVariants}>
-          <StatCard
-            title="Total Hours"
-            value={isAnalyticsPending ? '—' : formatHours(tiles.total_hours ?? 0)}
-            icon={Clock}
-            gradient="orange"
-            isLoading={isAnalyticsPending}
-          />
-        </motion.div>
-        <motion.div variants={itemVariants}>
-          <StatCard
-            title="Total Cost (₹)"
-            value={isAnalyticsPending ? '—' : formatCurrency(tiles.total_cost ?? 0)}
-            icon={DollarSign}
-            gradient="green"
-            isLoading={isAnalyticsPending}
-          />
-        </motion.div>
-        <motion.div variants={itemVariants}>
-          <StatCard
-            title="Utilization %"
-            value={isAnalyticsPending ? '—' : `${Number(tiles.utilization_pct ?? 0).toFixed(1)}%`}
-            icon={TrendingUp}
-            gradient="blue"
-            isLoading={isAnalyticsPending}
-          />
-        </motion.div>
-        <motion.div variants={itemVariants}>
-          <StatCard
-            title="Active Employees"
-            value={isAnalyticsPending ? '—' : (tiles.active_employees ?? 0)}
-            icon={Users}
-            gradient="purple"
-            isLoading={isAnalyticsPending}
-          />
-        </motion.div>
-        <motion.div variants={itemVariants}>
-          <StatCard
-            title="Active Clients"
-            value={isAnalyticsPending ? '—' : (tiles.active_clients ?? 0)}
-            icon={Building2}
-            gradient="cyan"
-            isLoading={isAnalyticsPending}
-          />
-        </motion.div>
-        <motion.div variants={itemVariants}>
-          <StatCard
-            title="Active Service POs"
-            value={isAnalyticsPending ? '—' : (tiles.active_service_pos ?? 0)}
-            icon={Briefcase}
-            gradient="amber"
-            isLoading={isAnalyticsPending}
-          />
-        </motion.div>
-        <motion.div variants={itemVariants}>
-          <StatCard
-            title="Avg Hrs/Employee"
-            value={isAnalyticsPending ? '—' : formatHours(tiles.avg_hours_per_employee ?? 0)}
-            icon={BarChart2}
-            gradient="blue"
-            isLoading={isAnalyticsPending}
-          />
-        </motion.div>
-      </motion.div>
+        <div className="space-y-4 pt-3">
 
-      {/* ── Monthly Hours Trend (full width) ── */}
-      <motion.div variants={itemVariants} initial="hidden" animate="show">
-        <MonthlyHoursTrendChart
-          data={trendData}
-          isLoading={isAnalyticsPending}
-          fiscalYear={fiscalYear}
-          quarter={quarter}
-        />
-      </motion.div>
+          {/* ── Controls row ── */}
+          <div className="flex flex-wrap gap-3 items-end">
+
+            {/* Quarter — segmented pill control */}
+            <div className="flex flex-col gap-1.5">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground pl-0.5">Quarter</p>
+              <div className="flex gap-1 rounded-xl bg-muted p-1">
+                {QUARTERS.map((q) => (
+                  <button
+                    key={q.value}
+                    onClick={() => setQuarter(quarter === q.value ? null : q.value)}
+                    className={`flex flex-col items-center px-3.5 py-1.5 rounded-lg min-w-[58px] transition-all duration-150 ${
+                      quarter === q.value
+                        ? 'bg-background shadow-sm text-foreground'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
+                    }`}
+                  >
+                    <span className={`text-xs font-bold leading-none ${quarter === q.value ? 'text-primary' : ''}`}>{q.label}</span>
+                    <span className="text-[9px] leading-none mt-0.5 opacity-60">{q.sub}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Divider */}
+            <div className="hidden md:block self-stretch w-px bg-border/70 mb-1" />
+
+            {/* Employee */}
+            <div className="flex flex-col gap-1.5 min-w-[190px] flex-1">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5 pl-0.5">
+                <Users className="h-3 w-3" /> Employee
+              </p>
+              <SearchableSelect
+                options={employeeOptions}
+                value={employeeId}
+                onValueChange={setEmployeeId}
+                placeholder="All employees"
+                searchPlaceholder="Search employee..."
+              />
+            </div>
+
+            {/* Client */}
+            <div className="flex flex-col gap-1.5 min-w-[170px] flex-1">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5 pl-0.5">
+                <Building2 className="h-3 w-3" /> Client
+              </p>
+              <SearchableSelect
+                options={clientOptions}
+                value={clientId}
+                onValueChange={setClientId}
+                placeholder="All clients"
+                searchPlaceholder="Search client..."
+              />
+            </div>
+
+            {/* Service PO */}
+            <div className="flex flex-col gap-1.5 min-w-[190px] flex-1">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5 pl-0.5">
+                <Briefcase className="h-3 w-3" /> Service PO
+              </p>
+              <SearchableSelect
+                options={servicePOOptions}
+                value={servicePOId}
+                onValueChange={setServicePOId}
+                placeholder="All service POs"
+                searchPlaceholder="Search PO..."
+              />
+            </div>
+          </div>
+
+          {/* ── Active filter chips ── */}
+          <AnimatePresence>
+            {hasFilters && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.18 }}
+                className="overflow-hidden"
+              >
+                <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-dashed">
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mr-1">Applied:</span>
+
+                  {quarter && (
+                    <motion.span
+                      initial={{ scale: 0.85, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+                      className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 text-primary border border-primary/25 px-3 py-1 text-xs font-semibold"
+                    >
+                      <CalendarDays className="h-3 w-3" />
+                      {QUARTERS.find((q) => q.value === quarter)?.label} · {QUARTERS.find((q) => q.value === quarter)?.sub}
+                      <button onClick={() => setQuarter(null)} className="ml-0.5 rounded-full hover:bg-primary/20 p-0.5 -mr-0.5 transition-colors">
+                        <X className="h-2.5 w-2.5" />
+                      </button>
+                    </motion.span>
+                  )}
+
+                  {employeeId && (
+                    <motion.span
+                      initial={{ scale: 0.85, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+                      className="inline-flex items-center gap-1.5 rounded-full bg-violet-50 text-violet-700 border border-violet-200 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-700 px-3 py-1 text-xs font-semibold max-w-[220px]"
+                    >
+                      <Users className="h-3 w-3 shrink-0" />
+                      <span className="truncate">{employeeOptions.find((e) => e.value === employeeId)?.label ?? 'Employee'}</span>
+                      <button onClick={() => setEmployeeId('')} className="ml-0.5 shrink-0 rounded-full hover:bg-violet-100 dark:hover:bg-violet-800 p-0.5 -mr-0.5 transition-colors">
+                        <X className="h-2.5 w-2.5" />
+                      </button>
+                    </motion.span>
+                  )}
+
+                  {clientId && (
+                    <motion.span
+                      initial={{ scale: 0.85, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+                      className="inline-flex items-center gap-1.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200 dark:bg-sky-900/30 dark:text-sky-300 dark:border-sky-700 px-3 py-1 text-xs font-semibold max-w-[220px]"
+                    >
+                      <Building2 className="h-3 w-3 shrink-0" />
+                      <span className="truncate">{clientOptions.find((c) => c.value === clientId)?.label ?? 'Client'}</span>
+                      <button onClick={() => setClientId('')} className="ml-0.5 shrink-0 rounded-full hover:bg-sky-100 dark:hover:bg-sky-800 p-0.5 -mr-0.5 transition-colors">
+                        <X className="h-2.5 w-2.5" />
+                      </button>
+                    </motion.span>
+                  )}
+
+                  {servicePOId && (
+                    <motion.span
+                      initial={{ scale: 0.85, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+                      className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700 px-3 py-1 text-xs font-semibold max-w-[220px]"
+                    >
+                      <Briefcase className="h-3 w-3 shrink-0" />
+                      <span className="truncate">{servicePOOptions.find((p) => p.value === servicePOId)?.label ?? 'Service PO'}</span>
+                      <button onClick={() => setServicePOId('')} className="ml-0.5 shrink-0 rounded-full hover:bg-amber-100 dark:hover:bg-amber-800 p-0.5 -mr-0.5 transition-colors">
+                        <X className="h-2.5 w-2.5" />
+                      </button>
+                    </motion.span>
+                  )}
+
+                  <button
+                    onClick={clearFilters}
+                    className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                  >
+                    <X className="h-3 w-3" /> Clear all
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+        </div>
+      </CollapsibleSection>
+
+      {/* ── Key Metrics ── */}
+      <CollapsibleSection title="Key Metrics" open={open.kpis} onToggle={() => toggle('kpis')}>
+        <motion.div
+          variants={containerVariants}
+          initial="hidden"
+          animate="show"
+          className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:grid-cols-7 pt-2"
+        >
+          <motion.div variants={itemVariants}>
+            <StatCard title="Total Hours" value={isAnalyticsPending ? '—' : formatHours(tiles.total_hours ?? 0)} icon={Clock} gradient="orange" isLoading={isAnalyticsPending} />
+          </motion.div>
+          <motion.div variants={itemVariants}>
+            <StatCard title="Total Cost (₹)" value={isAnalyticsPending ? '—' : formatCurrency(tiles.total_cost ?? 0)} icon={DollarSign} gradient="green" isLoading={isAnalyticsPending} />
+          </motion.div>
+          <motion.div variants={itemVariants}>
+            <StatCard title="Utilization %" value={isAnalyticsPending ? '—' : `${Number(tiles.utilization_pct ?? 0).toFixed(1)}%`} icon={TrendingUp} gradient="blue" isLoading={isAnalyticsPending} />
+          </motion.div>
+          <motion.div variants={itemVariants}>
+            <StatCard title="Active Employees" value={isAnalyticsPending ? '—' : (tiles.active_employees ?? 0)} icon={Users} gradient="purple" isLoading={isAnalyticsPending} />
+          </motion.div>
+          <motion.div variants={itemVariants}>
+            <StatCard title="Active Clients" value={isAnalyticsPending ? '—' : (tiles.active_clients ?? 0)} icon={Building2} gradient="cyan" isLoading={isAnalyticsPending} />
+          </motion.div>
+          <motion.div variants={itemVariants}>
+            <StatCard title="Active Service POs" value={isAnalyticsPending ? '—' : (tiles.active_service_pos ?? 0)} icon={Briefcase} gradient="amber" isLoading={isAnalyticsPending} />
+          </motion.div>
+          <motion.div variants={itemVariants}>
+            <StatCard title="Avg Hrs/Employee" value={isAnalyticsPending ? '—' : formatHours(tiles.avg_hours_per_employee ?? 0)} icon={BarChart2} gradient="blue" isLoading={isAnalyticsPending} />
+          </motion.div>
+        </motion.div>
+      </CollapsibleSection>
+
+      {/* ── Monthly Hours Trend ── */}
+      <CollapsibleSection title="Monthly Hours Trend" open={open.trend} onToggle={() => toggle('trend')}>
+        <div className="pt-2">
+          <MonthlyHoursTrendChart
+            data={trendData}
+            isLoading={isAnalyticsPending}
+            fiscalYear={fiscalYear}
+            quarter={quarter}
+          />
+        </div>
+      </CollapsibleSection>
 
       {/* ── Hours by Client + Hours by Employee ── */}
-      <motion.div
-        variants={containerVariants}
-        initial="hidden"
-        animate="show"
-        className="grid grid-cols-1 gap-4 lg:grid-cols-2"
-      >
-        <motion.div variants={itemVariants}>
-          <HoursByClientChart
-            data={charts.hours_by_client ?? []}
-            isLoading={isAnalyticsPending}
-            fiscalYear={fiscalYear}
-          />
-        </motion.div>
-        <motion.div variants={itemVariants}>
-          <HoursByEmployeeChart
-            data={charts.hours_by_employee ?? []}
-            isLoading={isAnalyticsPending}
-            fiscalYear={fiscalYear}
-          />
-        </motion.div>
-      </motion.div>
+      <CollapsibleSection title="Hours by Client & Employee" open={open.hoursCharts} onToggle={() => toggle('hoursCharts')}>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 pt-2">
+          <HoursByClientChart data={charts.hours_by_client ?? []} isLoading={isAnalyticsPending} fiscalYear={fiscalYear} />
+          <HoursByEmployeeChart data={charts.hours_by_employee ?? []} isLoading={isAnalyticsPending} fiscalYear={fiscalYear} />
+        </div>
+      </CollapsibleSection>
 
       {/* ── Client × Service PO + Employee Bench ── */}
-      <motion.div
-        variants={containerVariants}
-        initial="hidden"
-        animate="show"
-        className="grid grid-cols-1 gap-4 lg:grid-cols-2"
-      >
-        <motion.div variants={itemVariants}>
-          <ClientPOMatrixChart
-            data={charts.client_x_service_po ?? []}
-            isLoading={isAnalyticsPending}
-            fiscalYear={fiscalYear}
+      <CollapsibleSection title="Client × Service PO & Employee Bench" open={open.matrixCharts} onToggle={() => toggle('matrixCharts')}>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 pt-2">
+          <ClientPOMatrixChart data={charts.client_x_service_po ?? []} isLoading={isAnalyticsPending} fiscalYear={fiscalYear} />
+          <EmployeeBenchChart data={charts.employee_bench_pct ?? []} isLoading={isAnalyticsPending} fiscalYear={fiscalYear} />
+        </div>
+      </CollapsibleSection>
+
+      {/* ── Monthly Detail (Billable Breakdown + Top Employees) ── */}
+      <CollapsibleSection title="Monthly Detail" open={open.monthlyDetail} onToggle={() => toggle('monthlyDetail')}>
+        <div className="space-y-4 pt-2">
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-muted-foreground">Showing data for:</span>
+            <MonthYearPicker
+              value={bottomMonthYear}
+              onChange={(v) => { if (v) { setBottomMonthYear(v); setBillablePage(1); } }}
+              clearable={false}
+              className="w-40"
+            />
+          </div>
+          <BillableAnalyticsPanel
+            data={billableBreakdownData?.data ?? []}
+            meta={billableBreakdownData?.meta ?? {}}
+            isLoading={isBillableBreakdownPending}
+            month={Number(month)}
+            year={Number(year)}
+            page={billablePage}
+            onPageChange={setBillablePage}
           />
-        </motion.div>
-        <motion.div variants={itemVariants}>
-          <EmployeeBenchChart
-            data={charts.employee_bench_pct ?? []}
-            isLoading={isAnalyticsPending}
-            fiscalYear={fiscalYear}
+          <TopEmployeesByPOPanel
+            data={topEmployeesByPOData?.data ?? []}
+            isLoading={isTopEmployeesByPOPending}
+            month={Number(month)}
+            year={Number(year)}
           />
-        </motion.div>
-      </motion.div>
-
-      {/* ── Bottom panels: month picker + Billable Breakdown + Top Employees ── */}
-      <div className="flex items-center gap-3 pt-2 border-t">
-        <span className="text-sm font-medium text-muted-foreground">Monthly detail for:</span>
-        <MonthYearPicker
-          value={bottomMonthYear}
-          onChange={(v) => { if (v) { setBottomMonthYear(v); setBillablePage(1); } }}
-          clearable={false}
-          className="w-40"
-        />
-      </div>
-
-      {/* ── Employee Billable Breakdown ── */}
-      <motion.div variants={itemVariants} initial="hidden" animate="show">
-        <BillableAnalyticsPanel
-          data={billableBreakdownData?.data ?? []}
-          meta={billableBreakdownData?.meta ?? {}}
-          isLoading={isBillableBreakdownPending}
-          month={Number(month)}
-          year={Number(year)}
-          page={billablePage}
-          onPageChange={setBillablePage}
-        />
-      </motion.div>
-
-      {/* ── Top Employees by Service PO ── */}
-      <motion.div variants={itemVariants} initial="hidden" animate="show">
-        <TopEmployeesByPOPanel
-          data={topEmployeesByPOData?.data ?? []}
-          isLoading={isTopEmployeesByPOPending}
-          month={Number(month)}
-          year={Number(year)}
-        />
-      </motion.div>
+        </div>
+      </CollapsibleSection>
     </div>
   );
 };
