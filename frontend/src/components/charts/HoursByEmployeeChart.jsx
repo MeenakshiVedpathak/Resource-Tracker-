@@ -55,7 +55,11 @@ const HoursByEmployeeChart = ({ data = [], isLoading, fiscalYear }) => {
       <CardHeader>
         <div className="flex items-start justify-between gap-2">
           <div>
-            <CardTitle>Hours by Employee</CardTitle>
+            <CardTitle>Hours by Employee (Billable)
+                
+            </CardTitle>
+             <span className="text-muted-foreground font-normal">sorted by billable</span>
+               
             <CardDescription className="mt-1">Top contributors · {fyLabel}</CardDescription>
           </div>
           {activeData.length > 0 && (
