@@ -22,7 +22,7 @@ const CustomTooltip = ({ active, payload, label }) => {
   return (
     <div className="rounded-lg border bg-popover px-3 py-2 shadow-md text-xs">
       <p className="font-medium text-foreground mb-1 max-w-[220px]">{label}</p>
-      <p className="text-primary">{Number(payload[0].value).toLocaleString('en-IN')} hrs</p>
+      <p className="text-primary">{Number(payload[0].value).toLocaleString('en-IN')} billable hrs</p>
     </div>
   );
 };
@@ -30,10 +30,11 @@ const CustomTooltip = ({ active, payload, label }) => {
 const HoursByEmployeeChart = ({ data = [], isLoading, fiscalYear }) => {
   const [page, setPage] = useState(1);
 
-  const activeData = data.filter((e) => e.hours > 0);
+  const activeData = data.filter((e) => (e.billable_hours ?? 0) > 0)
+    .sort((a, b) => (b.billable_hours ?? 0) - (a.billable_hours ?? 0));
   const totalPages = Math.ceil(activeData.length / PAGE_SIZE);
   const pageData = activeData.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-  const maxHours = activeData[0]?.hours || 1;
+  const maxHours = activeData[0]?.billable_hours || 1;
 
   const fyLabel = fiscalYear ? `FY ${fiscalYear}–${String(fiscalYear + 1).slice(-2)}` : '';
 
@@ -106,12 +107,12 @@ const HoursByEmployeeChart = ({ data = [], isLoading, fiscalYear }) => {
                 />
                 <Tooltip content={<CustomTooltip />} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }} />
                 <Bar
-                  dataKey="hours"
+                  dataKey="billable_hours"
                   radius={[0, 3, 3, 0]}
                   label={{ position: 'right', fontSize: 10, fill: 'hsl(var(--muted-foreground))', formatter: (v) => v }}
                 >
                   {pageData.map((row, i) => {
-                    const pct = row.hours / maxHours;
+                    const pct = (row.billable_hours ?? 0) / maxHours;
                     const opacity = Math.round((0.45 + pct * 0.55) * 100) / 100;
                     return (
                       <Cell

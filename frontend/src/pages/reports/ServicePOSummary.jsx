@@ -177,7 +177,7 @@ const ServicePOSummary = () => {
     ...(clientId && clientId !== 'all' && { clientId }),
     ...(serviceTypeId && serviceTypeId !== 'all' && { serviceTypeId }),
 
-    ...(billable && billable !== 'all' && { isBillable: billable === 'yes' }),
+    ...(billable && billable !== 'all' && { is_billable: billable === 'yes' }),
     ...(status && status !== 'all' && { status }),
     ...(dateRange?.startDate && { startDate: dateRange.startDate }),
     ...(dateRange?.endDate && { endDate: dateRange.endDate }),
@@ -317,10 +317,12 @@ const ServicePOSummary = () => {
             <SearchableSelect showSearch={false}
               options={[
                 { label: "All", value: "all" },
-                { label: "Active", value: "active" },
-                { label: "Expired", value: "expired" },
-                { label: "On Hold", value: "on_hold" },
+                { label: "In Progress", value: "in-progress" },
+                { label: "Pending", value: "pending" },
+                { label: "On Hold", value: "on-hold" },
+                { label: "Completed", value: "completed" },
                 { label: "Cancelled", value: "cancelled" },
+                { label: "Closed", value: "closed" },
               ]}
               value={status}
               onValueChange={(v) => { setStatus(v); setPage(1); }}

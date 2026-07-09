@@ -57,7 +57,7 @@ const EmployeeBenchChart = ({ data = [], isLoading, fiscalYear }) => {
           <div>
             <CardTitle>Employee Bench %</CardTitle>
             <CardDescription className="mt-1">
-              Leave + No Work + L&D + Idle · {fyLabel}
+              Leave + Idle + On Bench · {fyLabel}
             </CardDescription>
           </div>
           {data.length > 0 && (

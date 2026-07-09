@@ -127,9 +127,10 @@ const BillableAnalyticsPanel = ({ data = [], meta = {}, isLoading, month, year, 
   const atRiskCount = tiers['At Risk'] + tiers['Critical'];
 
   /* ── bar chart data ── */
-  const barData = [...records]
-    .sort((a, b) => (b.non_billable_hours || 0) - (a.non_billable_hours || 0))
-    .map((r) => {
+  const sortedRecords = [...records]
+    .sort((a, b) => (b.non_billable_hours || 0) - (a.non_billable_hours || 0));
+
+  const barData = sortedRecords.map((r) => {
       let leaves = 0, idle = 0;
       (r.non_billable_reasons ?? []).forEach((nb) => {
         if (nb.service_type_name === 'Leaves') leaves += nb.hours;
@@ -392,7 +393,7 @@ const BillableAnalyticsPanel = ({ data = [], meta = {}, isLoading, month, year, 
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border">
-                        {records.map((row, idx) => {
+                        {sortedRecords.map((row, idx) => {
                           const pct    = row.billable_pct || 0;
                           const tier   = getTier(pct);
                           const topB   = (row.billable_reasons ?? []).filter((r) => r.hours > 0).slice(0, 2);

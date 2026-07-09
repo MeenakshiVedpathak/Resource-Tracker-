@@ -737,6 +737,7 @@ import { Button } from '@/components/ui/button';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { formatCurrency, formatHours, formatDate } from '@/utils/formatters';
 
 /* ─── constants ──────────────────────────────────────────────────────────── */
@@ -881,18 +882,26 @@ const InsightCard = ({ icon: Icon, label, sub, type, isLoading }) => {
   if (isLoading) return <Skeleton className="h-16 rounded-2xl flex-1" />;
 
   return (
-    <motion.div
-      variants={itemVariants}
-      className={`flex items-center gap-3 rounded-2xl border px-4 py-3 flex-1 min-w-[200px] ${s.card}`}
-    >
-      <div className={`p-2 rounded-xl shrink-0 ${s.icon}`}>
-        <Icon className="h-4 w-4" />
-      </div>
-      <div className="min-w-0">
-        <p className={`text-sm font-bold leading-tight truncate ${s.text}`}>{label}</p>
-        <p className={`text-xs mt-0.5 leading-tight truncate ${s.sub}`}>{sub}</p>
-      </div>
-    </motion.div>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <motion.div
+          variants={itemVariants}
+          className={`flex items-center gap-3 rounded-2xl border px-4 py-3 flex-1 min-w-[200px] cursor-default ${s.card}`}
+        >
+          <div className={`p-2 rounded-xl shrink-0 ${s.icon}`}>
+            <Icon className="h-4 w-4" />
+          </div>
+          <div className="min-w-0">
+            <p className={`text-sm font-bold leading-tight truncate ${s.text}`}>{label}</p>
+            <p className={`text-xs mt-0.5 leading-tight truncate ${s.sub}`}>{sub}</p>
+          </div>
+        </motion.div>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" className="max-w-[260px] text-xs">
+        <p className="font-semibold">{label}</p>
+        {sub && <p className="text-muted-foreground mt-0.5">{sub}</p>}
+      </TooltipContent>
+    </Tooltip>
   );
 };
 
@@ -1001,7 +1010,7 @@ const Dashboard = () => {
     useDashboard({ month: Number(month), year: Number(year) });
 
   const { data: topPOData,    isPending: isTopPOPending }    = useTopEmployeesByPO({ month: Number(month), year: Number(year), limit: 100 });
-  const { data: billableData, isPending: isBillablePending } = useEmployeeBillableBreakdown({ month: Number(month), year: Number(year), limit: 25, page: billablePage });
+  const { data: billableData, isPending: isBillablePending } = useEmployeeBillableBreakdown({ month: Number(month), year: Number(year), limit: 12, page: billablePage });
   const { data: employeesData } = useActiveEmployees();
   const { data: clientsData }   = useActiveClients();
   const { data: servicePOsData }= useActiveServicePOs();
@@ -1066,8 +1075,8 @@ const Dashboard = () => {
     else if (benchData.length > 0) list.push({ type: 'success', icon: Award, label: 'All Employees Productive', sub: 'No significant bench hours detected' });
     const topClient = (charts.hours_by_client ?? [])[0];
     if (topClient) list.push({ type: 'info', icon: Building2, label: topClient.client_name, sub: `Top client · ${topClient.hours.toLocaleString('en-IN')} hrs logged` });
-    const topEmp = (charts.hours_by_employee ?? [])[0];
-    if (topEmp) list.push({ type: 'info', icon: Users, label: topEmp.full_name, sub: `Top contributor · ${topEmp.hours.toLocaleString('en-IN')} hrs` });
+    const topEmp = [...(charts.hours_by_employee ?? [])].sort((a, b) => (b.billable_hours ?? 0) - (a.billable_hours ?? 0))[0];
+    if (topEmp) list.push({ type: 'info', icon: Users, label: topEmp.full_name, sub: `Top contributor · ${(topEmp.billable_hours ?? 0).toLocaleString('en-IN')} billable hrs` });
     return list.slice(0, 4);
   }, [isAnalyticsPending, tiles, charts]);
 

@@ -4,6 +4,9 @@ import { createColumnHelper } from '@tanstack/react-table';
 import { ArrowLeft, FileSpreadsheet } from 'lucide-react';
 import { useTimesheetImportRows } from '@/hooks/useTimesheets';
 import { useTimesheetHistory } from '@/hooks/useTimesheets';
+import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
+import { useActiveServicePOs } from '@/hooks/useServicePOs';
+import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
 import { ROUTES } from '@/constants/routes';
 import { formatDate } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
@@ -26,12 +29,32 @@ const TimesheetImportDetail = () => {
   const { data: historyData } = useTimesheetHistory({ page: 1, limit: 100 });
 
   const rows = Array.isArray(rowsData?.data) ? rowsData.data : [];
+  console.log('rowsData full response:', rowsData);
+  console.log('first row sample:', rows[0]);
   const importRecord = (historyData?.data ?? []).find((r) => String(r.id) === String(id));
 
   const [employeeFilter, setEmployeeFilter] = useState('all');
   const [poFilter, setPoFilter] = useState('all');
   const [clientFilter, setClientFilter] = useState('all');
-  const [billableFilter, setBillableFilter] = useState('all');
+  const [serviceCategoryFilter, setServiceCategoryFilter] = useState('all');
+
+  const { data: activeServiceCategories = [] } = useActiveServiceCategories();
+  const { data: activePOs = [] } = useActiveServicePOs();
+  const { data: activeServiceTypes = [] } = useActiveServiceTypes();
+
+  const poCategoryMap = useMemo(() => {
+    const typeToCategory = Object.fromEntries(
+      activeServiceTypes.map((st) => [String(st.id), String(st.service_category_id ?? '')])
+    );
+    const map = Object.fromEntries(
+      activePOs.map((po) => [String(po.id), typeToCategory[String(po.serviceType?.id)] ?? ''])
+    );
+    console.log('activePOs sample:', activePOs[0]);
+    console.log('activeServiceTypes sample:', activeServiceTypes[0]);
+    console.log('activeServiceCategories:', activeServiceCategories);
+    console.log('poCategoryMap:', map);
+    return map;
+  }, [activePOs, activeServiceTypes, activeServiceCategories]);
 
   const { employees, pos, clients } = useMemo(() => {
     return {
@@ -46,14 +69,10 @@ const TimesheetImportDetail = () => {
       if (employeeFilter !== 'all' && row.employee?.full_name !== employeeFilter) return false;
       if (poFilter !== 'all' && row.servicePO?.service_po_name !== poFilter) return false;
       if (clientFilter !== 'all' && row.servicePO?.client?.client_name !== clientFilter) return false;
-      if (billableFilter !== 'all') {
-        const isBillable = row.servicePO?.is_billable;
-        if (billableFilter === 'billable' && !isBillable) return false;
-        if (billableFilter === 'non-billable' && isBillable) return false;
-      }
+      if (serviceCategoryFilter !== 'all' && poCategoryMap[String(row.servicePO?.id)] !== serviceCategoryFilter) return false;
       return true;
     });
-  }, [rows, employeeFilter, poFilter, clientFilter, billableFilter]);
+  }, [rows, employeeFilter, poFilter, clientFilter, serviceCategoryFilter, poCategoryMap]);
 
   const columns = [
     columnHelper.accessor('employee', {
@@ -237,16 +256,18 @@ const TimesheetImportDetail = () => {
                 className="w-full h-9"
               />
 
-              <SearchableSelect showSearch={false}
+              <SearchableSelect
                 options={[
-                  { label: "All Status", value: "all" },
-                  { label: "Billable", value: "billable" },
-                  { label: "Non-billable", value: "non-billable" }
+                  { label: "All Categories", value: "all" },
+                  ...activeServiceCategories.map((sc) => ({
+                    label: sc.name,
+                    value: String(sc.id),
+                  })),
                 ]}
-                value={billableFilter}
-                onValueChange={setBillableFilter}
-                placeholder="All Status"
-                searchPlaceholder="Search status..."
+                value={serviceCategoryFilter}
+                onValueChange={setServiceCategoryFilter}
+                placeholder="All Categories"
+                searchPlaceholder="Search category..."
                 className="w-full h-9"
               />
             </div>

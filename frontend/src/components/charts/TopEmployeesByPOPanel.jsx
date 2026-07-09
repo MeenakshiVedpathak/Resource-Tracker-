@@ -4,7 +4,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import EmptyState from '@/components/common/EmptyState';
 import { Briefcase, Users, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/utils/cn';
-import { Label } from '@/components/ui/label';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useActiveServicePOs } from '@/hooks/useServicePOs';
 
@@ -211,17 +210,14 @@ const TopEmployeesByPOPanel = ({ data = [], isLoading, month, year }) => {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Top Employees by Service PO</CardTitle>
-        <CardDescription>
-          Contributor hours per project · {monthLabel}
-        </CardDescription>
-      </CardHeader>
-
-      <CardContent>
-        {/* ── Filters ── */}
-        <div className="mb-5 flex flex-wrap items-end gap-3">
-          <div className="flex flex-col gap-1">
-            <Label className="text-xs">Service Category</Label>
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <CardTitle>Top Employees by Service PO</CardTitle>
+            <CardDescription>
+              Contributor hours per project · {monthLabel}
+            </CardDescription>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap shrink-0">
             <SearchableSelect
               options={[
                 { label: 'All Categories', value: 'all' },
@@ -230,11 +226,8 @@ const TopEmployeesByPOPanel = ({ data = [], isLoading, month, year }) => {
               value={categoryName}
               onValueChange={setCategoryName}
               placeholder="All Categories"
-              className="h-8 w-44 text-sm"
+              className="h-8 w-40 text-sm"
             />
-          </div>
-          <div className="flex flex-col gap-1">
-            <Label className="text-xs">Service PO</Label>
             <SearchableSelect
               options={[
                 { label: 'All POs', value: 'all' },
@@ -246,11 +239,13 @@ const TopEmployeesByPOPanel = ({ data = [], isLoading, month, year }) => {
               value={poFilterId}
               onValueChange={setPoFilterId}
               placeholder="All POs"
-              className="h-8 w-56 text-sm"
+              className="h-8 w-52 text-sm"
             />
           </div>
         </div>
+      </CardHeader>
 
+      <CardContent>
         {isLoading && <SkeletonGrid />}
 
         {!isLoading && filteredData.length === 0 && (
