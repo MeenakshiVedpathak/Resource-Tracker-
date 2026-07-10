@@ -46,12 +46,15 @@ const SubProjectList = () => {
   const debouncedSearch = useDebounce(search, 400);
   const canManage = hasRole('Finance', 'Management', 'Project Manager');
 
+  const [sorting, setSorting] = useState([]);
+
   const params = {
     page,
     limit,
     ...(statusFilter !== 'all' && { status: statusFilter }),
     ...(poFilter !== 'all' && { service_po_id: poFilter }),
     ...(debouncedSearch && { search: debouncedSearch }),
+    ...(sorting[0] && { sortBy: sorting[0].id, sortOrder: sorting[0].desc ? 'desc' : 'asc' }),
   };
 
   const { data, isPending } = useSubProjects(params);
@@ -219,6 +222,8 @@ const SubProjectList = () => {
               }
             : undefined
         }
+        sorting={sorting}
+        onSortingChange={(s) => { setSorting(s); setPage(1); }}
         onPageChange={setPage}
         onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
         onRowClick={(row) => navigate(buildPath(ROUTES.SUB_PROJECT_EDIT, { id: row.id }))}

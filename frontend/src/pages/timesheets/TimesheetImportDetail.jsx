@@ -5,8 +5,6 @@ import { ArrowLeft, FileSpreadsheet } from 'lucide-react';
 import { useTimesheetImportRows } from '@/hooks/useTimesheets';
 import { useTimesheetHistory } from '@/hooks/useTimesheets';
 import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
-import { useActiveServicePOs } from '@/hooks/useServicePOs';
-import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
 import { ROUTES } from '@/constants/routes';
 import { formatDate } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
@@ -29,8 +27,6 @@ const TimesheetImportDetail = () => {
   const { data: historyData } = useTimesheetHistory({ page: 1, limit: 100 });
 
   const rows = Array.isArray(rowsData?.data) ? rowsData.data : [];
-  console.log('rowsData full response:', rowsData);
-  console.log('first row sample:', rows[0]);
   const importRecord = (historyData?.data ?? []).find((r) => String(r.id) === String(id));
 
   const [employeeFilter, setEmployeeFilter] = useState('all');
@@ -39,22 +35,6 @@ const TimesheetImportDetail = () => {
   const [serviceCategoryFilter, setServiceCategoryFilter] = useState('all');
 
   const { data: activeServiceCategories = [] } = useActiveServiceCategories();
-  const { data: activePOs = [] } = useActiveServicePOs();
-  const { data: activeServiceTypes = [] } = useActiveServiceTypes();
-
-  const poCategoryMap = useMemo(() => {
-    const typeToCategory = Object.fromEntries(
-      activeServiceTypes.map((st) => [String(st.id), String(st.service_category_id ?? '')])
-    );
-    const map = Object.fromEntries(
-      activePOs.map((po) => [String(po.id), typeToCategory[String(po.serviceType?.id)] ?? ''])
-    );
-    console.log('activePOs sample:', activePOs[0]);
-    console.log('activeServiceTypes sample:', activeServiceTypes[0]);
-    console.log('activeServiceCategories:', activeServiceCategories);
-    console.log('poCategoryMap:', map);
-    return map;
-  }, [activePOs, activeServiceTypes, activeServiceCategories]);
 
   const { employees, pos, clients } = useMemo(() => {
     return {
@@ -69,10 +49,10 @@ const TimesheetImportDetail = () => {
       if (employeeFilter !== 'all' && row.employee?.full_name !== employeeFilter) return false;
       if (poFilter !== 'all' && row.servicePO?.service_po_name !== poFilter) return false;
       if (clientFilter !== 'all' && row.servicePO?.client?.client_name !== clientFilter) return false;
-      if (serviceCategoryFilter !== 'all' && poCategoryMap[String(row.servicePO?.id)] !== serviceCategoryFilter) return false;
+      if (serviceCategoryFilter !== 'all' && String(row.servicePO?.serviceType?.serviceCategory?.id) !== serviceCategoryFilter) return false;
       return true;
     });
-  }, [rows, employeeFilter, poFilter, clientFilter, serviceCategoryFilter, poCategoryMap]);
+  }, [rows, employeeFilter, poFilter, clientFilter, serviceCategoryFilter]);
 
   const columns = [
     columnHelper.accessor('employee', {
@@ -141,18 +121,24 @@ const TimesheetImportDetail = () => {
         </span>
       ),
     }),
-    columnHelper.accessor('servicePO.is_billable', {
-      id: 'billable',
-      header: 'Billable',
-      size: 90,
-      cell: (info) =>
-        info.getValue() ? (
-          <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 hover:bg-green-100 text-xs">
-            Billable
+    columnHelper.accessor('servicePO.serviceType.serviceCategory', {
+      id: 'category',
+      header: 'Category',
+      size: 160,
+      cell: (info) => {
+        const cat = info.getValue();
+        if (!cat) return <span className="text-muted-foreground">—</span>;
+        const colorMap = {
+          1: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 hover:bg-green-100',
+          2: 'bg-slate-100 text-slate-600 dark:bg-slate-800/50 dark:text-slate-400 hover:bg-slate-100',
+          3: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 hover:bg-amber-100',
+        };
+        return (
+          <Badge className={`text-xs ${colorMap[cat.id] ?? 'bg-muted text-muted-foreground'}`}>
+            {cat.name}
           </Badge>
-        ) : (
-          <Badge variant="secondary" className="text-xs">Non-billable</Badge>
-        ),
+        );
+      },
     }),
   ];
 

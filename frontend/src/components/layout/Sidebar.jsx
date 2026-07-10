@@ -60,7 +60,7 @@ const NAV_GROUPS = [
           // { label: 'Timesheet Summary', to: ROUTES.REPORT_TIMESHEET },
           // { label: 'Sub-Project Hours', to: ROUTES.REPORT_SUB_PROJECT_HOURS },
           { label: 'Resource Allocation', to: ROUTES.REPORT_RESOURCE_ALLOCATION },
-          { label: 'Operational Cost', to: ROUTES.REPORT_OPERATIONAL_COST },
+          // { label: 'Operational Cost', to: ROUTES.REPORT_OPERATIONAL_COST },
         ],
       },
     ],

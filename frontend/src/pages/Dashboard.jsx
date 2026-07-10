@@ -710,11 +710,11 @@
 // export default Dashboard;
 
 
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Clock, DollarSign, TrendingUp, TrendingDown, Users, Building2, Briefcase,
-  BarChart2, RefreshCw, X, ChevronDown, CalendarDays, AlertCircle,
+  BarChart2, RefreshCw, X, ChevronDown, ChevronLeft, ChevronRight, CalendarDays, AlertCircle,
   Activity, Zap, Award, Calendar,
 } from 'lucide-react';
 import {
@@ -769,9 +769,13 @@ const cNum = (v) => {
   return String(Math.round(n * 10) / 10);
 };
 
+/* flat-top hexagon clip path */
+const HEX_CLIP = 'polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)';
+
 const KPI_CONFIG = [
   {
     key: 'total_hours', title: 'Total Hrs', icon: Clock,
+    hexOuter: '#fed7aa', hexInner: '#ea580c',
     bar: 'bg-orange-500', iconBg: 'bg-orange-50 dark:bg-orange-950/40', iconColor: 'text-orange-500',
     fmt: (v) => `${cNum(v)} hrs`,
     sub: (t) => {
@@ -781,6 +785,7 @@ const KPI_CONFIG = [
   },
   {
     key: 'total_cost', title: 'Total Cost', icon: DollarSign,
+    hexOuter: '#6ee7b7', hexInner: '#059669',
     bar: 'bg-emerald-500', iconBg: 'bg-emerald-50 dark:bg-emerald-950/40', iconColor: 'text-emerald-600',
     fmt: (v) => `₹${cNum(v)}`,
     sub: (t) => {
@@ -791,15 +796,17 @@ const KPI_CONFIG = [
   },
   {
     key: 'utilization_pct', title: 'Utilization', icon: Activity,
+    hexOuter: '#93c5fd', hexInner: '#2563eb',
     bar: 'bg-blue-500', iconBg: 'bg-blue-50 dark:bg-blue-950/40', iconColor: 'text-blue-500',
     fmt: (v) => `${Number(v).toFixed(1)}%`,
     sub: (t) => {
       const diff = (Number(t.utilization_pct || 0) - 80).toFixed(1);
-      return `${diff >= 0 ? '+' : ''}${diff}% vs 80% target`;
+      return `${diff >= 0 ? '+' : ''}${diff}% vs 80%`;
     },
   },
   {
     key: 'active_employees', title: 'Employees', icon: Users,
+    hexOuter: '#c4b5fd', hexInner: '#7c3aed',
     bar: 'bg-violet-500', iconBg: 'bg-violet-50 dark:bg-violet-950/40', iconColor: 'text-violet-500',
     fmt: (v) => cNum(v),
     sub: (_, c) => {
@@ -809,6 +816,7 @@ const KPI_CONFIG = [
   },
   {
     key: 'active_clients', title: 'Clients', icon: Building2,
+    hexOuter: '#67e8f9', hexInner: '#0891b2',
     bar: 'bg-cyan-500', iconBg: 'bg-cyan-50 dark:bg-cyan-950/40', iconColor: 'text-cyan-500',
     fmt: (v) => cNum(v),
     sub: (_, c) => {
@@ -818,6 +826,7 @@ const KPI_CONFIG = [
   },
   {
     key: 'active_service_pos', title: 'Service POs', icon: Briefcase,
+    hexOuter: '#fde68a', hexInner: '#d97706',
     bar: 'bg-amber-500', iconBg: 'bg-amber-50 dark:bg-amber-950/40', iconColor: 'text-amber-500',
     fmt: (v) => cNum(v),
     sub: (_, c) => {
@@ -827,9 +836,10 @@ const KPI_CONFIG = [
   },
   {
     key: 'avg_hours_per_employee', title: 'Avg Hrs/Emp', icon: BarChart2,
+    hexOuter: '#a5b4fc', hexInner: '#4338ca',
     bar: 'bg-indigo-500', iconBg: 'bg-indigo-50 dark:bg-indigo-950/40', iconColor: 'text-indigo-500',
     fmt: (v) => `${cNum(v)} hrs`,
-    sub: (t) => `≈ ${(Number(t.avg_hours_per_employee || 0) / 8).toFixed(1)} work days`,
+    sub: (t) => `≈ ${(Number(t.avg_hours_per_employee || 0) / 8).toFixed(1)} days`,
   },
 ];
 
@@ -843,34 +853,120 @@ const containerVariants = {
   show: { transition: { staggerChildren: 0.055 } },
 };
 
+const ScrollRow = ({ children }) => {
+  const ref = useRef(null);
+  const [canLeft, setCanLeft]   = useState(false);
+  const [canRight, setCanRight] = useState(false);
+
+  const update = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    setCanLeft(el.scrollLeft > 2);
+    setCanRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 2);
+  }, []);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    update();
+    el.addEventListener('scroll', update, { passive: true });
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => { el.removeEventListener('scroll', update); ro.disconnect(); };
+  }, [update]);
+
+  const scroll = (dir) => ref.current?.scrollBy({ left: dir * 200, behavior: 'smooth' });
+
+  return (
+    <div className="relative">
+      {canLeft && (
+        <button
+          onClick={() => scroll(-1)}
+          className="absolute left-0 top-1/2 -translate-y-1/2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-background border shadow-md text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+      )}
+      <div
+        ref={ref}
+        className="overflow-x-auto [&::-webkit-scrollbar]:hidden [scrollbar-width:none]"
+      >
+        {children}
+      </div>
+      {canRight && (
+        <button
+          onClick={() => scroll(1)}
+          className="absolute right-0 top-1/2 -translate-y-1/2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-background border shadow-md text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      )}
+    </div>
+  );
+};
+
 const KpiCard = ({ cfg, value, isLoading, tiles, charts }) => {
   const subText = !isLoading && cfg.sub ? cfg.sub(tiles, charts) : null;
-  return (
-    <motion.div
-      variants={itemVariants}
-      className="relative bg-card rounded-2xl border shadow-sm overflow-hidden hover:shadow-md transition-all duration-200 group"
-    >
-      <div className={`absolute inset-x-0 top-0 h-[3px] ${cfg.bar}`} />
-      <div className="px-3 pt-4 pb-3">
-        <div className="flex items-center justify-between gap-1 mb-2.5">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground leading-none whitespace-nowrap">{cfg.title}</p>
-          <div className={`p-1.5 rounded-lg shrink-0 ${cfg.iconBg} group-hover:scale-110 transition-transform duration-200`}>
-            <cfg.icon className={`h-3.5 w-3.5 ${cfg.iconColor}`} />
-          </div>
-        </div>
-        {isLoading
-          ? <><Skeleton className="h-6 w-16" /><Skeleton className="h-3 w-20 mt-2" /></>
-          : <>
-              <p className="text-[18px] font-extrabold text-foreground leading-none tracking-tight">{cfg.fmt(value ?? 0)}</p>
-              {subText && <p className="text-[10px] text-muted-foreground mt-1.5 leading-none truncate">{subText}</p>}
-            </>
-        }
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center gap-2 shrink-0">
+        <div className="animate-pulse rounded-none" style={{ width: 144, height: 124, clipPath: HEX_CLIP, background: '#e2e8f0' }} />
+        <div className="h-2 w-20 rounded-full animate-pulse bg-muted" />
       </div>
+    );
+  }
+
+  return (
+    <motion.div variants={itemVariants} className="flex flex-col items-center gap-1.5 cursor-default group shrink-0">
+      {/* hex wrapper */}
+      <div
+        className="relative transition-transform duration-200 group-hover:scale-105"
+        style={{ width: 144, height: 124 }}
+      >
+        {/* outer hex — lighter border colour */}
+        <div
+          className="absolute inset-0"
+          style={{ clipPath: HEX_CLIP, background: cfg.hexOuter }}
+        />
+        {/* inner hex — solid fill, inset 5 px */}
+        <div
+          className="absolute flex flex-col items-center justify-center gap-1"
+          style={{
+            top: 5, left: 5, right: 5, bottom: 5,
+            clipPath: HEX_CLIP,
+            background: cfg.hexInner,
+          }}
+        >
+          {/* icon circle */}
+          <div
+            className="flex h-8 w-8 items-center justify-center rounded-full shrink-0"
+            style={{ background: 'rgba(255,255,255,0.20)' }}
+          >
+            <cfg.icon className="h-4 w-4 text-white" />
+          </div>
+          {/* value */}
+          <p className="text-[13px] font-extrabold text-white leading-none tabular-nums text-center px-1">
+            {cfg.fmt(value ?? 0)}
+          </p>
+          {/* label */}
+          <p className="text-[8px] font-bold uppercase tracking-wider text-center px-2 leading-tight"
+             style={{ color: 'rgba(255,255,255,0.80)' }}>
+            {cfg.title}
+          </p>
+        </div>
+      </div>
+      {/* sub text below hex */}
+      {subText && (
+        <p className="text-[9px] text-muted-foreground text-center max-w-[130px] leading-tight truncate">
+          {subText}
+        </p>
+      )}
     </motion.div>
   );
 };
 
-const InsightCard = ({ icon: Icon, label, sub, type, isLoading }) => {
+const InsightCard = ({ icon: Icon, label, sub, type, isLoading, onClick }) => {
   const styles = {
     success: { card: 'bg-emerald-50 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-800', icon: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400', text: 'text-emerald-800 dark:text-emerald-300', sub: 'text-emerald-600/80 dark:text-emerald-400/70' },
     warning: { card: 'bg-amber-50 border-amber-200 dark:bg-amber-950/20 dark:border-amber-800',   icon: 'bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400',   text: 'text-amber-800 dark:text-amber-300',   sub: 'text-amber-600/80 dark:text-amber-400/70' },
@@ -886,7 +982,8 @@ const InsightCard = ({ icon: Icon, label, sub, type, isLoading }) => {
       <TooltipTrigger asChild>
         <motion.div
           variants={itemVariants}
-          className={`flex items-center gap-3 rounded-2xl border px-4 py-3 flex-1 min-w-[200px] cursor-default ${s.card}`}
+          onClick={onClick}
+          className={`flex items-center gap-3 rounded-2xl border px-4 py-3 flex-1 min-w-[200px] ${onClick ? 'cursor-pointer hover:brightness-95 active:scale-[0.98] transition-all duration-150' : 'cursor-default'} ${s.card}`}
         >
           <div className={`p-2 rounded-xl shrink-0 ${s.icon}`}>
             <Icon className="h-4 w-4" />
@@ -965,8 +1062,42 @@ const Dashboard = () => {
   const [viewMode, setViewMode]               = useState('quarterly');
   const [headerVisible, setHeaderVisible]     = useState(true);
 
-  const headerRef = useRef(null);
-  const outerRef  = useRef(null);
+  const headerRef       = useRef(null);
+  const outerRef        = useRef(null);
+  const benchSectionRef = useRef(null);
+  const kpiScrollRef    = useRef(null);
+
+  const employeeChartRef = useRef(null);
+  const clientChartRef   = useRef(null);
+
+  const scrollTo = useCallback((ref) => {
+    const el = ref.current;
+    if (!el) return;
+    const main = document.querySelector('main') ?? document.documentElement;
+    const offset = el.getBoundingClientRect().top - main.getBoundingClientRect().top + main.scrollTop - 80;
+    main.scrollTo({ top: offset, behavior: 'smooth' });
+  }, []);
+
+  const scrollToBench         = useCallback(() => scrollTo(benchSectionRef),   [scrollTo]);
+  const scrollToEmployeeChart = useCallback(() => scrollTo(employeeChartRef),  [scrollTo]);
+  const scrollToClientChart   = useCallback(() => scrollTo(clientChartRef),    [scrollTo]);
+  const [kpiScroll, setKpiScroll] = useState({ left: false, right: false });
+
+  const kpiRefCallback = useCallback((el) => {
+    // Cleanup previous listener
+    if (kpiScrollRef.current?._kpiCheck) {
+      kpiScrollRef.current.removeEventListener('scroll', kpiScrollRef.current._kpiCheck);
+    }
+    kpiScrollRef.current = el;
+    if (!el) return;
+    const check = () => setKpiScroll({
+      left:  el.scrollLeft > 4,
+      right: el.scrollLeft + el.clientWidth < el.scrollWidth - 4,
+    });
+    el._kpiCheck = check;
+    check();
+    el.addEventListener('scroll', check, { passive: true });
+  }, []);
 
   useEffect(() => {
     // Use closest('main') — the definitive scroll container per MainLayout
@@ -1067,18 +1198,28 @@ const Dashboard = () => {
           : { type: 'danger',  icon: TrendingDown, label: `${util.toFixed(1)}% Utilization`,    sub: 'Critical · Well below 80% target' }
       );
     }
-    const benchData     = charts.employee_bench_pct ?? [];
-    const critical      = benchData.filter((e) => e.bench_pct >= 75).length;
-    const onBench       = benchData.filter((e) => e.bench_pct >= 25).length;
-    if (critical > 0) list.push({ type: 'danger',  icon: AlertCircle, label: `${critical} Critical Bench`,      sub: 'Bench ≥75% · Needs immediate action' });
-    else if (onBench > 0) list.push({ type: 'warning', icon: Users,   label: `${onBench} Employee${onBench > 1 ? 's' : ''} on Bench`, sub: 'Bench >25% · Monitor allocation' });
-    else if (benchData.length > 0) list.push({ type: 'success', icon: Award, label: 'All Employees Productive', sub: 'No significant bench hours detected' });
+    const benchData = charts.employee_bench_pct ?? [];
+    const critical  = benchData.filter((e) => e.bench_pct >= 75).length;
+    const onBench   = benchData.filter((e) => e.bench_pct >= 25).length;
+    if (critical > 0) list.push({ type: 'danger',  icon: AlertCircle, label: `${critical} Critical Bench`,      sub: 'Bench ≥75% · Needs immediate action', onClick: scrollToBench });
+    else if (onBench > 0) list.push({ type: 'warning', icon: Users,   label: `${onBench} Employee${onBench > 1 ? 's' : ''} on Bench`, sub: 'Bench >25% · Monitor allocation', onClick: scrollToBench });
+    else if (benchData.length > 0) list.push({ type: 'success', icon: Award, label: 'All Employees Productive', sub: 'No significant bench hours detected', onClick: scrollToBench });
     const topClient = (charts.hours_by_client ?? [])[0];
-    if (topClient) list.push({ type: 'info', icon: Building2, label: topClient.client_name, sub: `Top client · ${topClient.hours.toLocaleString('en-IN')} hrs logged` });
-    const topEmp = [...(charts.hours_by_employee ?? [])].sort((a, b) => (b.billable_hours ?? 0) - (a.billable_hours ?? 0))[0];
-    if (topEmp) list.push({ type: 'info', icon: Users, label: topEmp.full_name, sub: `Top contributor · ${(topEmp.billable_hours ?? 0).toLocaleString('en-IN')} billable hrs` });
+    if (topClient) list.push({ type: 'info', icon: Building2, label: topClient.client_name, sub: `Top client · ${topClient.hours.toLocaleString('en-IN')} hrs logged`, onClick: scrollToClientChart });
+    const sortedEmps = [...(charts.hours_by_employee ?? [])].sort((a, b) => (b.billable_hours ?? 0) - (a.billable_hours ?? 0));
+    if (sortedEmps.length > 0) {
+      const topHrs = sortedEmps[0].billable_hours ?? 0;
+      const tied = sortedEmps.filter((e) => (e.billable_hours ?? 0) === topHrs);
+      if (tied.length === 1) {
+        list.push({ type: 'info', icon: Users, label: tied[0].full_name, sub: `Top contributor · ${topHrs.toLocaleString('en-IN')} billable hrs`, onClick: scrollToEmployeeChart });
+      } else if (tied.length === 2) {
+        list.push({ type: 'info', icon: Users, label: `${tied[0].full_name} & ${tied[1].full_name}`, sub: `Tied · ${topHrs.toLocaleString('en-IN')} billable hrs each`, onClick: scrollToEmployeeChart });
+      } else {
+        list.push({ type: 'info', icon: Users, label: `${tied.length} employees tied`, sub: `${topHrs.toLocaleString('en-IN')} billable hrs each`, onClick: scrollToEmployeeChart });
+      }
+    }
     return list.slice(0, 4);
-  }, [isAnalyticsPending, tiles, charts]);
+  }, [isAnalyticsPending, tiles, charts, scrollToBench, scrollToEmployeeChart, scrollToClientChart]);
 
   const lastUpdated = dataUpdatedAt ? formatDate(new Date(dataUpdatedAt), 'DD MMM YYYY, hh:mm A') : null;
   const fyLabel = `FY ${fiscalYear}–${String(fiscalYear + 1).slice(-2)}`;
@@ -1237,11 +1378,46 @@ const Dashboard = () => {
       {/* ══ KPI TILES ════════════════════════════════════════════════════════ */}
       <section>
         <SectionLabel icon={Activity} title="Key Performance Indicators" />
-        <motion.div variants={containerVariants} initial="hidden" animate="show" className="grid grid-cols-2 gap-3 sm:grid-cols-4 md:grid-cols-7">
-          {KPI_CONFIG.map((cfg) => (
-            <KpiCard key={cfg.key} cfg={cfg} value={tiles[cfg.key]} isLoading={isAnalyticsPending} tiles={tiles} charts={charts} />
-          ))}
-        </motion.div>
+        <div className="relative">
+          {/* Scroll container */}
+          <div
+            ref={kpiRefCallback}
+            className="overflow-x-auto [&::-webkit-scrollbar]:hidden [scrollbar-width:none] px-10"
+          >
+            <motion.div
+              variants={containerVariants}
+              initial="hidden"
+              animate="show"
+              className="flex flex-nowrap justify-center gap-x-3 min-w-max mx-auto"
+            >
+              {KPI_CONFIG.map((cfg) => (
+                <KpiCard key={cfg.key} cfg={cfg} value={tiles[cfg.key]} isLoading={isAnalyticsPending} tiles={tiles} charts={charts} />
+              ))}
+            </motion.div>
+          </div>
+
+          {/* Left arrow + fade */}
+          <div className={`absolute left-0 top-0 h-full flex items-center transition-opacity duration-200 ${kpiScroll.left ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+            <div className="absolute left-0 h-full w-16 bg-gradient-to-r from-background to-transparent pointer-events-none" />
+            <button
+              onClick={() => kpiScrollRef.current?.scrollBy({ left: -280, behavior: 'smooth' })}
+              className="relative z-10 ml-1 flex items-center justify-center w-8 h-8 rounded-full bg-background border shadow-md text-muted-foreground hover:text-foreground hover:shadow-lg transition-all duration-150"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+          </div>
+
+          {/* Right arrow + fade */}
+          <div className={`absolute right-0 top-0 h-full flex items-center transition-opacity duration-200 ${kpiScroll.right ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+            <div className="absolute right-0 h-full w-16 bg-gradient-to-l from-background to-transparent pointer-events-none" />
+            <button
+              onClick={() => kpiScrollRef.current?.scrollBy({ left: 280, behavior: 'smooth' })}
+              className="relative z-10 mr-1 flex items-center justify-center w-8 h-8 rounded-full bg-background border shadow-md text-muted-foreground hover:text-foreground hover:shadow-lg transition-all duration-150"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
       </section>
 
       {/* ══ MONTHLY TREND ════════════════════════════════════════════════════ */}
@@ -1256,10 +1432,10 @@ const Dashboard = () => {
       <section>
         <SectionLabel icon={BarChart2} title="Hours Breakdown" />
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
+          <motion.div ref={clientChartRef} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
             <HoursByClientChart data={charts.hours_by_client ?? []} isLoading={isAnalyticsPending} fiscalYear={fiscalYear} />
           </motion.div>
-          <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3, delay: 0.15 }}>
+          <motion.div ref={employeeChartRef} initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3, delay: 0.15 }}>
             <HoursByEmployeeChart data={charts.hours_by_employee ?? []} isLoading={isAnalyticsPending} fiscalYear={fiscalYear} />
           </motion.div>
         </div>
@@ -1272,7 +1448,7 @@ const Dashboard = () => {
           <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
             <ClientPOMatrixChart data={charts.client_x_service_po ?? []} isLoading={isAnalyticsPending} fiscalYear={fiscalYear} />
           </motion.div>
-          <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3, delay: 0.15 }}>
+          <motion.div ref={benchSectionRef} initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3, delay: 0.15 }}>
             <EmployeeBenchChart data={charts.employee_bench_pct ?? []} isLoading={isAnalyticsPending} fiscalYear={fiscalYear} />
           </motion.div>
         </div>
@@ -1295,36 +1471,40 @@ const Dashboard = () => {
                 </span>
               }
             />
-            <motion.div variants={containerVariants} initial="hidden" animate="show" className="grid grid-cols-2 gap-3 sm:grid-cols-4 md:grid-cols-7">
-              {[
-                { title: 'Total Hrs',       icon: Clock,       bar: 'bg-orange-500',  iconBg: 'bg-orange-50 dark:bg-orange-950/40',   iconColor: 'text-orange-500',  value: `${cNum(monthlyTiles.totalHours)} hrs`,     sub: null },
-                { title: 'Billable Hrs',    icon: TrendingUp,  bar: 'bg-emerald-500', iconBg: 'bg-emerald-50 dark:bg-emerald-950/40', iconColor: 'text-emerald-600', value: `${cNum(monthlyTiles.billHours)} hrs`,      sub: monthlyTiles.totalHours > 0 ? `${((monthlyTiles.billHours / monthlyTiles.totalHours) * 100).toFixed(1)}% of total` : null },
-                { title: 'Non-Billable',    icon: AlertCircle, bar: 'bg-amber-500',   iconBg: 'bg-amber-50 dark:bg-amber-950/40',     iconColor: 'text-amber-500',   value: `${cNum(monthlyTiles.nonBillHours)} hrs`,   sub: monthlyTiles.totalHours > 0 ? `${((monthlyTiles.nonBillHours / monthlyTiles.totalHours) * 100).toFixed(1)}% of total` : null },
-                { title: 'Utilization',     icon: Activity,    bar: 'bg-blue-500',    iconBg: 'bg-blue-50 dark:bg-blue-950/40',       iconColor: 'text-blue-500',    value: `${monthlyTiles.utilPct.toFixed(1)}%`,      sub: `${monthlyTiles.utilPct >= 80 ? '+' : ''}${(monthlyTiles.utilPct - 80).toFixed(1)}% vs 80%` },
-                { title: 'Employees',       icon: Users,       bar: 'bg-violet-500',  iconBg: 'bg-violet-50 dark:bg-violet-950/40',   iconColor: 'text-violet-500',  value: String(monthlyTiles.activeEmployees),       sub: `of ${monthlyTiles.totalEmployees} total` },
-                { title: 'Clients',         icon: Building2,   bar: 'bg-cyan-500',    iconBg: 'bg-cyan-50 dark:bg-cyan-950/40',       iconColor: 'text-cyan-500',    value: String(monthlyTiles.totalClients),          sub: null },
-                { title: 'Active POs',      icon: Briefcase,   bar: 'bg-indigo-500',  iconBg: 'bg-indigo-50 dark:bg-indigo-950/40',   iconColor: 'text-indigo-500',  value: String(monthlyTiles.activePOs),             sub: `of ${monthlyTiles.totalPOs} total` },
-              ].map((card) => (
-                <motion.div key={card.title} variants={itemVariants} className="relative bg-card rounded-2xl border shadow-sm overflow-hidden hover:shadow-md transition-all duration-200 group">
-                  <div className={`absolute inset-x-0 top-0 h-[3px] ${card.bar}`} />
-                  <div className="px-3 pt-4 pb-3">
-                    <div className="flex items-center justify-between gap-1 mb-2.5">
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground leading-none whitespace-nowrap">{card.title}</p>
-                      <div className={`p-1.5 rounded-lg shrink-0 ${card.iconBg} group-hover:scale-110 transition-transform duration-200`}>
-                        <card.icon className={`h-3.5 w-3.5 ${card.iconColor}`} />
-                      </div>
+            <ScrollRow>
+              <motion.div variants={containerVariants} initial="hidden" animate="show" className="flex flex-nowrap justify-center gap-x-3 min-w-max mx-auto">
+                {[
+                  { title: 'Total Hrs',    icon: Clock,       hexOuter: '#fed7aa', hexInner: '#ea580c', value: `${cNum(monthlyTiles.totalHours)} hrs`,   sub: null },
+                  { title: 'Billable Hrs', icon: TrendingUp,  hexOuter: '#6ee7b7', hexInner: '#059669', value: `${cNum(monthlyTiles.billHours)} hrs`,    sub: monthlyTiles.totalHours > 0 ? `${((monthlyTiles.billHours / monthlyTiles.totalHours) * 100).toFixed(1)}% of total` : null },
+                  { title: 'Non-Billable', icon: AlertCircle, hexOuter: '#fde68a', hexInner: '#d97706', value: `${cNum(monthlyTiles.nonBillHours)} hrs`, sub: monthlyTiles.totalHours > 0 ? `${((monthlyTiles.nonBillHours / monthlyTiles.totalHours) * 100).toFixed(1)}% of total` : null },
+                  { title: 'Utilization',  icon: Activity,    hexOuter: '#93c5fd', hexInner: '#2563eb', value: `${monthlyTiles.utilPct.toFixed(1)}%`,    sub: `${monthlyTiles.utilPct >= 80 ? '+' : ''}${(monthlyTiles.utilPct - 80).toFixed(1)}% vs 80%` },
+                  { title: 'Employees',    icon: Users,       hexOuter: '#c4b5fd', hexInner: '#7c3aed', value: String(monthlyTiles.activeEmployees),     sub: `of ${monthlyTiles.totalEmployees} total` },
+                  { title: 'Clients',      icon: Building2,   hexOuter: '#67e8f9', hexInner: '#0891b2', value: String(monthlyTiles.totalClients),        sub: null },
+                  { title: 'Active POs',   icon: Briefcase,   hexOuter: '#a5b4fc', hexInner: '#4338ca', value: String(monthlyTiles.activePOs),           sub: `of ${monthlyTiles.totalPOs} total` },
+                ].map((card) => (
+                  isStatsPending ? (
+                    <div key={card.title} className="flex flex-col items-center gap-2 shrink-0">
+                      <div className="animate-pulse" style={{ width: 144, height: 124, clipPath: HEX_CLIP, background: '#e2e8f0' }} />
+                      <div className="h-2 w-20 rounded-full animate-pulse bg-muted" />
                     </div>
-                    {isStatsPending
-                      ? <><Skeleton className="h-6 w-16" /><Skeleton className="h-3 w-20 mt-2" /></>
-                      : <>
-                          <p className="text-[18px] font-extrabold text-foreground leading-none tracking-tight">{card.value}</p>
-                          {card.sub && <p className="text-[10px] text-muted-foreground mt-1.5 leading-none truncate">{card.sub}</p>}
-                        </>
-                    }
-                  </div>
-                </motion.div>
-              ))}
-            </motion.div>
+                  ) : (
+                    <motion.div key={card.title} variants={itemVariants} className="flex flex-col items-center gap-1.5 cursor-default group shrink-0">
+                      <div className="relative transition-transform duration-200 group-hover:scale-105" style={{ width: 144, height: 124 }}>
+                        <div className="absolute inset-0" style={{ clipPath: HEX_CLIP, background: card.hexOuter }} />
+                        <div className="absolute flex flex-col items-center justify-center gap-1" style={{ top: 5, left: 5, right: 5, bottom: 5, clipPath: HEX_CLIP, background: card.hexInner }}>
+                          <div className="flex h-8 w-8 items-center justify-center rounded-full shrink-0" style={{ background: 'rgba(255,255,255,0.20)' }}>
+                            <card.icon className="h-4 w-4 text-white" />
+                          </div>
+                          <p className="text-[13px] font-extrabold text-white leading-none tabular-nums text-center px-1">{card.value}</p>
+                          <p className="text-[8px] font-bold uppercase tracking-wider text-center px-2 leading-tight" style={{ color: 'rgba(255,255,255,0.80)' }}>{card.title}</p>
+                        </div>
+                      </div>
+                      {card.sub && <p className="text-[9px] text-muted-foreground text-center max-w-[130px] leading-tight truncate">{card.sub}</p>}
+                    </motion.div>
+                  )
+                ))}
+              </motion.div>
+            </ScrollRow>
           </section>
 
           {/* ── Month-specific panels ─────────────────────────────────────── */}

@@ -32,6 +32,9 @@ const DataTable = ({
   pagination,
   onPageChange,
   onPageSizeChange,
+  // Server-side sorting props
+  sorting: externalSorting,
+  onSortingChange: onExternalSortingChange,
   // Search
   searchValue,
   onSearchChange,
@@ -44,13 +47,25 @@ const DataTable = ({
   rowClassName,
   onRowClick,
 }) => {
-  const [sorting, setSorting] = useState([]);
+  const [internalSorting, setInternalSorting] = useState([]);
+
+  const isManualSort = !!onExternalSortingChange;
+  const sorting = isManualSort ? (externalSorting ?? []) : internalSorting;
+
+  const handleSortingChange = (updater) => {
+    const next = typeof updater === 'function' ? updater(sorting) : updater;
+    if (isManualSort) {
+      onExternalSortingChange(next);
+    } else {
+      setInternalSorting(next);
+    }
+  };
 
   const table = useReactTable({
     data,
     columns,
     state: { sorting },
-    onSortingChange: setSorting,
+    onSortingChange: handleSortingChange,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     manualPagination: true,

@@ -86,11 +86,14 @@ const EmployeeList = () => {
 
   const debouncedSearch = useDebounce(search, 400);
 
+  const [sorting, setSorting] = useState([]);
+
   const params = {
     page,
     limit,
     status: statusFilter,
     ...(debouncedSearch && debouncedSearch.length >= 3 && { search: debouncedSearch }),
+    ...(sorting[0] && { sortBy: sorting[0].id, sortOrder: sorting[0].desc ? 'desc' : 'asc' }),
   };
 
   const { data, isPending, isFetching } = useEmployees(params);
@@ -673,6 +676,8 @@ const EmployeeList = () => {
             limit: meta.per_page ?? limit,
             total: meta.total,
           } : undefined}
+          sorting={sorting}
+          onSortingChange={(s) => { setSorting(s); setPage(1); }}
           onPageChange={setPage}
           onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
           onRowClick={(row) => navigate(buildPath(ROUTES.EMPLOYEE_EDIT, { id: row.id }))}

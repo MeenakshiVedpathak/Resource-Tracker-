@@ -69,12 +69,15 @@ const UserList = () => {
   const debouncedSearch = useDebounce(search, 400);
   const isHR = hasRole('HR', 'Management');
 
+  const [sorting, setSorting] = useState([]);
+
   const params = {
     page,
     limit,
     ...(statusFilter !== 'all' && { status: statusFilter }),
     ...(roleFilter !== 'all' && { role_id: roleFilter }),
     ...(debouncedSearch && { search: debouncedSearch }),
+    ...(sorting[0] && { sortBy: sorting[0].id, sortOrder: sorting[0].desc ? 'desc' : 'asc' }),
   };
 
   const { data, isPending } = useUsers(params);
@@ -308,6 +311,8 @@ const UserList = () => {
             }
             : undefined
         }
+        sorting={sorting}
+        onSortingChange={(s) => { setSorting(s); setPage(1); }}
         onPageChange={setPage}
         onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
         onRowClick={(row) => navigate(buildPath(ROUTES.USER_EDIT, { id: row.id }))}

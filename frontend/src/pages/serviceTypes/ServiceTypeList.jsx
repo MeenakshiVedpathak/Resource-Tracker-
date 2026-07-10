@@ -48,11 +48,14 @@ const ServiceTypeList = () => {
   const { data: serviceCategories = [] } = useActiveServiceCategories();
   const categoryMap = Object.fromEntries(serviceCategories.map((c) => [c.id, c.name]));
 
+  const [sorting, setSorting] = useState([]);
+
   const params = {
     page,
     limit,
     ...(categoryFilter !== 'all' && { service_category_id: categoryFilter }),
     ...(debouncedSearch && { search: debouncedSearch }),
+    ...(sorting[0] && { sortBy: sorting[0].id, sortOrder: sorting[0].desc ? 'desc' : 'asc' }),
   };
 
   const { data, isPending } = useServiceTypes(params);
@@ -201,6 +204,8 @@ const ServiceTypeList = () => {
           limit: meta.per_page ?? limit,
           total: total
         }}
+        sorting={sorting}
+        onSortingChange={(s) => { setSorting(s); setPage(1); }}
         onPageChange={setPage}
         onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
       />

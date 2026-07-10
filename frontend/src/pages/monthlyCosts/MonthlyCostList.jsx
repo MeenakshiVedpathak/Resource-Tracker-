@@ -53,12 +53,15 @@ const MonthlyCostList = () => {
   const debouncedSearch = useDebounce(search, 400);
   const canManage = hasRole('Finance', 'Management');
 
+  const [sorting, setSorting] = useState([]);
+
   const params = {
     page,
     limit,
     ...(monthYearFilter && { month: monthYearFilter.month }),
     ...(monthYearFilter && { year: monthYearFilter.year }),
     ...(debouncedSearch && { search: debouncedSearch }),
+    ...(sorting[0] && { sortBy: sorting[0].id, sortOrder: sorting[0].desc ? 'desc' : 'asc' }),
   };
 
   const { data, isPending } = useMonthlyCosts(params);
@@ -251,6 +254,8 @@ const MonthlyCostList = () => {
               }
             : undefined
         }
+        sorting={sorting}
+        onSortingChange={(s) => { setSorting(s); setPage(1); }}
         onPageChange={setPage}
         onPageSizeChange={(s) => {
           setLimit(s);

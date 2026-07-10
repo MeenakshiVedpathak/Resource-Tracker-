@@ -1,7 +1,8 @@
 import { useState } from 'react';
+import * as XLSX from 'xlsx';
 import { useNavigate, Outlet } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Plus, Pencil, Eye, Trash2, Search, Filter } from 'lucide-react';
+import { Plus, Pencil, Eye, Trash2, Search, Filter, Download } from 'lucide-react';
 import { useServicePOs, useDeleteServicePO } from '@/hooks/useServicePOs';
 import { useActiveClients } from '@/hooks/useClients';
 import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
@@ -22,6 +23,33 @@ import { SearchableSelect } from '@/components/ui/searchable-select';
 import { cn } from '@/utils/cn';
 
 const columnHelper = createColumnHelper();
+
+const exportToExcel = (rows) => {
+  const header = [
+    'PO Code', 'PO Name', 'Client', 'Service Type', 'Account Manager',
+    'Description', 'PO Value', 'Invoice Frequency', 'Invoice Amount',
+    'Start Date', 'End Date', 'Status', 'Billable',
+  ];
+  const dataRows = rows.map((r) => [
+    r.service_po_code ?? '',
+    r.service_po_name ?? '',
+    r.client?.client_name ?? '',
+    r.serviceType?.service_type_name ?? '',
+    r.account_manager ?? '',
+    r.service_description ?? '',
+    r.po_value != null ? Number(r.po_value) : '',
+    r.invoice_frequency ?? '',
+    r.invoice_amount != null ? Number(r.invoice_amount) : '',
+    r.start_date ? formatDate(r.start_date) : '',
+    r.end_date ? formatDate(r.end_date) : '',
+    r.status ?? '',
+    r.is_billable ? 'Yes' : 'No',
+  ]);
+  const ws = XLSX.utils.aoa_to_sheet([header, ...dataRows]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Service POs');
+  XLSX.writeFile(wb, 'Service_POs.xlsx');
+};
 
 const TruncatedCell = ({ value, maxWidth = '150px', className }) => {
   if (!value) return <span className="text-sm text-muted-foreground">—</span>;
@@ -51,6 +79,8 @@ const ServicePOList = () => {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const deleteMutation = useDeleteServicePO();
 
+  const [sorting, setSorting] = useState([]);
+
   const params = {
     page,
     limit,
@@ -58,6 +88,7 @@ const ServicePOList = () => {
     ...(debouncedSearch && { search: debouncedSearch }),
     ...(clientFilter !== 'all' && { client_id: clientFilter }),
     ...(typeFilter !== 'all' && { service_type_id: typeFilter }),
+    ...(sorting[0] && { sortBy: sorting[0].id, sortOrder: sorting[0].desc ? 'desc' : 'asc' }),
   };
 
   const { data, isPending } = useServicePOs(params);
@@ -228,6 +259,11 @@ const ServicePOList = () => {
                 </span>
               )}
             </Button>
+            {servicePOs.length > 0 && (
+              <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={() => exportToExcel(servicePOs)}>
+                <Download className="h-4 w-4" /> Export Excel
+              </Button>
+            )}
             {canManage && (
               <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => navigate(ROUTES.SERVICE_PO_NEW)}>
                 <Plus className="mr-1.5 h-4 w-4" /> Add Service PO
@@ -310,6 +346,8 @@ const ServicePOList = () => {
             }
             : undefined
         }
+        sorting={sorting}
+        onSortingChange={(s) => { setSorting(s); setPage(1); }}
         onPageChange={setPage}
         onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
         onRowClick={(row) => navigate(buildPath(ROUTES.SERVICE_PO_DETAIL, { id: row.id }))}

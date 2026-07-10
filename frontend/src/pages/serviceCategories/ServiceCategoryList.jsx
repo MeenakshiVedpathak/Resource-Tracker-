@@ -44,11 +44,14 @@ const ServiceCategoryList = () => {
   const debouncedSearch = useDebounce(search, 400);
   const canManage = hasRole('Finance', 'Management');
 
+  const [sorting, setSorting] = useState([]);
+
   const params = {
     page,
     limit,
     ...(statusFilter !== 'all' && { status: statusFilter }),
     ...(debouncedSearch && { search: debouncedSearch }),
+    ...(sorting[0] && { sortBy: sorting[0].id, sortOrder: sorting[0].desc ? 'desc' : 'asc' }),
   };
 
   const { data, isPending } = useServiceCategories(params);
@@ -198,6 +201,8 @@ const ServiceCategoryList = () => {
           limit: meta.per_page ?? limit,
           total: total
         }}
+        sorting={sorting}
+        onSortingChange={(s) => { setSorting(s); setPage(1); }}
         onPageChange={setPage}
         onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
       />

@@ -47,11 +47,14 @@ const ClientList = () => {
   const debouncedSearch = useDebounce(search, 400);
   const canManage = hasRole('Project Manager', 'HR', 'Management');
 
+  const [sorting, setSorting] = useState([]);
+
   const params = {
     page,
     limit,
     ...(statusFilter !== 'all' && { status: statusFilter }),
     ...(debouncedSearch && { search: debouncedSearch }),
+    ...(sorting[0] && { sortBy: sorting[0].id, sortOrder: sorting[0].desc ? 'desc' : 'asc' }),
   };
 
   const { data, isPending } = useClients(params);
@@ -448,6 +451,8 @@ const ClientList = () => {
                 }
               : undefined
           }
+          sorting={sorting}
+          onSortingChange={(s) => { setSorting(s); setPage(1); }}
           onPageChange={setPage}
           onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
           onRowClick={(row) => navigate(buildPath(ROUTES.CLIENT_EDIT, { id: row.id }))}

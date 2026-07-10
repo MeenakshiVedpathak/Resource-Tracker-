@@ -28,7 +28,13 @@ const TimesheetList = () => {
   const [selectedMonth, setSelectedMonth] = useState(String(currentDate.getMonth() + 1));
   const [selectedYear, setSelectedYear] = useState(String(currentDate.getFullYear()));
 
-  const params = { page, limit };
+  const [sorting, setSorting] = useState([]);
+
+  const params = {
+    page,
+    limit,
+    ...(sorting[0] && { sortBy: sorting[0].id, sortOrder: sorting[0].desc ? 'desc' : 'asc' }),
+  };
 
   const { data, isPending } = useTimesheetHistory(params);
 
@@ -175,6 +181,8 @@ const TimesheetList = () => {
               }
             : undefined
         }
+        sorting={sorting}
+        onSortingChange={(s) => { setSorting(s); setPage(1); }}
         onPageChange={setPage}
         onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
         onRowClick={(row) => navigate(buildPath(ROUTES.TIMESHEET_IMPORT_DETAIL, { id: row.id }))}
