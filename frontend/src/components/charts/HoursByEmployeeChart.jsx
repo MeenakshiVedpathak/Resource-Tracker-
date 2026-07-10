@@ -60,7 +60,7 @@ const HoursByEmployeeChart = ({ data = [], isLoading, fiscalYear }) => {
             <CardTitle>Hours by Employee (Billable)
                 
             </CardTitle>
-             <span className="text-muted-foreground font-normal">sorted by billable</span>
+             {/* <span className="text-muted-foreground font-normal">sorted by billable</span> */}
                
             <CardDescription className="mt-1">Top contributors · {fyLabel}</CardDescription>
           </div>

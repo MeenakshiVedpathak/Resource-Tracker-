@@ -717,12 +717,7 @@ import {
   BarChart2, RefreshCw, X, ChevronDown, ChevronLeft, ChevronRight, CalendarDays, AlertCircle,
   Activity, Zap, Award, Calendar,
 } from 'lucide-react';
-import {
-  useEmployeeBillableBreakdown,
-  useTopEmployeesByPO,
-  useDashboardAnalytics,
-  useDashboard,
-} from '@/hooks/useDashboard';
+import { useDashboardAnalytics } from '@/hooks/useDashboard';
 import { useActiveEmployees } from '@/hooks/useEmployees';
 import { useActiveClients } from '@/hooks/useClients';
 import { useActiveServicePOs } from '@/hooks/useServicePOs';
@@ -888,52 +883,29 @@ const ScrollRow = ({ children }) => {
 
 const KpiCard = ({ cfg, value, isLoading }) => {
   if (isLoading) {
-    return (
-      <div className="flex flex-col items-center gap-2 shrink-0">
-        <div className="animate-pulse rounded-none" style={{ width: 144, height: 124, clipPath: HEX_CLIP, background: '#e2e8f0' }} />
-        <div className="h-2 w-20 rounded-full animate-pulse bg-muted" />
-      </div>
-    );
+    return <div className="animate-pulse rounded-xl bg-muted h-[100px]" />;
   }
 
   return (
-    <motion.div variants={itemVariants} className="flex flex-col items-center gap-1.5 cursor-default group shrink-0">
-      {/* hex wrapper */}
-      <div
-        className="relative transition-transform duration-200 group-hover:scale-105"
-        style={{ width: 144, height: 124 }}
-      >
-        {/* outer hex — lighter border colour */}
-        <div
-          className="absolute inset-0"
-          style={{ clipPath: HEX_CLIP, background: cfg.hexOuter }}
-        />
-        {/* inner hex — solid fill, inset 5 px */}
-        <div
-          className="absolute flex flex-col items-center justify-center gap-1"
-          style={{
-            top: 5, left: 5, right: 5, bottom: 5,
-            clipPath: HEX_CLIP,
-            background: cfg.hexInner,
-          }}
-        >
-          {/* icon circle */}
-          <div
-            className="flex h-8 w-8 items-center justify-center rounded-full shrink-0"
-            style={{ background: 'rgba(255,255,255,0.20)' }}
-          >
-            <cfg.icon className="h-4 w-4 text-white" />
-          </div>
-          {/* value */}
-          <p className="text-[13px] font-extrabold text-white leading-none tabular-nums text-center px-1">
-            {cfg.fmt(value ?? 0)}
-          </p>
-          {/* label */}
-          <p className="text-[8px] font-bold uppercase tracking-wider text-center px-2 leading-tight"
-             style={{ color: 'rgba(255,255,255,0.80)' }}>
-            {cfg.title}
-          </p>
+    <motion.div variants={itemVariants} className="cursor-default group">
+      <div className="relative flex flex-col gap-2 rounded-xl border border-border bg-card pl-4 pr-3 py-3.5 shadow-sm overflow-hidden transition-all duration-200 group-hover:shadow-md group-hover:-translate-y-0.5">
+        {/* left color bar */}
+        <div className={`absolute left-0 top-0 h-full w-[3px] ${cfg.bar}`} />
+
+        {/* icon — small */}
+        <div className={`flex h-7 w-7 items-center justify-center rounded-md shrink-0 ${cfg.iconBg}`}>
+          <cfg.icon className={`h-3.5 w-3.5 ${cfg.iconColor}`} />
         </div>
+
+        {/* value */}
+        <p className="text-[17px] font-extrabold text-foreground leading-none tabular-nums">
+          {cfg.fmt(value ?? 0)}
+        </p>
+
+        {/* title — full text, no truncation */}
+        <p className="text-[11px] font-semibold text-muted-foreground leading-tight">
+          {cfg.title}
+        </p>
       </div>
     </motion.div>
   );
@@ -1031,6 +1003,7 @@ const Dashboard = () => {
   const [clientId, setClientId]               = useState('');
   const [servicePOId, setServicePOId]         = useState('');
   const [billablePage, setBillablePage]       = useState(1);
+  const [billablePageQ, setBillablePageQ]     = useState(1); // quarterly view pagination
   const [topPOFilter, setTopPOFilter]         = useState('billable');
   const [filtersOpen, setFiltersOpen]         = useState(true);
   const [viewMode, setViewMode]               = useState('quarterly');
@@ -1110,12 +1083,22 @@ const Dashboard = () => {
   const { data: analyticsData, isPending: isAnalyticsPending, refetch, isFetching, dataUpdatedAt } =
     useDashboardAnalytics(analyticsParams);
 
-  // Monthly Summary tiles — sourced from /dashboard/stats
-  const { data: statsData, isPending: isStatsPending } =
-    useDashboard({ month: Number(month), year: Number(year) });
+  /* monthly analytics — same API, filtered by selected month */
+  const monthFiscalYear = useMemo(
+    () => (bottomMonthYear.month >= 4 ? bottomMonthYear.year : bottomMonthYear.year - 1),
+    [bottomMonthYear],
+  );
+  const monthlyAnalyticsParams = {
+    fiscalYear: monthFiscalYear,
+    month: bottomMonthYear.month,
+    year:  bottomMonthYear.year,
+    ...(employeeId  && { employeeId }),
+    ...(clientId    && { clientId }),
+    ...(servicePOId && { poId: servicePOId }),
+  };
+  const { data: monthlyAnalyticsRaw, isPending: isMonthlyAnalyticsPending } =
+    useDashboardAnalytics(monthlyAnalyticsParams);
 
-  const { data: topPOData,    isPending: isTopPOPending }    = useTopEmployeesByPO({ month: Number(month), year: Number(year), limit: 100 });
-  const { data: billableData, isPending: isBillablePending } = useEmployeeBillableBreakdown({ month: Number(month), year: Number(year), limit: 12, page: billablePage });
   const { data: employeesData } = useActiveEmployees();
   const { data: clientsData }   = useActiveClients();
   const { data: servicePOsData }= useActiveServicePOs();
@@ -1123,10 +1106,18 @@ const Dashboard = () => {
   const tiles  = analyticsData?.tiles  ?? {};
   const charts = analyticsData?.charts ?? {};
 
+  const monthlyAnalyticsTiles  = monthlyAnalyticsRaw?.tiles  ?? {};
+  const monthlyAnalyticsCharts = monthlyAnalyticsRaw?.charts ?? {};
+
   const mergedTiles = useMemo(() => ({
     ...tiles,
-    total_po_value_current_year: Number(statsData?.financials?.total_po_value_current_year ?? 0),
-  }), [tiles, statsData]);
+    total_po_value_current_year: Number(analyticsData?.financials?.total_po_value_fiscal_year ?? 0),
+  }), [tiles, analyticsData]);
+
+  const mergedMonthlyTiles = useMemo(() => ({
+    ...monthlyAnalyticsTiles,
+    total_po_value_current_year: Number(monthlyAnalyticsRaw?.financials?.total_po_value_fiscal_year ?? 0),
+  }), [monthlyAnalyticsTiles, monthlyAnalyticsRaw]);
 
   const trendData = useMemo(() => {
     const raw = charts.monthly_hours_trend ?? [];
@@ -1134,32 +1125,65 @@ const Dashboard = () => {
     return raw.filter((d) => (QUARTER_MONTHS[quarter] ?? []).includes(d.month));
   }, [charts.monthly_hours_trend, quarter]);
 
-  const monthlyTiles = useMemo(() => {
-    const cm = statsData?.current_month ?? {};
-    const wf = statsData?.workforce     ?? {};
-    const pf = statsData?.portfolio     ?? {};
-    const fi = statsData?.financials    ?? {};
-    const totalHours   = Number(cm.total_hours_logged ?? 0);
-    const billHours    = Number(cm.billable_hours_logged ?? 0);
-    const nonBillHours = Number(cm.non_billable_hours_logged ?? 0);
-    const utilRaw      = Number(cm.overall_utilisation_pct ?? 0);
-    return {
-      totalHours,
-      billHours,
-      nonBillHours,
-      utilPct:          utilRaw > 0 ? utilRaw : (totalHours > 0 ? (billHours / totalHours) * 100 : 0),
-      activeEmployees:  Number(wf.active_employees ?? 0),
-      inactiveEmployees:Number(wf.inactive_employees ?? 0),
-      totalEmployees:   Number(wf.total_employees ?? 0),
-      totalClients:     Number(pf.total_clients ?? 0),
-      activePOs:        Number(pf.active_pos ?? 0),
-      closedPOs:        Number(pf.closed_pos ?? 0),
-      totalPOs:         Number(pf.total_pos ?? 0),
-      totalPOValue:     Number(fi.total_po_value_current_year ?? 0),
-      topPOs:           statsData?.charts?.top_pos_by_hours ?? {},
-      recentActivity:   statsData?.activity?.recent_timesheet_entries ?? [],
-    };
-  }, [statsData]);
+  /* map hours_by_employee → BillableAnalyticsPanel format
+     Cross-references employees_by_po to split non-billable into Leaves vs other */
+  const BILLABLE_PAGE_SIZE = 12;
+  const toBillableRows = (employees, empsByPO) => {
+    // Build per-employee non-billable reasons from non-billable POs in employees_by_po
+    const nbByEmp = {};
+    (empsByPO ?? [])
+      .filter((po) => !po.is_billable)
+      .forEach((po) => {
+        const svcType =
+          po.service_type_name === 'Leaves' || po.service_po_name === 'Leaves'
+            ? 'Leaves'
+            : 'Non-Billable';
+        (po.top_employees ?? []).forEach((e) => {
+          if (!nbByEmp[e.employee_id]) nbByEmp[e.employee_id] = [];
+          nbByEmp[e.employee_id].push({
+            service_po_id:     po.service_po_id,
+            service_po_name:   po.service_po_name,
+            service_type_name: svcType,
+            hours:             e.hours,
+          });
+        });
+      });
+
+    return (employees ?? []).map((e) => ({
+      employee_id:         e.employee_id,
+      employee_code:       e.employee_code,
+      full_name:           e.full_name,
+      designation:         '',
+      total_hours:         e.hours,
+      billable_hours:      e.billable_hours,
+      billable_pct:        e.hours > 0 ? (e.billable_hours / e.hours) * 100 : 0,
+      non_billable_hours:  e.non_billable_hours,
+      non_billable_reasons: nbByEmp[e.employee_id] ?? (
+        e.non_billable_hours > 0
+          ? [{ service_po_id: 0, service_po_name: 'Non-Billable', service_type_name: 'Non-Billable', hours: e.non_billable_hours }]
+          : []
+      ),
+      billable_reasons: [],
+    }));
+  };
+
+  const sortByNonBillable = (rows) =>
+    [...rows].sort((a, b) => (b.non_billable_hours || 0) - (a.non_billable_hours || 0));
+
+  const billableRowsQ = useMemo(
+    () => sortByNonBillable(toBillableRows(charts.hours_by_employee, charts.employees_by_po)),
+    [charts.hours_by_employee, charts.employees_by_po],
+  );
+  const billableRowsM = useMemo(
+    () => sortByNonBillable(toBillableRows(monthlyAnalyticsCharts.hours_by_employee, monthlyAnalyticsCharts.employees_by_po)),
+    [monthlyAnalyticsCharts.hours_by_employee, monthlyAnalyticsCharts.employees_by_po],
+  );
+
+  const mkMeta = (rows, page) => ({
+    limit: BILLABLE_PAGE_SIZE, total: rows.length, page,
+    totalPages: Math.ceil(rows.length / BILLABLE_PAGE_SIZE),
+    hasPrev: page > 1, hasNext: page < Math.ceil(rows.length / BILLABLE_PAGE_SIZE),
+  });
 
   const employeeOptions  = (employeesData?.data  ?? employeesData  ?? []).map((e) => ({ value: String(e.employee_id ?? e.id),    label: e.full_name ?? `${e.first_name ?? ''} ${e.last_name ?? ''}`.trim() }));
   const clientOptions    = (clientsData?.data    ?? clientsData    ?? []).map((c) => ({ value: String(c.client_id  ?? c.id),    label: c.client_name  ?? c.name }));
@@ -1206,6 +1230,41 @@ const Dashboard = () => {
     return list.slice(0, 4);
   }, [isAnalyticsPending, tiles, charts, scrollToBench, scrollToEmployeeChart, scrollToClientChart]);
 
+  const monthlyInsights = useMemo(() => {
+    if (isMonthlyAnalyticsPending) return [];
+    const list = [];
+    const util = Number(monthlyAnalyticsTiles.utilization_pct ?? 0);
+    if (util > 0) {
+      list.push(util >= 80
+        ? { type: 'success', icon: Zap,          label: `${util.toFixed(1)}% Utilization`,   sub: 'On track · Above 80% target' }
+        : util >= 60
+          ? { type: 'warning', icon: TrendingDown, label: `${util.toFixed(1)}% Utilization`, sub: 'Below 80% target · Improve allocation' }
+          : { type: 'danger',  icon: TrendingDown, label: `${util.toFixed(1)}% Utilization`, sub: 'Critical · Well below 80% target' }
+      );
+    }
+    const benchData = monthlyAnalyticsCharts.employee_bench_pct ?? [];
+    const critical  = benchData.filter((e) => e.bench_pct >= 75).length;
+    const onBench   = benchData.filter((e) => e.bench_pct >= 25).length;
+    if (critical > 0) list.push({ type: 'danger',  icon: AlertCircle, label: `${critical} Critical Bench`,                             sub: 'Bench ≥75% · Needs immediate action',  onClick: scrollToBench });
+    else if (onBench > 0) list.push({ type: 'warning', icon: Users,   label: `${onBench} Employee${onBench > 1 ? 's' : ''} on Bench`, sub: 'Bench >25% · Monitor allocation',      onClick: scrollToBench });
+    else if (benchData.length > 0) list.push({ type: 'success', icon: Award, label: 'All Employees Productive',                        sub: 'No significant bench hours detected',  onClick: scrollToBench });
+    const topClient = (monthlyAnalyticsCharts.hours_by_client ?? [])[0];
+    if (topClient) list.push({ type: 'info', icon: Building2, label: topClient.client_name, sub: `Top client · ${topClient.hours.toLocaleString('en-IN')} hrs logged`, onClick: scrollToClientChart });
+    const sortedEmps = [...(monthlyAnalyticsCharts.hours_by_employee ?? [])].sort((a, b) => (b.billable_hours ?? 0) - (a.billable_hours ?? 0));
+    if (sortedEmps.length > 0) {
+      const topHrs = sortedEmps[0].billable_hours ?? 0;
+      const tied = sortedEmps.filter((e) => (e.billable_hours ?? 0) === topHrs);
+      if (tied.length === 1) {
+        list.push({ type: 'info', icon: Users, label: tied[0].full_name, sub: `Top contributor · ${topHrs.toLocaleString('en-IN')} billable hrs`, onClick: scrollToEmployeeChart });
+      } else if (tied.length === 2) {
+        list.push({ type: 'info', icon: Users, label: `${tied[0].full_name} & ${tied[1].full_name}`, sub: `Tied · ${topHrs.toLocaleString('en-IN')} billable hrs each`, onClick: scrollToEmployeeChart });
+      } else {
+        list.push({ type: 'info', icon: Users, label: `${tied.length} employees tied`, sub: `${topHrs.toLocaleString('en-IN')} billable hrs each`, onClick: scrollToEmployeeChart });
+      }
+    }
+    return list.slice(0, 4);
+  }, [isMonthlyAnalyticsPending, monthlyAnalyticsTiles, monthlyAnalyticsCharts, scrollToBench, scrollToEmployeeChart, scrollToClientChart]);
+
   const lastUpdated = dataUpdatedAt ? formatDate(new Date(dataUpdatedAt), 'DD MMM YYYY, hh:mm A') : null;
   const fyLabel = `FY ${fiscalYear}–${String(fiscalYear + 1).slice(-2)}`;
 
@@ -1239,6 +1298,21 @@ const Dashboard = () => {
         </div>
 
         <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+          {/* Contextual date picker */}
+          {viewMode === 'quarterly' ? (
+            <FiscalYearPicker
+              value={fiscalYear}
+              onChange={setFiscalYear}
+              className="w-36 rounded-xl"
+            />
+          ) : (
+            <MonthYearPicker
+              value={bottomMonthYear}
+              onChange={(v) => { if (v) { setBottomMonthYear(v); setBillablePage(1); } }}
+              clearable={false}
+              className="w-36 h-9 text-sm"
+            />
+          )}
           {/* View mode toggle */}
           <div className="flex items-center gap-0.5 p-0.5 rounded-xl bg-muted border">
             {[
@@ -1257,35 +1331,22 @@ const Dashboard = () => {
             ))}
           </div>
 
-          {/* Contextual date picker */}
-          {viewMode === 'quarterly' ? (
-            <FiscalYearPicker
-              value={fiscalYear}
-              onChange={setFiscalYear}
-              className="w-36 rounded-xl"
-            />
-          ) : (
-            <MonthYearPicker
-              value={bottomMonthYear}
-              onChange={(v) => { if (v) { setBottomMonthYear(v); setBillablePage(1); } }}
-              clearable={false}
-              className="w-36 h-9 text-sm"
-            />
-          )}
+         
 
           <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching} className="h-9 rounded-xl gap-1.5">
             <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? 'animate-spin' : ''}`} />
-            <span className="hidden sm:inline">Refresh</span>
+            {/* <span className="hidden sm:inline">Refresh</span> */}
           </Button>
         </div>
       </div>{/* end page header */}
 
-      {/* Filter panel inside sticky — quarterly only */}
-      {viewMode === 'quarterly' && (
-        <div className="pb-2">
-          <FilterPanel open={filtersOpen} onToggle={() => setFiltersOpen((p) => !p)} badge={hasFilters ? activeFilterCount : undefined}>
-            <div className="flex flex-wrap items-center gap-2">
+      {/* Filter panel — available in both quarterly and monthly views */}
+      <div className="pb-2">
+        <FilterPanel open={filtersOpen} onToggle={() => setFiltersOpen((p) => !p)} badge={hasFilters ? activeFilterCount : undefined}>
+          <div className="flex flex-wrap items-center gap-2">
 
+            {/* Quarter toggle — quarterly view only */}
+            {viewMode === 'quarterly' && (<>
               <div className="flex items-center bg-background border border-input shadow-sm rounded-xl p-1 gap-0.5 shrink-0">
                 {QUARTERS.map((q) => (
                   <button
@@ -1300,51 +1361,55 @@ const Dashboard = () => {
                   </button>
                 ))}
               </div>
-
               <div className="h-6 w-px bg-border hidden sm:block" />
+            </>)}
 
-              <div className="flex items-center gap-1.5 min-w-[150px] flex-1">
-                <Users className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                <SearchableSelect options={employeeOptions} value={employeeId} onValueChange={setEmployeeId} placeholder="Employee" searchPlaceholder="Search employee…" className="h-8 text-sm" />
-              </div>
-              <div className="flex items-center gap-1.5 min-w-[140px] flex-1">
-                <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                <SearchableSelect options={clientOptions} value={clientId} onValueChange={setClientId} placeholder="Client" searchPlaceholder="Search client…" className="h-8 text-sm" />
-              </div>
-              <div className="flex items-center gap-1.5 min-w-[150px] flex-1">
-                <Briefcase className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                <SearchableSelect options={servicePOOptions} value={servicePOId} onValueChange={setServicePOId} placeholder="Service PO" searchPlaceholder="Search PO…" className="h-8 text-sm" />
-              </div>
-
-              <AnimatePresence>
-                {hasFilters && (
-                  <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="flex items-center gap-1.5 flex-wrap">
-                    {quarter && <Chip color="primary" icon={CalendarDays} label={`${QUARTERS.find((q) => q.value === quarter)?.label} · ${QUARTERS.find((q) => q.value === quarter)?.sub}`} onRemove={() => setQuarter(null)} />}
-                    {employeeId && <Chip color="violet" icon={Users} label={employeeOptions.find((e) => e.value === employeeId)?.label ?? 'Employee'} onRemove={() => setEmployeeId('')} />}
-                    {clientId && <Chip color="sky" icon={Building2} label={clientOptions.find((c) => c.value === clientId)?.label ?? 'Client'} onRemove={() => setClientId('')} />}
-                    {servicePOId && <Chip color="amber" icon={Briefcase} label={servicePOOptions.find((p) => p.value === servicePOId)?.label ?? 'Service PO'} onRemove={() => setServicePOId('')} />}
-                    <button onClick={clearFilters} className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
-                      <X className="h-3 w-3" /> Clear
-                    </button>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+            <div className="flex items-center gap-1.5 min-w-[150px] flex-1">
+              <Users className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              <SearchableSelect options={employeeOptions} value={employeeId} onValueChange={setEmployeeId} placeholder="Employee" searchPlaceholder="Search employee…" className="h-8 text-sm" />
+            </div>
+            <div className="flex items-center gap-1.5 min-w-[140px] flex-1">
+              <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              <SearchableSelect options={clientOptions} value={clientId} onValueChange={setClientId} placeholder="Client" searchPlaceholder="Search client…" className="h-8 text-sm" />
+            </div>
+            <div className="flex items-center gap-1.5 min-w-[150px] flex-1">
+              <Briefcase className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              <SearchableSelect options={servicePOOptions} value={servicePOId} onValueChange={setServicePOId} placeholder="Service PO" searchPlaceholder="Search PO…" className="h-8 text-sm" />
             </div>
 
-            {/* Insights — shown inside the filter panel, FY/quarter scoped */}
-            {(isAnalyticsPending || insights.length > 0) && (
+            <AnimatePresence>
+              {hasFilters && (
+                <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="flex items-center gap-1.5 flex-wrap">
+                  {quarter && viewMode === 'quarterly' && <Chip color="primary" icon={CalendarDays} label={`${QUARTERS.find((q) => q.value === quarter)?.label} · ${QUARTERS.find((q) => q.value === quarter)?.sub}`} onRemove={() => setQuarter(null)} />}
+                  {employeeId && <Chip color="violet" icon={Users} label={employeeOptions.find((e) => e.value === employeeId)?.label ?? 'Employee'} onRemove={() => setEmployeeId('')} />}
+                  {clientId && <Chip color="sky" icon={Building2} label={clientOptions.find((c) => c.value === clientId)?.label ?? 'Client'} onRemove={() => setClientId('')} />}
+                  {servicePOId && <Chip color="amber" icon={Briefcase} label={servicePOOptions.find((p) => p.value === servicePOId)?.label ?? 'Service PO'} onRemove={() => setServicePOId('')} />}
+                  <button onClick={clearFilters} className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+                    <X className="h-3 w-3" /> Clear
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Insights */}
+          {(() => {
+            const pending  = viewMode === 'quarterly' ? isAnalyticsPending        : isMonthlyAnalyticsPending;
+            const list     = viewMode === 'quarterly' ? insights                  : monthlyInsights;
+            if (!pending && list.length === 0) return null;
+            return (
               <div className="mt-3 pt-3 border-t">
                 <motion.div variants={containerVariants} initial="hidden" animate="show" className="flex flex-wrap gap-2">
-                  {isAnalyticsPending
+                  {pending
                     ? Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-[52px] rounded-2xl flex-1 min-w-[160px]" />)
-                    : insights.map((ins, i) => <InsightCard key={i} {...ins} />)
+                    : list.map((ins, i) => <InsightCard key={i} {...ins} />)
                   }
                 </motion.div>
               </div>
-            )}
-          </FilterPanel>
-        </div>
-      )}
+            );
+          })()}
+        </FilterPanel>
+      </div>
 
       </div>{/* end sticky zone */}
 
@@ -1357,46 +1422,16 @@ const Dashboard = () => {
       {/* ══ KPI TILES ════════════════════════════════════════════════════════ */}
       <section>
         <SectionLabel icon={Activity} title="Key Performance Indicators" />
-        <div className="relative">
-          {/* Scroll container */}
-          <div
-            ref={kpiRefCallback}
-            className="overflow-x-auto [&::-webkit-scrollbar]:hidden [scrollbar-width:none] px-10"
-          >
-            <motion.div
-              variants={containerVariants}
-              initial="hidden"
-              animate="show"
-              className="flex flex-nowrap justify-center gap-x-3 min-w-max mx-auto"
-            >
-              {KPI_CONFIG.map((cfg) => (
-                <KpiCard key={cfg.key} cfg={cfg} value={mergedTiles[cfg.key]} isLoading={isAnalyticsPending || (cfg.key === 'total_po_value_current_year' && isStatsPending)} />
-              ))}
-            </motion.div>
-          </div>
-
-          {/* Left arrow + fade */}
-          <div className={`absolute left-0 top-0 h-full flex items-center transition-opacity duration-200 ${kpiScroll.left ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-            <div className="absolute left-0 h-full w-16 bg-gradient-to-r from-background to-transparent pointer-events-none" />
-            <button
-              onClick={() => kpiScrollRef.current?.scrollBy({ left: -280, behavior: 'smooth' })}
-              className="relative z-10 ml-1 flex items-center justify-center w-8 h-8 rounded-full bg-background border shadow-md text-muted-foreground hover:text-foreground hover:shadow-lg transition-all duration-150"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-          </div>
-
-          {/* Right arrow + fade */}
-          <div className={`absolute right-0 top-0 h-full flex items-center transition-opacity duration-200 ${kpiScroll.right ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-            <div className="absolute right-0 h-full w-16 bg-gradient-to-l from-background to-transparent pointer-events-none" />
-            <button
-              onClick={() => kpiScrollRef.current?.scrollBy({ left: 280, behavior: 'smooth' })}
-              className="relative z-10 mr-1 flex items-center justify-center w-8 h-8 rounded-full bg-background border shadow-md text-muted-foreground hover:text-foreground hover:shadow-lg transition-all duration-150"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
+        <motion.div
+          variants={containerVariants}
+          initial="hidden"
+          animate="show"
+          className="grid grid-cols-4 lg:grid-cols-8 gap-2"
+        >
+          {KPI_CONFIG.map((cfg) => (
+            <KpiCard key={cfg.key} cfg={cfg} value={mergedTiles[cfg.key]} isLoading={isAnalyticsPending} />
+          ))}
+        </motion.div>
       </section>
 
       {/* ══ MONTHLY TREND ════════════════════════════════════════════════════ */}
@@ -1433,55 +1468,152 @@ const Dashboard = () => {
         </div>
       </section>
 
+      {/* ══ TOP POs BY HOURS (quarterly) ═════════════════════════════════════ */}
+      {(() => {
+        const topPOsQ  = charts.top_pos_by_hours ?? {};
+        const PO_FILTERS = [
+          { key: 'billable',              label: 'Billable',              style: { active: 'bg-emerald-500 text-white', dot: 'bg-emerald-500', bar: 'bg-emerald-500' } },
+          { key: 'non_billable',          label: 'Non-Billable',          style: { active: 'bg-orange-500 text-white',  dot: 'bg-orange-500',  bar: 'bg-orange-500'  } },
+          { key: 'customer_non_billable', label: 'Customer Non-Billable', style: { active: 'bg-sky-500 text-white',     dot: 'bg-sky-500',     bar: 'bg-sky-500'     } },
+        ].filter(f => (topPOsQ[f.key]?.length ?? 0) > 0 || f.key === 'billable');
+        const activeFilter = PO_FILTERS.find(f => f.key === topPOFilter) ?? PO_FILTERS[0];
+        const poList = topPOsQ[topPOFilter] ?? [];
+        return (
+          <section className="rounded-2xl border bg-card shadow-sm overflow-hidden">
+            <div className="px-4 py-3 border-b bg-muted/30">
+              <div className="flex items-center gap-2 mb-2.5">
+                <Briefcase className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-bold">Top POs by Hours</span>
+              </div>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {PO_FILTERS.map((f) => (
+                  <button key={f.key} onClick={() => setTopPOFilter(f.key)}
+                    className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all duration-150 border ${topPOFilter === f.key ? `${f.style.active} border-transparent shadow-sm` : 'bg-background text-muted-foreground border-border hover:text-foreground'}`}>
+                    <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${topPOFilter === f.key ? 'bg-white/70' : f.style.dot}`} />
+                    {f.label}
+                    <span className={`text-[10px] tabular-nums ${topPOFilter === f.key ? 'opacity-70' : 'text-muted-foreground'}`}>{topPOsQ[f.key]?.length ?? 0}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="divide-y">
+              {isAnalyticsPending
+                ? Array.from({ length: 5 }).map((_, i) => (
+                    <div key={i} className="flex items-center gap-3 px-4 py-3">
+                      <Skeleton className="h-4 w-4 rounded-full shrink-0" />
+                      <div className="flex-1 space-y-1.5"><Skeleton className="h-3 w-3/4" /><Skeleton className="h-2 w-1/2" /></div>
+                      <Skeleton className="h-3 w-16" />
+                    </div>
+                  ))
+                : poList.length === 0
+                  ? <p className="text-sm text-muted-foreground text-center py-8">No {activeFilter.label.toLowerCase()} PO data for this period</p>
+                  : poList.map((po, i) => {
+                      const logged   = Number(po.total_hours_logged ?? 0);
+                      const expected = Number(po.expected_man_hours ?? 0);
+                      const pct      = expected > 0 ? Math.min((logged / expected) * 100, 100) : null;
+                      return (
+                        <div key={po.id} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors">
+                          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-[11px] font-bold text-primary shrink-0">{i + 1}</span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate" title={po.service_po_name}>{po.service_po_name}</p>
+                            <p className="text-xs text-muted-foreground truncate">{po.client_name}</p>
+                            {pct !== null && (
+                              <div className="mt-1 h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                                <div className={`h-full rounded-full transition-all ${activeFilter.style.bar}`} style={{ width: `${pct}%` }} />
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="text-sm font-semibold tabular-nums">{cNum(logged)} hrs</p>
+                            {expected > 0 && <p className="text-[10px] text-muted-foreground">of {cNum(expected)}</p>}
+                          </div>
+                        </div>
+                      );
+                    })
+              }
+            </div>
+          </section>
+        );
+      })()}
+
+      {/* ══ BILLABLE BREAKDOWN (quarterly) ═══════════════════════════════════ */}
+      <section>
+        <SectionLabel icon={Calendar} title="Billable Breakdown" />
+        <BillableAnalyticsPanel
+          data={billableRowsQ.slice((billablePageQ - 1) * BILLABLE_PAGE_SIZE, billablePageQ * BILLABLE_PAGE_SIZE)}
+          meta={mkMeta(billableRowsQ, billablePageQ)}
+          isLoading={isAnalyticsPending}
+          month={null}
+          year={fiscalYear}
+          page={billablePageQ}
+          onPageChange={setBillablePageQ}
+        />
+      </section>
+
+      {/* ══ TOP EMPLOYEES BY SERVICE PO (quarterly) ══════════════════════════ */}
+      <section>
+        <SectionLabel icon={Briefcase} title="Top Employees by Service PO" />
+        <TopEmployeesByPOPanel
+          data={charts.employees_by_po ?? []}
+          isLoading={isAnalyticsPending}
+          month={null}
+          year={fiscalYear}
+        />
+      </section>
+
       </>)}
 
       {/* ══ MONTHLY VIEW ═════════════════════════════════════════════════════ */}
       {viewMode === 'monthly' && (
         <motion.div key="monthly-view" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }} className="space-y-5">
 
-          {/* ── Monthly KPI Tiles ────────────────────────────────────────── */}
+          {/* ── KPI Tiles ────────────────────────────────────────────────── */}
           <section>
-            <SectionLabel
-              icon={Activity}
-              title="Monthly Summary"
-              action={
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400">
-                  {new Date(Number(year), Number(month) - 1).toLocaleString('en-IN', { month: 'short', year: 'numeric' })}
-                </span>
-              }
-            />
-            <ScrollRow>
-              <motion.div variants={containerVariants} initial="hidden" animate="show" className="flex flex-nowrap justify-center gap-x-3 min-w-max mx-auto">
-                {[
-                  { title: 'Total Hrs',    icon: Clock,       hexOuter: '#fed7aa', hexInner: '#ea580c', value: `${cNum(monthlyTiles.totalHours)} hrs`   },
-                  { title: 'Billable Hrs', icon: TrendingUp,  hexOuter: '#6ee7b7', hexInner: '#059669', value: `${cNum(monthlyTiles.billHours)} hrs`    },
-                  { title: 'Non-Billable', icon: AlertCircle, hexOuter: '#fde68a', hexInner: '#d97706', value: `${cNum(monthlyTiles.nonBillHours)} hrs` },
-                  { title: 'Utilization',  icon: Activity,    hexOuter: '#93c5fd', hexInner: '#2563eb', value: `${monthlyTiles.utilPct.toFixed(1)}%`    },
-                  { title: 'Employees',    icon: Users,       hexOuter: '#c4b5fd', hexInner: '#7c3aed', value: String(monthlyTiles.activeEmployees)     },
-                  { title: 'Clients',      icon: Building2,   hexOuter: '#67e8f9', hexInner: '#0891b2', value: String(monthlyTiles.totalClients)        },
-                  { title: 'Active POs',   icon: Briefcase,   hexOuter: '#a5b4fc', hexInner: '#4338ca', value: String(monthlyTiles.activePOs)           },
-                ].map((card) => (
-                  isStatsPending ? (
-                    <div key={card.title} className="flex flex-col items-center gap-2 shrink-0">
-                      <div className="animate-pulse" style={{ width: 144, height: 124, clipPath: HEX_CLIP, background: '#e2e8f0' }} />
-                    </div>
-                  ) : (
-                    <motion.div key={card.title} variants={itemVariants} className="flex flex-col items-center gap-1.5 cursor-default group shrink-0">
-                      <div className="relative transition-transform duration-200 group-hover:scale-105" style={{ width: 144, height: 124 }}>
-                        <div className="absolute inset-0" style={{ clipPath: HEX_CLIP, background: card.hexOuter }} />
-                        <div className="absolute flex flex-col items-center justify-center gap-1" style={{ top: 5, left: 5, right: 5, bottom: 5, clipPath: HEX_CLIP, background: card.hexInner }}>
-                          <div className="flex h-8 w-8 items-center justify-center rounded-full shrink-0" style={{ background: 'rgba(255,255,255,0.20)' }}>
-                            <card.icon className="h-4 w-4 text-white" />
-                          </div>
-                          <p className="text-[13px] font-extrabold text-white leading-none tabular-nums text-center px-1">{card.value}</p>
-                          <p className="text-[8px] font-bold uppercase tracking-wider text-center px-2 leading-tight" style={{ color: 'rgba(255,255,255,0.80)' }}>{card.title}</p>
-                        </div>
-                      </div>
-                    </motion.div>
-                  )
-                ))}
+            <SectionLabel icon={Activity} title="Key Performance Indicators" />
+            <motion.div
+              variants={containerVariants}
+              initial="hidden"
+              animate="show"
+              className="grid grid-cols-4 lg:grid-cols-8 gap-2"
+            >
+              {KPI_CONFIG.map((cfg) => (
+                <KpiCard key={cfg.key} cfg={cfg} value={mergedMonthlyTiles[cfg.key]} isLoading={isMonthlyAnalyticsPending} />
+              ))}
+            </motion.div>
+          </section>
+
+          {/* ── Monthly Hours Trend ──────────────────────────────────────── */}
+          <section>
+            <SectionLabel icon={TrendingUp} title="Monthly Hours Trend" />
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
+              <MonthlyHoursTrendChart data={monthlyAnalyticsCharts.monthly_hours_trend ?? []} isLoading={isMonthlyAnalyticsPending} fiscalYear={monthFiscalYear} quarter={null} />
+            </motion.div>
+          </section>
+
+          {/* ── Hours Breakdown ──────────────────────────────────────────── */}
+          <section>
+            <SectionLabel icon={BarChart2} title="Hours Breakdown" />
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <motion.div ref={clientChartRef} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
+                <HoursByClientChart data={monthlyAnalyticsCharts.hours_by_client ?? []} isLoading={isMonthlyAnalyticsPending} fiscalYear={monthFiscalYear} />
               </motion.div>
-            </ScrollRow>
+              <motion.div ref={employeeChartRef} initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3, delay: 0.15 }}>
+                <HoursByEmployeeChart data={monthlyAnalyticsCharts.hours_by_employee ?? []} isLoading={isMonthlyAnalyticsPending} fiscalYear={monthFiscalYear} />
+              </motion.div>
+            </div>
+          </section>
+
+          {/* ── Resource & Portfolio Analysis ────────────────────────────── */}
+          <section>
+            <SectionLabel icon={Users} title="Resource & Portfolio Analysis" />
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
+                <ClientPOMatrixChart data={monthlyAnalyticsCharts.client_x_service_po ?? []} isLoading={isMonthlyAnalyticsPending} fiscalYear={monthFiscalYear} />
+              </motion.div>
+              <motion.div ref={benchSectionRef} initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3, delay: 0.15 }}>
+                <EmployeeBenchChart data={monthlyAnalyticsCharts.employee_bench_pct ?? []} isLoading={isMonthlyAnalyticsPending} fiscalYear={monthFiscalYear} />
+              </motion.div>
+            </div>
           </section>
 
           {/* ── Top POs by Hours ─────────────────────────────────────────── */}
@@ -1490,9 +1622,10 @@ const Dashboard = () => {
               { key: 'billable',             label: 'Billable',              style: { active: 'bg-emerald-500 text-white', dot: 'bg-emerald-500', bar: 'bg-emerald-500' } },
               { key: 'non_billable',         label: 'Non-Billable',          style: { active: 'bg-orange-500 text-white',  dot: 'bg-orange-500',  bar: 'bg-orange-500'  } },
               { key: 'customer_non_billable',label: 'Customer Non-Billable', style: { active: 'bg-sky-500 text-white',     dot: 'bg-sky-500',     bar: 'bg-sky-500'     } },
-            ].filter(f => (monthlyTiles.topPOs[f.key]?.length ?? 0) > 0 || f.key === 'billable');
+            ].filter(f => ((monthlyAnalyticsCharts.top_pos_by_hours ?? {})[f.key]?.length ?? 0) > 0 || f.key === 'billable');
             const activeFilter = PO_FILTERS.find(f => f.key === topPOFilter) ?? PO_FILTERS[0];
-            const poList = monthlyTiles.topPOs[topPOFilter] ?? [];
+            const topPOsM = monthlyAnalyticsCharts.top_pos_by_hours ?? {};
+            const poList  = topPOsM[topPOFilter] ?? [];
             return (
               <section className="rounded-2xl border bg-card shadow-sm overflow-hidden">
                 <div className="px-4 py-3 border-b bg-muted/30">
@@ -1520,14 +1653,14 @@ const Dashboard = () => {
                         <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${topPOFilter === f.key ? 'bg-white/70' : f.style.dot}`} />
                         {f.label}
                         <span className={`text-[10px] tabular-nums ${topPOFilter === f.key ? 'opacity-70' : 'text-muted-foreground'}`}>
-                          {monthlyTiles.topPOs[f.key]?.length ?? 0}
+                          {topPOsM[f.key]?.length ?? 0}
                         </span>
                       </button>
                     ))}
                   </div>
                 </div>
                 <div className="divide-y">
-                  {isStatsPending
+                  {isMonthlyAnalyticsPending
                     ? Array.from({ length: 5 }).map((_, i) => (
                         <div key={i} className="flex items-center gap-3 px-4 py-3">
                           <Skeleton className="h-4 w-4 rounded-full shrink-0" />
@@ -1566,21 +1699,13 @@ const Dashboard = () => {
             );
           })()}
 
-          {/* ── Month-specific panels ─────────────────────────────────────── */}
+          {/* ── Billable Breakdown ───────────────────────────────────────── */}
           <section>
-            <SectionLabel
-              icon={Calendar}
-              title="Billable Breakdown"
-              action={
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400">
-                  Month-specific
-                </span>
-              }
-            />
+            <SectionLabel icon={Calendar} title="Billable Breakdown" />
             <BillableAnalyticsPanel
-              data={billableData?.data ?? []}
-              meta={billableData?.meta ?? {}}
-              isLoading={isBillablePending}
+              data={billableRowsM.slice((billablePage - 1) * BILLABLE_PAGE_SIZE, billablePage * BILLABLE_PAGE_SIZE)}
+              meta={mkMeta(billableRowsM, billablePage)}
+              isLoading={isMonthlyAnalyticsPending}
               month={Number(month)}
               year={Number(year)}
               page={billablePage}
@@ -1588,19 +1713,12 @@ const Dashboard = () => {
             />
           </section>
 
+          {/* ── Top Employees by Service PO ──────────────────────────────── */}
           <section>
-            <SectionLabel
-              icon={Briefcase}
-              title="Top Employees by Service PO"
-              action={
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400">
-                  Month-specific
-                </span>
-              }
-            />
+            <SectionLabel icon={Briefcase} title="Top Employees by Service PO" />
             <TopEmployeesByPOPanel
-              data={topPOData?.data ?? []}
-              isLoading={isTopPOPending}
+              data={monthlyAnalyticsCharts.employees_by_po ?? []}
+              isLoading={isMonthlyAnalyticsPending}
               month={Number(month)}
               year={Number(year)}
             />

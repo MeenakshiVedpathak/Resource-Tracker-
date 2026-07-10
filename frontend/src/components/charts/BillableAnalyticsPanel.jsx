@@ -12,7 +12,7 @@ import { cn } from '@/utils/cn';
 /* ── colour palette (hex — safe in recharts) ── */
 const C = {
   billable : '#6366f1',
-  leaves   : '#3b82f6',
+  leaves   : '#ef4444',
   idle     : '#f97316',
 };
 
@@ -91,7 +91,7 @@ const NBBadge = ({ name, hours, type }) => (
   <span className={cn(
     'inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium leading-none',
     type === 'Leaves'
-      ? 'bg-blue-500/10 text-blue-700 dark:text-blue-400'
+      ? 'bg-red-500/10 text-red-700 dark:text-red-400'
       : 'bg-orange-500/10 text-orange-700 dark:text-orange-400'
   )}>
     {name}: {hours}h
@@ -216,11 +216,11 @@ const BillableAnalyticsPanel = ({ data = [], meta = {}, isLoading, month, year, 
               label="Leave Hours"
               value={`${totalLeaves}h`}
               icon={Calendar}
-              cardBg="bg-blue-50 dark:bg-blue-950/30"
-              borderColor="border-blue-200 dark:border-blue-800"
-              iconBg="bg-blue-100 dark:bg-blue-900/50"
-              iconColor="text-blue-600 dark:text-blue-400"
-              valueColor="text-blue-700 dark:text-blue-300"
+              cardBg="bg-red-50 dark:bg-red-950/30"
+              borderColor="border-red-200 dark:border-red-800"
+              iconBg="bg-red-100 dark:bg-red-900/50"
+              iconColor="text-red-500 dark:text-red-400"
+              valueColor="text-red-600 dark:text-red-400"
               subtext={totalHours > 0 ? `${((totalLeaves / totalHours) * 100).toFixed(1)}% of total` : undefined}
             />
             <Stat
