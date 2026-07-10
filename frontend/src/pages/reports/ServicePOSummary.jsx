@@ -5,6 +5,7 @@ import { Download, Filter, Search } from 'lucide-react';
 import { useServicePOSummary } from '@/hooks/useReports';
 import { useActiveClients } from '@/hooks/useClients';
 import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
+import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
 import { useDebounce } from '@/hooks/useDebounce';
 import { formatCurrency, formatDate, formatHours } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
@@ -22,7 +23,7 @@ const columnHelper = createColumnHelper();
 
 const exportToExcel = (rows) => {
   const header = [
-    'PO Code', 'PO Name', 'Client Name', 'Service Type', 'Start Date', 'End Date', 
+    'PO Code', 'PO Name', 'Client Name', 'Service Type', 'Category', 'Start Date', 'End Date',
     'Status', 'Billable', 'Invoice Freq.', 'Account Manager', 'PO Value', 
     'Expected Hours', 'Hours Delivered Before Month', 'Available Hours', 
     'Billable Amount', 'Invoiced Amount', 'Unbilled Amount'
@@ -32,6 +33,7 @@ const exportToExcel = (rows) => {
     r.service_po_name ?? '',
     r.client_name ?? '',
     r.service_type ?? '',
+    r.category_name ?? '',
     r.start_date ? formatDate(r.start_date) : '',
     r.end_date ? formatDate(r.end_date) : '',
     r.status ?? '',
@@ -89,6 +91,11 @@ const columns = [
   columnHelper.accessor('service_type', {
     header: 'Service Type',
     size: 150,
+    cell: (info) => info.getValue() || '—',
+  }),
+  columnHelper.accessor('category_name', {
+    header: 'Category',
+    size: 140,
     cell: (info) => info.getValue() || '—',
   }),
   columnHelper.accessor('status', {
@@ -160,7 +167,7 @@ const ServicePOSummary = () => {
   const [clientId, setClientId] = useState('all');
   const [serviceTypeId, setServiceTypeId] = useState('all');
 
-  const [billable, setBillable] = useState('all');
+  const [categoryId, setCategoryId] = useState('all');
   const [status, setStatus] = useState('all');
   const [dateRange, setDateRange] = useState(null);
   const [search, setSearch] = useState('');
@@ -171,13 +178,14 @@ const ServicePOSummary = () => {
   const debouncedSearch = useDebounce(search, 400);
   const { data: activeClients = [] } = useActiveClients();
   const { data: activeServiceTypes = [] } = useActiveServiceTypes();
+  const { data: activeServiceCategories = [] } = useActiveServiceCategories();
 
   const params = {
     ...(monthYear && { month: monthYear.month, year: monthYear.year }),
     ...(clientId && clientId !== 'all' && { clientId }),
     ...(serviceTypeId && serviceTypeId !== 'all' && { serviceTypeId }),
 
-    ...(billable && billable !== 'all' && { is_billable: billable === 'yes' }),
+    ...(categoryId !== 'all' && { service_category_id: categoryId }),
     ...(status && status !== 'all' && { status }),
     ...(dateRange?.startDate && { startDate: dateRange.startDate }),
     ...(dateRange?.endDate && { endDate: dateRange.endDate }),
@@ -190,13 +198,13 @@ const ServicePOSummary = () => {
 
   const records = Array.isArray(data?.data?.records) ? data.data.records : Array.isArray(data?.data) ? data.data : [];
   const summary = data?.data?.summary ?? null;
-  const meta = data?.meta ?? {};
+  const meta    = data?.meta ?? {};
 
   const activeFilterCount = [
     dateRange !== null,
     clientId !== 'all',
     serviceTypeId !== 'all',
-    billable !== 'all',
+    categoryId !== 'all',
     status !== 'all',
   ].filter(Boolean).length;
 
@@ -298,16 +306,16 @@ const ServicePOSummary = () => {
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Label className="text-xs">Billable</Label>
-            <SearchableSelect showSearch={false}
+            <Label className="text-xs">Category</Label>
+            <SearchableSelect
+              showSearch={false}
               options={[
-                { label: "All", value: "all" },
-                { label: "Yes", value: "yes" },
-                { label: "No", value: "no" }
+                { label: 'All Categories', value: 'all' },
+                ...activeServiceCategories.map((c) => ({ label: c.name, value: String(c.id) })),
               ]}
-              value={billable}
-              onValueChange={(v) => { setBillable(v); setPage(1); }}
-              placeholder="All"
+              value={categoryId}
+              onValueChange={(v) => { setCategoryId(v); setPage(1); }}
+              placeholder="All Categories"
               className="h-9 w-full text-sm"
             />
           </div>

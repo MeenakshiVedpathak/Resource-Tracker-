@@ -1,8 +1,8 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import EmptyState from '@/components/common/EmptyState';
-import { Briefcase, Users, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Briefcase, Users, AlertTriangle, ChevronLeft, ChevronRight, Clock, Filter } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useActiveServicePOs } from '@/hooks/useServicePOs';
@@ -11,20 +11,16 @@ const PAGE_SIZE = 9;
 
 const EMP_COLORS = ['#6366f1', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6'];
 
-/* ── Summary pill ── */
-const Pill = ({ label, value, icon: Icon, colorClass, subtext }) => (
-  <div className="flex items-center gap-2.5 rounded-lg border bg-muted/20 px-3 py-2.5">
-    {Icon && (
-      <div className={cn('rounded-md p-1.5 bg-muted/50 shrink-0', colorClass)}>
-        <Icon className="h-3.5 w-3.5" />
-      </div>
-    )}
+/* ── Stat card ── */
+const StatItem = ({ label, value, icon: Icon, cardBg, borderColor, iconBg, iconColor, valueColor, subtext }) => (
+  <div className={cn('flex items-center gap-2.5 px-3 py-2 rounded-lg border', cardBg, borderColor)}>
+    <div className={cn('flex h-8 w-8 items-center justify-center rounded-lg shrink-0', iconBg)}>
+      <Icon className={cn('h-4 w-4', iconColor)} />
+    </div>
     <div>
-      <p className="text-[10px] text-muted-foreground uppercase tracking-wide leading-none mb-0.5 whitespace-nowrap">
-        {label}
-      </p>
-      <p className={cn('text-sm font-bold tabular-nums leading-none', colorClass)}>{value}</p>
-      {subtext && <p className="text-[10px] text-muted-foreground mt-0.5 leading-none">{subtext}</p>}
+      <p className={cn('text-base font-extrabold tabular-nums leading-none', valueColor)}>{value}</p>
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mt-1 leading-none">{label}</p>
+      {subtext && <p className="text-[9px] text-muted-foreground/60 mt-0.5 leading-none">{subtext}</p>}
     </div>
   </div>
 );
@@ -208,16 +204,24 @@ const TopEmployeesByPOPanel = ({ data = [], isLoading, month, year }) => {
   const isFiltered = categoryName !== 'all' || poFilterId !== 'all';
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-start justify-between gap-3 flex-wrap">
-          <div>
-            <CardTitle>Top Employees by Service PO</CardTitle>
-            <CardDescription>
-              Contributor hours per project · {monthLabel}
-            </CardDescription>
+    <Card className="overflow-hidden">
+      {/* ── Header ─────────────────────────────────────────────────────── */}
+      <div className="px-5 pt-4 pb-3 border-b bg-gradient-to-r from-primary/[0.04] via-primary/[0.02] to-transparent">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          {/* Title */}
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 shrink-0">
+              <Briefcase className="h-4.5 w-4.5 text-primary" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-foreground leading-none">Top Employees by Service PO</p>
+              <p className="text-xs text-muted-foreground mt-1 leading-none">Contributor hours per project · {monthLabel}</p>
+            </div>
           </div>
-          <div className="flex items-center gap-2 flex-wrap shrink-0">
+
+          {/* Filters */}
+          <div className="flex items-center gap-2 shrink-0">
+            <Filter className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
             <SearchableSelect
               options={[
                 { label: 'All Categories', value: 'all' },
@@ -226,7 +230,7 @@ const TopEmployeesByPOPanel = ({ data = [], isLoading, month, year }) => {
               value={categoryName}
               onValueChange={setCategoryName}
               placeholder="All Categories"
-              className="h-8 w-40 text-sm"
+              className="h-8 w-36 text-xs"
             />
             <SearchableSelect
               options={[
@@ -239,13 +243,53 @@ const TopEmployeesByPOPanel = ({ data = [], isLoading, month, year }) => {
               value={poFilterId}
               onValueChange={setPoFilterId}
               placeholder="All POs"
-              className="h-8 w-52 text-sm"
+              className="h-8 w-48 text-xs"
             />
           </div>
         </div>
-      </CardHeader>
 
-      <CardContent>
+        {/* ── Stat cards ── */}
+        {!isLoading && filteredData.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            <StatItem
+              label="Active POs"
+              value={activePOs.length}
+              icon={Briefcase}
+              cardBg="bg-blue-50 dark:bg-blue-950/30"
+              borderColor="border-blue-200 dark:border-blue-800"
+              iconBg="bg-blue-100 dark:bg-blue-900/50"
+              iconColor="text-blue-600 dark:text-blue-400"
+              valueColor="text-blue-700 dark:text-blue-300"
+            />
+            <StatItem
+              label="Total Hours"
+              value={`${totalHours.toLocaleString('en-IN')}h`}
+              icon={Clock}
+              cardBg="bg-emerald-50 dark:bg-emerald-950/30"
+              borderColor="border-emerald-200 dark:border-emerald-800"
+              iconBg="bg-emerald-100 dark:bg-emerald-900/50"
+              iconColor="text-emerald-600 dark:text-emerald-400"
+              valueColor="text-emerald-700 dark:text-emerald-300"
+              subtext="top contributors only"
+            />
+            {singleContributorCount > 0 && (
+              <StatItem
+                label="Sole Contributor"
+                value={singleContributorCount}
+                icon={AlertTriangle}
+                cardBg="bg-amber-50 dark:bg-amber-950/30"
+                borderColor="border-amber-200 dark:border-amber-800"
+                iconBg="bg-amber-100 dark:bg-amber-900/50"
+                iconColor="text-amber-600 dark:text-amber-400"
+                valueColor="text-amber-700 dark:text-amber-300"
+                subtext="POs with single person"
+              />
+            )}
+          </div>
+        )}
+      </div>
+
+      <CardContent className="pt-4">
         {isLoading && <SkeletonGrid />}
 
         {!isLoading && filteredData.length === 0 && (
@@ -262,33 +306,6 @@ const TopEmployeesByPOPanel = ({ data = [], isLoading, month, year }) => {
 
         {!isLoading && filteredData.length > 0 && (
           <>
-            {/* Summary pills */}
-            <div className="mb-5 flex flex-wrap gap-2">
-              <Pill
-                label="Active POs"
-                value={activePOs.length}
-                icon={Briefcase}
-                colorClass="text-primary"
-              />
-              <Pill
-                label="Total Hours"
-                value={`${totalHours.toLocaleString('en-IN')}h`}
-                icon={Users}
-                colorClass="text-foreground"
-                subtext="top contributors only"
-              />
-              {singleContributorCount > 0 && (
-                <Pill
-                  label="Sole Contributor"
-                  value={singleContributorCount}
-                  icon={AlertTriangle}
-                  colorClass="text-amber-500"
-                  subtext="POs with single person"
-                />
-              )}
-            </div>
-
-            {/* PO cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
               {paginatedData.map((po, idx) => (
                 <POCard

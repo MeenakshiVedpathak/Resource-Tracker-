@@ -841,6 +841,13 @@ const KPI_CONFIG = [
     fmt: (v) => `${cNum(v)} hrs`,
     sub: (t) => `≈ ${(Number(t.avg_hours_per_employee || 0) / 8).toFixed(1)} days`,
   },
+  {
+    key: 'total_po_value_current_year', title: 'PO Value', icon: TrendingUp,
+    hexOuter: '#bbf7d0', hexInner: '#16a34a',
+    bar: 'bg-green-500', iconBg: 'bg-green-50 dark:bg-green-950/40', iconColor: 'text-green-600',
+    fmt: (v) => formatCurrency(v),
+    sub: () => 'Current FY total',
+  },
 ];
 
 /* ─── sub-components ─────────────────────────────────────────────────────── */
@@ -1058,6 +1065,7 @@ const Dashboard = () => {
   const [clientId, setClientId]               = useState('');
   const [servicePOId, setServicePOId]         = useState('');
   const [billablePage, setBillablePage]       = useState(1);
+  const [topPOFilter, setTopPOFilter]         = useState('billable');
   const [filtersOpen, setFiltersOpen]         = useState(true);
   const [viewMode, setViewMode]               = useState('quarterly');
   const [headerVisible, setHeaderVisible]     = useState(true);
@@ -1149,6 +1157,11 @@ const Dashboard = () => {
   const tiles  = analyticsData?.tiles  ?? {};
   const charts = analyticsData?.charts ?? {};
 
+  const mergedTiles = useMemo(() => ({
+    ...tiles,
+    total_po_value_current_year: Number(statsData?.financials?.total_po_value_current_year ?? 0),
+  }), [tiles, statsData]);
+
   const trendData = useMemo(() => {
     const raw = charts.monthly_hours_trend ?? [];
     if (!quarter) return raw;
@@ -1159,6 +1172,7 @@ const Dashboard = () => {
     const cm = statsData?.current_month ?? {};
     const wf = statsData?.workforce     ?? {};
     const pf = statsData?.portfolio     ?? {};
+    const fi = statsData?.financials    ?? {};
     const totalHours   = Number(cm.total_hours_logged ?? 0);
     const billHours    = Number(cm.billable_hours_logged ?? 0);
     const nonBillHours = Number(cm.non_billable_hours_logged ?? 0);
@@ -1167,12 +1181,17 @@ const Dashboard = () => {
       totalHours,
       billHours,
       nonBillHours,
-      utilPct: utilRaw > 0 ? utilRaw : (totalHours > 0 ? (billHours / totalHours) * 100 : 0),
-      activeEmployees: Number(wf.active_employees ?? 0),
-      totalEmployees:  Number(wf.total_employees ?? 0),
-      totalClients:    Number(pf.total_clients ?? 0),
-      activePOs:       Number(pf.active_pos ?? 0),
-      totalPOs:        Number(pf.total_pos ?? 0),
+      utilPct:          utilRaw > 0 ? utilRaw : (totalHours > 0 ? (billHours / totalHours) * 100 : 0),
+      activeEmployees:  Number(wf.active_employees ?? 0),
+      inactiveEmployees:Number(wf.inactive_employees ?? 0),
+      totalEmployees:   Number(wf.total_employees ?? 0),
+      totalClients:     Number(pf.total_clients ?? 0),
+      activePOs:        Number(pf.active_pos ?? 0),
+      closedPOs:        Number(pf.closed_pos ?? 0),
+      totalPOs:         Number(pf.total_pos ?? 0),
+      totalPOValue:     Number(fi.total_po_value_current_year ?? 0),
+      topPOs:           statsData?.charts?.top_pos_by_hours ?? {},
+      recentActivity:   statsData?.activity?.recent_timesheet_entries ?? [],
     };
   }, [statsData]);
 
@@ -1349,6 +1368,18 @@ const Dashboard = () => {
                 )}
               </AnimatePresence>
             </div>
+
+            {/* Insights — shown inside the filter panel, FY/quarter scoped */}
+            {(isAnalyticsPending || insights.length > 0) && (
+              <div className="mt-3 pt-3 border-t">
+                <motion.div variants={containerVariants} initial="hidden" animate="show" className="flex flex-wrap gap-2">
+                  {isAnalyticsPending
+                    ? Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-[52px] rounded-2xl flex-1 min-w-[160px]" />)
+                    : insights.map((ins, i) => <InsightCard key={i} {...ins} />)
+                  }
+                </motion.div>
+              </div>
+            )}
           </FilterPanel>
         </div>
       )}
@@ -1360,20 +1391,6 @@ const Dashboard = () => {
 
       {/* ══ QUARTERLY VIEW ═══════════════════════════════════════════════════ */}
       {viewMode === 'quarterly' && (<>
-
-      {/* Insights strip */}
-      <AnimatePresence>
-        {(isAnalyticsPending || insights.length > 0) && (
-          <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-            <motion.div variants={containerVariants} initial="hidden" animate="show" className="flex flex-wrap gap-3">
-              {isAnalyticsPending
-                ? Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-[58px] rounded-2xl flex-1 min-w-[180px]" />)
-                : insights.map((ins, i) => <InsightCard key={i} {...ins} />)
-              }
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* ══ KPI TILES ════════════════════════════════════════════════════════ */}
       <section>
@@ -1391,7 +1408,7 @@ const Dashboard = () => {
               className="flex flex-nowrap justify-center gap-x-3 min-w-max mx-auto"
             >
               {KPI_CONFIG.map((cfg) => (
-                <KpiCard key={cfg.key} cfg={cfg} value={tiles[cfg.key]} isLoading={isAnalyticsPending} tiles={tiles} charts={charts} />
+                <KpiCard key={cfg.key} cfg={cfg} value={mergedTiles[cfg.key]} isLoading={isAnalyticsPending || (cfg.key === 'total_po_value_current_year' && isStatsPending)} tiles={mergedTiles} charts={charts} />
               ))}
             </motion.div>
           </div>
@@ -1478,9 +1495,9 @@ const Dashboard = () => {
                   { title: 'Billable Hrs', icon: TrendingUp,  hexOuter: '#6ee7b7', hexInner: '#059669', value: `${cNum(monthlyTiles.billHours)} hrs`,    sub: monthlyTiles.totalHours > 0 ? `${((monthlyTiles.billHours / monthlyTiles.totalHours) * 100).toFixed(1)}% of total` : null },
                   { title: 'Non-Billable', icon: AlertCircle, hexOuter: '#fde68a', hexInner: '#d97706', value: `${cNum(monthlyTiles.nonBillHours)} hrs`, sub: monthlyTiles.totalHours > 0 ? `${((monthlyTiles.nonBillHours / monthlyTiles.totalHours) * 100).toFixed(1)}% of total` : null },
                   { title: 'Utilization',  icon: Activity,    hexOuter: '#93c5fd', hexInner: '#2563eb', value: `${monthlyTiles.utilPct.toFixed(1)}%`,    sub: `${monthlyTiles.utilPct >= 80 ? '+' : ''}${(monthlyTiles.utilPct - 80).toFixed(1)}% vs 80%` },
-                  { title: 'Employees',    icon: Users,       hexOuter: '#c4b5fd', hexInner: '#7c3aed', value: String(monthlyTiles.activeEmployees),     sub: `of ${monthlyTiles.totalEmployees} total` },
+                  { title: 'Employees',    icon: Users,       hexOuter: '#c4b5fd', hexInner: '#7c3aed', value: String(monthlyTiles.activeEmployees),     sub: monthlyTiles.inactiveEmployees > 0 ? `${monthlyTiles.inactiveEmployees} inactive · ${monthlyTiles.totalEmployees} total` : `All active · ${monthlyTiles.totalEmployees} total` },
                   { title: 'Clients',      icon: Building2,   hexOuter: '#67e8f9', hexInner: '#0891b2', value: String(monthlyTiles.totalClients),        sub: null },
-                  { title: 'Active POs',   icon: Briefcase,   hexOuter: '#a5b4fc', hexInner: '#4338ca', value: String(monthlyTiles.activePOs),           sub: `of ${monthlyTiles.totalPOs} total` },
+                  { title: 'Active POs',   icon: Briefcase,   hexOuter: '#a5b4fc', hexInner: '#4338ca', value: String(monthlyTiles.activePOs),           sub: monthlyTiles.closedPOs > 0 ? `${monthlyTiles.closedPOs} closed · ${monthlyTiles.totalPOs} total` : `of ${monthlyTiles.totalPOs} total` },
                 ].map((card) => (
                   isStatsPending ? (
                     <div key={card.title} className="flex flex-col items-center gap-2 shrink-0">
@@ -1506,6 +1523,88 @@ const Dashboard = () => {
               </motion.div>
             </ScrollRow>
           </section>
+
+          {/* ── Top POs by Hours ─────────────────────────────────────────── */}
+          {(() => {
+            const PO_FILTERS = [
+              { key: 'billable',             label: 'Billable',              style: { active: 'bg-emerald-500 text-white', dot: 'bg-emerald-500', bar: 'bg-emerald-500' } },
+              { key: 'non_billable',         label: 'Non-Billable',          style: { active: 'bg-orange-500 text-white',  dot: 'bg-orange-500',  bar: 'bg-orange-500'  } },
+              { key: 'customer_non_billable',label: 'Customer Non-Billable', style: { active: 'bg-sky-500 text-white',     dot: 'bg-sky-500',     bar: 'bg-sky-500'     } },
+            ].filter(f => (monthlyTiles.topPOs[f.key]?.length ?? 0) > 0 || f.key === 'billable');
+            const activeFilter = PO_FILTERS.find(f => f.key === topPOFilter) ?? PO_FILTERS[0];
+            const poList = monthlyTiles.topPOs[topPOFilter] ?? [];
+            return (
+              <section className="rounded-2xl border bg-card shadow-sm overflow-hidden">
+                <div className="px-4 py-3 border-b bg-muted/30">
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div className="flex items-center gap-2">
+                      <Briefcase className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm font-bold">Top POs by Hours</span>
+                    </div>
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400">
+                      {new Date(Number(year), Number(month) - 1).toLocaleString('en-IN', { month: 'short', year: 'numeric' })}
+                    </span>
+                  </div>
+                  {/* Filter tabs */}
+                  <div className="mt-2.5 flex items-center gap-1.5 flex-wrap">
+                    {PO_FILTERS.map((f) => (
+                      <button
+                        key={f.key}
+                        onClick={() => setTopPOFilter(f.key)}
+                        className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all duration-150 border ${
+                          topPOFilter === f.key
+                            ? `${f.style.active} border-transparent shadow-sm`
+                            : 'bg-background text-muted-foreground border-border hover:text-foreground'
+                        }`}
+                      >
+                        <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${topPOFilter === f.key ? 'bg-white/70' : f.style.dot}`} />
+                        {f.label}
+                        <span className={`text-[10px] tabular-nums ${topPOFilter === f.key ? 'opacity-70' : 'text-muted-foreground'}`}>
+                          {monthlyTiles.topPOs[f.key]?.length ?? 0}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="divide-y">
+                  {isStatsPending
+                    ? Array.from({ length: 5 }).map((_, i) => (
+                        <div key={i} className="flex items-center gap-3 px-4 py-3">
+                          <Skeleton className="h-4 w-4 rounded-full shrink-0" />
+                          <div className="flex-1 space-y-1.5"><Skeleton className="h-3 w-3/4" /><Skeleton className="h-2 w-1/2" /></div>
+                          <Skeleton className="h-3 w-16" />
+                        </div>
+                      ))
+                    : poList.length === 0
+                      ? <p className="text-sm text-muted-foreground text-center py-8">No {activeFilter.label.toLowerCase()} PO data for this period</p>
+                      : poList.map((po, i) => {
+                          const logged   = Number(po.total_hours_logged ?? 0);
+                          const expected = Number(po.expected_man_hours ?? 0);
+                          const pct      = expected > 0 ? Math.min((logged / expected) * 100, 100) : null;
+                          return (
+                            <div key={po.id} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors">
+                              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-[11px] font-bold text-primary shrink-0">{i + 1}</span>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium truncate" title={po.service_po_name}>{po.service_po_name}</p>
+                                <p className="text-xs text-muted-foreground truncate">{po.client_name}</p>
+                                {pct !== null && (
+                                  <div className="mt-1 h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                                    <div className={`h-full rounded-full transition-all ${activeFilter.style.bar}`} style={{ width: `${pct}%` }} />
+                                  </div>
+                                )}
+                              </div>
+                              <div className="text-right shrink-0">
+                                <p className="text-sm font-semibold tabular-nums">{cNum(logged)} hrs</p>
+                                {expected > 0 && <p className="text-[10px] text-muted-foreground">of {cNum(expected)}</p>}
+                              </div>
+                            </div>
+                          );
+                        })
+                  }
+                </div>
+              </section>
+            );
+          })()}
 
           {/* ── Month-specific panels ─────────────────────────────────────── */}
           <section>

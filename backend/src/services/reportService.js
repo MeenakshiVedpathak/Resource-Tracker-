@@ -533,8 +533,9 @@ async function getServicePOSummary(query) {
     ? query.is_billable === 'true' || query.is_billable === true
     : undefined;
 
-  const clientId = query.clientId ? parseInt(query.clientId, 10) : undefined;
+  const clientId      = query.clientId      ? parseInt(query.clientId, 10)      : undefined;
   const serviceTypeId = query.serviceTypeId ? parseInt(query.serviceTypeId, 10) : undefined;
+  const categoryId    = query.service_category_id ? parseInt(query.service_category_id, 10) : undefined;
 
   logger.info('Report: getServicePOSummary', { filters, page, limit });
 
@@ -545,6 +546,7 @@ async function getServicePOSummary(query) {
     clientId,
     isBillable,
     serviceTypeId,
+    categoryId,
     startDate:  filters.startDate,
     endDate:    filters.endDate,
     search:     filters.search,

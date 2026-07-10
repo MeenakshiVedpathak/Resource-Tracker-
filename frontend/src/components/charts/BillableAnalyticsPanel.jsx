@@ -3,10 +3,10 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   PieChart, Pie, Cell, ResponsiveContainer, Legend,
 } from 'recharts';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import EmptyState from '@/components/common/EmptyState';
-import { Users, Calendar, Coffee, ShieldAlert, CheckCircle2, LayoutGrid, List, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Users, Calendar, Coffee, ShieldAlert, CheckCircle2, LayoutGrid, List, ChevronLeft, ChevronRight, BarChart2 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 
 /* ── colour palette (hex — safe in recharts) ── */
@@ -64,15 +64,15 @@ const PieTip = ({ active, payload }) => {
 };
 
 /* ── sub-components ── */
-const Stat = ({ label, value, icon: Icon, colorClass, subtext }) => (
-  <div className="flex items-center gap-3 rounded-lg border bg-muted/20 px-3.5 py-2.5">
-    <div className={cn('rounded-md p-1.5 bg-muted/50', colorClass)}>
-      <Icon className="h-3.5 w-3.5" />
+const Stat = ({ label, value, icon: Icon, cardBg, borderColor, iconBg, iconColor, valueColor, subtext }) => (
+  <div className={cn('flex items-center gap-2.5 rounded-lg border px-3 py-2', cardBg, borderColor)}>
+    <div className={cn('flex h-8 w-8 items-center justify-center rounded-lg shrink-0', iconBg)}>
+      <Icon className={cn('h-4 w-4', iconColor)} />
     </div>
     <div className="min-w-0">
-      <p className="text-[10px] text-muted-foreground uppercase tracking-wide leading-none mb-0.5 whitespace-nowrap">{label}</p>
-      <p className={cn('text-sm font-bold tabular-nums leading-none', colorClass)}>{value}</p>
-      {subtext && <p className="text-[10px] text-muted-foreground mt-0.5 leading-none">{subtext}</p>}
+      <p className={cn('text-base font-extrabold tabular-nums leading-none', valueColor)}>{value}</p>
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mt-1 leading-none">{label}</p>
+      {subtext && <p className="text-[9px] text-muted-foreground/60 mt-0.5 leading-none">{subtext}</p>}
     </div>
   </div>
 );
@@ -158,26 +158,30 @@ const BillableAnalyticsPanel = ({ data = [], meta = {}, isLoading, month, year, 
   const th = 'px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground whitespace-nowrap';
   const td = 'px-3 py-2.5 text-xs align-middle';
 
+  const effTier = getTier(overallPct);
+
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-start justify-between gap-3 flex-wrap">
-          <div>
-            <CardTitle>Billable Analytics</CardTitle>
-            <CardDescription>
-              Billable vs non-billable with reasons per employee · {monthLabel}
-            </CardDescription>
+    <Card className="overflow-hidden">
+      {/* ── Header ── */}
+      <div className="px-5 pt-4 pb-3 border-b bg-gradient-to-r from-primary/[0.04] via-primary/[0.02] to-transparent">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 shrink-0">
+              <BarChart2 className="h-4 w-4 text-primary" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-foreground leading-none">Billable Analytics</p>
+              <p className="text-xs text-muted-foreground mt-1 leading-none">Billable vs non-billable per employee · {monthLabel}</p>
+            </div>
           </div>
 
           {/* View toggle */}
-          <div className="flex rounded-lg border overflow-hidden text-xs shrink-0">
+          <div className="flex rounded-lg border overflow-hidden text-xs shrink-0 bg-background">
             <button
               onClick={() => setView('charts')}
               className={cn(
                 'flex items-center gap-1.5 px-3 py-1.5 transition-colors',
-                view === 'charts'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'hover:bg-muted/50 text-muted-foreground'
+                view === 'charts' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted/50 text-muted-foreground'
               )}
             >
               <LayoutGrid className="h-3 w-3" /> Charts
@@ -186,23 +190,71 @@ const BillableAnalyticsPanel = ({ data = [], meta = {}, isLoading, month, year, 
               onClick={() => setView('table')}
               className={cn(
                 'flex items-center gap-1.5 px-3 py-1.5 border-l transition-colors',
-                view === 'table'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'hover:bg-muted/50 text-muted-foreground'
+                view === 'table' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted/50 text-muted-foreground'
               )}
             >
               <List className="h-3 w-3" /> Table
             </button>
           </div>
         </div>
-      </CardHeader>
 
-      <CardContent>
+        {/* ── Stat cards ── */}
+        {!isLoading && records.length > 0 && (
+          <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <Stat
+              label="Billable Efficiency"
+              value={`${overallPct.toFixed(1)}%`}
+              icon={CheckCircle2}
+              cardBg={overallPct >= 75 ? 'bg-emerald-50 dark:bg-emerald-950/30' : 'bg-red-50 dark:bg-red-950/30'}
+              borderColor={overallPct >= 75 ? 'border-emerald-200 dark:border-emerald-800' : 'border-red-200 dark:border-red-800'}
+              iconBg={overallPct >= 75 ? 'bg-emerald-100 dark:bg-emerald-900/50' : 'bg-red-100 dark:bg-red-900/50'}
+              iconColor={overallPct >= 75 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}
+              valueColor={effTier.text}
+              subtext={`${totalBillable}h of ${totalHours}h`}
+            />
+            <Stat
+              label="Leave Hours"
+              value={`${totalLeaves}h`}
+              icon={Calendar}
+              cardBg="bg-blue-50 dark:bg-blue-950/30"
+              borderColor="border-blue-200 dark:border-blue-800"
+              iconBg="bg-blue-100 dark:bg-blue-900/50"
+              iconColor="text-blue-600 dark:text-blue-400"
+              valueColor="text-blue-700 dark:text-blue-300"
+              subtext={totalHours > 0 ? `${((totalLeaves / totalHours) * 100).toFixed(1)}% of total` : undefined}
+            />
+            <Stat
+              label="Idle Hours"
+              value={`${totalIdle}h`}
+              icon={Coffee}
+              cardBg="bg-orange-50 dark:bg-orange-950/30"
+              borderColor="border-orange-200 dark:border-orange-800"
+              iconBg="bg-orange-100 dark:bg-orange-900/50"
+              iconColor="text-orange-500 dark:text-orange-400"
+              valueColor="text-orange-600 dark:text-orange-400"
+              subtext={totalHours > 0 ? `${((totalIdle / totalHours) * 100).toFixed(1)}% of total` : undefined}
+            />
+            <Stat
+              label="At-Risk Employees"
+              value={atRiskCount}
+              icon={ShieldAlert}
+              cardBg={atRiskCount > 0 ? 'bg-red-50 dark:bg-red-950/30' : 'bg-emerald-50 dark:bg-emerald-950/30'}
+              borderColor={atRiskCount > 0 ? 'border-red-200 dark:border-red-800' : 'border-emerald-200 dark:border-emerald-800'}
+              iconBg={atRiskCount > 0 ? 'bg-red-100 dark:bg-red-900/50' : 'bg-emerald-100 dark:bg-emerald-900/50'}
+              iconColor={atRiskCount > 0 ? 'text-red-500' : 'text-emerald-600 dark:text-emerald-400'}
+              valueColor={atRiskCount > 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-700 dark:text-emerald-300'}
+              subtext="below 75% billable"
+            />
+          </div>
+        )}
+      </div>
+
+      <CardContent className="pt-4">
         {/* ── Loading ── */}
         {isLoading && (
           <div className="space-y-3">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-14 rounded-lg" />)}
+              {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-16 rounded-xl" />)}
             </div>
             <Skeleton className="h-72 rounded-lg" />
           </div>
@@ -219,37 +271,6 @@ const BillableAnalyticsPanel = ({ data = [], meta = {}, isLoading, month, year, 
 
         {!isLoading && records.length > 0 && (
           <>
-            {/* ── Summary stats ── */}
-            <div className="mb-5 grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <Stat
-                label="Billable Efficiency"
-                value={`${overallPct.toFixed(1)}%`}
-                icon={CheckCircle2}
-                colorClass={getTier(overallPct).text}
-                subtext={`${totalBillable}h of ${totalHours}h`}
-              />
-              <Stat
-                label="Leave Hours"
-                value={`${totalLeaves}h`}
-                icon={Calendar}
-                colorClass="text-blue-600 dark:text-blue-400"
-                subtext={totalHours > 0 ? `${((totalLeaves / totalHours) * 100).toFixed(1)}% of total` : undefined}
-              />
-              <Stat
-                label="Idle Hours"
-                value={`${totalIdle}h`}
-                icon={Coffee}
-                colorClass="text-orange-500"
-                subtext={totalHours > 0 ? `${((totalIdle / totalHours) * 100).toFixed(1)}% of total` : undefined}
-              />
-              <Stat
-                label="At-Risk Employees"
-                value={atRiskCount}
-                icon={ShieldAlert}
-                colorClass={atRiskCount > 0 ? 'text-red-500' : 'text-emerald-600 dark:text-emerald-400'}
-                subtext="below 75% billable"
-              />
-            </div>
 
             {/* ── CHARTS VIEW ── */}
             {view === 'charts' && (
