@@ -735,6 +735,7 @@ import BillableAnalyticsPanel from '@/components/charts/BillableAnalyticsPanel';
 import TopEmployeesByPOPanel from '@/components/charts/TopEmployeesByPOPanel';
 import { Button } from '@/components/ui/button';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
+import { FiscalYearPicker } from '@/components/ui/fiscal-year-picker';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
@@ -778,75 +779,48 @@ const KPI_CONFIG = [
     hexOuter: '#fed7aa', hexInner: '#ea580c',
     bar: 'bg-orange-500', iconBg: 'bg-orange-50 dark:bg-orange-950/40', iconColor: 'text-orange-500',
     fmt: (v) => `${cNum(v)} hrs`,
-    sub: (t) => {
-      const b = Number(t.total_hours || 0) * (Number(t.utilization_pct || 0) / 100);
-      return `${cNum(b)} hrs billable`;
-    },
   },
   {
     key: 'total_cost', title: 'Total Cost', icon: DollarSign,
     hexOuter: '#6ee7b7', hexInner: '#059669',
     bar: 'bg-emerald-500', iconBg: 'bg-emerald-50 dark:bg-emerald-950/40', iconColor: 'text-emerald-600',
     fmt: (v) => `₹${cNum(v)}`,
-    sub: (t) => {
-      const hrs = Number(t.total_hours || 0);
-      const cost = Number(t.total_cost || 0);
-      return hrs > 0 ? `₹${Math.round(cost / hrs)}/hr avg` : null;
-    },
   },
   {
     key: 'utilization_pct', title: 'Utilization', icon: Activity,
     hexOuter: '#93c5fd', hexInner: '#2563eb',
     bar: 'bg-blue-500', iconBg: 'bg-blue-50 dark:bg-blue-950/40', iconColor: 'text-blue-500',
     fmt: (v) => `${Number(v).toFixed(1)}%`,
-    sub: (t) => {
-      const diff = (Number(t.utilization_pct || 0) - 80).toFixed(1);
-      return `${diff >= 0 ? '+' : ''}${diff}% vs 80%`;
-    },
   },
   {
     key: 'active_employees', title: 'Employees', icon: Users,
     hexOuter: '#c4b5fd', hexInner: '#7c3aed',
     bar: 'bg-violet-500', iconBg: 'bg-violet-50 dark:bg-violet-950/40', iconColor: 'text-violet-500',
     fmt: (v) => cNum(v),
-    sub: (_, c) => {
-      const bench = (c.employee_bench_pct ?? []).filter((e) => e.bench_pct > 0).length;
-      return bench > 0 ? `${bench} on bench` : 'All productive';
-    },
   },
   {
     key: 'active_clients', title: 'Clients', icon: Building2,
     hexOuter: '#67e8f9', hexInner: '#0891b2',
     bar: 'bg-cyan-500', iconBg: 'bg-cyan-50 dark:bg-cyan-950/40', iconColor: 'text-cyan-500',
     fmt: (v) => cNum(v),
-    sub: (_, c) => {
-      const top = (c.hours_by_client ?? [])[0];
-      return top ? `Top: ${top.client_name.split(' ').slice(0, 2).join(' ')}` : null;
-    },
   },
   {
     key: 'active_service_pos', title: 'Service POs', icon: Briefcase,
     hexOuter: '#fde68a', hexInner: '#d97706',
     bar: 'bg-amber-500', iconBg: 'bg-amber-50 dark:bg-amber-950/40', iconColor: 'text-amber-500',
     fmt: (v) => cNum(v),
-    sub: (_, c) => {
-      const active = new Set((c.client_x_service_po ?? []).filter((r) => r.hours > 0).map((r) => r.service_po_id)).size;
-      return active > 0 ? `${active} with hours` : null;
-    },
   },
   {
     key: 'avg_hours_per_employee', title: 'Avg Hrs/Emp', icon: BarChart2,
     hexOuter: '#a5b4fc', hexInner: '#4338ca',
     bar: 'bg-indigo-500', iconBg: 'bg-indigo-50 dark:bg-indigo-950/40', iconColor: 'text-indigo-500',
     fmt: (v) => `${cNum(v)} hrs`,
-    sub: (t) => `≈ ${(Number(t.avg_hours_per_employee || 0) / 8).toFixed(1)} days`,
   },
   {
     key: 'total_po_value_current_year', title: 'PO Value', icon: TrendingUp,
     hexOuter: '#bbf7d0', hexInner: '#16a34a',
     bar: 'bg-green-500', iconBg: 'bg-green-50 dark:bg-green-950/40', iconColor: 'text-green-600',
     fmt: (v) => formatCurrency(v),
-    sub: () => 'Current FY total',
   },
 ];
 
@@ -912,9 +886,7 @@ const ScrollRow = ({ children }) => {
   );
 };
 
-const KpiCard = ({ cfg, value, isLoading, tiles, charts }) => {
-  const subText = !isLoading && cfg.sub ? cfg.sub(tiles, charts) : null;
-
+const KpiCard = ({ cfg, value, isLoading }) => {
   if (isLoading) {
     return (
       <div className="flex flex-col items-center gap-2 shrink-0">
@@ -963,12 +935,6 @@ const KpiCard = ({ cfg, value, isLoading, tiles, charts }) => {
           </p>
         </div>
       </div>
-      {/* sub text below hex */}
-      {subText && (
-        <p className="text-[9px] text-muted-foreground text-center max-w-[130px] leading-tight truncate">
-          {subText}
-        </p>
-      )}
     </motion.div>
   );
 };
@@ -1293,15 +1259,11 @@ const Dashboard = () => {
 
           {/* Contextual date picker */}
           {viewMode === 'quarterly' ? (
-            <select
+            <FiscalYearPicker
               value={fiscalYear}
-              onChange={(e) => setFiscalYear(Number(e.target.value))}
-              className="h-9 rounded-xl border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30 font-medium w-36"
-            >
-              {FY_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
+              onChange={setFiscalYear}
+              className="w-36 rounded-xl"
+            />
           ) : (
             <MonthYearPicker
               value={bottomMonthYear}
@@ -1408,7 +1370,7 @@ const Dashboard = () => {
               className="flex flex-nowrap justify-center gap-x-3 min-w-max mx-auto"
             >
               {KPI_CONFIG.map((cfg) => (
-                <KpiCard key={cfg.key} cfg={cfg} value={mergedTiles[cfg.key]} isLoading={isAnalyticsPending || (cfg.key === 'total_po_value_current_year' && isStatsPending)} tiles={mergedTiles} charts={charts} />
+                <KpiCard key={cfg.key} cfg={cfg} value={mergedTiles[cfg.key]} isLoading={isAnalyticsPending || (cfg.key === 'total_po_value_current_year' && isStatsPending)} />
               ))}
             </motion.div>
           </div>
@@ -1491,18 +1453,17 @@ const Dashboard = () => {
             <ScrollRow>
               <motion.div variants={containerVariants} initial="hidden" animate="show" className="flex flex-nowrap justify-center gap-x-3 min-w-max mx-auto">
                 {[
-                  { title: 'Total Hrs',    icon: Clock,       hexOuter: '#fed7aa', hexInner: '#ea580c', value: `${cNum(monthlyTiles.totalHours)} hrs`,   sub: null },
-                  { title: 'Billable Hrs', icon: TrendingUp,  hexOuter: '#6ee7b7', hexInner: '#059669', value: `${cNum(monthlyTiles.billHours)} hrs`,    sub: monthlyTiles.totalHours > 0 ? `${((monthlyTiles.billHours / monthlyTiles.totalHours) * 100).toFixed(1)}% of total` : null },
-                  { title: 'Non-Billable', icon: AlertCircle, hexOuter: '#fde68a', hexInner: '#d97706', value: `${cNum(monthlyTiles.nonBillHours)} hrs`, sub: monthlyTiles.totalHours > 0 ? `${((monthlyTiles.nonBillHours / monthlyTiles.totalHours) * 100).toFixed(1)}% of total` : null },
-                  { title: 'Utilization',  icon: Activity,    hexOuter: '#93c5fd', hexInner: '#2563eb', value: `${monthlyTiles.utilPct.toFixed(1)}%`,    sub: `${monthlyTiles.utilPct >= 80 ? '+' : ''}${(monthlyTiles.utilPct - 80).toFixed(1)}% vs 80%` },
-                  { title: 'Employees',    icon: Users,       hexOuter: '#c4b5fd', hexInner: '#7c3aed', value: String(monthlyTiles.activeEmployees),     sub: monthlyTiles.inactiveEmployees > 0 ? `${monthlyTiles.inactiveEmployees} inactive · ${monthlyTiles.totalEmployees} total` : `All active · ${monthlyTiles.totalEmployees} total` },
-                  { title: 'Clients',      icon: Building2,   hexOuter: '#67e8f9', hexInner: '#0891b2', value: String(monthlyTiles.totalClients),        sub: null },
-                  { title: 'Active POs',   icon: Briefcase,   hexOuter: '#a5b4fc', hexInner: '#4338ca', value: String(monthlyTiles.activePOs),           sub: monthlyTiles.closedPOs > 0 ? `${monthlyTiles.closedPOs} closed · ${monthlyTiles.totalPOs} total` : `of ${monthlyTiles.totalPOs} total` },
+                  { title: 'Total Hrs',    icon: Clock,       hexOuter: '#fed7aa', hexInner: '#ea580c', value: `${cNum(monthlyTiles.totalHours)} hrs`   },
+                  { title: 'Billable Hrs', icon: TrendingUp,  hexOuter: '#6ee7b7', hexInner: '#059669', value: `${cNum(monthlyTiles.billHours)} hrs`    },
+                  { title: 'Non-Billable', icon: AlertCircle, hexOuter: '#fde68a', hexInner: '#d97706', value: `${cNum(monthlyTiles.nonBillHours)} hrs` },
+                  { title: 'Utilization',  icon: Activity,    hexOuter: '#93c5fd', hexInner: '#2563eb', value: `${monthlyTiles.utilPct.toFixed(1)}%`    },
+                  { title: 'Employees',    icon: Users,       hexOuter: '#c4b5fd', hexInner: '#7c3aed', value: String(monthlyTiles.activeEmployees)     },
+                  { title: 'Clients',      icon: Building2,   hexOuter: '#67e8f9', hexInner: '#0891b2', value: String(monthlyTiles.totalClients)        },
+                  { title: 'Active POs',   icon: Briefcase,   hexOuter: '#a5b4fc', hexInner: '#4338ca', value: String(monthlyTiles.activePOs)           },
                 ].map((card) => (
                   isStatsPending ? (
                     <div key={card.title} className="flex flex-col items-center gap-2 shrink-0">
                       <div className="animate-pulse" style={{ width: 144, height: 124, clipPath: HEX_CLIP, background: '#e2e8f0' }} />
-                      <div className="h-2 w-20 rounded-full animate-pulse bg-muted" />
                     </div>
                   ) : (
                     <motion.div key={card.title} variants={itemVariants} className="flex flex-col items-center gap-1.5 cursor-default group shrink-0">
@@ -1516,7 +1477,6 @@ const Dashboard = () => {
                           <p className="text-[8px] font-bold uppercase tracking-wider text-center px-2 leading-tight" style={{ color: 'rgba(255,255,255,0.80)' }}>{card.title}</p>
                         </div>
                       </div>
-                      {card.sub && <p className="text-[9px] text-muted-foreground text-center max-w-[130px] leading-tight truncate">{card.sub}</p>}
                     </motion.div>
                   )
                 ))}
