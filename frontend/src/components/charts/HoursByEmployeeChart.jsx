@@ -15,7 +15,7 @@ import EmptyState from '@/components/common/EmptyState';
 import { Users, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const PAGE_SIZE = 10;
-const CHART_HEIGHT = 400;
+const CHART_HEIGHT = 320;
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
@@ -41,28 +41,24 @@ const HoursByEmployeeChart = ({ data = [], isLoading, fiscalYear }) => {
   if (isLoading) {
     return (
       <Card>
-        <CardHeader>
-          <Skeleton className="h-5 w-44 mb-1" />
-          <Skeleton className="h-4 w-56" />
+        <CardHeader className="px-4 pt-4 pb-2">
+          <Skeleton className="h-4 w-44 mb-1" />
+          <Skeleton className="h-3 w-56" />
         </CardHeader>
-        <CardContent>
-          <Skeleton className="h-52 w-full" />
+        <CardContent className="px-4 pb-4">
+          <Skeleton className="h-48 w-full" />
         </CardContent>
       </Card>
     );
   }
 
   return (
-    <Card className="flex flex-col">
-      <CardHeader>
+    <Card className="flex flex-col h-full">
+      <CardHeader className="px-4 pt-4 pb-2">
         <div className="flex items-start justify-between gap-2">
           <div>
-            <CardTitle>Hours by Employee (Billable)
-                
-            </CardTitle>
-             {/* <span className="text-muted-foreground font-normal">sorted by billable</span> */}
-               
-            <CardDescription className="mt-1">Top contributors · {fyLabel}</CardDescription>
+            <CardTitle className="text-sm font-semibold">Hours by Employee (Billable)</CardTitle>
+            <CardDescription className="mt-0.5 text-xs">Top contributors · {fyLabel}</CardDescription>
           </div>
           {activeData.length > 0 && (
             <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground tabular-nums">
@@ -71,7 +67,7 @@ const HoursByEmployeeChart = ({ data = [], isLoading, fiscalYear }) => {
           )}
         </div>
       </CardHeader>
-      <CardContent className="flex-1 flex flex-col">
+      <CardContent className="px-4 pb-4 flex-1 flex flex-col">
         {activeData.length === 0 ? (
           <EmptyState
             icon={Users}
@@ -99,7 +95,7 @@ const HoursByEmployeeChart = ({ data = [], isLoading, fiscalYear }) => {
                 <YAxis
                   type="category"
                   dataKey="full_name"
-                  width={130}
+                  width={140}
                   tick={{ fontSize: 11, fill: 'hsl(var(--foreground))' }}
                   tickLine={false}
                   axisLine={false}

@@ -4,7 +4,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import EmptyState from '@/components/common/EmptyState';
 import { LayoutGrid, ChevronDown, ChevronRight, ChevronLeft } from 'lucide-react';
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 8;
 
 const PO_COLORS = [
   'hsl(var(--primary))',
@@ -54,13 +54,13 @@ const ClientPOMatrixChart = ({ data = [], isLoading, fiscalYear }) => {
   if (isLoading) {
     return (
       <Card className="flex flex-col h-full">
-        <CardHeader>
-          <Skeleton className="h-5 w-48 mb-1" />
-          <Skeleton className="h-4 w-64" />
+        <CardHeader className="px-4 pt-4 pb-2">
+          <Skeleton className="h-4 w-48 mb-1" />
+          <Skeleton className="h-3 w-64" />
         </CardHeader>
-        <CardContent className="flex-1 flex flex-col space-y-2">
+        <CardContent className="px-4 pb-4 flex-1 flex flex-col space-y-2">
           {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-12 w-full rounded-md" />
+            <Skeleton key={i} className="h-10 w-full rounded-md" />
           ))}
         </CardContent>
       </Card>
@@ -69,11 +69,11 @@ const ClientPOMatrixChart = ({ data = [], isLoading, fiscalYear }) => {
 
   return (
     <Card className="flex flex-col h-full">
-      <CardHeader>
+      <CardHeader className="px-4 pt-4 pb-2">
         <div className="flex items-start justify-between gap-2">
           <div>
-            <CardTitle>Client × Service PO (Hours)</CardTitle>
-            <CardDescription className="mt-1">Hours breakdown by client and service PO · {fyLabel}</CardDescription>
+            <CardTitle className="text-sm font-semibold">Client × Service PO (Hours)</CardTitle>
+            <CardDescription className="mt-0.5 text-xs">Hours breakdown by client and service PO · {fyLabel}</CardDescription>
           </div>
           {grouped.length > 0 && (
             <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground tabular-nums">
@@ -82,7 +82,7 @@ const ClientPOMatrixChart = ({ data = [], isLoading, fiscalYear }) => {
           )}
         </div>
       </CardHeader>
-      <CardContent className="flex-1 flex flex-col">
+      <CardContent className="px-4 pb-4 flex-1 flex flex-col">
         {grouped.length === 0 ? (
           <EmptyState
             icon={LayoutGrid}
@@ -109,7 +109,7 @@ const ClientPOMatrixChart = ({ data = [], isLoading, fiscalYear }) => {
                         ) : (
                           <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                         )}
-                        <span className="text-sm font-medium truncate max-w-[200px]">
+                        <span className="text-xs font-semibold truncate" title={client.client_name}>
                           {client.client_name}
                         </span>
                       </div>
@@ -117,7 +117,7 @@ const ClientPOMatrixChart = ({ data = [], isLoading, fiscalYear }) => {
                         <span className="text-xs text-muted-foreground">
                           {client.pos.length} PO{client.pos.length !== 1 ? 's' : ''}
                         </span>
-                        <span className="text-sm font-semibold tabular-nums text-foreground">
+                        <span className="text-sm font-bold tabular-nums text-foreground">
                           {client.total.toLocaleString('en-IN')} hrs
                         </span>
                       </div>

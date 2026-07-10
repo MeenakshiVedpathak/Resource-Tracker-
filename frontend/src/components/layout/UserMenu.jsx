@@ -57,10 +57,10 @@ const UserMenu = () => {
           <p className="text-xs text-muted-foreground">{user?.email}</p>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => navigate(ROUTES.PROFILE)}>
+        {/* <DropdownMenuItem onClick={() => navigate(ROUTES.PROFILE)}>
           <UserCircle className="mr-2 h-4 w-4" />
           Profile
-        </DropdownMenuItem>
+        </DropdownMenuItem> */}
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">
           <LogOut className="mr-2 h-4 w-4" />

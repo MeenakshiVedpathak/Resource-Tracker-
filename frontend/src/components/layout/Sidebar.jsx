@@ -22,7 +22,7 @@ const NAV_GROUPS = [
     items: [
       { label: 'Employees', icon: Users, to: ROUTES.EMPLOYEES },
       { label: 'Users', icon: UserCog, to: ROUTES.USERS },
-      { label: 'Roles', icon: Shield, to: ROUTES.ROLES },
+      // { label: 'Roles', icon: Shield, to: ROUTES.ROLES },
     ],
   },
   {

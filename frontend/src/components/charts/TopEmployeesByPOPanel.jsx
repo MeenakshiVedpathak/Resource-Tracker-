@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import EmptyState from '@/components/common/EmptyState';
-import { Briefcase, Users, AlertTriangle, ChevronLeft, ChevronRight, Clock, Filter } from 'lucide-react';
+import { Briefcase, Users, AlertTriangle, ChevronLeft, ChevronRight, Clock, Filter, TrendingUp, TrendingDown } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useActiveServicePOs } from '@/hooks/useServicePOs';
@@ -11,9 +11,16 @@ const PAGE_SIZE = 9;
 
 const EMP_COLORS = ['#6366f1', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6'];
 
+const cNum = (v) => {
+  const n = Number(v) || 0;
+  if (n >= 100000) return `${(n / 100000).toFixed(1)}L`;
+  if (n >= 1000)   return `${(n / 1000).toFixed(1)}k`;
+  return String(Math.round(n));
+};
+
 /* ── Stat card ── */
 const StatItem = ({ label, value, icon: Icon, cardBg, borderColor, iconBg, iconColor, valueColor, subtext }) => (
-  <div className={cn('flex items-center gap-2.5 px-3 py-2 rounded-lg border', cardBg, borderColor)}>
+  <div className={cn('flex items-center gap-2.5 px-3 py-2 rounded-lg border w-full', cardBg, borderColor)}>
     <div className={cn('flex h-8 w-8 items-center justify-center rounded-lg shrink-0', iconBg)}>
       <Icon className={cn('h-4 w-4', iconColor)} />
     </div>
@@ -200,6 +207,13 @@ const TopEmployeesByPOPanel = ({ data = [], isLoading, month, year }) => {
     (s, po) => s + (po.top_employees ?? []).reduce((ps, e) => ps + (e.hours || 0), 0),
     0
   );
+  const billableHours = filteredData
+    .filter((po) => po.is_billable)
+    .reduce((s, po) => s + (po.top_employees ?? []).reduce((ps, e) => ps + (e.hours || 0), 0), 0);
+  const nonBillableHours = filteredData
+    .filter((po) => !po.is_billable)
+    .reduce((s, po) => s + (po.top_employees ?? []).reduce((ps, e) => ps + (e.hours || 0), 0), 0);
+  const billablePct = totalHours > 0 ? Math.round((billableHours / totalHours) * 100) : 0;
 
   const isFiltered = categoryName !== 'all' || poFilterId !== 'all';
 
@@ -250,7 +264,7 @@ const TopEmployeesByPOPanel = ({ data = [], isLoading, month, year }) => {
 
         {/* ── Stat cards ── */}
         {!isLoading && filteredData.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
             <StatItem
               label="Active POs"
               value={activePOs.length}
@@ -263,7 +277,7 @@ const TopEmployeesByPOPanel = ({ data = [], isLoading, month, year }) => {
             />
             <StatItem
               label="Total Hours"
-              value={`${totalHours.toLocaleString('en-IN')}h`}
+              value={`${cNum(totalHours)} hrs`}
               icon={Clock}
               cardBg="bg-emerald-50 dark:bg-emerald-950/30"
               borderColor="border-emerald-200 dark:border-emerald-800"
@@ -272,19 +286,39 @@ const TopEmployeesByPOPanel = ({ data = [], isLoading, month, year }) => {
               valueColor="text-emerald-700 dark:text-emerald-300"
               subtext="top contributors only"
             />
-            {singleContributorCount > 0 && (
-              <StatItem
-                label="Sole Contributor"
-                value={singleContributorCount}
-                icon={AlertTriangle}
-                cardBg="bg-amber-50 dark:bg-amber-950/30"
-                borderColor="border-amber-200 dark:border-amber-800"
-                iconBg="bg-amber-100 dark:bg-amber-900/50"
-                iconColor="text-amber-600 dark:text-amber-400"
-                valueColor="text-amber-700 dark:text-amber-300"
-                subtext="POs with single person"
-              />
-            )}
+            <StatItem
+              label="Billable Hours"
+              value={`${cNum(billableHours)} hrs`}
+              icon={TrendingUp}
+              cardBg="bg-indigo-50 dark:bg-indigo-950/30"
+              borderColor="border-indigo-200 dark:border-indigo-800"
+              iconBg="bg-indigo-100 dark:bg-indigo-900/50"
+              iconColor="text-indigo-600 dark:text-indigo-400"
+              valueColor="text-indigo-700 dark:text-indigo-300"
+              subtext={`${billablePct}% of total`}
+            />
+            <StatItem
+              label="Non-Billable"
+              value={`${cNum(nonBillableHours)} hrs`}
+              icon={TrendingDown}
+              cardBg="bg-orange-50 dark:bg-orange-950/30"
+              borderColor="border-orange-200 dark:border-orange-800"
+              iconBg="bg-orange-100 dark:bg-orange-900/50"
+              iconColor="text-orange-600 dark:text-orange-400"
+              valueColor="text-orange-700 dark:text-orange-300"
+              subtext={`${100 - billablePct}% of total`}
+            />
+            <StatItem
+              label="Sole Contributor"
+              value={singleContributorCount}
+              icon={AlertTriangle}
+              cardBg="bg-amber-50 dark:bg-amber-950/30"
+              borderColor="border-amber-200 dark:border-amber-800"
+              iconBg="bg-amber-100 dark:bg-amber-900/50"
+              iconColor="text-amber-600 dark:text-amber-400"
+              valueColor="text-amber-700 dark:text-amber-300"
+              subtext="POs with single person"
+            />
           </div>
         )}
       </div>

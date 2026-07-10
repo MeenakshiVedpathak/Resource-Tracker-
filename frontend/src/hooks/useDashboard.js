@@ -29,6 +29,6 @@ export const useDashboardAnalytics = (params) =>
   useQuery({
     queryKey: ['dashboard', 'analytics', params],
     queryFn: () => dashboardApi.getAnalytics(params),
-    enabled: !!(params?.fiscalYear),
+    enabled: !!(params?.fiscalYear || (params?.month && params?.year)),
     staleTime: 0,
   });

@@ -24,7 +24,7 @@ const getTier = (pct) => {
   return          { label: 'Critical', color: '#ef4444', text: 'text-red-500' };
 };
 
-const trunc = (str, n = 14) => str.length > n ? str.slice(0, n - 1) + '…' : str;
+const trunc = (str) => str;
 
 /* ── custom tooltips ── */
 const BarTip = ({ active, payload }) => {
@@ -298,7 +298,7 @@ const BillableAnalyticsPanel = ({ data = [], meta = {}, isLoading, month, year, 
                       <YAxis
                         type="category"
                         dataKey="name"
-                        width={104}
+                        width={180}
                         tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
                         tickLine={false}
                         axisLine={false}
