@@ -1005,6 +1005,8 @@ const Dashboard = () => {
   const [servicePOId, setServicePOId]         = useState('');
   const [billablePage, setBillablePage]       = useState(1);
   const [billablePageQ, setBillablePageQ]     = useState(1); // quarterly view pagination
+  const [billableSortBy, setBillableSortBy]   = useState('nonBillable');  // 'nonBillable' | 'billable'
+  const [billableSortByQ, setBillableSortByQ] = useState('nonBillable'); // quarterly view sort
   const [topPOFilter, setTopPOFilter]         = useState('billable');
   const [filtersOpen, setFiltersOpen]         = useState(true);
   const [viewMode, setViewMode]               = useState('quarterly');
@@ -1167,16 +1169,27 @@ const Dashboard = () => {
     }));
   };
 
-  const sortByNonBillable = (rows) =>
-    [...rows].sort((a, b) => (b.non_billable_hours || 0) - (a.non_billable_hours || 0));
+  const sortBillableRows = (rows, sortBy) =>
+    [...rows].sort((a, b) => sortBy === 'billable'
+      ? (b.billable_hours || 0) - (a.billable_hours || 0)
+      : (b.non_billable_hours || 0) - (a.non_billable_hours || 0));
 
   const billableRowsQ = useMemo(
-    () => sortByNonBillable(toBillableRows(charts.hours_by_employee, charts.employees_by_po)),
+    () => toBillableRows(charts.hours_by_employee, charts.employees_by_po),
     [charts.hours_by_employee, charts.employees_by_po],
   );
   const billableRowsM = useMemo(
-    () => sortByNonBillable(toBillableRows(monthlyAnalyticsCharts.hours_by_employee, monthlyAnalyticsCharts.employees_by_po)),
+    () => toBillableRows(monthlyAnalyticsCharts.hours_by_employee, monthlyAnalyticsCharts.employees_by_po),
     [monthlyAnalyticsCharts.hours_by_employee, monthlyAnalyticsCharts.employees_by_po],
+  );
+
+  const sortedBillableRowsQ = useMemo(
+    () => sortBillableRows(billableRowsQ, billableSortByQ),
+    [billableRowsQ, billableSortByQ],
+  );
+  const sortedBillableRowsM = useMemo(
+    () => sortBillableRows(billableRowsM, billableSortBy),
+    [billableRowsM, billableSortBy],
   );
 
   const mkMeta = (rows, page) => ({
@@ -1201,10 +1214,10 @@ const Dashboard = () => {
     const util = Number(tiles.utilization_pct ?? 0);
     if (util > 0) {
       list.push(util >= 80
-        ? { type: 'success', icon: Zap,          label: `${util.toFixed(1)}% Utilization`,      sub: 'On track · Above 80% target' }
+        ? { type: 'success', icon: Zap,          label: `${util.toFixed(1)}% Utilization`,      sub: 'On track · Above 80% target', onClick: scrollToClientChart }
         : util >= 60
-          ? { type: 'warning', icon: TrendingDown, label: `${util.toFixed(1)}% Utilization`,    sub: 'Below 80% target · Improve allocation' }
-          : { type: 'danger',  icon: TrendingDown, label: `${util.toFixed(1)}% Utilization`,    sub: 'Critical · Well below 80% target' }
+          ? { type: 'warning', icon: TrendingDown, label: `${util.toFixed(1)}% Utilization`,    sub: 'Below 80% target · Improve allocation', onClick: scrollToClientChart }
+          : { type: 'danger',  icon: TrendingDown, label: `${util.toFixed(1)}% Utilization`,    sub: 'Critical · Well below 80% target', onClick: scrollToClientChart }
       );
     }
     const benchData = charts.employee_bench_pct ?? [];
@@ -1236,10 +1249,10 @@ const Dashboard = () => {
     const util = Number(monthlyAnalyticsTiles.utilization_pct ?? 0);
     if (util > 0) {
       list.push(util >= 80
-        ? { type: 'success', icon: Zap,          label: `${util.toFixed(1)}% Utilization`,   sub: 'On track · Above 80% target' }
+        ? { type: 'success', icon: Zap,          label: `${util.toFixed(1)}% Utilization`,   sub: 'On track · Above 80% target', onClick: scrollToClientChart }
         : util >= 60
-          ? { type: 'warning', icon: TrendingDown, label: `${util.toFixed(1)}% Utilization`, sub: 'Below 80% target · Improve allocation' }
-          : { type: 'danger',  icon: TrendingDown, label: `${util.toFixed(1)}% Utilization`, sub: 'Critical · Well below 80% target' }
+          ? { type: 'warning', icon: TrendingDown, label: `${util.toFixed(1)}% Utilization`, sub: 'Below 80% target · Improve allocation', onClick: scrollToClientChart }
+          : { type: 'danger',  icon: TrendingDown, label: `${util.toFixed(1)}% Utilization`, sub: 'Critical · Well below 80% target', onClick: scrollToClientChart }
       );
     }
     const benchData = monthlyAnalyticsCharts.employee_bench_pct ?? [];
@@ -1467,7 +1480,7 @@ const Dashboard = () => {
       </section> */}
 
       {/* ══ RESOURCE INSIGHT (quarterly) ════════════════════════════════════ */}
-      <section>
+      <section ref={benchSectionRef}>
         <SectionLabel icon={Users} title="Resource Insights" />
         <ResourceInsightPanel
           benchData={charts.employee_bench_pct ?? []}
@@ -1482,13 +1495,15 @@ const Dashboard = () => {
       <section>
         <SectionLabel icon={Calendar} title="Billable Breakdown" />
         <BillableAnalyticsPanel
-          data={billableRowsQ.slice((billablePageQ - 1) * BILLABLE_PAGE_SIZE, billablePageQ * BILLABLE_PAGE_SIZE)}
-          meta={mkMeta(billableRowsQ, billablePageQ)}
+          data={sortedBillableRowsQ.slice((billablePageQ - 1) * BILLABLE_PAGE_SIZE, billablePageQ * BILLABLE_PAGE_SIZE)}
+          meta={mkMeta(sortedBillableRowsQ, billablePageQ)}
           isLoading={isAnalyticsPending}
           month={null}
           year={fiscalYear}
           page={billablePageQ}
           onPageChange={setBillablePageQ}
+          sortBy={billableSortByQ}
+          onSortByChange={(v) => { setBillableSortByQ(v); setBillablePageQ(1); }}
         />
       </section>
 
@@ -1625,7 +1640,7 @@ const Dashboard = () => {
           </section> */}
 
           {/* ── Resource Insights (monthly) ──────────────────────────────── */}
-          <section>
+          <section ref={benchSectionRef}>
             <SectionLabel icon={Users} title="Resource Insights" />
             <ResourceInsightPanel
               benchData={monthlyAnalyticsCharts.employee_bench_pct ?? []}
@@ -1640,13 +1655,15 @@ const Dashboard = () => {
           <section>
             <SectionLabel icon={Calendar} title="Billable Breakdown" />
             <BillableAnalyticsPanel
-              data={billableRowsM.slice((billablePage - 1) * BILLABLE_PAGE_SIZE, billablePage * BILLABLE_PAGE_SIZE)}
-              meta={mkMeta(billableRowsM, billablePage)}
+              data={sortedBillableRowsM.slice((billablePage - 1) * BILLABLE_PAGE_SIZE, billablePage * BILLABLE_PAGE_SIZE)}
+              meta={mkMeta(sortedBillableRowsM, billablePage)}
               isLoading={isMonthlyAnalyticsPending}
               month={Number(month)}
               year={Number(year)}
               page={billablePage}
               onPageChange={setBillablePage}
+              sortBy={billableSortBy}
+              onSortByChange={(v) => { setBillableSortBy(v); setBillablePage(1); }}
             />
           </section>
 

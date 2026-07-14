@@ -5,6 +5,7 @@ import { ArrowLeft, FileSpreadsheet } from 'lucide-react';
 import { useTimesheetImportRows } from '@/hooks/useTimesheets';
 import { useTimesheetHistory } from '@/hooks/useTimesheets';
 import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
+import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
 import { ROUTES } from '@/constants/routes';
 import { formatDate } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
@@ -33,16 +34,52 @@ const TimesheetImportDetail = () => {
   const [poFilter, setPoFilter] = useState('all');
   const [clientFilter, setClientFilter] = useState('all');
   const [serviceCategoryFilter, setServiceCategoryFilter] = useState('all');
+  const [serviceTypeFilter, setServiceTypeFilter] = useState('all');
 
   const { data: activeServiceCategories = [] } = useActiveServiceCategories();
+  const { data: activeServiceTypes = [] } = useActiveServiceTypes();
 
-  const { employees, pos, clients } = useMemo(() => {
+  const { employees, poOptions, clients } = useMemo(() => {
+    const poMap = new Map();
+    rows.forEach((r) => {
+      const poName = r.servicePO?.service_po_name;
+      if (poName && !poMap.has(poName)) {
+        poMap.set(poName, {
+          name: poName,
+          serviceTypeId: r.servicePO?.serviceType?.id != null ? String(r.servicePO.serviceType.id) : null,
+          categoryId: r.servicePO?.serviceType?.serviceCategory?.id != null ? String(r.servicePO.serviceType.serviceCategory.id) : null,
+        });
+      }
+    });
     return {
       employees: Array.from(new Set(rows.map(r => r.employee?.full_name).filter(Boolean))).sort(),
-      pos: Array.from(new Set(rows.map(r => r.servicePO?.service_po_name).filter(Boolean))).sort(),
+      poOptions: Array.from(poMap.values()).sort((a, b) => a.name.localeCompare(b.name)),
       clients: Array.from(new Set(rows.map(r => r.servicePO?.client?.client_name).filter(Boolean))).sort(),
     };
   }, [rows]);
+
+  // Category → Type: only show types belonging to the selected category
+  const filteredServiceTypes = serviceCategoryFilter === 'all'
+    ? activeServiceTypes
+    : activeServiceTypes.filter((t) => String(t.service_category_id) === serviceCategoryFilter);
+
+  // Type (or Category, if no type chosen yet) → Service PO
+  const filteredPOOptions = poOptions.filter((po) => {
+    if (serviceTypeFilter !== 'all') return po.serviceTypeId === serviceTypeFilter;
+    if (serviceCategoryFilter !== 'all') return po.categoryId === serviceCategoryFilter;
+    return true;
+  });
+
+  const handleCategoryChange = (v) => {
+    setServiceCategoryFilter(v);
+    setServiceTypeFilter('all');
+    setPoFilter('all');
+  };
+
+  const handleTypeChange = (v) => {
+    setServiceTypeFilter(v);
+    setPoFilter('all');
+  };
 
   const filteredRows = useMemo(() => {
     return rows.filter(row => {
@@ -50,9 +87,10 @@ const TimesheetImportDetail = () => {
       if (poFilter !== 'all' && row.servicePO?.service_po_name !== poFilter) return false;
       if (clientFilter !== 'all' && row.servicePO?.client?.client_name !== clientFilter) return false;
       if (serviceCategoryFilter !== 'all' && String(row.servicePO?.serviceType?.serviceCategory?.id) !== serviceCategoryFilter) return false;
+      if (serviceTypeFilter !== 'all' && String(row.servicePO?.serviceType?.id) !== serviceTypeFilter) return false;
       return true;
     });
-  }, [rows, employeeFilter, poFilter, clientFilter, serviceCategoryFilter]);
+  }, [rows, employeeFilter, poFilter, clientFilter, serviceCategoryFilter, serviceTypeFilter]);
 
   const columns = [
     columnHelper.accessor('employee', {
@@ -205,7 +243,7 @@ const TimesheetImportDetail = () => {
           data={filteredRows}
           isLoading={false}
           toolbar={
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 w-full mb-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4 w-full mb-2">
               <SearchableSelect
                 options={[
                   { label: "All Employees", value: "all" },
@@ -215,18 +253,6 @@ const TimesheetImportDetail = () => {
                 onValueChange={setEmployeeFilter}
                 placeholder="All Employees"
                 searchPlaceholder="Search employee..."
-                className="w-full h-9"
-              />
-              
-              <SearchableSelect
-                options={[
-                  { label: "All Service POs", value: "all" },
-                  ...pos.map(po => ({ label: po, value: po }))
-                ]}
-                value={poFilter}
-                onValueChange={setPoFilter}
-                placeholder="All Service POs"
-                searchPlaceholder="Search PO..."
                 className="w-full h-9"
               />
 
@@ -251,9 +277,36 @@ const TimesheetImportDetail = () => {
                   })),
                 ]}
                 value={serviceCategoryFilter}
-                onValueChange={setServiceCategoryFilter}
+                onValueChange={handleCategoryChange}
                 placeholder="All Categories"
                 searchPlaceholder="Search category..."
+                className="w-full h-9"
+              />
+
+              <SearchableSelect
+                options={[
+                  { label: "All Types", value: "all" },
+                  ...filteredServiceTypes.map((t) => ({
+                    label: t.service_type_name,
+                    value: String(t.id),
+                  })),
+                ]}
+                value={serviceTypeFilter}
+                onValueChange={handleTypeChange}
+                placeholder="All Types"
+                searchPlaceholder="Search type..."
+                className="w-full h-9"
+              />
+
+              <SearchableSelect
+                options={[
+                  { label: "All Service POs", value: "all" },
+                  ...filteredPOOptions.map(po => ({ label: po.name, value: po.name }))
+                ]}
+                value={poFilter}
+                onValueChange={setPoFilter}
+                placeholder="All Service POs"
+                searchPlaceholder="Search PO..."
                 className="w-full h-9"
               />
             </div>

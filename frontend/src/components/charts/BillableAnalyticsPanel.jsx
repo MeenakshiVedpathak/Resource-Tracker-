@@ -99,7 +99,10 @@ const NBBadge = ({ name, hours, type }) => (
 );
 
 /* ── main component ── */
-const BillableAnalyticsPanel = ({ data = [], meta = {}, isLoading, month, year, page = 1, onPageChange }) => {
+const BillableAnalyticsPanel = ({
+  data = [], meta = {}, isLoading, month, year, page = 1, onPageChange,
+  sortBy = 'nonBillable', onSortByChange,
+}) => {
   const [view, setView] = useState('charts');
 
   const monthLabel = month && year
@@ -127,8 +130,11 @@ const BillableAnalyticsPanel = ({ data = [], meta = {}, isLoading, month, year, 
   const atRiskCount = tiers['At Risk'] + tiers['Critical'];
 
   /* ── bar chart data ── */
-  const sortedRecords = [...records]
-    .sort((a, b) => (b.non_billable_hours || 0) - (a.non_billable_hours || 0));
+  const sortedRecords = [...records].sort((a, b) =>
+    sortBy === 'billable'
+      ? (b.billable_hours || 0) - (a.billable_hours || 0)
+      : (b.non_billable_hours || 0) - (a.non_billable_hours || 0)
+  );
 
   const barData = sortedRecords.map((r) => {
       let leaves = 0, idle = 0;
@@ -139,10 +145,10 @@ const BillableAnalyticsPanel = ({ data = [], meta = {}, isLoading, month, year, 
       return {
         name       : trunc(r.full_name),
         fullName   : r.full_name,
-        Billable   : r.billable_hours || 0,
-        Leaves     : leaves,
-        Idle       : idle,
-        billablePct: r.billable_pct   || 0,
+        Billable      : r.billable_hours || 0,
+        Leaves        : leaves,
+        'Non-Billable': idle,
+        billablePct   : r.billable_pct   || 0,
       };
     });
 
@@ -150,7 +156,7 @@ const BillableAnalyticsPanel = ({ data = [], meta = {}, isLoading, month, year, 
   const pieData = [
     { name: 'Billable', value: totalBillable, fill: C.billable },
     { name: 'Leaves',   value: totalLeaves,   fill: C.leaves   },
-    { name: 'Idle',     value: totalIdle,     fill: C.idle     },
+    { name: 'Non-Billable',     value: totalIdle,     fill: C.idle     },
   ].filter((d) => d.value > 0);
 
   const barChartHeight = Math.max(280, barData.length * 38);
@@ -224,7 +230,7 @@ const BillableAnalyticsPanel = ({ data = [], meta = {}, isLoading, month, year, 
               subtext={totalHours > 0 ? `${((totalLeaves / totalHours) * 100).toFixed(1)}% of total` : undefined}
             />
             <Stat
-              label="Idle Hours"
+              label="Non-Billable Hours"
               value={`${totalIdle}h`}
               icon={Coffee}
               cardBg="bg-orange-50 dark:bg-orange-950/30"
@@ -277,10 +283,34 @@ const BillableAnalyticsPanel = ({ data = [], meta = {}, isLoading, month, year, 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
                 {/* Horizontal stacked bar chart */}
                 <div className="lg:col-span-2">
-                  <p className="text-xs font-semibold text-foreground mb-3">
-                    Hours by Employee
-                    <span className="ml-1.5 text-muted-foreground font-normal">sorted by non-billable</span>
-                  </p>
+                  <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+                    <p className="text-xs font-semibold text-foreground">
+                      Hours by Employee
+                      <span className="ml-1.5 text-muted-foreground font-normal">
+                        sorted by {sortBy === 'billable' ? 'billable' : 'non-billable'}
+                      </span>
+                    </p>
+                    <div className="flex rounded-lg border overflow-hidden text-[11px] shrink-0 bg-background">
+                      <button
+                        onClick={() => onSortByChange?.('billable')}
+                        className={cn(
+                          'px-2.5 py-1 transition-colors',
+                          sortBy === 'billable' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted/50 text-muted-foreground'
+                        )}
+                      >
+                        Billable
+                      </button>
+                      <button
+                        onClick={() => onSortByChange?.('nonBillable')}
+                        className={cn(
+                          'px-2.5 py-1 border-l transition-colors',
+                          sortBy === 'nonBillable' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted/50 text-muted-foreground'
+                        )}
+                      >
+                        Non-Billable
+                      </button>
+                    </div>
+                  </div>
                   <ResponsiveContainer width="100%" height={barChartHeight}>
                     <BarChart
                       data={barData}
@@ -311,7 +341,7 @@ const BillableAnalyticsPanel = ({ data = [], meta = {}, isLoading, month, year, 
                       />
                       <Bar dataKey="Billable" stackId="a" fill={C.billable} radius={[0, 0, 0, 0]} maxBarSize={22} />
                       <Bar dataKey="Leaves"   stackId="a" fill={C.leaves}   radius={[0, 0, 0, 0]} maxBarSize={22} />
-                      <Bar dataKey="Idle"     stackId="a" fill={C.idle}     radius={[0, 4, 4, 0]} maxBarSize={22} />
+                      <Bar dataKey="Non-Billable" stackId="a" fill={C.idle} radius={[0, 4, 4, 0]} maxBarSize={22} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>

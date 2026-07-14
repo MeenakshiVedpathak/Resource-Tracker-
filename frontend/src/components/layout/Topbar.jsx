@@ -34,8 +34,8 @@ const Topbar = ({ title }) => {
         {/* Right controls */}
         <div className="ml-auto flex items-center gap-2 shrink-0">
 
-          {/* Theme toggle — pill style */}
-          <button
+          {/* Theme toggle — pill style (hidden for now) */}
+          {/* <button
             onClick={toggleTheme}
             aria-label="Toggle theme"
             className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
@@ -46,8 +46,7 @@ const Topbar = ({ title }) => {
             }
           </button>
 
-          {/* Divider */}
-          <div className="h-5 w-px bg-border" />
+          <div className="h-5 w-px bg-border" /> */}
 
           <UserMenu />
         </div>

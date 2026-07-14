@@ -1,4 +1,4 @@
-import { useState, Fragment } from 'react';
+import { useState, useMemo, Fragment } from 'react';
 import * as XLSX from 'xlsx';
 import { Download, Filter, Search, ChevronRight, ChevronsUpDown } from 'lucide-react';
 import { useResourceProjectUtilization } from '@/hooks/useReports';
@@ -7,6 +7,7 @@ import { useDebounce } from '@/hooks/useDebounce';
 import { useActiveEmployees } from '@/hooks/useEmployees';
 import { useActiveClients } from '@/hooks/useClients';
 import { useActiveServicePOs } from '@/hooks/useServicePOs';
+import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
 import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
 import { formatHours, formatCurrency, formatMonthYear, getInitials } from '@/utils/formatters';
 import PageHeader from '@/components/common/PageHeader';
@@ -129,6 +130,7 @@ const ResourceProjectUtilization = () => {
   const [clientId, setClientId] = useState('all');
   const [poId, setPoId] = useState('all');
   const [category, setCategory] = useState('all');
+  const [typeId, setTypeId] = useState('all');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
@@ -141,10 +143,43 @@ const ResourceProjectUtilization = () => {
   const { data: activeClients = [] } = useActiveClients();
   const { data: activePOs = [] } = useActiveServicePOs();
   const { data: activeServiceCategories = [] } = useActiveServiceCategories();
+  const { data: activeServiceTypes = [] } = useActiveServiceTypes();
 
   const selectedCategoryName = category !== 'all'
     ? activeServiceCategories.find((sc) => String(sc.id) === category)?.name
     : undefined;
+
+  // Category → Type: only show types belonging to the selected category
+  const filteredServiceTypes = category === 'all'
+    ? activeServiceTypes
+    : activeServiceTypes.filter((t) => String(t.service_category_id) === category);
+
+  // Type (or Category, if no type chosen yet) → Service PO
+  const typeCategoryMap = useMemo(() => {
+    const map = new Map();
+    activeServiceTypes.forEach((t) => map.set(String(t.id), String(t.service_category_id)));
+    return map;
+  }, [activeServiceTypes]);
+
+  const filteredPOs = activePOs.filter((po) => {
+    const poTypeId = po.serviceType?.id != null ? String(po.serviceType.id) : null;
+    if (typeId !== 'all') return poTypeId === typeId;
+    if (category !== 'all') return poTypeId != null && typeCategoryMap.get(poTypeId) === category;
+    return true;
+  });
+
+  const handleCategoryChange = (v) => {
+    setCategory(v);
+    setTypeId('all');
+    setPoId('all');
+    setPage(1);
+  };
+
+  const handleTypeChange = (v) => {
+    setTypeId(v);
+    setPoId('all');
+    setPage(1);
+  };
 
   const params = {
     month: monthYear.month,
@@ -155,6 +190,7 @@ const ResourceProjectUtilization = () => {
     ...(clientId !== 'all' && { clientId }),
     ...(poId !== 'all' && { projectId: poId }),
     ...(category !== 'all' && { serviceCategoryId: category }),
+    ...(typeId !== 'all' && { serviceTypeId: typeId }),
     ...(debouncedSearch && { search: debouncedSearch }),
   };
 
@@ -227,8 +263,9 @@ const ResourceProjectUtilization = () => {
   const activeFilterCount = [
     employeeId !== 'all' ? 1 : 0,
     clientId !== 'all' ? 1 : 0,
-    poId !== 'all' ? 1 : 0,
     category !== 'all' ? 1 : 0,
+    typeId !== 'all' ? 1 : 0,
+    poId !== 'all' ? 1 : 0,
   ].reduce((a, b) => a + b, 0);
 
   const totalPages = meta.totalPages ?? 1;
@@ -273,7 +310,7 @@ const ResourceProjectUtilization = () => {
       />
 
       {/* Collapsible filter panel */}
-      <div className={`overflow-hidden transition-all duration-500 ease-in-out ${filtersOpen ? 'max-h-[220px] opacity-100 mb-5' : 'max-h-0 opacity-0 mb-0'}`}>
+      <div className={`overflow-hidden transition-all duration-500 ease-in-out ${filtersOpen ? 'max-h-[420px] opacity-100 mb-5' : 'max-h-0 opacity-0 mb-0'}`}>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full rounded-lg border bg-muted/30 p-4">
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs font-medium">Month &amp; Year <span className="text-destructive">*</span></Label>
@@ -316,21 +353,6 @@ const ResourceProjectUtilization = () => {
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Label className="text-xs font-medium">Service PO</Label>
-            <SearchableSelect
-              options={[
-                { label: 'All POs', value: 'all' },
-                ...activePOs.map((po) => ({ label: po.service_po_name || po.service_po_code || String(po.id), value: String(po.id) })),
-              ]}
-              value={poId}
-              onValueChange={(v) => { setPoId(v); setPage(1); }}
-              placeholder="All POs"
-              searchPlaceholder="Search PO..."
-              className="h-9 text-sm w-full"
-            />
-          </div>
-
-          <div className="flex flex-col gap-1.5">
             <Label className="text-xs font-medium">Service Category</Label>
             <SearchableSelect
               options={[
@@ -338,9 +360,39 @@ const ResourceProjectUtilization = () => {
                 ...activeServiceCategories.map((sc) => ({ label: sc.name, value: String(sc.id) })),
               ]}
               value={category}
-              onValueChange={(v) => { setCategory(v); setPage(1); }}
+              onValueChange={handleCategoryChange}
               placeholder="All Categories"
               searchPlaceholder="Search category..."
+              className="h-9 text-sm w-full"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs font-medium">Service Type</Label>
+            <SearchableSelect
+              options={[
+                { label: 'All Types', value: 'all' },
+                ...filteredServiceTypes.map((t) => ({ label: t.service_type_name, value: String(t.id) })),
+              ]}
+              value={typeId}
+              onValueChange={handleTypeChange}
+              placeholder="All Types"
+              searchPlaceholder="Search type..."
+              className="h-9 text-sm w-full"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs font-medium">Service PO</Label>
+            <SearchableSelect
+              options={[
+                { label: 'All POs', value: 'all' },
+                ...filteredPOs.map((po) => ({ label: po.service_po_name || po.service_po_code || String(po.id), value: String(po.id) })),
+              ]}
+              value={poId}
+              onValueChange={(v) => { setPoId(v); setPage(1); }}
+              placeholder="All POs"
+              searchPlaceholder="Search PO..."
               className="h-9 text-sm w-full"
             />
           </div>

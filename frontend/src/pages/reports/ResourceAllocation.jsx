@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import { createColumnHelper } from '@tanstack/react-table';
 import { Download, Filter, Search } from 'lucide-react';
@@ -9,6 +9,7 @@ import { useActiveEmployees } from '@/hooks/useEmployees';
 import { useActiveServicePOs } from '@/hooks/useServicePOs';
 import { useActiveClients } from '@/hooks/useClients';
 import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
+import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
 import { formatHours } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
@@ -23,7 +24,7 @@ const columnHelper = createColumnHelper();
 
 
 const exportToExcel = (rows) => {
-  const header = ['Code', 'Employee', 'Designation', 'Client', 'Service PO', 'PO Code', 'Service Type', 'PO Status', 'Billable', 'Hours Logged'];
+  const header = ['Code', 'Employee', 'Designation', 'Client', 'Service PO', 'PO Code', 'Service Type', 'PO Status', 'Category', 'Hours Logged'];
   const dataRows = rows.map((r) => [
     r.employee_code ?? '',
     r.full_name ?? '',
@@ -33,7 +34,7 @@ const exportToExcel = (rows) => {
     r.service_po_code ?? '',
     r.service_type_name ?? '',
     r.po_status ?? '',
-    r.is_billable ? 'Yes' : 'No',
+    r.service_category_name ?? '',
     r.total_hours_logged != null ? Number(r.total_hours_logged) : '',
   ]);
   const ws = XLSX.utils.aoa_to_sheet([header, ...dataRows]);
@@ -54,6 +55,14 @@ const SERVICE_TYPE_COLORS = {
 
 const serviceTypeBadgeClass = (type) =>
   SERVICE_TYPE_COLORS[type?.toLowerCase()] ?? 'bg-muted text-muted-foreground';
+
+const CATEGORY_COLORS = {
+  billable: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
+  'non-billable': 'bg-orange-500/10 text-orange-700 dark:text-orange-400',
+};
+
+const categoryBadgeClass = (category) =>
+  CATEGORY_COLORS[category?.toLowerCase()] ?? 'bg-muted text-muted-foreground';
 
 const columns = [
   columnHelper.accessor('employee_code', {
@@ -146,19 +155,20 @@ const columns = [
       ) : <span className="text-muted-foreground text-xs">—</span>;
     },
   }),
-  columnHelper.accessor('is_billable', {
-    header: 'Billable',
-    size: 110,
+  columnHelper.accessor('service_category_name', {
+    header: 'Category',
+    size: 130,
     cell: (info) => {
-      const v = info.getValue();
-      return (
+      const val = info.getValue();
+      return val ? (
         <span className={cn(
           'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium',
-          v ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
-            : 'bg-muted text-muted-foreground'
+          categoryBadgeClass(val)
         )}>
-          {v ? 'Yes' : 'No'}
+          {val}
         </span>
+      ) : (
+        <span className="text-muted-foreground text-xs">—</span>
       );
     },
   }),
@@ -182,6 +192,7 @@ const ResourceAllocation = () => {
   const [poId, setPoId] = useState('all');
   const [clientId, setClientId] = useState('all');
   const [billable, setBillable] = useState('all');
+  const [categoryId, setCategoryId] = useState('all');
   const [serviceTypeId, setServiceTypeId] = useState('all');
   const [poStatus, setPoStatus] = useState('all');
 
@@ -195,7 +206,40 @@ const ResourceAllocation = () => {
   const { data: activeEmployees = [] } = useActiveEmployees();
   const { data: activePOs = [] } = useActiveServicePOs();
   const { data: activeClients = [] } = useActiveClients();
+  const { data: activeServiceCategories = [] } = useActiveServiceCategories();
   const { data: activeServiceTypes = [] } = useActiveServiceTypes();
+
+  // Category → Type: only show types belonging to the selected category
+  const filteredServiceTypes = categoryId === 'all'
+    ? activeServiceTypes
+    : activeServiceTypes.filter((t) => String(t.service_category_id) === categoryId);
+
+  // Type (or Category, if no type chosen yet) → Service PO
+  const typeCategoryMap = useMemo(() => {
+    const map = new Map();
+    activeServiceTypes.forEach((t) => map.set(String(t.id), String(t.service_category_id)));
+    return map;
+  }, [activeServiceTypes]);
+
+  const filteredPOs = activePOs.filter((po) => {
+    const poTypeId = po.serviceType?.id != null ? String(po.serviceType.id) : null;
+    if (serviceTypeId !== 'all') return poTypeId === serviceTypeId;
+    if (categoryId !== 'all') return poTypeId != null && typeCategoryMap.get(poTypeId) === categoryId;
+    return true;
+  });
+
+  const handleCategoryChange = (v) => {
+    setCategoryId(v);
+    setServiceTypeId('all');
+    setPoId('all');
+    setPage(1);
+  };
+
+  const handleTypeChange = (v) => {
+    setServiceTypeId(v);
+    setPoId('all');
+    setPage(1);
+  };
 
   const params = {
     page,
@@ -206,6 +250,7 @@ const ResourceAllocation = () => {
     ...(clientId !== 'all' && { clientId }),
     ...(billable !== 'all' && { isBillable: billable === 'yes' }),
     ...(poStatus !== 'all' && { status: poStatus }),
+    ...(categoryId !== 'all' && { serviceCategoryId: categoryId }),
     ...(serviceTypeId !== 'all' && { serviceTypeId }),
     ...(debouncedSearch && { search: debouncedSearch }),
   };
@@ -233,6 +278,7 @@ const ResourceAllocation = () => {
     poId !== 'all' ? 1 : 0,
     clientId !== 'all' ? 1 : 0,
     billable !== 'all' ? 1 : 0,
+    categoryId !== 'all' ? 1 : 0,
     serviceTypeId !== 'all' ? 1 : 0,
     poStatus !== 'all' ? 1 : 0,
   ].reduce((a, b) => a + b, 0);
@@ -276,7 +322,7 @@ const ResourceAllocation = () => {
       />
 
       {/* Collapsible filter panel */}
-      <div className={`overflow-hidden transition-all duration-500 ease-in-out ${filtersOpen ? 'max-h-[220px] opacity-100 mb-5' : 'max-h-0 opacity-0 mb-0'}`}>
+      <div className={`overflow-hidden transition-all duration-500 ease-in-out ${filtersOpen ? 'max-h-[420px] opacity-100 mb-5' : 'max-h-0 opacity-0 mb-0'}`}>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full rounded-lg border bg-muted/30 p-4">
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs">Month &amp; Year</Label>
@@ -325,19 +371,19 @@ const ResourceAllocation = () => {
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Label className="text-xs">Service PO</Label>
+            <Label className="text-xs">Service Category</Label>
             <SearchableSelect
               options={[
-                { label: "All POs", value: "all" },
-                ...activePOs.map((po) => ({
-                  label: po.service_po_name || po.service_po_code || String(po.id),
-                  value: String(po.id)
+                { label: "All Categories", value: "all" },
+                ...activeServiceCategories.map((sc) => ({
+                  label: sc.name,
+                  value: String(sc.id)
                 }))
               ]}
-              value={poId}
-              onValueChange={(v) => { setPoId(v); setPage(1); }}
-              placeholder="All POs"
-              searchPlaceholder="Search PO..."
+              value={categoryId}
+              onValueChange={handleCategoryChange}
+              placeholder="All Categories"
+              searchPlaceholder="Search category..."
               className="h-9 text-sm w-full"
             />
           </div>
@@ -347,15 +393,33 @@ const ResourceAllocation = () => {
             <SearchableSelect
               options={[
                 { label: "All Service Types", value: "all" },
-                ...activeServiceTypes.map((st) => ({
+                ...filteredServiceTypes.map((st) => ({
                   label: st.service_type_name,
                   value: String(st.id)
                 }))
               ]}
               value={serviceTypeId}
-              onValueChange={(v) => { setServiceTypeId(v); setPage(1); }}
+              onValueChange={handleTypeChange}
               placeholder="All Service Types"
               searchPlaceholder="Search type..."
+              className="h-9 text-sm w-full"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Service PO</Label>
+            <SearchableSelect
+              options={[
+                { label: "All POs", value: "all" },
+                ...filteredPOs.map((po) => ({
+                  label: po.service_po_name || po.service_po_code || String(po.id),
+                  value: String(po.id)
+                }))
+              ]}
+              value={poId}
+              onValueChange={(v) => { setPoId(v); setPage(1); }}
+              placeholder="All POs"
+              searchPlaceholder="Search PO..."
               className="h-9 text-sm w-full"
             />
           </div>

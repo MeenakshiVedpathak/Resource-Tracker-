@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import * as XLSX from 'xlsx';
-import { useNavigate, Outlet } from 'react-router-dom';
+import { useNavigate, useSearchParams, Outlet } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
 import { Plus, Pencil, Eye, Trash2, Search, Filter, Download } from 'lucide-react';
 import { useServicePOs, useDeleteServicePO } from '@/hooks/useServicePOs';
 import { servicePOsApi } from '@/api/servicePOs.api';
 import { useActiveClients } from '@/hooks/useClients';
 import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
+import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
 import { useAuth } from '@/hooks/useAuth';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useNotification } from '@/hooks/useNotification';
@@ -64,14 +65,18 @@ const TruncatedCell = ({ value, maxWidth = '150px', className }) => {
 const ServicePOList = () => {
   const navigate = useNavigate();
   const { hasRole } = useAuth();
+  const [searchParams] = useSearchParams();
+  const categoryIdParam = searchParams.get('service_category_id');
+  const servicePoIdParam = searchParams.get('service_po_id');
 
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [clientFilter, setClientFilter] = useState('all');
+  const [categoryFilter, setCategoryFilter] = useState(categoryIdParam || 'all');
   const [typeFilter, setTypeFilter] = useState('all');
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(!!categoryIdParam);
   const [exporting, setExporting] = useState(false);
 
   const debouncedSearch = useDebounce(search, 400);
@@ -89,19 +94,34 @@ const ServicePOList = () => {
     ...(statusFilter !== 'all' && { status: statusFilter }),
     ...(debouncedSearch && { search: debouncedSearch }),
     ...(clientFilter !== 'all' && { client_id: clientFilter }),
+    ...(categoryFilter !== 'all' && { service_category_id: categoryFilter }),
     ...(typeFilter !== 'all' && { service_type_id: typeFilter }),
+    ...(servicePoIdParam && { service_po_id: servicePoIdParam }),
     ...(sorting[0] && { sortBy: sorting[0].id, sortOrder: sorting[0].desc ? 'desc' : 'asc' }),
   };
 
   const { data, isPending } = useServicePOs(params);
   const { data: clients = [] } = useActiveClients();
   const { data: serviceTypes = [] } = useActiveServiceTypes();
+  const { data: serviceCategories = [] } = useActiveServiceCategories();
 
   const servicePOs = data?.data ?? [];
   const meta = data?.meta ?? {};
 
+  // Category → Type: only show types belonging to the selected category
+  const filteredServiceTypes = categoryFilter === 'all'
+    ? serviceTypes
+    : serviceTypes.filter((t) => String(t.service_category_id) === categoryFilter);
+
+  const handleCategoryChange = (v) => {
+    setCategoryFilter(v);
+    setTypeFilter('all');
+    setPage(1);
+  };
+
   const activeFilterCount = [
     clientFilter !== 'all' ? 1 : 0,
+    categoryFilter !== 'all' ? 1 : 0,
     typeFilter !== 'all' ? 1 : 0,
     statusFilter !== 'all' ? 1 : 0,
   ].reduce((a, b) => a + b, 0);
@@ -309,11 +329,28 @@ const ServicePOList = () => {
             />
           </div>
           <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Service Category</Label>
+            <SearchableSelect
+              options={[
+                { label: "All Categories", value: "all" },
+                ...serviceCategories.map((sc) => ({
+                  label: sc.name,
+                  value: String(sc.id)
+                }))
+              ]}
+              value={categoryFilter}
+              onValueChange={handleCategoryChange}
+              placeholder="All Categories"
+              searchPlaceholder="Search category..."
+              className="h-9 w-full text-sm bg-white"
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
             <Label className="text-xs">Service Type</Label>
             <SearchableSelect
               options={[
                 { label: "All Service Types", value: "all" },
-                ...serviceTypes.map((t) => ({
+                ...filteredServiceTypes.map((t) => ({
                   label: t.service_type_name,
                   value: String(t.id)
                 }))

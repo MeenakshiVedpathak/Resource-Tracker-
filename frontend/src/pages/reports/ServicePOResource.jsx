@@ -5,6 +5,8 @@ import { useServicePOResourceReport } from '@/hooks/useReports';
 import { reportsApi } from '@/api/reports.api';
 import { useActiveEmployees } from '@/hooks/useEmployees';
 import { useActiveServicePOs } from '@/hooks/useServicePOs';
+import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
+import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
 import { useActiveClients } from '@/hooks/useClients';
 import { formatMonthYear } from '@/utils/formatters';
 import PageHeader from '@/components/common/PageHeader';
@@ -103,6 +105,8 @@ const ServicePOResource = () => {
     year: new Date().getFullYear(),
   });
   const [employeeId, setEmployeeId] = useState('all');
+  const [categoryId, setCategoryId] = useState('all');
+  const [typeId, setTypeId] = useState('all');
   const [poId, setPoId] = useState('all');
   const [clientId, setClientId] = useState('all');
 
@@ -114,11 +118,47 @@ const ServicePOResource = () => {
   const { data: activeEmployees = [] } = useActiveEmployees();
   const { data: activePOs = [] } = useActiveServicePOs();
   const { data: activeClients = [] } = useActiveClients();
+  const { data: activeServiceCategories = [] } = useActiveServiceCategories();
+  const { data: activeServiceTypes = [] } = useActiveServiceTypes();
+
+  // Category → Type: only show types belonging to the selected category
+  const filteredServiceTypes = categoryId === 'all'
+    ? activeServiceTypes
+    : activeServiceTypes.filter((t) => String(t.service_category_id) === categoryId);
+
+  // Type (or Category, if no type chosen yet) → Service PO
+  const typeCategoryMap = useMemo(() => {
+    const map = new Map();
+    activeServiceTypes.forEach((t) => map.set(String(t.id), String(t.service_category_id)));
+    return map;
+  }, [activeServiceTypes]);
+
+  const filteredPOs = activePOs.filter((po) => {
+    const poTypeId = po.serviceType?.id != null ? String(po.serviceType.id) : null;
+    if (typeId !== 'all') return poTypeId === typeId;
+    if (categoryId !== 'all') return poTypeId != null && typeCategoryMap.get(poTypeId) === categoryId;
+    return true;
+  });
+
+  const handleCategoryChange = (v) => {
+    setCategoryId(v);
+    setTypeId('all');
+    setPoId('all');
+    setPage(1);
+  };
+
+  const handleTypeChange = (v) => {
+    setTypeId(v);
+    setPoId('all');
+    setPage(1);
+  };
 
   const params = {
     ...(monthYear && { month: monthYear.month }),
     ...(monthYear && { year: monthYear.year }),
     ...(employeeId !== 'all' && { employeeId }),
+    ...(categoryId !== 'all' && { serviceCategoryId: categoryId }),
+    ...(typeId !== 'all' && { serviceTypeId: typeId }),
     ...(poId !== 'all' && { poId }),
     ...(clientId !== 'all' && { clientId }),
     page,
@@ -152,6 +192,8 @@ const ServicePOResource = () => {
 
   const activeFilterCount = [
     employeeId !== 'all' ? 1 : 0,
+    categoryId !== 'all' ? 1 : 0,
+    typeId !== 'all' ? 1 : 0,
     poId !== 'all' ? 1 : 0,
     clientId !== 'all' ? 1 : 0,
   ].reduce((a, b) => a + b, 0);
@@ -186,7 +228,7 @@ const ServicePOResource = () => {
       />
 
       {/* ── Collapsible Filter Panel ── */}
-      <div className={`overflow-hidden transition-all duration-500 ease-in-out ${filtersOpen ? 'max-h-[220px] opacity-100 mb-5' : 'max-h-0 opacity-0 mb-0'}`}>
+      <div className={`overflow-hidden transition-all duration-500 ease-in-out ${filtersOpen ? 'max-h-[420px] opacity-100 mb-5' : 'max-h-0 opacity-0 mb-0'}`}>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full rounded-lg border bg-muted/30 p-4">
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs font-medium">Month &amp; Year</Label>
@@ -217,6 +259,60 @@ const ServicePOResource = () => {
           </div>
 
           <div className="flex flex-col gap-1.5">
+            <Label className="text-xs font-medium">Service Category</Label>
+            <SearchableSelect
+              options={[
+                { label: "All Categories", value: "all" },
+                ...activeServiceCategories.map((sc) => ({
+                  label: sc.name,
+                  value: String(sc.id)
+                }))
+              ]}
+              value={categoryId}
+              onValueChange={handleCategoryChange}
+              placeholder="All Categories"
+              searchPlaceholder="Search category..."
+              className="h-9 text-sm w-full"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs font-medium">Service Type</Label>
+            <SearchableSelect
+              options={[
+                { label: "All Types", value: "all" },
+                ...filteredServiceTypes.map((t) => ({
+                  label: t.service_type_name,
+                  value: String(t.id)
+                }))
+              ]}
+              value={typeId}
+              onValueChange={handleTypeChange}
+              placeholder="All Types"
+              searchPlaceholder="Search type..."
+              className="h-9 text-sm w-full"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs font-medium">Service PO</Label>
+            <SearchableSelect
+              options={[
+                { label: "All POs", value: "all" },
+                ...filteredPOs.map((po) => ({
+                  label: po.service_po_name || po.service_po_code || String(po.id),
+                  value: String(po.id)
+                }))
+              ]}
+              value={poId}
+              onValueChange={(v) => { setPoId(v); setPage(1); }}
+              placeholder="All POs"
+              searchPlaceholder="Search PO..."
+              className="h-9 text-sm w-full"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
             <Label className="text-xs font-medium">Employee</Label>
             <SearchableSelect
               options={[
@@ -230,24 +326,6 @@ const ServicePOResource = () => {
               onValueChange={(v) => { setEmployeeId(v); setPage(1); }}
               placeholder="All Employees"
               searchPlaceholder="Search employee..."
-              className="h-9 text-sm w-full"
-            />
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <Label className="text-xs font-medium">Service PO</Label>
-            <SearchableSelect
-              options={[
-                { label: "All POs", value: "all" },
-                ...activePOs.map((po) => ({
-                  label: po.service_po_name || po.service_po_code || String(po.id),
-                  value: String(po.id)
-                }))
-              ]}
-              value={poId}
-              onValueChange={(v) => { setPoId(v); setPage(1); }}
-              placeholder="All POs"
-              searchPlaceholder="Search PO..."
               className="h-9 text-sm w-full"
             />
           </div>

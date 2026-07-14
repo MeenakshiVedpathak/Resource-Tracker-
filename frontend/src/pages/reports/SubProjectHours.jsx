@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import { createColumnHelper } from '@tanstack/react-table';
 import { Download, Filter, Search } from 'lucide-react';
@@ -6,6 +6,8 @@ import { useSubProjectHours } from '@/hooks/useReports';
 import { reportsApi } from '@/api/reports.api';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useActiveServicePOs } from '@/hooks/useServicePOs';
+import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
+import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
 import { useActiveClients } from '@/hooks/useClients';
 import { formatHours, formatDate } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
@@ -138,6 +140,8 @@ const columns = [
 const SubProjectHours = () => {
   const [poId, setPoId] = useState('all');
   const [clientId, setClientId] = useState('all');
+  const [categoryId, setCategoryId] = useState('all');
+  const [typeId, setTypeId] = useState('all');
   const [status, setStatus] = useState('all');
 
   const [search, setSearch] = useState('');
@@ -149,8 +153,44 @@ const SubProjectHours = () => {
   const debouncedSearch = useDebounce(search, 400);
   const { data: activePOs = [] } = useActiveServicePOs();
   const { data: activeClients = [] } = useActiveClients();
+  const { data: activeServiceCategories = [] } = useActiveServiceCategories();
+  const { data: activeServiceTypes = [] } = useActiveServiceTypes();
+
+  // Category → Type: only show types belonging to the selected category
+  const filteredServiceTypes = categoryId === 'all'
+    ? activeServiceTypes
+    : activeServiceTypes.filter((t) => String(t.service_category_id) === categoryId);
+
+  // Type (or Category, if no type chosen yet) → Service PO
+  const typeCategoryMap = useMemo(() => {
+    const map = new Map();
+    activeServiceTypes.forEach((t) => map.set(String(t.id), String(t.service_category_id)));
+    return map;
+  }, [activeServiceTypes]);
+
+  const filteredPOs = activePOs.filter((po) => {
+    const poTypeId = po.serviceType?.id != null ? String(po.serviceType.id) : null;
+    if (typeId !== 'all') return poTypeId === typeId;
+    if (categoryId !== 'all') return poTypeId != null && typeCategoryMap.get(poTypeId) === categoryId;
+    return true;
+  });
+
+  const handleCategoryChange = (v) => {
+    setCategoryId(v);
+    setTypeId('all');
+    setPoId('all');
+    setPage(1);
+  };
+
+  const handleTypeChange = (v) => {
+    setTypeId(v);
+    setPoId('all');
+    setPage(1);
+  };
 
   const params = {
+    ...(categoryId !== 'all' && { serviceCategoryId: categoryId }),
+    ...(typeId !== 'all' && { serviceTypeId: typeId }),
     ...(poId !== 'all' && { poId }),
     ...(clientId !== 'all' && { clientId }),
     ...(status !== 'all' && { status }),
@@ -170,6 +210,8 @@ const SubProjectHours = () => {
   const activeFilterCount = [
     poId !== 'all' ? 1 : 0,
     clientId !== 'all' ? 1 : 0,
+    categoryId !== 'all' ? 1 : 0,
+    typeId !== 'all' ? 1 : 0,
     status !== 'all' ? 1 : 0,
   ].reduce((a, b) => a + b, 0);
 
@@ -221,7 +263,7 @@ const SubProjectHours = () => {
       </div>
 
       {/* Collapsible filter panel */}
-      <div className={`overflow-hidden transition-all duration-500 ease-in-out ${filtersOpen ? 'max-h-[220px] opacity-100 mb-5' : 'max-h-0 opacity-0 mb-0'}`}>
+      <div className={`overflow-hidden transition-all duration-500 ease-in-out ${filtersOpen ? 'max-h-[420px] opacity-100 mb-5' : 'max-h-0 opacity-0 mb-0'}`}>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full rounded-lg border bg-muted/30 p-4">
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs">Client</Label>
@@ -242,11 +284,47 @@ const SubProjectHours = () => {
           </div>
 
           <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Service Category</Label>
+            <SearchableSelect
+              options={[
+                { label: "All Categories", value: "all" },
+                ...activeServiceCategories.map((sc) => ({
+                  label: sc.name,
+                  value: String(sc.id)
+                }))
+              ]}
+              value={categoryId}
+              onValueChange={handleCategoryChange}
+              placeholder="All Categories"
+              searchPlaceholder="Search category..."
+              className="h-9 text-sm w-full"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Service Type</Label>
+            <SearchableSelect
+              options={[
+                { label: "All Types", value: "all" },
+                ...filteredServiceTypes.map((t) => ({
+                  label: t.service_type_name,
+                  value: String(t.id)
+                }))
+              ]}
+              value={typeId}
+              onValueChange={handleTypeChange}
+              placeholder="All Types"
+              searchPlaceholder="Search type..."
+              className="h-9 text-sm w-full"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
             <Label className="text-xs">Service PO</Label>
             <SearchableSelect
               options={[
                 { label: "All POs", value: "all" },
-                ...activePOs.map((po) => ({
+                ...filteredPOs.map((po) => ({
                   label: po.service_po_name || po.service_po_code || String(po.id),
                   value: String(po.id)
                 }))
