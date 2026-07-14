@@ -93,3 +93,12 @@ export const useMonthlyResourceUtilization = (params) =>
     staleTime: 0,
     placeholderData: (prev) => prev,
   });
+
+export const useResourceProjectUtilization = (params) =>
+  useQuery({
+    queryKey: QUERY_KEYS.REPORT_RESOURCE_PROJECT_UTILIZATION(params),
+    queryFn: () => reportsApi.getResourceProjectUtilization(params),
+    enabled: !!(params?.month && params?.year),
+    staleTime: 0,
+    placeholderData: (prev) => prev,
+  });

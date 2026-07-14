@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx';
 import { createColumnHelper } from '@tanstack/react-table';
 import { Download, Filter, Search } from 'lucide-react';
 import { useServicePOUtilisationReport } from '@/hooks/useReports';
+import { reportsApi } from '@/api/reports.api';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useActiveServicePOs } from '@/hooks/useServicePOs';
 import { useActiveClients } from '@/hooks/useClients';
@@ -98,6 +99,7 @@ const ServicePOUtilisation = () => {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const debouncedSearch = useDebounce(search, 400);
   const { data: activePOs = [] } = useActiveServicePOs();
@@ -122,6 +124,19 @@ const ServicePOUtilisation = () => {
     clientId !== 'all' ? clientId : null,
     poId !== 'all' ? poId : null,
   ].filter(Boolean).length;
+
+  // Export pulls every matching record (not just the current page) with one extra request.
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const total = meta.total > 0 ? meta.total : 1000;
+      const res = await reportsApi.getServicePOUtilisation({ ...params, page: 1, limit: total });
+      const allRows = Array.isArray(res?.data) ? res.data : [];
+      exportToExcel(allRows);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   return (
     <div>
@@ -149,8 +164,8 @@ const ServicePOUtilisation = () => {
           )}
         </Button>
         {rows.length > 0 && (
-          <Button variant="outline" size="sm" className="h-9" onClick={() => exportToExcel(rows)}>
-            <Download className="mr-1.5 h-4 w-4" />Export Excel
+          <Button variant="outline" size="sm" className="h-9" onClick={handleExport} disabled={exporting}>
+            <Download className="mr-1.5 h-4 w-4" />{exporting ? 'Exporting…' : 'Export Excel'}
           </Button>
         )}
       </div>

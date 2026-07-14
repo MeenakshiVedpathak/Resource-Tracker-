@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import { Download, Filter } from 'lucide-react';
 import { useServicePOResourceReport } from '@/hooks/useReports';
+import { reportsApi } from '@/api/reports.api';
 import { useActiveEmployees } from '@/hooks/useEmployees';
 import { useActiveServicePOs } from '@/hooks/useServicePOs';
 import { useActiveClients } from '@/hooks/useClients';
@@ -108,6 +109,7 @@ const ServicePOResource = () => {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const { data: activeEmployees = [] } = useActiveEmployees();
   const { data: activePOs = [] } = useActiveServicePOs();
@@ -128,6 +130,19 @@ const ServicePOResource = () => {
   const rows   = data?.data ?? [];
   const meta   = data?.meta ?? {};
   const groups = useMemo(() => groupRows(rows), [rows]);
+
+  // Export pulls every matching record (not just the current page) with one extra request.
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const total = meta.total > 0 ? meta.total : 1000;
+      const res = await reportsApi.getResourceAllocation({ ...params, page: 1, limit: total });
+      const all = Array.isArray(res?.data) ? res.data : [];
+      exportToExcel(all, monthYear?.month, monthYear?.year);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const monthLabel  = monthYear ? formatMonthYear(monthYear.month, monthYear.year) : '';
   const totalHours  = rows.reduce((sum, r) => {
@@ -162,8 +177,8 @@ const ServicePOResource = () => {
               )}
             </Button>
             {rows.length > 0 && (
-              <Button variant="outline" size="sm" className="h-9" onClick={() => exportToExcel(rows, monthYear?.month, monthYear?.year)}>
-                <Download className="mr-1.5 h-4 w-4" />Export Excel
+              <Button variant="outline" size="sm" className="h-9" onClick={handleExport} disabled={exporting}>
+                <Download className="mr-1.5 h-4 w-4" />{exporting ? 'Exporting…' : 'Export Excel'}
               </Button>
             )}
           </div>

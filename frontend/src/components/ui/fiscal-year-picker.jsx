@@ -41,7 +41,7 @@ export function FiscalYearPicker({ value, onChange, className }) {
           variant="outline"
           size="sm"
           className={cn(
-            'h-9 px-3 text-sm bg-white font-medium justify-start gap-1.5',
+            'h-9 px-3 text-sm font-medium justify-start gap-1.5',
             className
           )}
         >

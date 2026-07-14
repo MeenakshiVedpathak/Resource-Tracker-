@@ -67,6 +67,7 @@ export const QUERY_KEYS = {
   REPORT_SERVICE_PO_RESOURCE: (params) => ['reports', 'service-po-resource', params],
   REPORT_SERVICE_PO_SUMMARY: (params) => ['reports', 'service-po-summary', params],
   REPORT_MONTHLY_RESOURCE_UTILIZATION: (params) => ['reports', 'monthly-resource-utilization', params],
+  REPORT_RESOURCE_PROJECT_UTILIZATION: (params) => ['reports', 'resource-project-utilization', params],
 
   // Notifications
   NOTIFICATIONS: (params) => ['notifications', params],

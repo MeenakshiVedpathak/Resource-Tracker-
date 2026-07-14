@@ -53,6 +53,7 @@ const MonthlyUtilization = lazy(() => import('@/pages/reports/MonthlyUtilization
 const ServicePOResource = lazy(() => import('@/pages/reports/ServicePOResource'));
 const ServicePOSummary = lazy(() => import('@/pages/reports/ServicePOSummary'));
 const MonthlyResourceUtilization = lazy(() => import('@/pages/reports/MonthlyResourceUtilization'));
+const ResourceProjectUtilization = lazy(() => import('@/pages/reports/ResourceProjectUtilization'));
 
 // ── Settings ──
 const Profile = lazy(() => import('@/pages/Profile'));
@@ -148,6 +149,7 @@ const AppRoutes = () => (
           <Route path={ROUTES.REPORT_SERVICE_PO_RESOURCE} element={<ServicePOResource />} />
           <Route path={ROUTES.REPORT_SERVICE_PO_SUMMARY} element={<ServicePOSummary />} />
           <Route path={ROUTES.REPORT_MONTHLY_RESOURCE_UTILIZATION} element={<MonthlyResourceUtilization />} />
+          <Route path={ROUTES.REPORT_RESOURCE_PROJECT_UTILIZATION} element={<ResourceProjectUtilization />} />
         </Route>
 
         {/* Settings */}

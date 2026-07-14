@@ -21,4 +21,6 @@ export const reportsApi = {
     apiClient.get('/reports/service-po-summary', { params }).then((r) => r.data),
   getMonthlyResourceUtilization: (params) =>
     apiClient.get('/reports/monthly-resource-utilization', { params }).then((r) => r.data),
+  getResourceProjectUtilization: (params) =>
+    apiClient.get('/reports/resource-project-utilization-report', { params }).then((r) => r.data),
 };

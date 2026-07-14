@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx';
 import { createColumnHelper } from '@tanstack/react-table';
 import { Download, Filter, Search } from 'lucide-react';
 import { useServicePOSummary } from '@/hooks/useReports';
+import { reportsApi } from '@/api/reports.api';
 import { useActiveClients } from '@/hooks/useClients';
 import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
 import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
@@ -174,6 +175,7 @@ const ServicePOSummary = () => {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
+  const [exporting, setExporting] = useState(false);
 
   const debouncedSearch = useDebounce(search, 400);
   const { data: activeClients = [] } = useActiveClients();
@@ -208,6 +210,19 @@ const ServicePOSummary = () => {
     status !== 'all',
   ].filter(Boolean).length;
 
+  // Export pulls every matching record (not just the current page) with one extra request.
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const total = meta.total > 0 ? meta.total : 1000;
+      const res = await reportsApi.getServicePOSummary({ ...params, page: 1, limit: total });
+      const allRecords = Array.isArray(res?.data?.records) ? res.data.records : Array.isArray(res?.data) ? res.data : [];
+      exportToExcel(allRecords);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div>
       <PageHeader
@@ -238,8 +253,8 @@ const ServicePOSummary = () => {
               )}
             </Button>
             {records.length > 0 && (
-              <Button variant="outline" size="sm" className="h-9" onClick={() => exportToExcel(records)}>
-                <Download className="mr-1.5 h-4 w-4" />Export Excel
+              <Button variant="outline" size="sm" className="h-9" onClick={handleExport} disabled={exporting}>
+                <Download className="mr-1.5 h-4 w-4" />{exporting ? 'Exporting…' : 'Export Excel'}
               </Button>
             )}
           </div>

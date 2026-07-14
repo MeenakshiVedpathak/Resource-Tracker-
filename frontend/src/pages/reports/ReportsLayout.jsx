@@ -13,6 +13,7 @@ const NAV = [
   // { label: 'Monthly Utilization',   to: ROUTES.REPORT_MONTHLY_UTILIZATION },
   { label: 'PO vs Resource', to: ROUTES.REPORT_SERVICE_PO_RESOURCE },
   { label: 'Monthly Utilization', to: ROUTES.REPORT_MONTHLY_RESOURCE_UTILIZATION },
+  { label: 'Resource Project Utilization', to: ROUTES.REPORT_RESOURCE_PROJECT_UTILIZATION },
 ];
 
 const ReportsLayout = () => (

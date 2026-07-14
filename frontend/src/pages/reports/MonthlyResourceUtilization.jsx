@@ -2,6 +2,7 @@ import { useState } from 'react';
 import * as XLSX from 'xlsx';
 import { Download, Filter, Search } from 'lucide-react';
 import { useMonthlyResourceUtilization } from '@/hooks/useReports';
+import { reportsApi } from '@/api/reports.api';
 import { useActiveEmployees } from '@/hooks/useEmployees';
 import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
 import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
@@ -144,6 +145,7 @@ const MonthlyResourceUtilization = () => {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const { data: activeEmployees = [] }         = useActiveEmployees();
   const { data: activeServiceCategories = [] } = useActiveServiceCategories();
@@ -233,6 +235,19 @@ const MonthlyResourceUtilization = () => {
 
   const handleSearchChange = (e) => { setSearch(e.target.value); setPage(1); };
 
+  // Export pulls every matching record (not just the current page) with one extra request.
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const total = meta.total > 0 ? meta.total : 1000;
+      const res = await reportsApi.getMonthlyResourceUtilization({ ...params, page: 1, limit: total });
+      const allRecords = Array.isArray(res?.data?.records) ? res.data.records : [];
+      exportToExcel(allRecords, filteredColumns, monthYear?.month, monthYear?.year);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const getCategoryColorClass = (catId) => {
     switch(catId) {
       case 1: return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400';
@@ -288,8 +303,8 @@ const MonthlyResourceUtilization = () => {
               )}
             </Button>
             {records.length > 0 && (
-              <Button variant="outline" size="sm" className="h-9" onClick={() => exportToExcel(records, filteredColumns, monthYear?.month, monthYear?.year)}>
-                <Download className="mr-1.5 h-4 w-4" />Export Excel
+              <Button variant="outline" size="sm" className="h-9" onClick={handleExport} disabled={exporting}>
+                <Download className="mr-1.5 h-4 w-4" />{exporting ? 'Exporting…' : 'Export Excel'}
               </Button>
             )}
           </div>

@@ -4,6 +4,7 @@ import { useNavigate, Outlet } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
 import { Plus, Pencil, Eye, Trash2, Search, Filter, Download } from 'lucide-react';
 import { useServicePOs, useDeleteServicePO } from '@/hooks/useServicePOs';
+import { servicePOsApi } from '@/api/servicePOs.api';
 import { useActiveClients } from '@/hooks/useClients';
 import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
 import { useAuth } from '@/hooks/useAuth';
@@ -71,6 +72,7 @@ const ServicePOList = () => {
   const [clientFilter, setClientFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const debouncedSearch = useDebounce(search, 400);
 
@@ -103,6 +105,19 @@ const ServicePOList = () => {
     typeFilter !== 'all' ? 1 : 0,
     statusFilter !== 'all' ? 1 : 0,
   ].reduce((a, b) => a + b, 0);
+
+  // Export pulls every matching record (not just the current page) with one extra request.
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const total = meta.total > 0 ? meta.total : 1000;
+      const res = await servicePOsApi.getAll({ ...params, page: 1, limit: total });
+      const all = Array.isArray(res?.data) ? res.data : [];
+      exportToExcel(all);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const columns = [
     columnHelper.display({
@@ -260,8 +275,8 @@ const ServicePOList = () => {
               )}
             </Button>
             {servicePOs.length > 0 && (
-              <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={() => exportToExcel(servicePOs)}>
-                <Download className="h-4 w-4" /> Export Excel
+              <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={handleExport} disabled={exporting}>
+                <Download className="h-4 w-4" /> {exporting ? 'Exporting…' : 'Export Excel'}
               </Button>
             )}
             {canManage && (

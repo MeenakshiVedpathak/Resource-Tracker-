@@ -1,7 +1,8 @@
+import { useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useDispatch, useSelector } from 'react-redux';
-import { selectSidebarCollapsed, toggleSidebar } from '@/store/slices/uiSlice';
+import { selectSidebarCollapsed, toggleSidebar, setSidebarCollapsed } from '@/store/slices/uiSlice';
 import { cn } from '@/utils/cn';
 import { ROUTES } from '@/constants/routes';
 import {
@@ -60,6 +61,7 @@ const NAV_GROUPS = [
           // { label: 'Timesheet Summary', to: ROUTES.REPORT_TIMESHEET },
           // { label: 'Sub-Project Hours', to: ROUTES.REPORT_SUB_PROJECT_HOURS },
           { label: 'Resource Allocation', to: ROUTES.REPORT_RESOURCE_ALLOCATION },
+          { label: 'Resource Project Utilization', to: ROUTES.REPORT_RESOURCE_PROJECT_UTILIZATION },
           // { label: 'Operational Cost', to: ROUTES.REPORT_OPERATIONAL_COST },
         ],
       },
@@ -156,13 +158,33 @@ const NavItem = ({ item, collapsed }) => {
 const Sidebar = () => {
   const dispatch = useDispatch();
   const collapsed = useSelector(selectSidebarCollapsed);
+  const { pathname } = useLocation();
+
+  // Drawer on mobile: start closed, and close again after each navigation
+  useEffect(() => {
+    if (window.innerWidth < 768) dispatch(setSidebarCollapsed(true));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
 
   return (
-    <motion.aside
-      animate={{ width: collapsed ? 64 : 260 }}
-      transition={{ duration: 0.2, ease: 'easeInOut' }}
-      className="relative flex h-full shrink-0 flex-col bg-sidebar border-r border-sidebar-border overflow-hidden"
-    >
+    <>
+      {/* Mobile backdrop — closes the drawer on tap */}
+      {!collapsed && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 md:hidden"
+          onClick={() => dispatch(toggleSidebar())}
+        />
+      )}
+
+      <motion.aside
+        animate={{ width: collapsed ? 64 : 260 }}
+        transition={{ duration: 0.2, ease: 'easeInOut' }}
+        className={cn(
+          'fixed inset-y-0 left-0 z-50 flex h-full shrink-0 flex-col bg-sidebar border-r border-sidebar-border overflow-hidden transition-transform duration-200',
+          'md:relative md:z-auto md:translate-x-0',
+          collapsed ? '-translate-x-full md:translate-x-0' : 'translate-x-0'
+        )}
+      >
       {/* Logo */}
       <div className={cn(
         'flex h-16 shrink-0 items-center border-b border-sidebar-border px-4 gap-3',
@@ -229,7 +251,8 @@ const Sidebar = () => {
           )}
         </button>
       </div>
-    </motion.aside>
+      </motion.aside>
+    </>
   );
 };
 

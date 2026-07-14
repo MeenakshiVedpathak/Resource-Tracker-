@@ -6,6 +6,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
 import { useMonthlyCostSummary } from '@/hooks/useReports';
+import { reportsApi } from '@/api/reports.api';
 import { formatCurrency, formatMonthYear } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
@@ -92,6 +93,7 @@ const MonthlyCostSummary = () => {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const params = {
     page,
@@ -112,6 +114,19 @@ const MonthlyCostSummary = () => {
   }));
 
   const activeFilterCount = 0;
+
+  // Export pulls every matching record (not just the current page) with one extra request.
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const total = meta.total > 0 ? meta.total : 1000;
+      const res = await reportsApi.getMonthlyCostSummary({ ...params, page: 1, limit: total });
+      const all = Array.isArray(res?.data?.records) ? res.data.records : [];
+      exportToExcel(all);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   return (
     <div>
@@ -136,8 +151,8 @@ const MonthlyCostSummary = () => {
           )}
         </Button>
         {rows.length > 0 && (
-          <Button variant="outline" size="sm" className="h-9" onClick={() => exportToExcel(rows)}>
-            <Download className="mr-1.5 h-4 w-4" />Export Excel
+          <Button variant="outline" size="sm" className="h-9" onClick={handleExport} disabled={exporting}>
+            <Download className="mr-1.5 h-4 w-4" />{exporting ? 'Exporting…' : 'Export Excel'}
           </Button>
         )}
       </div>

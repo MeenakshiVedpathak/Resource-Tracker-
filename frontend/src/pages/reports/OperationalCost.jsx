@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx';
 import { createColumnHelper } from '@tanstack/react-table';
 import { Download, Filter, Search } from 'lucide-react';
 import { useOperationalCost } from '@/hooks/useReports';
+import { reportsApi } from '@/api/reports.api';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useActiveEmployees } from '@/hooks/useEmployees';
 import { formatCurrency, formatMonthYear } from '@/utils/formatters';
@@ -139,6 +140,7 @@ const OperationalCost = () => {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const debouncedSearch = useDebounce(search, 400);
   const { data: activeEmployees = [] } = useActiveEmployees();
@@ -161,6 +163,19 @@ const OperationalCost = () => {
   const activeFilterCount = [
     employeeId !== 'all' ? 1 : 0,
   ].reduce((a, b) => a + b, 0);
+
+  // Export pulls every matching record (not just the current page) with one extra request.
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const total = meta.total > 0 ? meta.total : 1000;
+      const res = await reportsApi.getOperationalCost({ ...params, page: 1, limit: total });
+      const all = Array.isArray(res?.data?.records) ? res.data.records : [];
+      exportToExcel(all);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   return (
     <div>
@@ -186,8 +201,8 @@ const OperationalCost = () => {
               )}
             </Button>
             {rows.length > 0 && (
-              <Button variant="outline" size="sm" className="h-9" onClick={() => exportToExcel(rows)}>
-                <Download className="mr-1.5 h-4 w-4" />Export Excel
+              <Button variant="outline" size="sm" className="h-9" onClick={handleExport} disabled={exporting}>
+                <Download className="mr-1.5 h-4 w-4" />{exporting ? 'Exporting…' : 'Export Excel'}
               </Button>
             )}
           </div>
