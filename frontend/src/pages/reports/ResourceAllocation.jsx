@@ -191,7 +191,6 @@ const ResourceAllocation = () => {
   const [employeeId, setEmployeeId] = useState('all');
   const [poId, setPoId] = useState('all');
   const [clientId, setClientId] = useState('all');
-  const [billable, setBillable] = useState('all');
   const [categoryId, setCategoryId] = useState('all');
   const [serviceTypeId, setServiceTypeId] = useState('all');
   const [poStatus, setPoStatus] = useState('all');
@@ -248,7 +247,6 @@ const ResourceAllocation = () => {
     ...(employeeId !== 'all' && { employeeId }),
     ...(poId !== 'all' && { poId }),
     ...(clientId !== 'all' && { clientId }),
-    ...(billable !== 'all' && { isBillable: billable === 'yes' }),
     ...(poStatus !== 'all' && { status: poStatus }),
     ...(categoryId !== 'all' && { serviceCategoryId: categoryId }),
     ...(serviceTypeId !== 'all' && { serviceTypeId }),
@@ -277,7 +275,6 @@ const ResourceAllocation = () => {
     employeeId !== 'all' ? 1 : 0,
     poId !== 'all' ? 1 : 0,
     clientId !== 'all' ? 1 : 0,
-    billable !== 'all' ? 1 : 0,
     categoryId !== 'all' ? 1 : 0,
     serviceTypeId !== 'all' ? 1 : 0,
     poStatus !== 'all' ? 1 : 0,
@@ -439,21 +436,6 @@ const ResourceAllocation = () => {
               value={poStatus}
               onValueChange={(v) => { setPoStatus(v); setPage(1); }}
               placeholder="All status"
-              className="h-9 text-sm w-full"
-            />
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <Label className="text-xs">Billable</Label>
-            <SearchableSelect showSearch={false}
-              options={[
-                { label: "All", value: "all" },
-                { label: "Yes", value: "yes" },
-                { label: "No", value: "no" },
-              ]}
-              value={billable}
-              onValueChange={(v) => { setBillable(v); setPage(1); }}
-              placeholder="All"
               className="h-9 text-sm w-full"
             />
           </div>

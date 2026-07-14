@@ -259,6 +259,24 @@ const ServicePOResource = () => {
           </div>
 
           <div className="flex flex-col gap-1.5">
+            <Label className="text-xs font-medium">Employee</Label>
+            <SearchableSelect
+              options={[
+                { label: "All Employees", value: "all" },
+                ...activeEmployees.map((e) => ({
+                  label: e.full_name,
+                  value: String(e.id)
+                }))
+              ]}
+              value={employeeId}
+              onValueChange={(v) => { setEmployeeId(v); setPage(1); }}
+              placeholder="All Employees"
+              searchPlaceholder="Search employee..."
+              className="h-9 text-sm w-full"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
             <Label className="text-xs font-medium">Service Category</Label>
             <SearchableSelect
               options={[
@@ -308,24 +326,6 @@ const ServicePOResource = () => {
               onValueChange={(v) => { setPoId(v); setPage(1); }}
               placeholder="All POs"
               searchPlaceholder="Search PO..."
-              className="h-9 text-sm w-full"
-            />
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <Label className="text-xs font-medium">Employee</Label>
-            <SearchableSelect
-              options={[
-                { label: "All Employees", value: "all" },
-                ...activeEmployees.map((e) => ({
-                  label: e.full_name,
-                  value: String(e.id)
-                }))
-              ]}
-              value={employeeId}
-              onValueChange={(v) => { setEmployeeId(v); setPage(1); }}
-              placeholder="All Employees"
-              searchPlaceholder="Search employee..."
               className="h-9 text-sm w-full"
             />
           </div>

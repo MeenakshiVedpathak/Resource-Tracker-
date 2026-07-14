@@ -961,17 +961,18 @@ const SectionLabel = ({ icon: Icon, title, action }) => (
 
 const FilterPanel = ({ open, onToggle, children, badge }) => (
   <div className="rounded-2xl border bg-card shadow-sm overflow-hidden">
+    <div className="h-1 w-full bg-gradient-to-r from-primary via-violet-500 to-amber-500" />
     <button
       onClick={onToggle}
-      className="w-full flex items-center justify-between px-4 py-2.5 bg-gradient-to-r from-primary/[0.06] via-primary/[0.03] to-transparent hover:from-primary/[0.10] hover:via-primary/[0.05] transition-all duration-200 text-left group"
+      className="w-full flex items-center justify-between px-4 py-3 bg-gradient-to-r from-primary/[0.08] via-violet-500/[0.05] to-amber-500/[0.06] hover:from-primary/[0.14] hover:via-violet-500/[0.09] hover:to-amber-500/[0.10] transition-all duration-200 text-left group"
     >
       <div className="flex items-center gap-2.5">
-        <div className="p-1.5 rounded-lg bg-primary/10 shrink-0">
-          <CalendarDays className="h-3.5 w-3.5 text-primary" />
+        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-indigo-600 shadow-sm shadow-primary/30 shrink-0">
+          <CalendarDays className="h-4 w-4 text-white" />
         </div>
         <span className="text-sm font-semibold tracking-tight">Filters & Period</span>
         {badge && (
-          <span className="rounded-full bg-primary/10 text-primary border border-primary/20 px-2.5 py-0.5 text-[10px] font-bold">
+          <span className="rounded-full bg-primary text-primary-foreground shadow-sm px-2.5 py-0.5 text-[10px] font-bold">
             {badge} active
           </span>
         )}
@@ -988,7 +989,7 @@ const FilterPanel = ({ open, onToggle, children, badge }) => (
           transition={{ duration: 0.22, ease: 'easeInOut' }}
           style={{ overflow: 'hidden' }}
         >
-          <div className="border-t bg-gradient-to-b from-muted/30 to-transparent px-4 py-3">{children}</div>
+          <div className="border-t bg-gradient-to-br from-primary/[0.03] via-violet-500/[0.02] to-amber-500/[0.03] px-4 py-3.5">{children}</div>
         </motion.div>
       )}
     </AnimatePresence>
@@ -1360,34 +1361,37 @@ const Dashboard = () => {
 
             {/* Quarter toggle — quarterly view only */}
             {viewMode === 'quarterly' && (<>
-              <div className="flex items-center bg-background border border-input shadow-sm rounded-xl p-1 gap-0.5 shrink-0">
-                {QUARTERS.map((q) => (
-                  <button
-                    key={q.value}
-                    onClick={() => setQuarter(quarter === q.value ? null : q.value)}
-                    className={`px-3 py-1 rounded-lg text-xs transition-all duration-150 whitespace-nowrap ${
-                      quarter === q.value ? QUARTER_STYLES.active : QUARTER_STYLES.inactive
-                    }`}
-                  >
-                    {q.label}
-                    <span className={`ml-1 text-[10px] ${quarter === q.value ? 'opacity-60' : 'opacity-50'}`}>{q.sub}</span>
-                  </button>
-                ))}
+              <div className="flex items-center gap-1.5 shrink-0">
+                <FilterIconBadge icon={CalendarDays} color="primary" />
+                <div className="flex items-center bg-background border border-primary/20 shadow-sm rounded-xl p-1 gap-0.5">
+                  {QUARTERS.map((q) => (
+                    <button
+                      key={q.value}
+                      onClick={() => setQuarter(quarter === q.value ? null : q.value)}
+                      className={`px-3 py-1 rounded-lg text-xs transition-all duration-150 whitespace-nowrap ${
+                        quarter === q.value ? QUARTER_STYLES.active : QUARTER_STYLES.inactive
+                      }`}
+                    >
+                      {q.label}
+                      <span className={`ml-1 text-[10px] ${quarter === q.value ? 'opacity-60' : 'opacity-50'}`}>{q.sub}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
               <div className="h-6 w-px bg-border hidden sm:block" />
             </>)}
 
             <div className="flex items-center gap-1.5 min-w-[150px] flex-1">
-              <Users className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-              <SearchableSelect options={employeeOptions} value={employeeId} onValueChange={setEmployeeId} placeholder="Employee" searchPlaceholder="Search employee…" className="h-8 text-sm" />
+              <FilterIconBadge icon={Users} color="violet" />
+              <SearchableSelect options={employeeOptions} value={employeeId} onValueChange={setEmployeeId} placeholder="Employee" searchPlaceholder="Search employee…" className={`h-8 text-sm ${FILTER_FIELD_STYLES.violet}`} />
             </div>
             <div className="flex items-center gap-1.5 min-w-[140px] flex-1">
-              <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-              <SearchableSelect options={clientOptions} value={clientId} onValueChange={setClientId} placeholder="Client" searchPlaceholder="Search client…" className="h-8 text-sm" />
+              <FilterIconBadge icon={Building2} color="sky" />
+              <SearchableSelect options={clientOptions} value={clientId} onValueChange={setClientId} placeholder="Client" searchPlaceholder="Search client…" className={`h-8 text-sm ${FILTER_FIELD_STYLES.sky}`} />
             </div>
             <div className="flex items-center gap-1.5 min-w-[150px] flex-1">
-              <Briefcase className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-              <SearchableSelect options={servicePOOptions} value={servicePOId} onValueChange={setServicePOId} placeholder="Service PO" searchPlaceholder="Search PO…" className="h-8 text-sm" />
+              <FilterIconBadge icon={Briefcase} color="amber" />
+              <SearchableSelect options={servicePOOptions} value={servicePOId} onValueChange={setServicePOId} placeholder="Service PO" searchPlaceholder="Search PO…" className={`h-8 text-sm ${FILTER_FIELD_STYLES.amber}`} />
             </div>
 
             <AnimatePresence>
@@ -1777,6 +1781,25 @@ const CHIP_STYLES = {
   sky:     'bg-sky-50 text-sky-700 border-sky-200 hover:bg-sky-100 dark:bg-sky-900/20 dark:text-sky-300 dark:border-sky-700',
   amber:   'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-700',
 };
+
+const FILTER_ICON_STYLES = {
+  primary: 'bg-primary shadow-primary/30',
+  violet:  'bg-violet-500 shadow-violet-500/30',
+  sky:     'bg-sky-500 shadow-sky-500/30',
+  amber:   'bg-amber-500 shadow-amber-500/30',
+};
+
+const FILTER_FIELD_STYLES = {
+  violet: 'border-violet-200 bg-violet-50 hover:bg-violet-100/70 focus-visible:ring-violet-400 dark:border-violet-800 dark:bg-violet-950/20 dark:hover:bg-violet-950/30',
+  sky:    'border-sky-200 bg-sky-50 hover:bg-sky-100/70 focus-visible:ring-sky-400 dark:border-sky-800 dark:bg-sky-950/20 dark:hover:bg-sky-950/30',
+  amber:  'border-amber-200 bg-amber-50 hover:bg-amber-100/70 focus-visible:ring-amber-400 dark:border-amber-800 dark:bg-amber-950/20 dark:hover:bg-amber-950/30',
+};
+
+const FilterIconBadge = ({ icon: Icon, color }) => (
+  <span className={`flex h-7 w-7 items-center justify-center rounded-lg shrink-0 text-white shadow-sm ${FILTER_ICON_STYLES[color] ?? FILTER_ICON_STYLES.primary}`}>
+    <Icon className="h-3.5 w-3.5" />
+  </span>
+);
 const Chip = ({ icon: Icon, label, onRemove, color }) => (
   <motion.span
     initial={{ scale: 0.85, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}

@@ -6,6 +6,8 @@ import { Briefcase, Users, AlertTriangle, ChevronLeft, ChevronRight, Clock, Filt
 import { cn } from '@/utils/cn';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useActiveServicePOs } from '@/hooks/useServicePOs';
+import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
+import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
 
 const PAGE_SIZE = 9;
 
@@ -157,18 +159,39 @@ const SkeletonGrid = () => (
 
 /* ── Main component ── */
 const TopEmployeesByPOPanel = ({ data = [], isLoading, month, year }) => {
-  const [categoryName, setCategoryName] = useState('all');
-  const [poFilterId, setPoFilterId]     = useState('all');
-  const [clientPage, setClientPage]     = useState(1);
+  const [categoryId, setCategoryId] = useState('all');
+  const [poFilterId, setPoFilterId] = useState('all');
+  const [clientPage, setClientPage] = useState(1);
 
   /* ── Dropdown data ── */
-  const { data: activePOOptions = [] } = useActiveServicePOs();
+  const { data: activePOOptions = [] }         = useActiveServicePOs();
+  const { data: activeServiceCategories = [] } = useActiveServiceCategories();
+  const { data: activeServiceTypes = [] }      = useActiveServiceTypes();
 
-  /* ── Derive unique category names from the response data ── */
-  const uniqueCategories = useMemo(
-    () => [...new Set(data.map((po) => po.category_name).filter(Boolean))].sort(),
-    [data]
+  /* ── Category → Service PO, same cascade used in the other reports ── */
+  const typeCategoryMap = useMemo(() => {
+    const map = new Map();
+    activeServiceTypes.forEach((t) => map.set(String(t.id), String(t.service_category_id)));
+    return map;
+  }, [activeServiceTypes]);
+
+  const filteredPOOptions = useMemo(() => {
+    if (categoryId === 'all') return activePOOptions;
+    return activePOOptions.filter((po) => {
+      const poTypeId = po.serviceType?.id != null ? String(po.serviceType.id) : null;
+      return poTypeId != null && typeCategoryMap.get(poTypeId) === categoryId;
+    });
+  }, [activePOOptions, categoryId, typeCategoryMap]);
+
+  const selectedCategoryName = useMemo(
+    () => activeServiceCategories.find((c) => String(c.id) === categoryId)?.name,
+    [activeServiceCategories, categoryId]
   );
+
+  const handleCategoryChange = (v) => {
+    setCategoryId(v);
+    setPoFilterId('all');
+  };
 
   /* ── Client-side filtering using fields already present in the response ── */
   const filteredData = useMemo(() => {
@@ -178,15 +201,15 @@ const TopEmployeesByPOPanel = ({ data = [], isLoading, month, year }) => {
       result = result.filter((po) => String(po.service_po_id) === poFilterId);
     }
 
-    if (categoryName !== 'all') {
-      result = result.filter((po) => po.category_name === categoryName);
+    if (categoryId !== 'all') {
+      result = result.filter((po) => po.category_name === selectedCategoryName);
     }
 
     return result;
-  }, [data, poFilterId, categoryName]);
+  }, [data, poFilterId, categoryId, selectedCategoryName]);
 
   /* ── Reset page when filters change ── */
-  useEffect(() => { setClientPage(1); }, [poFilterId, categoryName]);
+  useEffect(() => { setClientPage(1); }, [poFilterId, categoryId]);
 
   /* ── Client-side pagination ── */
   const totalPages   = Math.ceil(filteredData.length / PAGE_SIZE);
@@ -215,7 +238,7 @@ const TopEmployeesByPOPanel = ({ data = [], isLoading, month, year }) => {
     .reduce((s, po) => s + (po.top_employees ?? []).reduce((ps, e) => ps + (e.hours || 0), 0), 0);
   const billablePct = totalHours > 0 ? Math.round((billableHours / totalHours) * 100) : 0;
 
-  const isFiltered = categoryName !== 'all' || poFilterId !== 'all';
+  const isFiltered = categoryId !== 'all' || poFilterId !== 'all';
 
   return (
     <Card className="overflow-hidden">
@@ -239,17 +262,17 @@ const TopEmployeesByPOPanel = ({ data = [], isLoading, month, year }) => {
             <SearchableSelect
               options={[
                 { label: 'All Categories', value: 'all' },
-                ...uniqueCategories.map((name) => ({ label: name, value: name })),
+                ...activeServiceCategories.map((c) => ({ label: c.name, value: String(c.id) })),
               ]}
-              value={categoryName}
-              onValueChange={setCategoryName}
+              value={categoryId}
+              onValueChange={handleCategoryChange}
               placeholder="All Categories"
               className="h-8 w-36 text-xs"
             />
             <SearchableSelect
               options={[
                 { label: 'All POs', value: 'all' },
-                ...activePOOptions.map((po) => ({
+                ...filteredPOOptions.map((po) => ({
                   label: po.service_po_name || po.service_po_code || String(po.id),
                   value: String(po.id),
                 })),
