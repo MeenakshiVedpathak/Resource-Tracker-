@@ -1496,6 +1496,7 @@ const Dashboard = () => {
         <SectionLabel icon={Calendar} title="Billable Breakdown" />
         <BillableAnalyticsPanel
           data={sortedBillableRowsQ.slice((billablePageQ - 1) * BILLABLE_PAGE_SIZE, billablePageQ * BILLABLE_PAGE_SIZE)}
+          allData={sortedBillableRowsQ}
           meta={mkMeta(sortedBillableRowsQ, billablePageQ)}
           isLoading={isAnalyticsPending}
           month={null}
@@ -1656,6 +1657,7 @@ const Dashboard = () => {
             <SectionLabel icon={Calendar} title="Billable Breakdown" />
             <BillableAnalyticsPanel
               data={sortedBillableRowsM.slice((billablePage - 1) * BILLABLE_PAGE_SIZE, billablePage * BILLABLE_PAGE_SIZE)}
+              allData={sortedBillableRowsM}
               meta={mkMeta(sortedBillableRowsM, billablePage)}
               isLoading={isMonthlyAnalyticsPending}
               month={Number(month)}

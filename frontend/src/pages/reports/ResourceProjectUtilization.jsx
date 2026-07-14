@@ -499,26 +499,26 @@ const ResourceProjectUtilization = () => {
                               {projectsToShow.length === 0 ? (
                                 <p className="px-6 py-3 text-xs text-muted-foreground">No projects match the current filter.</p>
                               ) : (
-                                <table className="w-full border-collapse text-xs">
+                                <table className="w-full table-fixed border-collapse text-xs">
                                   <thead>
                                     <tr className="border-b border-primary/20 bg-primary/10">
-                                      <th className="px-3 py-2 pl-10 text-left font-semibold text-primary">Client</th>
-                                      <th className="px-3 py-2 text-left font-semibold text-primary">Project</th>
-                                      <th className="px-3 py-2 text-left font-semibold text-primary w-[110px]">Type</th>
-                                      <th className="px-3 py-2 text-left font-semibold text-primary w-[120px]">Category</th>
-                                      <th className="px-3 py-2 text-right font-semibold text-primary w-[100px]">Hours</th>
-                                      <th className="px-3 py-2 text-right font-semibold text-primary w-[140px]">Billable Amount</th>
+                                      <th className="px-3 py-2 pl-10 align-middle text-left font-semibold text-primary w-[22%]">Client</th>
+                                      <th className="px-3 py-2 align-middle text-left font-semibold text-primary w-[31%]">Project</th>
+                                      <th className="px-3 py-2 align-middle text-center font-semibold text-primary w-[11%]">Type</th>
+                                      <th className="px-3 py-2 align-middle text-center font-semibold text-primary w-[12%]">Category</th>
+                                      <th className="px-3 py-2 align-middle text-right font-semibold text-primary w-[10%]">Hours</th>
+                                      <th className="px-3 py-2 align-middle text-right font-semibold text-primary w-[14%]">Billable Amount</th>
                                     </tr>
                                   </thead>
                                   <tbody className="divide-y divide-border/60">
                                     {projectsToShow.map((p, pi) => (
                                       <tr key={pi}>
-                                        <td className="px-3 py-1.5 pl-10">{p.client || '—'}</td>
-                                        <td className="px-3 py-1.5">{p.projectName || '—'}</td>
-                                        <td className="px-3 py-1.5"><ProjectTypeBadge value={p.projectType} /></td>
-                                        <td className="px-3 py-1.5"><CategoryBadge value={p.category} /></td>
-                                        <td className="px-3 py-1.5 text-right tabular-nums">{formatHours(p.projectHours)}</td>
-                                        <td className="px-3 py-1.5 text-right tabular-nums">{p.billableAmount ? formatCurrency(p.billableAmount) : '—'}</td>
+                                        <td className="px-3 py-1.5 pl-10 align-middle truncate" title={p.client}>{p.client || '—'}</td>
+                                        <td className="px-3 py-1.5 align-middle truncate" title={p.projectName}>{p.projectName || '—'}</td>
+                                        <td className="px-3 py-1.5 align-middle text-center"><ProjectTypeBadge value={p.projectType} /></td>
+                                        <td className="px-3 py-1.5 align-middle text-center"><CategoryBadge value={p.category} /></td>
+                                        <td className="px-3 py-1.5 align-middle text-right tabular-nums">{formatHours(p.projectHours)}</td>
+                                        <td className="px-3 py-1.5 align-middle text-right tabular-nums">{p.billableAmount ? formatCurrency(p.billableAmount) : '—'}</td>
                                       </tr>
                                     ))}
                                   </tbody>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import { useNavigate, useSearchParams, Outlet } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
@@ -6,6 +6,7 @@ import { Plus, Pencil, Eye, Trash2, Search, Filter, Download } from 'lucide-reac
 import { useServicePOs, useDeleteServicePO } from '@/hooks/useServicePOs';
 import { servicePOsApi } from '@/api/servicePOs.api';
 import { useActiveClients } from '@/hooks/useClients';
+import { useActiveServicePOs } from '@/hooks/useServicePOs';
 import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
 import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
 import { useAuth } from '@/hooks/useAuth';
@@ -76,7 +77,8 @@ const ServicePOList = () => {
   const [clientFilter, setClientFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState(categoryIdParam || 'all');
   const [typeFilter, setTypeFilter] = useState('all');
-  const [filtersOpen, setFiltersOpen] = useState(!!categoryIdParam);
+  const [poFilter, setPoFilter] = useState(servicePoIdParam || 'all');
+  const [filtersOpen, setFiltersOpen] = useState(!!categoryIdParam || !!servicePoIdParam);
   const [exporting, setExporting] = useState(false);
 
   const debouncedSearch = useDebounce(search, 400);
@@ -96,12 +98,13 @@ const ServicePOList = () => {
     ...(clientFilter !== 'all' && { client_id: clientFilter }),
     ...(categoryFilter !== 'all' && { service_category_id: categoryFilter }),
     ...(typeFilter !== 'all' && { service_type_id: typeFilter }),
-    ...(servicePoIdParam && { service_po_id: servicePoIdParam }),
+    ...(poFilter !== 'all' && { service_po_id: poFilter }),
     ...(sorting[0] && { sortBy: sorting[0].id, sortOrder: sorting[0].desc ? 'desc' : 'asc' }),
   };
 
   const { data, isPending } = useServicePOs(params);
   const { data: clients = [] } = useActiveClients();
+  const { data: activePOs = [] } = useActiveServicePOs();
   const { data: serviceTypes = [] } = useActiveServiceTypes();
   const { data: serviceCategories = [] } = useActiveServiceCategories();
 
@@ -113,9 +116,30 @@ const ServicePOList = () => {
     ? serviceTypes
     : serviceTypes.filter((t) => String(t.service_category_id) === categoryFilter);
 
+  // Type (or Category, if no type chosen yet) → Service PO
+  const typeCategoryMap = useMemo(() => {
+    const map = new Map();
+    serviceTypes.forEach((t) => map.set(String(t.id), String(t.service_category_id)));
+    return map;
+  }, [serviceTypes]);
+
+  const filteredPOs = activePOs.filter((po) => {
+    const poTypeId = po.serviceType?.id != null ? String(po.serviceType.id) : null;
+    if (typeFilter !== 'all') return poTypeId === typeFilter;
+    if (categoryFilter !== 'all') return poTypeId != null && typeCategoryMap.get(poTypeId) === categoryFilter;
+    return true;
+  });
+
   const handleCategoryChange = (v) => {
     setCategoryFilter(v);
     setTypeFilter('all');
+    setPoFilter('all');
+    setPage(1);
+  };
+
+  const handleTypeChange = (v) => {
+    setTypeFilter(v);
+    setPoFilter('all');
     setPage(1);
   };
 
@@ -123,6 +147,7 @@ const ServicePOList = () => {
     clientFilter !== 'all' ? 1 : 0,
     categoryFilter !== 'all' ? 1 : 0,
     typeFilter !== 'all' ? 1 : 0,
+    poFilter !== 'all' ? 1 : 0,
     statusFilter !== 'all' ? 1 : 0,
   ].reduce((a, b) => a + b, 0);
 
@@ -309,7 +334,7 @@ const ServicePOList = () => {
       />
 
       {/* Collapsible filter panel */}
-      <div className={`overflow-hidden transition-all duration-500 ease-in-out ${filtersOpen ? 'max-h-[220px] opacity-100 mb-2' : 'max-h-0 opacity-0 mb-0'}`}>
+      <div className={`overflow-hidden transition-all duration-500 ease-in-out ${filtersOpen ? 'max-h-[420px] opacity-100 mb-2' : 'max-h-0 opacity-0 mb-0'}`}>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full rounded-lg border bg-muted/30 p-4">
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs">Client</Label>
@@ -356,9 +381,26 @@ const ServicePOList = () => {
                 }))
               ]}
               value={typeFilter}
-              onValueChange={(v) => { setTypeFilter(v); setPage(1); }}
+              onValueChange={handleTypeChange}
               placeholder="All Service Types"
               searchPlaceholder="Search type..."
+              className="h-9 w-full text-sm bg-white"
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Service PO</Label>
+            <SearchableSelect
+              options={[
+                { label: "All POs", value: "all" },
+                ...filteredPOs.map((po) => ({
+                  label: po.service_po_name || po.service_po_code || String(po.id),
+                  value: String(po.id)
+                }))
+              ]}
+              value={poFilter}
+              onValueChange={(v) => { setPoFilter(v); setPage(1); }}
+              placeholder="All POs"
+              searchPlaceholder="Search PO..."
               className="h-9 w-full text-sm bg-white"
             />
           </div>

@@ -100,7 +100,7 @@ const NBBadge = ({ name, hours, type }) => (
 
 /* ── main component ── */
 const BillableAnalyticsPanel = ({
-  data = [], meta = {}, isLoading, month, year, page = 1, onPageChange,
+  data = [], allData, meta = {}, isLoading, month, year, page = 1, onPageChange,
   sortBy = 'nonBillable', onSortByChange,
 }) => {
   const [view, setView] = useState('charts');
@@ -110,14 +110,16 @@ const BillableAnalyticsPanel = ({
     : 'This Month';
 
   const records = data.filter((r) => r.total_hours > 0);
+  /* aggregates (totals/donut/tiers) must reflect ALL employees, not just the current page */
+  const allRecords = (allData ?? data).filter((r) => r.total_hours > 0);
 
   /* ── totals ── */
-  const totalBillable    = records.reduce((s, r) => s + (r.billable_hours     || 0), 0);
-  const totalHours       = records.reduce((s, r) => s + (r.total_hours        || 0), 0);
+  const totalBillable    = allRecords.reduce((s, r) => s + (r.billable_hours     || 0), 0);
+  const totalHours       = allRecords.reduce((s, r) => s + (r.total_hours        || 0), 0);
   const overallPct       = totalHours > 0 ? (totalBillable / totalHours) * 100 : 0;
 
   let totalLeaves = 0, totalIdle = 0;
-  records.forEach((r) =>
+  allRecords.forEach((r) =>
     (r.non_billable_reasons ?? []).forEach((nb) => {
       if (nb.service_type_name === 'Leaves') totalLeaves += nb.hours;
       else totalIdle += nb.hours;
@@ -126,7 +128,7 @@ const BillableAnalyticsPanel = ({
 
   /* ── tier counts ── */
   const tiers = { Healthy: 0, Good: 0, 'At Risk': 0, Critical: 0 };
-  records.forEach((r) => { tiers[getTier(r.billable_pct || 0).label]++; });
+  allRecords.forEach((r) => { tiers[getTier(r.billable_pct || 0).label]++; });
   const atRiskCount = tiers['At Risk'] + tiers['Critical'];
 
   /* ── bar chart data ── */
@@ -205,7 +207,7 @@ const BillableAnalyticsPanel = ({
         </div>
 
         {/* ── Stat cards ── */}
-        {!isLoading && records.length > 0 && (
+        {!isLoading && allRecords.length > 0 && (
           <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
             <Stat
               label="Billable Efficiency"
@@ -267,7 +269,7 @@ const BillableAnalyticsPanel = ({
         )}
 
         {/* ── Empty ── */}
-        {!isLoading && records.length === 0 && (
+        {!isLoading && allRecords.length === 0 && (
           <EmptyState
             icon={Users}
             title="No data for this period"
@@ -275,7 +277,7 @@ const BillableAnalyticsPanel = ({
           />
         )}
 
-        {!isLoading && records.length > 0 && (
+        {!isLoading && allRecords.length > 0 && (
           <>
 
             {/* ── CHARTS VIEW ── */}

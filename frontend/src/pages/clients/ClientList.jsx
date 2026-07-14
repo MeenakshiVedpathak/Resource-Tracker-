@@ -357,7 +357,7 @@ const ClientList = () => {
                   key={value}
                   onClick={() => { setStatusFilter(value); setPage(1); }}
                   className={cn(
-                    'px-3 h-full font-medium transition-colors border-r last:border-r-0',
+                    'flex-1 px-3 h-full font-medium text-center transition-colors border-r last:border-r-0',
                     statusFilter === value
                       ? 'bg-primary text-primary-foreground'
                       : 'bg-background text-muted-foreground hover:bg-muted'

@@ -14,11 +14,11 @@ const MainLayout = () => (
         <footer className="w-full border-t bg-slate-50/80 py-3 px-6">
           <div className="mx-auto max-w-screen-2xl flex flex-col sm:flex-row items-center justify-between gap-1">
             <p className="text-[11px] text-muted-foreground">
-              © {new Date().getFullYear()} GTT Data Solutions. All rights reserved.
+              © {new Date().getFullYear()} GTT Data Solutions Ltd. All rights reserved.
             </p>
             <p className="text-[11px] text-muted-foreground">
               Designed &amp; Developed by{' '}
-              <span className="font-semibold text-foreground/70">GTT Data Solutions</span>
+              <span className="font-semibold text-foreground/70">GTT Data Solutions Ltd.</span>
             </p>
           </div>
         </footer>
