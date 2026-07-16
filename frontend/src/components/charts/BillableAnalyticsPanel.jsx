@@ -6,14 +6,21 @@ import {
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import EmptyState from '@/components/common/EmptyState';
-import { Users, Calendar, Coffee, ShieldAlert, CheckCircle2, LayoutGrid, List, ChevronLeft, ChevronRight, BarChart2 } from 'lucide-react';
+import { Users, Calendar, Coffee, ShieldAlert, CheckCircle2, LayoutGrid, List, ChevronLeft, ChevronRight, BarChart2, ArrowDownWideNarrow } from 'lucide-react';
 import { cn } from '@/utils/cn';
 
 /* ── colour palette (hex — safe in recharts) ── */
 const C = {
-  billable : '#6366f1',
-  leaves   : '#ef4444',
-  idle     : '#f97316',
+  billable  : '#22c55e',
+  nonBillable: '#6366f1',
+  customerNonBillable: '#f97316',
+};
+
+/* ── group reasons by type (Leaves / On Bench / Others / ...) and sum hours ── */
+const groupByType = (reasons = []) => {
+  const m = {};
+  reasons.forEach((r) => { m[r.service_type_name] = (m[r.service_type_name] || 0) + (r.hours || 0); });
+  return Object.entries(m).filter(([, hrs]) => hrs > 0).sort((a, b) => b[1] - a[1]);
 };
 
 /* ── tier helper ── */
@@ -27,12 +34,27 @@ const getTier = (pct) => {
 const trunc = (str) => str;
 
 /* ── custom tooltips ── */
+const TypeBreakdownRows = ({ title, entries }) => {
+  if (!entries.length) return null;
+  return (
+    <div className="pt-1.5 mt-1.5 border-t space-y-1">
+      <p className="text-[9px] font-semibold text-muted-foreground/70 uppercase tracking-wide">{title}</p>
+      {entries.map(([type, hrs]) => (
+        <div key={type} className="flex items-center justify-between gap-4">
+          <span className="text-muted-foreground">{type}</span>
+          <span className="font-medium tabular-nums text-foreground">{hrs}h</span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 const BarTip = ({ active, payload }) => {
   if (!active || !payload?.length) return null;
-  const { fullName, billablePct } = payload[0].payload;
+  const { fullName, billablePct, internalReasons, customerReasons } = payload[0].payload;
   const tier = getTier(billablePct);
   return (
-    <div className="rounded-lg border bg-popover p-2.5 shadow-md text-xs space-y-1 min-w-[150px]">
+    <div className="rounded-lg border bg-popover p-3 shadow-lg text-xs space-y-1 min-w-[180px]">
       <p className="font-semibold text-foreground leading-tight">{fullName}</p>
       <p className={cn('text-xs font-bold mb-1', tier.text)}>{billablePct?.toFixed(1)}% billable</p>
       {payload.map((p) => (
@@ -42,6 +64,8 @@ const BarTip = ({ active, payload }) => {
           <span className="font-medium tabular-nums">{p.value}h</span>
         </div>
       ))}
+      <TypeBreakdownRows title="Non-Billable types" entries={groupByType(internalReasons)} />
+      <TypeBreakdownRows title="Customer non-billable types" entries={groupByType(customerReasons)} />
     </div>
   );
 };
@@ -51,14 +75,20 @@ const PieTip = ({ active, payload }) => {
   const entry = payload[0];
   const name    = entry.name;
   const value   = entry.value;
+  const fill    = entry.payload?.fill;
   const percent = entry.percent ?? entry.payload?.percent;
   const pctStr  = percent != null ? (percent * 100).toFixed(1) : null;
+  const breakdown = groupByType(entry.payload?.reasons ?? []);
   return (
-    <div className="rounded-lg border bg-popover p-2.5 shadow-md text-xs">
-      <p className="font-semibold">{name}</p>
-      <p className="text-muted-foreground">
+    <div className="rounded-lg border bg-popover p-3 shadow-lg text-xs min-w-[170px]">
+      <p className="flex items-center gap-1.5 font-semibold text-foreground">
+        <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: fill }} />
+        {name}
+      </p>
+      <p className="text-muted-foreground mt-0.5">
         {value}h{pctStr ? ` · ${pctStr}%` : ''}
       </p>
+      <TypeBreakdownRows title="By type" entries={breakdown} />
     </div>
   );
 };
@@ -87,12 +117,14 @@ const TierRow = ({ label, count, color }) => (
   </div>
 );
 
-const NBBadge = ({ name, hours, type }) => (
+const NBBadge = ({ name, hours, type, category }) => (
   <span className={cn(
     'inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium leading-none',
-    type === 'Leaves'
-      ? 'bg-red-500/10 text-red-700 dark:text-red-400'
-      : 'bg-orange-500/10 text-orange-700 dark:text-orange-400'
+    category === 'Customer Non-Billable'
+      ? 'bg-orange-500/10 text-orange-700 dark:text-orange-400'
+      : type === 'Leaves'
+        ? 'bg-red-500/10 text-red-700 dark:text-red-400'
+        : 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-400'
   )}>
     {name}: {hours}h
   </span>
@@ -118,13 +150,11 @@ const BillableAnalyticsPanel = ({
   const totalHours       = allRecords.reduce((s, r) => s + (r.total_hours        || 0), 0);
   const overallPct       = totalHours > 0 ? (totalBillable / totalHours) * 100 : 0;
 
-  let totalLeaves = 0, totalIdle = 0;
-  allRecords.forEach((r) =>
-    (r.non_billable_reasons ?? []).forEach((nb) => {
-      if (nb.service_type_name === 'Leaves') totalLeaves += nb.hours;
-      else totalIdle += nb.hours;
-    })
-  );
+  const totalNonBillable         = allRecords.reduce((s, r) => s + (r.internal_non_billable_hours ?? r.non_billable_hours ?? 0), 0);
+  const totalCustomerNonBillable = allRecords.reduce((s, r) => s + (r.customer_non_billable_hours ?? 0), 0);
+
+  const allInternalReasons = allRecords.flatMap((r) => r.internal_non_billable_reasons ?? r.non_billable_reasons ?? []);
+  const allCustomerReasons = allRecords.flatMap((r) => r.customer_non_billable_reasons ?? []);
 
   /* ── tier counts ── */
   const tiers = { Healthy: 0, Good: 0, 'At Risk': 0, Critical: 0 };
@@ -132,33 +162,28 @@ const BillableAnalyticsPanel = ({
   const atRiskCount = tiers['At Risk'] + tiers['Critical'];
 
   /* ── bar chart data ── */
-  const sortedRecords = [...records].sort((a, b) =>
-    sortBy === 'billable'
-      ? (b.billable_hours || 0) - (a.billable_hours || 0)
-      : (b.non_billable_hours || 0) - (a.non_billable_hours || 0)
-  );
+  const sortedRecords = [...records].sort((a, b) => {
+    if (sortBy === 'billable') return (b.billable_hours || 0) - (a.billable_hours || 0);
+    if (sortBy === 'customerNonBillable') return (b.customer_non_billable_hours || 0) - (a.customer_non_billable_hours || 0);
+    return (b.non_billable_hours || 0) - (a.non_billable_hours || 0);
+  });
 
-  const barData = sortedRecords.map((r) => {
-      let leaves = 0, idle = 0;
-      (r.non_billable_reasons ?? []).forEach((nb) => {
-        if (nb.service_type_name === 'Leaves') leaves += nb.hours;
-        else idle += nb.hours;
-      });
-      return {
-        name       : trunc(r.full_name),
-        fullName   : r.full_name,
-        Billable      : r.billable_hours || 0,
-        Leaves        : leaves,
-        'Non-Billable': idle,
-        billablePct   : r.billable_pct   || 0,
-      };
-    });
+  const barData = sortedRecords.map((r) => ({
+    name       : trunc(r.full_name),
+    fullName   : r.full_name,
+    Billable                : r.billable_hours || 0,
+    'Non-Billable'           : r.internal_non_billable_hours ?? r.non_billable_hours ?? 0,
+    'Customer Non-Billable'  : r.customer_non_billable_hours || 0,
+    billablePct   : r.billable_pct || 0,
+    internalReasons: r.internal_non_billable_reasons ?? r.non_billable_reasons ?? [],
+    customerReasons: r.customer_non_billable_reasons ?? [],
+  }));
 
   /* ── donut data ── */
   const pieData = [
-    { name: 'Billable', value: totalBillable, fill: C.billable },
-    { name: 'Leaves',   value: totalLeaves,   fill: C.leaves   },
-    { name: 'Non-Billable',     value: totalIdle,     fill: C.idle     },
+    { name: 'Billable',                value: totalBillable,           fill: C.billable,            reasons: [] },
+    { name: 'Non-Billable',            value: totalNonBillable,        fill: C.nonBillable,          reasons: allInternalReasons },
+    { name: 'Customer Non-Billable',   value: totalCustomerNonBillable, fill: C.customerNonBillable, reasons: allCustomerReasons },
   ].filter((d) => d.value > 0);
 
   const barChartHeight = Math.max(280, barData.length * 38);
@@ -179,7 +204,7 @@ const BillableAnalyticsPanel = ({
             </div>
             <div className="min-w-0">
               <p className="text-sm font-bold text-foreground leading-none">Billable Analytics</p>
-              <p className="text-xs text-muted-foreground mt-1 leading-none">Billable vs non-billable per employee · {monthLabel}</p>
+              <p className="text-xs text-muted-foreground mt-1 leading-none">Billable vs non-billable vs customer non-billable per employee · {monthLabel}</p>
             </div>
           </div>
 
@@ -221,26 +246,26 @@ const BillableAnalyticsPanel = ({
               subtext={`${totalBillable}h of ${totalHours}h`}
             />
             <Stat
-              label="Leave Hours"
-              value={`${totalLeaves}h`}
-              icon={Calendar}
-              cardBg="bg-red-50 dark:bg-red-950/30"
-              borderColor="border-red-200 dark:border-red-800"
-              iconBg="bg-red-100 dark:bg-red-900/50"
-              iconColor="text-red-500 dark:text-red-400"
-              valueColor="text-red-600 dark:text-red-400"
-              subtext={totalHours > 0 ? `${((totalLeaves / totalHours) * 100).toFixed(1)}% of total` : undefined}
+              label="Non-Billable Hours"
+              value={`${totalNonBillable}h`}
+              icon={Coffee}
+              cardBg="bg-indigo-50 dark:bg-indigo-950/30"
+              borderColor="border-indigo-200 dark:border-indigo-800"
+              iconBg="bg-indigo-100 dark:bg-indigo-900/50"
+              iconColor="text-indigo-500 dark:text-indigo-400"
+              valueColor="text-indigo-600 dark:text-indigo-400"
+              subtext={totalHours > 0 ? `${((totalNonBillable / totalHours) * 100).toFixed(1)}% of total` : undefined}
             />
             <Stat
-              label="Non-Billable Hours"
-              value={`${totalIdle}h`}
-              icon={Coffee}
+              label="Customer Non-Billable"
+              value={`${totalCustomerNonBillable}h`}
+              icon={Calendar}
               cardBg="bg-orange-50 dark:bg-orange-950/30"
               borderColor="border-orange-200 dark:border-orange-800"
               iconBg="bg-orange-100 dark:bg-orange-900/50"
               iconColor="text-orange-500 dark:text-orange-400"
               valueColor="text-orange-600 dark:text-orange-400"
-              subtext={totalHours > 0 ? `${((totalIdle / totalHours) * 100).toFixed(1)}% of total` : undefined}
+              subtext={totalHours > 0 ? `${((totalCustomerNonBillable / totalHours) * 100).toFixed(1)}% of total` : undefined}
             />
             <Stat
               label="At-Risk Employees"
@@ -286,32 +311,20 @@ const BillableAnalyticsPanel = ({
                 {/* Horizontal stacked bar chart */}
                 <div className="lg:col-span-2">
                   <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
-                    <p className="text-xs font-semibold text-foreground">
-                      Hours by Employee
-                      <span className="ml-1.5 text-muted-foreground font-normal">
-                        sorted by {sortBy === 'billable' ? 'billable' : 'non-billable'}
-                      </span>
-                    </p>
-                    <div className="flex rounded-lg border overflow-hidden text-[11px] shrink-0 bg-background">
-                      <button
-                        onClick={() => onSortByChange?.('billable')}
-                        className={cn(
-                          'px-2.5 py-1 transition-colors',
-                          sortBy === 'billable' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted/50 text-muted-foreground'
-                        )}
+                    <p className="text-xs font-semibold text-foreground">Hours by Employee</p>
+                    <label className="flex items-center gap-1.5 shrink-0 text-[11px] text-muted-foreground">
+                      <ArrowDownWideNarrow className="h-3.5 w-3.5" />
+                      Sort by
+                      <select
+                        value={sortBy}
+                        onChange={(e) => onSortByChange?.(e.target.value)}
+                        className="h-7 rounded-lg border bg-background px-2 text-[11px] font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                       >
-                        Billable
-                      </button>
-                      <button
-                        onClick={() => onSortByChange?.('nonBillable')}
-                        className={cn(
-                          'px-2.5 py-1 border-l transition-colors',
-                          sortBy === 'nonBillable' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted/50 text-muted-foreground'
-                        )}
-                      >
-                        Non-Billable
-                      </button>
-                    </div>
+                        <option value="billable">Billable</option>
+                        <option value="nonBillable">Non-Billable</option>
+                        <option value="customerNonBillable">Customer Non-Billable</option>
+                      </select>
+                    </label>
                   </div>
                   <ResponsiveContainer width="100%" height={barChartHeight}>
                     <BarChart
@@ -342,8 +355,8 @@ const BillableAnalyticsPanel = ({
                         wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
                       />
                       <Bar dataKey="Billable" stackId="a" fill={C.billable} radius={[0, 0, 0, 0]} maxBarSize={22} />
-                      <Bar dataKey="Leaves"   stackId="a" fill={C.leaves}   radius={[0, 0, 0, 0]} maxBarSize={22} />
-                      <Bar dataKey="Non-Billable" stackId="a" fill={C.idle} radius={[0, 4, 4, 0]} maxBarSize={22} />
+                      <Bar dataKey="Non-Billable" stackId="a" fill={C.nonBillable} radius={[0, 0, 0, 0]} maxBarSize={22} />
+                      <Bar dataKey="Customer Non-Billable" stackId="a" fill={C.customerNonBillable} radius={[0, 4, 4, 0]} maxBarSize={22} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -369,11 +382,11 @@ const BillableAnalyticsPanel = ({
                               <Cell key={entry.name} fill={entry.fill} />
                             ))}
                           </Pie>
-                          <Tooltip content={<PieTip />} />
+                          <Tooltip content={<PieTip />} wrapperStyle={{ zIndex: 50 }} />
                         </PieChart>
                       </ResponsiveContainer>
                       {/* Center label */}
-                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                      <div className="absolute inset-0 z-0 flex flex-col items-center justify-center pointer-events-none">
                         <span className={cn('text-xl font-bold tabular-nums', getTier(overallPct).text)}>
                           {overallPct.toFixed(1)}%
                         </span>
@@ -396,7 +409,7 @@ const BillableAnalyticsPanel = ({
                     <p className="text-xs font-semibold text-foreground mb-2">Employee Health Tiers</p>
                     <div className="rounded-md border px-3 divide-y divide-border">
                       <TierRow label="Healthy (≥ 90%)"   count={tiers['Healthy']}  color="#10b981" />
-                      <TierRow label="Good (75 – 89%)"   count={tiers['Good']}     color={C.billable} />
+                      <TierRow label="Good (75 – 89%)"   count={tiers['Good']}     color="#6366f1" />
                       <TierRow label="At Risk (60 – 74%)" count={tiers['At Risk']} color="#f59e0b" />
                       <TierRow label="Critical (< 60%)"  count={tiers['Critical']} color="#ef4444" />
                     </div>
@@ -497,7 +510,7 @@ const BillableAnalyticsPanel = ({
                                 {nbR.length > 0 ? (
                                   <div className="flex flex-wrap gap-1">
                                     {nbR.map((r) => (
-                                      <NBBadge key={r.service_po_id} name={r.service_po_name} hours={r.hours} type={r.service_type_name} />
+                                      <NBBadge key={r.service_po_id} name={r.service_po_name} hours={r.hours} type={r.service_type_name} category={r.category_name} />
                                     ))}
                                   </div>
                                 ) : (

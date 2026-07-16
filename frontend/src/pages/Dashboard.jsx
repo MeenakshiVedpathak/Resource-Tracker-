@@ -715,13 +715,18 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Clock, DollarSign, TrendingUp, TrendingDown, Users, Building2, Briefcase,
   BarChart2, RefreshCw, X, ChevronDown, ChevronLeft, ChevronRight, CalendarDays, AlertCircle,
-  Activity, Zap, Award, Calendar,
+  Activity, Zap, Award, Calendar, IndianRupee,
 } from 'lucide-react';
-import { useDashboardAnalytics } from '@/hooks/useDashboard';
+import { useDashboardAnalytics, useDashboardAnalytics2 } from '@/hooks/useDashboard';
 import { useActiveEmployees } from '@/hooks/useEmployees';
 import { useActiveClients } from '@/hooks/useClients';
 import { useActiveServicePOs } from '@/hooks/useServicePOs';
 import MonthlyHoursTrendChart from '@/components/charts/MonthlyHoursTrendChart';
+import MonthlyUtilizationTrendChart from '@/components/charts/MonthlyUtilizationTrendChart';
+import CostTrendChart from '@/components/charts/CostTrendChart';
+import CostByTypeDonut from '@/components/charts/CostByTypeDonut';
+import ClientCostChart from '@/components/charts/ClientCostChart';
+import TopClientsByCostPanel from '@/components/charts/TopClientsByCostPanel';
 import HoursByClientChart from '@/components/charts/HoursByClientChart';
 import HoursByEmployeeChart from '@/components/charts/HoursByEmployeeChart';
 import ClientPOMatrixChart from '@/components/charts/ClientPOMatrixChart';
@@ -752,6 +757,7 @@ const QUARTERS = [
   { value: 4, label: 'Q4', sub: 'Jan–Mar' },
 ];
 const QUARTER_MONTHS = { 1: [4, 5, 6], 2: [7, 8, 9], 3: [10, 11, 12], 4: [1, 2, 3] };
+const MONTH_ABBR = { Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6, Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12 };
 
 const QUARTER_STYLES = {
   active:   'bg-primary text-primary-foreground font-semibold shadow-sm',
@@ -1085,7 +1091,7 @@ const Dashboard = () => {
   };
 
   const { data: analyticsData, isPending: isAnalyticsPending, refetch, isFetching, dataUpdatedAt } =
-    useDashboardAnalytics(analyticsParams);
+    useDashboardAnalytics(analyticsParams, { enabled: viewMode === 'quarterly' });
 
   /* monthly analytics — same API, filtered by selected month */
   const monthFiscalYear = useMemo(
@@ -1100,7 +1106,13 @@ const Dashboard = () => {
     ...(servicePOId && { poId: servicePOId }),
   };
   const { data: monthlyAnalyticsRaw, isPending: isMonthlyAnalyticsPending } =
-    useDashboardAnalytics(monthlyAnalyticsParams);
+    useDashboardAnalytics(monthlyAnalyticsParams, { enabled: viewMode === 'monthly' });
+
+  /* dashboard/analytics2 — same filters as above (utilization trend + cost trend by type) */
+  const { data: analytics2Data } =
+    useDashboardAnalytics2(analyticsParams, { enabled: viewMode === 'quarterly' });
+  const { data: monthlyAnalytics2Raw } =
+    useDashboardAnalytics2(monthlyAnalyticsParams, { enabled: viewMode === 'monthly' });
 
   const { data: employeesData } = useActiveEmployees();
   const { data: clientsData }   = useActiveClients();
@@ -1128,46 +1140,74 @@ const Dashboard = () => {
     return raw.filter((d) => (QUARTER_MONTHS[quarter] ?? []).includes(d.month));
   }, [charts.monthly_hours_trend, quarter]);
 
+  /* cost_trend_by_type entries only carry a "Mon-YY" label (no numeric month) — parse it for quarter filtering */
+  const costTrendData = useMemo(() => {
+    const raw = analytics2Data?.cost_trend_by_type ?? [];
+    if (!quarter) return raw;
+    return raw.filter((d) => (QUARTER_MONTHS[quarter] ?? []).includes(MONTH_ABBR[d.month?.split('-')[0]]));
+  }, [analytics2Data?.cost_trend_by_type, quarter]);
+
+  const monthlyCostTrendData = monthlyAnalytics2Raw?.cost_trend_by_type ?? [];
+
   /* map hours_by_employee → BillableAnalyticsPanel format
-     Cross-references employees_by_po to split non-billable into Leaves vs other */
+     Cross-references employees_by_po (category_name) to split non-billable hours into
+     internal Non-Billable vs Customer Non-Billable, and tags each reason with a "type"
+     (Leaves / On Bench / Idle / service_type_name) for the hover breakdown. */
   const BILLABLE_PAGE_SIZE = 12;
+  const RESERVED_PO_NAMES = ['Leaves', 'On Bench', 'Idle'];
   const toBillableRows = (employees, empsByPO) => {
-    // Build per-employee non-billable reasons from non-billable POs in employees_by_po
-    const nbByEmp = {};
+    // Build per-employee reasons from non-billable POs in employees_by_po, split by category
+    const nbByEmp = {};       // combined (internal + customer) — kept for back-compat consumers
+    const customerByEmp = {}; // customer non-billable only
+
     (empsByPO ?? [])
       .filter((po) => !po.is_billable)
       .forEach((po) => {
-        const svcType =
-          po.service_type_name === 'Leaves' || po.service_po_name === 'Leaves'
-            ? 'Leaves'
-            : 'Non-Billable';
+        const isCustomer = po.category_name === 'Customer Non-Billable';
+        const typeLabel = RESERVED_PO_NAMES.includes(po.service_po_name)
+          ? po.service_po_name
+          : (po.service_type_name || po.service_po_name);
         (po.top_employees ?? []).forEach((e) => {
-          if (!nbByEmp[e.employee_id]) nbByEmp[e.employee_id] = [];
-          nbByEmp[e.employee_id].push({
+          const entry = {
             service_po_id:     po.service_po_id,
             service_po_name:   po.service_po_name,
-            service_type_name: svcType,
+            service_type_name: typeLabel,
+            category_name:     po.category_name,
             hours:             e.hours,
-          });
+          };
+          (nbByEmp[e.employee_id] ??= []).push(entry);
+          if (isCustomer) (customerByEmp[e.employee_id] ??= []).push(entry);
         });
       });
 
-    return (employees ?? []).map((e) => ({
-      employee_id:         e.employee_id,
-      employee_code:       e.employee_code,
-      full_name:           e.full_name,
-      designation:         '',
-      total_hours:         e.hours,
-      billable_hours:      e.billable_hours,
-      billable_pct:        e.hours > 0 ? (e.billable_hours / e.hours) * 100 : 0,
-      non_billable_hours:  e.non_billable_hours,
-      non_billable_reasons: nbByEmp[e.employee_id] ?? (
+    return (employees ?? []).map((e) => {
+      const allReasons = nbByEmp[e.employee_id] ?? (
         e.non_billable_hours > 0
-          ? [{ service_po_id: 0, service_po_name: 'Non-Billable', service_type_name: 'Non-Billable', hours: e.non_billable_hours }]
+          ? [{ service_po_id: 0, service_po_name: 'Non-Billable', service_type_name: 'Non-Billable', category_name: 'Non-Billable', hours: e.non_billable_hours }]
           : []
-      ),
-      billable_reasons: [],
-    }));
+      );
+      const customerReasons = customerByEmp[e.employee_id] ?? [];
+      const customerHours   = customerReasons.reduce((s, r) => s + (r.hours || 0), 0);
+      const internalReasons = allReasons.filter((r) => r.category_name !== 'Customer Non-Billable');
+      const internalHours   = Math.max((e.non_billable_hours || 0) - customerHours, 0);
+
+      return {
+        employee_id:         e.employee_id,
+        employee_code:       e.employee_code,
+        full_name:           e.full_name,
+        designation:         '',
+        total_hours:         e.hours,
+        billable_hours:      e.billable_hours,
+        billable_pct:        e.hours > 0 ? (e.billable_hours / e.hours) * 100 : 0,
+        non_billable_hours:  e.non_billable_hours, // combined — back-compat (e.g. ResourceInsightPanel)
+        internal_non_billable_hours:   internalHours,
+        customer_non_billable_hours:   customerHours,
+        non_billable_reasons: allReasons,           // combined — back-compat
+        internal_non_billable_reasons: internalReasons,
+        customer_non_billable_reasons: customerReasons,
+        billable_reasons: [],
+      };
+    });
   };
 
   const sortBillableRows = (rows, sortBy) =>
@@ -1226,7 +1266,7 @@ const Dashboard = () => {
     const onBench   = benchData.filter((e) => e.bench_pct >= 25).length;
     if (critical > 0) list.push({ type: 'danger',  icon: AlertCircle, label: `${critical} Critical Bench`,      sub: 'Bench ≥75% · Needs immediate action', onClick: scrollToBench });
     else if (onBench > 0) list.push({ type: 'warning', icon: Users,   label: `${onBench} Employee${onBench > 1 ? 's' : ''} on Bench`, sub: 'Bench >25% · Monitor allocation', onClick: scrollToBench });
-    else if (benchData.length > 0) list.push({ type: 'success', icon: Award, label: 'All Employees Productive', sub: 'No significant bench hours detected', onClick: scrollToBench });
+    else if (benchData.length > 0) list.push({ type: 'success', icon: Award, label: 'Bench Below Threshold', sub: 'All employees under 25% bench', onClick: scrollToBench });
     const topClient = (charts.hours_by_client ?? [])[0];
     if (topClient) list.push({ type: 'info', icon: Building2, label: topClient.client_name, sub: `Top client · ${topClient.hours.toLocaleString('en-IN')} hrs logged`, onClick: scrollToClientChart });
     const sortedEmps = [...(charts.hours_by_employee ?? [])].sort((a, b) => (b.billable_hours ?? 0) - (a.billable_hours ?? 0));
@@ -1261,7 +1301,7 @@ const Dashboard = () => {
     const onBench   = benchData.filter((e) => e.bench_pct >= 25).length;
     if (critical > 0) list.push({ type: 'danger',  icon: AlertCircle, label: `${critical} Critical Bench`,                             sub: 'Bench ≥75% · Needs immediate action',  onClick: scrollToBench });
     else if (onBench > 0) list.push({ type: 'warning', icon: Users,   label: `${onBench} Employee${onBench > 1 ? 's' : ''} on Bench`, sub: 'Bench >25% · Monitor allocation',      onClick: scrollToBench });
-    else if (benchData.length > 0) list.push({ type: 'success', icon: Award, label: 'All Employees Productive',                        sub: 'No significant bench hours detected',  onClick: scrollToBench });
+    else if (benchData.length > 0) list.push({ type: 'success', icon: Award, label: 'Bench Below Threshold',                             sub: 'All employees under 25% bench',        onClick: scrollToBench });
     const topClient = (monthlyAnalyticsCharts.hours_by_client ?? [])[0];
     if (topClient) list.push({ type: 'info', icon: Building2, label: topClient.client_name, sub: `Top client · ${topClient.hours.toLocaleString('en-IN')} hrs logged`, onClick: scrollToClientChart });
     const sortedEmps = [...(monthlyAnalyticsCharts.hours_by_employee ?? [])].sort((a, b) => (b.billable_hours ?? 0) - (a.billable_hours ?? 0));
@@ -1357,46 +1397,48 @@ const Dashboard = () => {
       {/* Filter panel — available in both quarterly and monthly views */}
       <div className="pb-2">
         <FilterPanel open={filtersOpen} onToggle={() => setFiltersOpen((p) => !p)} badge={hasFilters ? activeFilterCount : undefined}>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-col gap-2.5">
 
-            {/* Quarter toggle — quarterly view only */}
-            {viewMode === 'quarterly' && (<>
-              <div className="flex items-center gap-1.5 shrink-0">
-                <FilterIconBadge icon={CalendarDays} color="primary" />
-                <div className="flex items-center bg-background border border-primary/20 shadow-sm rounded-xl p-1 gap-0.5">
-                  {QUARTERS.map((q) => (
-                    <button
-                      key={q.value}
-                      onClick={() => setQuarter(quarter === q.value ? null : q.value)}
-                      className={`px-3 py-1 rounded-lg text-xs transition-all duration-150 whitespace-nowrap ${
-                        quarter === q.value ? QUARTER_STYLES.active : QUARTER_STYLES.inactive
-                      }`}
-                    >
-                      {q.label}
-                      <span className={`ml-1 text-[10px] ${quarter === q.value ? 'opacity-60' : 'opacity-50'}`}>{q.sub}</span>
-                    </button>
-                  ))}
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Quarter toggle — quarterly view only */}
+              {viewMode === 'quarterly' && (<>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <FilterIconBadge icon={CalendarDays} color="primary" />
+                  <div className="flex items-center bg-background border border-primary/20 shadow-sm rounded-xl p-1 gap-0.5">
+                    {QUARTERS.map((q) => (
+                      <button
+                        key={q.value}
+                        onClick={() => setQuarter(quarter === q.value ? null : q.value)}
+                        className={`px-3 py-1 rounded-lg text-xs transition-all duration-150 whitespace-nowrap ${
+                          quarter === q.value ? QUARTER_STYLES.active : QUARTER_STYLES.inactive
+                        }`}
+                      >
+                        {q.label}
+                        <span className={`ml-1 text-[10px] ${quarter === q.value ? 'opacity-60' : 'opacity-50'}`}>{q.sub}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
-              <div className="h-6 w-px bg-border hidden sm:block" />
-            </>)}
+                <div className="h-6 w-px bg-border hidden sm:block" />
+              </>)}
 
-            <div className="flex items-center gap-1.5 min-w-[150px] flex-1">
-              <FilterIconBadge icon={Users} color="violet" />
-              <SearchableSelect options={employeeOptions} value={employeeId} onValueChange={setEmployeeId} placeholder="Employee" searchPlaceholder="Search employee…" className={`h-8 text-sm ${FILTER_FIELD_STYLES.violet}`} />
-            </div>
-            <div className="flex items-center gap-1.5 min-w-[140px] flex-1">
-              <FilterIconBadge icon={Building2} color="sky" />
-              <SearchableSelect options={clientOptions} value={clientId} onValueChange={setClientId} placeholder="Client" searchPlaceholder="Search client…" className={`h-8 text-sm ${FILTER_FIELD_STYLES.sky}`} />
-            </div>
-            <div className="flex items-center gap-1.5 min-w-[150px] flex-1">
-              <FilterIconBadge icon={Briefcase} color="amber" />
-              <SearchableSelect options={servicePOOptions} value={servicePOId} onValueChange={setServicePOId} placeholder="Service PO" searchPlaceholder="Search PO…" className={`h-8 text-sm ${FILTER_FIELD_STYLES.amber}`} />
+              <div className="flex items-center gap-1.5 min-w-[150px] flex-1">
+                <FilterIconBadge icon={Users} color="violet" />
+                <SearchableSelect options={employeeOptions} value={employeeId} onValueChange={setEmployeeId} placeholder="Employee" searchPlaceholder="Search employee…" className={`h-8 text-sm ${FILTER_FIELD_STYLES.violet}`} />
+              </div>
+              <div className="flex items-center gap-1.5 min-w-[140px] flex-1">
+                <FilterIconBadge icon={Building2} color="sky" />
+                <SearchableSelect options={clientOptions} value={clientId} onValueChange={setClientId} placeholder="Client" searchPlaceholder="Search client…" className={`h-8 text-sm ${FILTER_FIELD_STYLES.sky}`} />
+              </div>
+              <div className="flex items-center gap-1.5 min-w-[150px] flex-1">
+                <FilterIconBadge icon={Briefcase} color="amber" />
+                <SearchableSelect options={servicePOOptions} value={servicePOId} onValueChange={setServicePOId} placeholder="Service PO" searchPlaceholder="Search PO…" className={`h-8 text-sm ${FILTER_FIELD_STYLES.amber}`} />
+              </div>
             </div>
 
             <AnimatePresence>
               {hasFilters && (
-                <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="flex items-center gap-1.5 flex-wrap">
+                <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="flex items-center gap-1.5 flex-wrap pt-2 border-t">
                   {quarter && viewMode === 'quarterly' && <Chip color="primary" icon={CalendarDays} label={`${QUARTERS.find((q) => q.value === quarter)?.label} · ${QUARTERS.find((q) => q.value === quarter)?.sub}`} onRemove={() => setQuarter(null)} />}
                   {employeeId && <Chip color="violet" icon={Users} label={employeeOptions.find((e) => e.value === employeeId)?.label ?? 'Employee'} onRemove={() => setEmployeeId('')} />}
                   {clientId && <Chip color="sky" icon={Building2} label={clientOptions.find((c) => c.value === clientId)?.label ?? 'Client'} onRemove={() => setClientId('')} />}
@@ -1454,9 +1496,40 @@ const Dashboard = () => {
       {/* ══ MONTHLY TREND ════════════════════════════════════════════════════ */}
       <section>
         <SectionLabel icon={TrendingUp} title="Monthly Hours Trend" />
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
-          <MonthlyHoursTrendChart data={trendData} isLoading={isAnalyticsPending} fiscalYear={fiscalYear} quarter={quarter} />
-        </motion.div>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
+            <MonthlyHoursTrendChart data={trendData} isLoading={isAnalyticsPending} fiscalYear={fiscalYear} quarter={quarter} />
+          </motion.div>
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.15 }}>
+            <MonthlyUtilizationTrendChart data={analytics2Data?.monthly_resource_utilization ?? []} isLoading={isAnalyticsPending} />
+          </motion.div>
+        </div>
+      </section>
+
+      {/* ══ COST TREND BY TYPE ══════════════════════════════════════════════ */}
+      <section>
+        <SectionLabel icon={IndianRupee} title="Cost Trend by Type" />
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
+            <CostTrendChart data={costTrendData} isLoading={isAnalyticsPending} periodLabel={quarter ? `Q${quarter} · FY ${fiscalYear}` : `FY ${fiscalYear}`} />
+          </motion.div>
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.15 }}>
+            <CostByTypeDonut data={costTrendData} isLoading={isAnalyticsPending} periodLabel={quarter ? `Q${quarter} · FY ${fiscalYear}` : `FY ${fiscalYear}`} />
+          </motion.div>
+        </div>
+      </section>
+
+      {/* ══ CLIENT COST ANALYTICS ═══════════════════════════════════════════ */}
+      <section>
+        <SectionLabel icon={Building2} title="Client Cost Analytics" />
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
+            <ClientCostChart data={analytics2Data?.client_wise_cost_analytics ?? []} isLoading={isAnalyticsPending} periodLabel={quarter ? `Q${quarter} · FY ${fiscalYear}` : `FY ${fiscalYear}`} />
+          </motion.div>
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.15 }}>
+            <TopClientsByCostPanel data={analytics2Data?.top_clients_by_cost?.data ?? []} isLoading={isAnalyticsPending} periodLabel={quarter ? `Q${quarter} · FY ${fiscalYear}` : `FY ${fiscalYear}`} />
+          </motion.div>
+        </div>
       </section>
 
       {/* ══ HOURS BY CLIENT, EMPLOYEE & CLIENT×PO ═══════════════════════════ */}
@@ -1514,7 +1587,7 @@ const Dashboard = () => {
 
       {/* ══ TOP EMPLOYEES BY SERVICE PO (quarterly) ══════════════════════════ */}
       <section>
-        <SectionLabel icon={Briefcase} title="Top Employees by Service PO" />
+        <SectionLabel icon={Briefcase} title="Employees by Service PO" />
         <TopEmployeesByPOPanel
           data={charts.employees_by_po ?? []}
           isLoading={isAnalyticsPending}
@@ -1615,9 +1688,40 @@ const Dashboard = () => {
           {/* ── Monthly Hours Trend ──────────────────────────────────────── */}
           <section>
             <SectionLabel icon={TrendingUp} title="Monthly Hours Trend" />
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
-              <MonthlyHoursTrendChart data={monthlyAnalyticsCharts.monthly_hours_trend ?? []} isLoading={isMonthlyAnalyticsPending} fiscalYear={monthFiscalYear} quarter={null} />
-            </motion.div>
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
+                <MonthlyHoursTrendChart data={monthlyAnalyticsCharts.monthly_hours_trend ?? []} isLoading={isMonthlyAnalyticsPending} fiscalYear={monthFiscalYear} quarter={null} />
+              </motion.div>
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.15 }}>
+                <MonthlyUtilizationTrendChart data={monthlyAnalytics2Raw?.monthly_resource_utilization ?? []} isLoading={isMonthlyAnalyticsPending} />
+              </motion.div>
+            </div>
+          </section>
+
+          {/* ── Cost Trend by Type ────────────────────────────────────────── */}
+          <section>
+            <SectionLabel icon={IndianRupee} title="Cost Trend by Service Category" />
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
+                <CostTrendChart data={monthlyCostTrendData} isLoading={isMonthlyAnalyticsPending} periodLabel={new Date(bottomMonthYear.year, bottomMonthYear.month - 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' })} />
+              </motion.div>
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.15 }}>
+                <CostByTypeDonut data={monthlyCostTrendData} isLoading={isMonthlyAnalyticsPending} periodLabel={new Date(bottomMonthYear.year, bottomMonthYear.month - 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' })} />
+              </motion.div>
+            </div>
+          </section>
+
+          {/* ── Client Cost Analytics ────────────────────────────────────── */}
+          <section>
+            <SectionLabel icon={Building2} title="Client Cost Analytics" />
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
+                <ClientCostChart data={monthlyAnalytics2Raw?.client_wise_cost_analytics ?? []} isLoading={isMonthlyAnalyticsPending} periodLabel={new Date(bottomMonthYear.year, bottomMonthYear.month - 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' })} />
+              </motion.div>
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.15 }}>
+                <TopClientsByCostPanel data={monthlyAnalytics2Raw?.top_clients_by_cost?.data ?? []} isLoading={isMonthlyAnalyticsPending} periodLabel={new Date(bottomMonthYear.year, bottomMonthYear.month - 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' })} />
+              </motion.div>
+            </div>
           </section>
 
           {/* ── Hours Breakdown ──────────────────────────────────────────── */}
@@ -1675,7 +1779,7 @@ const Dashboard = () => {
 
           {/* ── Top Employees by Service PO ──────────────────────────────── */}
           <section>
-            <SectionLabel icon={Briefcase} title="Top Employees by Service PO" />
+            <SectionLabel icon={Briefcase} title="Employees by Service PO" />
             <TopEmployeesByPOPanel
               data={monthlyAnalyticsCharts.employees_by_po ?? []}
               isLoading={isMonthlyAnalyticsPending}

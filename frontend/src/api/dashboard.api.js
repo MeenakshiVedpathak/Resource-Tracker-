@@ -12,4 +12,7 @@ export const dashboardApi = {
 
   getAnalytics: (params) =>
     apiClient.get('/dashboard/analytics', { params }).then((r) => r.data?.data ?? {}),
+
+  getAnalytics2: (params) =>
+    apiClient.get('/dashboard/analytics2', { params }).then((r) => r.data?.data ?? {}),
 };

@@ -251,7 +251,7 @@ const TopEmployeesByPOPanel = ({ data = [], isLoading, month, year }) => {
               <Briefcase className="h-4.5 w-4.5 text-primary" />
             </div>
             <div className="min-w-0">
-              <p className="text-sm font-bold text-foreground leading-none">Top Employees by Service PO</p>
+              <p className="text-sm font-bold text-foreground leading-none">Employees by Service PO</p>
               <p className="text-xs text-muted-foreground mt-1 leading-none">Contributor hours per project · {monthLabel}</p>
             </div>
           </div>

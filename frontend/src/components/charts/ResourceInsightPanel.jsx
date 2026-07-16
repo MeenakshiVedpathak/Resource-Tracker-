@@ -131,7 +131,7 @@ const BillableMixPanel = ({ billableRows, periodLabel }) => {
         <p className="text-[11px] text-muted-foreground mt-0.5">{periodLabel} · {totalH.toLocaleString('en-IN')} total hrs</p>
       </div>
 
-      {/* Donut */}
+    
       <div className="relative mx-auto shrink-0" style={{ width: 148, height: 148 }}>
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
@@ -275,13 +275,13 @@ const ResourceInsightPanel = ({ benchData, billableRows, employeesByPO, isLoadin
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div className="rounded-2xl border bg-card p-4 flex flex-col min-h-[360px] max-h-[460px]">
         <BenchPanel data={benchData} periodLabel={periodLabel} />
       </div>
-      <div className="rounded-2xl border bg-card p-4 flex flex-col min-h-[360px] max-h-[460px]">
+      {/* <div className="rounded-2xl border bg-card p-4 flex flex-col min-h-[360px] max-h-[460px]">
         <BillableMixPanel billableRows={billableRows} periodLabel={periodLabel} />
-      </div>
+      </div> */}
       <div className="rounded-2xl border bg-card p-4 flex flex-col min-h-[360px] max-h-[460px]">
         <SoleContributorPanel employeesByPO={employeesByPO} />
       </div>

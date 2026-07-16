@@ -25,10 +25,18 @@ export const useTopEmployeesByPO = (params) =>
     staleTime: 1000 * 60 * 2,
   });
 
-export const useDashboardAnalytics = (params) =>
+export const useDashboardAnalytics = (params, options = {}) =>
   useQuery({
     queryKey: ['dashboard', 'analytics', params],
     queryFn: () => dashboardApi.getAnalytics(params),
-    enabled: !!(params?.fiscalYear || (params?.month && params?.year)),
+    enabled: (options.enabled ?? true) && !!(params?.fiscalYear || (params?.month && params?.year)),
+    staleTime: 0,
+  });
+
+export const useDashboardAnalytics2 = (params, options = {}) =>
+  useQuery({
+    queryKey: ['dashboard', 'analytics2', params],
+    queryFn: () => dashboardApi.getAnalytics2(params),
+    enabled: (options.enabled ?? true) && !!(params?.fiscalYear || (params?.month && params?.year)),
     staleTime: 0,
   });
