@@ -715,7 +715,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Clock, DollarSign, TrendingUp, TrendingDown, Users, Building2, Briefcase,
   BarChart2, RefreshCw, X, ChevronDown, ChevronLeft, ChevronRight, CalendarDays, AlertCircle,
-  Activity, Zap, Award, Calendar, IndianRupee,
+  Activity, Zap, Award, Calendar, IndianRupee, Table2, CalendarOff,
 } from 'lucide-react';
 import { useDashboardAnalytics, useDashboardAnalytics2 } from '@/hooks/useDashboard';
 import { useActiveEmployees } from '@/hooks/useEmployees';
@@ -727,6 +727,11 @@ import CostTrendChart from '@/components/charts/CostTrendChart';
 import CostByTypeDonut from '@/components/charts/CostByTypeDonut';
 import ClientCostChart from '@/components/charts/ClientCostChart';
 import TopClientsByCostPanel from '@/components/charts/TopClientsByCostPanel';
+import ClientCategoryCostMatrix from '@/components/charts/ClientCategoryCostMatrix';
+import ClientWiseAnalyticsTable from '@/components/charts/ClientWiseAnalyticsTable';
+import ProjectWiseAnalyticsTable from '@/components/charts/ProjectWiseAnalyticsTable';
+import LeaveHoursTrendChart from '@/components/charts/LeaveHoursTrendChart';
+import NoWorkTrendChart from '@/components/charts/NoWorkTrendChart';
 import HoursByClientChart from '@/components/charts/HoursByClientChart';
 import HoursByEmployeeChart from '@/components/charts/HoursByEmployeeChart';
 import ClientPOMatrixChart from '@/components/charts/ClientPOMatrixChart';
@@ -1140,12 +1145,25 @@ const Dashboard = () => {
     return raw.filter((d) => (QUARTER_MONTHS[quarter] ?? []).includes(d.month));
   }, [charts.monthly_hours_trend, quarter]);
 
-  /* cost_trend_by_type entries only carry a "Mon-YY" label (no numeric month) — parse it for quarter filtering */
-  const costTrendData = useMemo(() => {
-    const raw = analytics2Data?.cost_trend_by_type ?? [];
-    if (!quarter) return raw;
-    return raw.filter((d) => (QUARTER_MONTHS[quarter] ?? []).includes(MONTH_ABBR[d.month?.split('-')[0]]));
-  }, [analytics2Data?.cost_trend_by_type, quarter]);
+  /* cost_trend_by_type / leave_hours_trend / no_work_trend entries only carry a "Mon-YY" label
+     (no numeric month) — parse it for quarter filtering */
+  const filterByQuarterLabel = (raw, q) => {
+    if (!q) return raw;
+    return raw.filter((d) => (QUARTER_MONTHS[q] ?? []).includes(MONTH_ABBR[d.month?.split('-')[0]]));
+  };
+
+  const costTrendData = useMemo(
+    () => filterByQuarterLabel(analytics2Data?.cost_trend_by_type ?? [], quarter),
+    [analytics2Data?.cost_trend_by_type, quarter],
+  );
+  const costTrendLeaveData = useMemo(
+    () => filterByQuarterLabel(analytics2Data?.leave_hours_trend ?? [], quarter),
+    [analytics2Data?.leave_hours_trend, quarter],
+  );
+  const costTrendNoWorkData = useMemo(
+    () => filterByQuarterLabel(analytics2Data?.no_work_trend ?? [], quarter),
+    [analytics2Data?.no_work_trend, quarter],
+  );
 
   const monthlyCostTrendData = monthlyAnalytics2Raw?.cost_trend_by_type ?? [];
 
@@ -1532,6 +1550,43 @@ const Dashboard = () => {
         </div>
       </section>
 
+      {/* ══ CLIENT × CATEGORY COST MATRIX ════════════════════════════════════ */}
+      <section>
+        <SectionLabel icon={Table2} title="Client × Category Cost Matrix" />
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
+          <ClientCategoryCostMatrix data={analytics2Data?.client_category_cost_matrix ?? []} isLoading={isAnalyticsPending} periodLabel={quarter ? `Q${quarter} · FY ${fiscalYear}` : `FY ${fiscalYear}`} />
+        </motion.div>
+      </section>
+
+      {/* ══ CLIENT-WISE ANALYTICS ════════════════════════════════════════════ */}
+      <section>
+        <SectionLabel icon={Table2} title="Client-wise Analytics" />
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
+          <ClientWiseAnalyticsTable data={analytics2Data?.client_wise_analytics ?? []} isLoading={isAnalyticsPending} periodLabel={quarter ? `Q${quarter} · FY ${fiscalYear}` : `FY ${fiscalYear}`} />
+        </motion.div>
+      </section>
+
+      {/* ══ PROJECT-WISE ANALYTICS ═══════════════════════════════════════════ */}
+      <section>
+        <SectionLabel icon={Briefcase} title="Project-wise Analytics" />
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
+          <ProjectWiseAnalyticsTable data={analytics2Data?.project_wise_analytics ?? []} isLoading={isAnalyticsPending} periodLabel={quarter ? `Q${quarter} · FY ${fiscalYear}` : `FY ${fiscalYear}`} />
+        </motion.div>
+      </section>
+
+      {/* ══ LEAVE & NO-WORK TREND ════════════════════════════════════════════ */}
+      <section>
+        <SectionLabel icon={CalendarOff} title="Leave & No-Work Trend" />
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
+            <LeaveHoursTrendChart data={costTrendLeaveData} isLoading={isAnalyticsPending} periodLabel={quarter ? `Q${quarter} · FY ${fiscalYear}` : `FY ${fiscalYear}`} />
+          </motion.div>
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.15 }}>
+            <NoWorkTrendChart data={costTrendNoWorkData} isLoading={isAnalyticsPending} periodLabel={quarter ? `Q${quarter} · FY ${fiscalYear}` : `FY ${fiscalYear}`} />
+          </motion.div>
+        </div>
+      </section>
+
       {/* ══ HOURS BY CLIENT, EMPLOYEE & CLIENT×PO ═══════════════════════════ */}
       <section>
         <SectionLabel icon={BarChart2} title="Hours Breakdown" />
@@ -1720,6 +1775,43 @@ const Dashboard = () => {
               </motion.div>
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.15 }}>
                 <TopClientsByCostPanel data={monthlyAnalytics2Raw?.top_clients_by_cost?.data ?? []} isLoading={isMonthlyAnalyticsPending} periodLabel={new Date(bottomMonthYear.year, bottomMonthYear.month - 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' })} />
+              </motion.div>
+            </div>
+          </section>
+
+          {/* ── Client × Category Cost Matrix ─────────────────────────────── */}
+          <section>
+            <SectionLabel icon={Table2} title="Client × Category Cost Matrix" />
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
+              <ClientCategoryCostMatrix data={monthlyAnalytics2Raw?.client_category_cost_matrix ?? []} isLoading={isMonthlyAnalyticsPending} periodLabel={new Date(bottomMonthYear.year, bottomMonthYear.month - 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' })} />
+            </motion.div>
+          </section>
+
+          {/* ── Client-wise Analytics ─────────────────────────────────────── */}
+          <section>
+            <SectionLabel icon={Table2} title="Client-wise Analytics" />
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
+              <ClientWiseAnalyticsTable data={monthlyAnalytics2Raw?.client_wise_analytics ?? []} isLoading={isMonthlyAnalyticsPending} periodLabel={new Date(bottomMonthYear.year, bottomMonthYear.month - 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' })} />
+            </motion.div>
+          </section>
+
+          {/* ── Project-wise Analytics ────────────────────────────────────── */}
+          <section>
+            <SectionLabel icon={Briefcase} title="Project-wise Analytics" />
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
+              <ProjectWiseAnalyticsTable data={monthlyAnalytics2Raw?.project_wise_analytics ?? []} isLoading={isMonthlyAnalyticsPending} periodLabel={new Date(bottomMonthYear.year, bottomMonthYear.month - 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' })} />
+            </motion.div>
+          </section>
+
+          {/* ── Leave & No-Work Trend ─────────────────────────────────────── */}
+          <section>
+            <SectionLabel icon={CalendarOff} title="Leave & No-Work Trend" />
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
+                <LeaveHoursTrendChart data={monthlyAnalytics2Raw?.leave_hours_trend ?? []} isLoading={isMonthlyAnalyticsPending} periodLabel={new Date(bottomMonthYear.year, bottomMonthYear.month - 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' })} />
+              </motion.div>
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.15 }}>
+                <NoWorkTrendChart data={monthlyAnalytics2Raw?.no_work_trend ?? []} isLoading={isMonthlyAnalyticsPending} periodLabel={new Date(bottomMonthYear.year, bottomMonthYear.month - 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' })} />
               </motion.div>
             </div>
           </section>
