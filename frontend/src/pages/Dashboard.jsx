@@ -1537,6 +1537,72 @@ const Dashboard = () => {
         </div>
       </section>
 
+      {/* ══ RESOURCE INSIGHT (quarterly) ════════════════════════════════════ */}
+      <section ref={benchSectionRef}>
+        <SectionLabel icon={Users} title="Resource Insights" />
+        <ResourceInsightPanel
+          benchData={charts.employee_bench_pct ?? []}
+          billableRows={billableRowsQ}
+          employeesByPO={charts.employees_by_po ?? []}
+          isLoading={isAnalyticsPending}
+          periodLabel={quarter ? `Q${quarter} · FY ${fiscalYear}` : `FY ${fiscalYear}`}
+        />
+      </section>
+
+      {/* ══ BILLABLE BREAKDOWN (quarterly) ═══════════════════════════════════ */}
+      <section>
+        <SectionLabel icon={Calendar} title="Billable Breakdown" />
+        <BillableAnalyticsPanel
+          data={sortedBillableRowsQ.slice((billablePageQ - 1) * BILLABLE_PAGE_SIZE, billablePageQ * BILLABLE_PAGE_SIZE)}
+          allData={sortedBillableRowsQ}
+          meta={mkMeta(sortedBillableRowsQ, billablePageQ)}
+          isLoading={isAnalyticsPending}
+          month={null}
+          year={fiscalYear}
+          page={billablePageQ}
+          onPageChange={setBillablePageQ}
+          sortBy={billableSortByQ}
+          onSortByChange={(v) => { setBillableSortByQ(v); setBillablePageQ(1); }}
+        />
+      </section>
+
+      {/* ══ LEAVE & NO-WORK TREND ════════════════════════════════════════════ */}
+      <section>
+        <SectionLabel icon={CalendarOff} title="Leave & No-Work Trend" />
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
+            <LeaveHoursTrendChart data={costTrendLeaveData} isLoading={isAnalyticsPending} periodLabel={quarter ? `Q${quarter} · FY ${fiscalYear}` : `FY ${fiscalYear}`} />
+          </motion.div>
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.15 }}>
+            <NoWorkTrendChart data={costTrendNoWorkData} isLoading={isAnalyticsPending} periodLabel={quarter ? `Q${quarter} · FY ${fiscalYear}` : `FY ${fiscalYear}`} />
+          </motion.div>
+        </div>
+      </section>
+
+      {/* ══ BENCH ════════════════════════════════════════════════════════════ */}
+      {/* <section ref={benchSectionRef}>
+        <SectionLabel icon={Users} title="Resource & Portfolio Analysis" />
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
+          <EmployeeBenchChart data={charts.employee_bench_pct ?? []} isLoading={isAnalyticsPending} fiscalYear={fiscalYear} />
+        </motion.div>
+      </section> */}
+
+      {/* ══ HOURS BY CLIENT, EMPLOYEE & CLIENT×PO ═══════════════════════════ */}
+      <section>
+        <SectionLabel icon={BarChart2} title="Hours Breakdown" />
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <motion.div ref={clientChartRef} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
+            <HoursByClientChart data={charts.hours_by_client ?? []} isLoading={isAnalyticsPending} fiscalYear={fiscalYear} />
+          </motion.div>
+          <motion.div ref={employeeChartRef} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.15 }}>
+            <HoursByEmployeeChart data={charts.hours_by_employee ?? []} isLoading={isAnalyticsPending} fiscalYear={fiscalYear} />
+          </motion.div>
+          <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3, delay: 0.2 }}>
+            <ClientPOMatrixChart data={charts.client_x_service_po ?? []} isLoading={isAnalyticsPending} fiscalYear={fiscalYear} />
+          </motion.div>
+        </div>
+      </section>
+
       {/* ══ CLIENT COST ANALYTICS ═══════════════════════════════════════════ */}
       <section>
         <SectionLabel icon={Building2} title="Client Cost Analytics" />
@@ -1572,72 +1638,6 @@ const Dashboard = () => {
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
           <ProjectWiseAnalyticsTable data={analytics2Data?.project_wise_analytics ?? []} isLoading={isAnalyticsPending} periodLabel={quarter ? `Q${quarter} · FY ${fiscalYear}` : `FY ${fiscalYear}`} />
         </motion.div>
-      </section>
-
-      {/* ══ LEAVE & NO-WORK TREND ════════════════════════════════════════════ */}
-      <section>
-        <SectionLabel icon={CalendarOff} title="Leave & No-Work Trend" />
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
-            <LeaveHoursTrendChart data={costTrendLeaveData} isLoading={isAnalyticsPending} periodLabel={quarter ? `Q${quarter} · FY ${fiscalYear}` : `FY ${fiscalYear}`} />
-          </motion.div>
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.15 }}>
-            <NoWorkTrendChart data={costTrendNoWorkData} isLoading={isAnalyticsPending} periodLabel={quarter ? `Q${quarter} · FY ${fiscalYear}` : `FY ${fiscalYear}`} />
-          </motion.div>
-        </div>
-      </section>
-
-      {/* ══ HOURS BY CLIENT, EMPLOYEE & CLIENT×PO ═══════════════════════════ */}
-      <section>
-        <SectionLabel icon={BarChart2} title="Hours Breakdown" />
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <motion.div ref={clientChartRef} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
-            <HoursByClientChart data={charts.hours_by_client ?? []} isLoading={isAnalyticsPending} fiscalYear={fiscalYear} />
-          </motion.div>
-          <motion.div ref={employeeChartRef} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.15 }}>
-            <HoursByEmployeeChart data={charts.hours_by_employee ?? []} isLoading={isAnalyticsPending} fiscalYear={fiscalYear} />
-          </motion.div>
-          <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3, delay: 0.2 }}>
-            <ClientPOMatrixChart data={charts.client_x_service_po ?? []} isLoading={isAnalyticsPending} fiscalYear={fiscalYear} />
-          </motion.div>
-        </div>
-      </section>
-
-      {/* ══ BENCH ════════════════════════════════════════════════════════════ */}
-      {/* <section ref={benchSectionRef}>
-        <SectionLabel icon={Users} title="Resource & Portfolio Analysis" />
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
-          <EmployeeBenchChart data={charts.employee_bench_pct ?? []} isLoading={isAnalyticsPending} fiscalYear={fiscalYear} />
-        </motion.div>
-      </section> */}
-
-      {/* ══ RESOURCE INSIGHT (quarterly) ════════════════════════════════════ */}
-      <section ref={benchSectionRef}>
-        <SectionLabel icon={Users} title="Resource Insights" />
-        <ResourceInsightPanel
-          benchData={charts.employee_bench_pct ?? []}
-          billableRows={billableRowsQ}
-          employeesByPO={charts.employees_by_po ?? []}
-          isLoading={isAnalyticsPending}
-          periodLabel={quarter ? `Q${quarter} · FY ${fiscalYear}` : `FY ${fiscalYear}`}
-        />
-      </section>
-
-      {/* ══ BILLABLE BREAKDOWN (quarterly) ═══════════════════════════════════ */}
-      <section>
-        <SectionLabel icon={Calendar} title="Billable Breakdown" />
-        <BillableAnalyticsPanel
-          data={sortedBillableRowsQ.slice((billablePageQ - 1) * BILLABLE_PAGE_SIZE, billablePageQ * BILLABLE_PAGE_SIZE)}
-          allData={sortedBillableRowsQ}
-          meta={mkMeta(sortedBillableRowsQ, billablePageQ)}
-          isLoading={isAnalyticsPending}
-          month={null}
-          year={fiscalYear}
-          page={billablePageQ}
-          onPageChange={setBillablePageQ}
-          sortBy={billableSortByQ}
-          onSortByChange={(v) => { setBillableSortByQ(v); setBillablePageQ(1); }}
-        />
       </section>
 
       {/* ══ TOP EMPLOYEES BY SERVICE PO (quarterly) ══════════════════════════ */}
@@ -1766,6 +1766,72 @@ const Dashboard = () => {
             </div>
           </section>
 
+          {/* ── Resource Insights (monthly) ──────────────────────────────── */}
+          <section ref={benchSectionRef}>
+            <SectionLabel icon={Users} title="Resource Insights" />
+            <ResourceInsightPanel
+              benchData={monthlyAnalyticsCharts.employee_bench_pct ?? []}
+              billableRows={billableRowsM}
+              employeesByPO={monthlyAnalyticsCharts.employees_by_po ?? []}
+              isLoading={isMonthlyAnalyticsPending}
+              periodLabel={new Date(bottomMonthYear.year, bottomMonthYear.month - 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' })}
+            />
+          </section>
+
+          {/* ── Billable Breakdown ───────────────────────────────────────── */}
+          <section>
+            <SectionLabel icon={Calendar} title="Billable Breakdown" />
+            <BillableAnalyticsPanel
+              data={sortedBillableRowsM.slice((billablePage - 1) * BILLABLE_PAGE_SIZE, billablePage * BILLABLE_PAGE_SIZE)}
+              allData={sortedBillableRowsM}
+              meta={mkMeta(sortedBillableRowsM, billablePage)}
+              isLoading={isMonthlyAnalyticsPending}
+              month={Number(month)}
+              year={Number(year)}
+              page={billablePage}
+              onPageChange={setBillablePage}
+              sortBy={billableSortBy}
+              onSortByChange={(v) => { setBillableSortBy(v); setBillablePage(1); }}
+            />
+          </section>
+
+          {/* ── Leave & No-Work Trend ─────────────────────────────────────── */}
+          <section>
+            <SectionLabel icon={CalendarOff} title="Leave & No-Work Trend" />
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
+                <LeaveHoursTrendChart data={monthlyAnalytics2Raw?.leave_hours_trend ?? []} isLoading={isMonthlyAnalyticsPending} periodLabel={new Date(bottomMonthYear.year, bottomMonthYear.month - 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' })} />
+              </motion.div>
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.15 }}>
+                <NoWorkTrendChart data={monthlyAnalytics2Raw?.no_work_trend ?? []} isLoading={isMonthlyAnalyticsPending} periodLabel={new Date(bottomMonthYear.year, bottomMonthYear.month - 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' })} />
+              </motion.div>
+            </div>
+          </section>
+
+          {/* ── Resource & Portfolio Analysis ────────────────────────────── */}
+          {/* <section ref={benchSectionRef}>
+            <SectionLabel icon={Users} title="Resource & Portfolio Analysis" />
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
+              <EmployeeBenchChart data={monthlyAnalyticsCharts.employee_bench_pct ?? []} isLoading={isMonthlyAnalyticsPending} fiscalYear={monthFiscalYear} />
+            </motion.div>
+          </section> */}
+
+          {/* ── Hours Breakdown ──────────────────────────────────────────── */}
+          <section>
+            <SectionLabel icon={BarChart2} title="Hours Breakdown" />
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+              <motion.div ref={clientChartRef} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
+                <HoursByClientChart data={monthlyAnalyticsCharts.hours_by_client ?? []} isLoading={isMonthlyAnalyticsPending} fiscalYear={monthFiscalYear} />
+              </motion.div>
+              <motion.div ref={employeeChartRef} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.15 }}>
+                <HoursByEmployeeChart data={monthlyAnalyticsCharts.hours_by_employee ?? []} isLoading={isMonthlyAnalyticsPending} fiscalYear={monthFiscalYear} />
+              </motion.div>
+              <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3, delay: 0.2 }}>
+                <ClientPOMatrixChart data={monthlyAnalyticsCharts.client_x_service_po ?? []} isLoading={isMonthlyAnalyticsPending} fiscalYear={monthFiscalYear} />
+              </motion.div>
+            </div>
+          </section>
+
           {/* ── Client Cost Analytics ────────────────────────────────────── */}
           <section>
             <SectionLabel icon={Building2} title="Client Cost Analytics" />
@@ -1801,72 +1867,6 @@ const Dashboard = () => {
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
               <ProjectWiseAnalyticsTable data={monthlyAnalytics2Raw?.project_wise_analytics ?? []} isLoading={isMonthlyAnalyticsPending} periodLabel={new Date(bottomMonthYear.year, bottomMonthYear.month - 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' })} />
             </motion.div>
-          </section>
-
-          {/* ── Leave & No-Work Trend ─────────────────────────────────────── */}
-          <section>
-            <SectionLabel icon={CalendarOff} title="Leave & No-Work Trend" />
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
-                <LeaveHoursTrendChart data={monthlyAnalytics2Raw?.leave_hours_trend ?? []} isLoading={isMonthlyAnalyticsPending} periodLabel={new Date(bottomMonthYear.year, bottomMonthYear.month - 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' })} />
-              </motion.div>
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.15 }}>
-                <NoWorkTrendChart data={monthlyAnalytics2Raw?.no_work_trend ?? []} isLoading={isMonthlyAnalyticsPending} periodLabel={new Date(bottomMonthYear.year, bottomMonthYear.month - 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' })} />
-              </motion.div>
-            </div>
-          </section>
-
-          {/* ── Hours Breakdown ──────────────────────────────────────────── */}
-          <section>
-            <SectionLabel icon={BarChart2} title="Hours Breakdown" />
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-              <motion.div ref={clientChartRef} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
-                <HoursByClientChart data={monthlyAnalyticsCharts.hours_by_client ?? []} isLoading={isMonthlyAnalyticsPending} fiscalYear={monthFiscalYear} />
-              </motion.div>
-              <motion.div ref={employeeChartRef} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.15 }}>
-                <HoursByEmployeeChart data={monthlyAnalyticsCharts.hours_by_employee ?? []} isLoading={isMonthlyAnalyticsPending} fiscalYear={monthFiscalYear} />
-              </motion.div>
-              <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3, delay: 0.2 }}>
-                <ClientPOMatrixChart data={monthlyAnalyticsCharts.client_x_service_po ?? []} isLoading={isMonthlyAnalyticsPending} fiscalYear={monthFiscalYear} />
-              </motion.div>
-            </div>
-          </section>
-
-          {/* ── Resource & Portfolio Analysis ────────────────────────────── */}
-          {/* <section ref={benchSectionRef}>
-            <SectionLabel icon={Users} title="Resource & Portfolio Analysis" />
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
-              <EmployeeBenchChart data={monthlyAnalyticsCharts.employee_bench_pct ?? []} isLoading={isMonthlyAnalyticsPending} fiscalYear={monthFiscalYear} />
-            </motion.div>
-          </section> */}
-
-          {/* ── Resource Insights (monthly) ──────────────────────────────── */}
-          <section ref={benchSectionRef}>
-            <SectionLabel icon={Users} title="Resource Insights" />
-            <ResourceInsightPanel
-              benchData={monthlyAnalyticsCharts.employee_bench_pct ?? []}
-              billableRows={billableRowsM}
-              employeesByPO={monthlyAnalyticsCharts.employees_by_po ?? []}
-              isLoading={isMonthlyAnalyticsPending}
-              periodLabel={new Date(bottomMonthYear.year, bottomMonthYear.month - 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' })}
-            />
-          </section>
-
-          {/* ── Billable Breakdown ───────────────────────────────────────── */}
-          <section>
-            <SectionLabel icon={Calendar} title="Billable Breakdown" />
-            <BillableAnalyticsPanel
-              data={sortedBillableRowsM.slice((billablePage - 1) * BILLABLE_PAGE_SIZE, billablePage * BILLABLE_PAGE_SIZE)}
-              allData={sortedBillableRowsM}
-              meta={mkMeta(sortedBillableRowsM, billablePage)}
-              isLoading={isMonthlyAnalyticsPending}
-              month={Number(month)}
-              year={Number(year)}
-              page={billablePage}
-              onPageChange={setBillablePage}
-              sortBy={billableSortBy}
-              onSortByChange={(v) => { setBillableSortBy(v); setBillablePage(1); }}
-            />
           </section>
 
           {/* ── Top Employees by Service PO ──────────────────────────────── */}
