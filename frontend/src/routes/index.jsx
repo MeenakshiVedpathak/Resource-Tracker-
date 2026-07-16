@@ -25,6 +25,7 @@ const ClientForm = lazy(() => import('@/pages/clients/ClientForm'));
 const ServicePOList = lazy(() => import('@/pages/servicePOs/ServicePOList'));
 const ServicePOForm = lazy(() => import('@/pages/servicePOs/ServicePOForm'));
 const ServicePODetail = lazy(() => import('@/pages/servicePOs/ServicePODetail'));
+const ServicePOImport = lazy(() => import('@/pages/servicePOs/ServicePOImport'));
 const SubProjectList = lazy(() => import('@/pages/subProjects/SubProjectList'));
 const SubProjectForm = lazy(() => import('@/pages/subProjects/SubProjectForm'));
 const ServiceTypeList = lazy(() => import('@/pages/serviceTypes/ServiceTypeList'));
@@ -106,6 +107,7 @@ const AppRoutes = () => (
           <Route path="new" element={<ServicePOForm />} />
           <Route path=":id/edit" element={<ServicePOForm />} />
         </Route>
+        <Route path={ROUTES.SERVICE_PO_IMPORT} element={<ServicePOImport />} />
         <Route path={ROUTES.SERVICE_PO_DETAIL} element={<ServicePODetail />} />
 
         {/* Sub-projects */}

@@ -1,6 +1,6 @@
-import { useState, useMemo, Fragment } from 'react';
+import { useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
-import { Download, Filter, Search, ChevronRight, ChevronsUpDown } from 'lucide-react';
+import { Download, Filter, Search, ChevronRight } from 'lucide-react';
 import { useResourceProjectUtilization } from '@/hooks/useReports';
 import { reportsApi } from '@/api/reports.api';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -16,9 +16,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SearchableSelect } from '@/components/ui/searchable-select';
+import { MultiSelect } from '@/components/ui/multi-select';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { cn } from '@/utils/cn';
 
 const CATEGORY_COLORS = {
@@ -126,16 +128,16 @@ const ResourceProjectUtilization = () => {
     month: now.getMonth() + 1,
     year: now.getFullYear(),
   });
-  const [employeeId, setEmployeeId] = useState('all');
-  const [clientId, setClientId] = useState('all');
-  const [poId, setPoId] = useState('all');
+  const [employeeIds, setEmployeeIds] = useState([]);
+  const [clientIds, setClientIds] = useState([]);
+  const [poIds, setPoIds] = useState([]);
   const [category, setCategory] = useState('all');
-  const [typeId, setTypeId] = useState('all');
+  const [typeIds, setTypeIds] = useState([]);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [expandedRows, setExpandedRows] = useState(() => new Set());
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState(null);
   const [exporting, setExporting] = useState(false);
 
   const debouncedSearch = useDebounce(search, 400);
@@ -163,21 +165,21 @@ const ResourceProjectUtilization = () => {
 
   const filteredPOs = activePOs.filter((po) => {
     const poTypeId = po.serviceType?.id != null ? String(po.serviceType.id) : null;
-    if (typeId !== 'all') return poTypeId === typeId;
+    if (typeIds.length > 0) return poTypeId != null && typeIds.includes(poTypeId);
     if (category !== 'all') return poTypeId != null && typeCategoryMap.get(poTypeId) === category;
     return true;
   });
 
   const handleCategoryChange = (v) => {
     setCategory(v);
-    setTypeId('all');
-    setPoId('all');
+    setTypeIds([]);
+    setPoIds([]);
     setPage(1);
   };
 
   const handleTypeChange = (v) => {
-    setTypeId(v);
-    setPoId('all');
+    setTypeIds(v);
+    setPoIds([]);
     setPage(1);
   };
 
@@ -186,11 +188,11 @@ const ResourceProjectUtilization = () => {
     year: monthYear.year,
     page,
     limit,
-    ...(employeeId !== 'all' && { employeeId }),
-    ...(clientId !== 'all' && { clientId }),
-    ...(poId !== 'all' && { projectId: poId }),
+    ...(employeeIds.length > 0 && { employeeIds: employeeIds.join(',') }),
+    ...(clientIds.length > 0 && { clientIds: clientIds.join(',') }),
+    ...(poIds.length > 0 && { projectIds: poIds.join(',') }),
     ...(category !== 'all' && { serviceCategoryId: category }),
-    ...(typeId !== 'all' && { serviceTypeId: typeId }),
+    ...(typeIds.length > 0 && { serviceTypeIds: typeIds.join(',') }),
     ...(debouncedSearch && { search: debouncedSearch }),
   };
 
@@ -248,24 +250,14 @@ const ResourceProjectUtilization = () => {
     }
   };
 
-  const toggleRow = (employeeId) => {
-    setExpandedRows((prev) => {
-      const next = new Set(prev);
-      if (next.has(employeeId)) next.delete(employeeId);
-      else next.add(employeeId);
-      return next;
-    });
-  };
-
-  const allExpanded = rows.length > 0 && rows.every((r) => expandedRows.has(r.employeeId));
-  const toggleAll = () => setExpandedRows(allExpanded ? new Set() : new Set(rows.map((r) => r.employeeId)));
+  const selectedRow = rows.find((r) => r.employeeId === selectedEmployeeId) ?? null;
 
   const activeFilterCount = [
-    employeeId !== 'all' ? 1 : 0,
-    clientId !== 'all' ? 1 : 0,
+    employeeIds.length > 0 ? 1 : 0,
+    clientIds.length > 0 ? 1 : 0,
     category !== 'all' ? 1 : 0,
-    typeId !== 'all' ? 1 : 0,
-    poId !== 'all' ? 1 : 0,
+    typeIds.length > 0 ? 1 : 0,
+    poIds.length > 0 ? 1 : 0,
   ].reduce((a, b) => a + b, 0);
 
   const totalPages = meta.totalPages ?? 1;
@@ -324,31 +316,25 @@ const ResourceProjectUtilization = () => {
 
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs font-medium">Employee</Label>
-            <SearchableSelect
-              options={[
-                { label: 'All Employees', value: 'all' },
-                ...activeEmployees.map((e) => ({ label: e.full_name, value: String(e.id) })),
-              ]}
-              value={employeeId}
-              onValueChange={(v) => { setEmployeeId(v); setPage(1); }}
+            <MultiSelect
+              options={activeEmployees.map((e) => ({ label: e.full_name, value: String(e.id) }))}
+              value={employeeIds}
+              onValueChange={(v) => { setEmployeeIds(v); setPage(1); }}
               placeholder="All Employees"
               searchPlaceholder="Search employee..."
-              className="h-9 text-sm w-full"
+              className="w-full"
             />
           </div>
 
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs font-medium">Client</Label>
-            <SearchableSelect
-              options={[
-                { label: 'All Clients', value: 'all' },
-                ...activeClients.map((c) => ({ label: c.client_name, value: String(c.id) })),
-              ]}
-              value={clientId}
-              onValueChange={(v) => { setClientId(v); setPage(1); }}
+            <MultiSelect
+              options={activeClients.map((c) => ({ label: c.client_name, value: String(c.id) }))}
+              value={clientIds}
+              onValueChange={(v) => { setClientIds(v); setPage(1); }}
               placeholder="All Clients"
               searchPlaceholder="Search client..."
-              className="h-9 text-sm w-full"
+              className="w-full"
             />
           </div>
 
@@ -369,31 +355,25 @@ const ResourceProjectUtilization = () => {
 
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs font-medium">Service Type</Label>
-            <SearchableSelect
-              options={[
-                { label: 'All Types', value: 'all' },
-                ...filteredServiceTypes.map((t) => ({ label: t.service_type_name, value: String(t.id) })),
-              ]}
-              value={typeId}
+            <MultiSelect
+              options={filteredServiceTypes.map((t) => ({ label: t.service_type_name, value: String(t.id) }))}
+              value={typeIds}
               onValueChange={handleTypeChange}
               placeholder="All Types"
               searchPlaceholder="Search type..."
-              className="h-9 text-sm w-full"
+              className="w-full"
             />
           </div>
 
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs font-medium">Service PO</Label>
-            <SearchableSelect
-              options={[
-                { label: 'All POs', value: 'all' },
-                ...filteredPOs.map((po) => ({ label: po.service_po_name || po.service_po_code || String(po.id), value: String(po.id) })),
-              ]}
-              value={poId}
-              onValueChange={(v) => { setPoId(v); setPage(1); }}
+            <MultiSelect
+              options={filteredPOs.map((po) => ({ label: po.service_po_name || po.service_po_code || String(po.id), value: String(po.id) }))}
+              value={poIds}
+              onValueChange={(v) => { setPoIds(v); setPage(1); }}
               placeholder="All POs"
               searchPlaceholder="Search PO..."
-              className="h-9 text-sm w-full"
+              className="w-full"
             />
           </div>
         </div>
@@ -428,108 +408,58 @@ const ResourceProjectUtilization = () => {
             </div>
           </div>
 
-          {/* Table toolbar */}
-          <div className="mb-2 flex items-center justify-between">
-            <button
-              type="button"
-              onClick={toggleAll}
-              className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <ChevronsUpDown className="h-3.5 w-3.5" />
-              {allExpanded ? 'Collapse all' : 'Expand all'}
-            </button>
-            <span className="text-xs text-muted-foreground">{expandedRows.size} of {rows.length} expanded</span>
-          </div>
-
           {/* Table */}
           <div className="rounded-lg border overflow-hidden">
             <div className="overflow-auto max-h-[55vh]">
-              <table className="min-w-full w-full border-collapse text-sm">
+              <table className="min-w-full w-full table-fixed border-collapse text-sm">
+                <colgroup>
+                  <col className="w-9" />
+                  <col />
+                  <col className="w-[110px]" />
+                  <col className="w-[110px]" />
+                  <col className="w-[120px]" />
+                  <col className="w-[140px]" />
+                  <col className="w-[140px]" />
+                </colgroup>
                 <thead className="sticky top-0 z-10 bg-slate-50 shadow-[0_1px_3px_0_rgb(0,0,0,0.1)]">
                   <tr className="border-b">
-                    <th className="px-2.5 py-2 text-left text-xs font-semibold w-[36px]" />
+                    <th className="px-2.5 py-2 text-left text-xs font-semibold" />
                     <th className="px-2.5 py-2 text-left text-xs font-semibold">Employee</th>
-                    <th className="px-2.5 py-2 text-right text-xs font-semibold w-[110px]">Total Hours</th>
-                    <th className="px-2.5 py-2 text-right text-xs font-semibold w-[110px]">Billable</th>
-                    <th className="px-2.5 py-2 text-right text-xs font-semibold w-[120px]">Non-Billable</th>
-                    <th className="px-2.5 py-2 text-right text-xs font-semibold w-[140px]">Billable Amount</th>
-                    <th className="px-2.5 py-2 text-left text-xs font-semibold w-[100px]">Projects</th>
-                    <th className="px-2.5 py-2 text-left text-xs font-semibold">Remarks</th>
+                    <th className="px-2.5 py-2 text-right text-xs font-semibold">Total Hours</th>
+                    <th className="px-2.5 py-2 text-right text-xs font-semibold">Billable</th>
+                    <th className="px-2.5 py-2 text-right text-xs font-semibold">Non-Billable</th>
+                    <th className="px-2.5 py-2 text-right text-xs font-semibold">Billable Amount</th>
+                    <th className="px-2.5 py-2 text-left text-xs font-semibold">Projects</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {rows.map((row, i) => {
-                    const isOpen = expandedRows.has(row.employeeId);
-                    const projectsToShow = row.filteredProjects;
-                    return (
-                      <Fragment key={row.employeeId ?? i}>
-                        <tr
-                          className={cn(
-                            'transition-colors cursor-pointer border-l-2',
-                            isOpen
-                              ? 'bg-primary/[0.04] border-l-primary hover:bg-primary/[0.06]'
-                              : cn('border-l-transparent hover:bg-muted/40', i % 2 === 1 && 'bg-muted/[0.15]')
-                          )}
-                          onClick={() => toggleRow(row.employeeId)}
-                        >
-                          <td className="px-2.5 py-2 text-center">
-                            <span className={cn(
-                              'inline-flex h-6 w-6 items-center justify-center rounded-md transition-colors',
-                              isOpen ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted'
-                            )}>
-                              <ChevronRight className={cn('h-4 w-4 transition-transform duration-200', isOpen && 'rotate-90')} />
-                            </span>
-                          </td>
-                          <td className="px-2.5 py-2">
-                            <div className="flex items-center gap-2">
-                              <EmployeeAvatar name={row.employeeName} />
-                              <p className="font-medium text-xs">{row.employeeName || '—'}</p>
-                            </div>
-                          </td>
-                          <td className="px-2.5 py-2 text-right tabular-nums font-medium">{formatHours(row.totalHours)}</td>
-                          <td className="px-2.5 py-2 text-right tabular-nums text-emerald-700 dark:text-emerald-400">{formatHours(row.billableHours)}</td>
-                          <td className="px-2.5 py-2 text-right tabular-nums text-orange-700 dark:text-orange-400">{formatHours(row.nonBillableHours)}</td>
-                          <td className="px-2.5 py-2 text-right tabular-nums font-medium">{formatCurrency(row.billableAmount)}</td>
-                          <td className="px-2.5 py-2 text-xs text-muted-foreground">{row.projects?.length ?? 0} project{(row.projects?.length ?? 0) !== 1 ? 's' : ''}</td>
-                          <td className="px-2.5 py-2 text-xs text-muted-foreground">{row.remarks || '—'}</td>
-                        </tr>
-                        {isOpen && (
-                          <tr>
-                            <td colSpan={8} className="bg-primary/[0.02] p-0">
-                              {projectsToShow.length === 0 ? (
-                                <p className="px-6 py-3 text-xs text-muted-foreground">No projects match the current filter.</p>
-                              ) : (
-                                <table className="w-full table-fixed border-collapse text-xs">
-                                  <thead>
-                                    <tr className="border-b border-primary/20 bg-primary/10">
-                                      <th className="px-3 py-2 pl-10 align-middle text-left font-semibold text-primary w-[22%]">Client</th>
-                                      <th className="px-3 py-2 align-middle text-left font-semibold text-primary w-[31%]">Project</th>
-                                      <th className="px-3 py-2 align-middle text-center font-semibold text-primary w-[11%]">Type</th>
-                                      <th className="px-3 py-2 align-middle text-center font-semibold text-primary w-[12%]">Category</th>
-                                      <th className="px-3 py-2 align-middle text-right font-semibold text-primary w-[10%]">Hours</th>
-                                      <th className="px-3 py-2 align-middle text-right font-semibold text-primary w-[14%]">Billable Amount</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody className="divide-y divide-border/60">
-                                    {projectsToShow.map((p, pi) => (
-                                      <tr key={pi}>
-                                        <td className="px-3 py-1.5 pl-10 align-middle truncate" title={p.client}>{p.client || '—'}</td>
-                                        <td className="px-3 py-1.5 align-middle truncate" title={p.projectName}>{p.projectName || '—'}</td>
-                                        <td className="px-3 py-1.5 align-middle text-center"><ProjectTypeBadge value={p.projectType} /></td>
-                                        <td className="px-3 py-1.5 align-middle text-center"><CategoryBadge value={p.category} /></td>
-                                        <td className="px-3 py-1.5 align-middle text-right tabular-nums">{formatHours(p.projectHours)}</td>
-                                        <td className="px-3 py-1.5 align-middle text-right tabular-nums">{p.billableAmount ? formatCurrency(p.billableAmount) : '—'}</td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              )}
-                            </td>
-                          </tr>
-                        )}
-                      </Fragment>
-                    );
-                  })}
+                  {rows.map((row, i) => (
+                    <tr
+                      key={row.employeeId ?? i}
+                      className={cn(
+                        'transition-colors cursor-pointer border-l-2 border-l-transparent hover:bg-muted/40',
+                        i % 2 === 1 && 'bg-muted/[0.15]'
+                      )}
+                      onClick={() => setSelectedEmployeeId(row.employeeId)}
+                    >
+                      <td className="px-2.5 py-2 text-center">
+                        <span className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground">
+                          <ChevronRight className="h-4 w-4" />
+                        </span>
+                      </td>
+                      <td className="px-2.5 py-2">
+                        <div className="flex items-center gap-2">
+                          <EmployeeAvatar name={row.employeeName} />
+                          <p className="font-medium text-xs">{row.employeeName || '—'}</p>
+                        </div>
+                      </td>
+                      <td className="px-2.5 py-2 text-right tabular-nums font-medium">{formatHours(row.totalHours)}</td>
+                      <td className="px-2.5 py-2 text-right tabular-nums text-emerald-700 dark:text-emerald-400">{formatHours(row.billableHours)}</td>
+                      <td className="px-2.5 py-2 text-right tabular-nums text-orange-700 dark:text-orange-400">{formatHours(row.nonBillableHours)}</td>
+                      <td className="px-2.5 py-2 text-right tabular-nums font-medium">{formatCurrency(row.billableAmount)}</td>
+                      <td className="px-2.5 py-2 text-xs text-muted-foreground">{row.projects?.length ?? 0} project{(row.projects?.length ?? 0) !== 1 ? 's' : ''}</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -580,6 +510,83 @@ const ResourceProjectUtilization = () => {
           </div>
         </>
       )}
+
+      <Sheet open={!!selectedRow} onOpenChange={(open) => !open && setSelectedEmployeeId(null)}>
+        <SheetContent side="right" className="w-full sm:max-w-lg p-0 flex flex-col bg-white overflow-hidden">
+          {selectedRow && (
+            <>
+              <SheetHeader className="px-5 py-4 border-b">
+                <div className="flex items-center gap-3">
+                  <EmployeeAvatar name={selectedRow.employeeName} />
+                  <div>
+                    <SheetTitle className="text-left">{selectedRow.employeeName || '—'}</SheetTitle>
+                    <p className="text-xs text-muted-foreground">{monthLabel}</p>
+                  </div>
+                </div>
+              </SheetHeader>
+
+              <div className="flex-1 overflow-y-auto px-5 py-4">
+                {/* Summary stats */}
+                <div className="mb-5 grid grid-cols-2 gap-2.5">
+                  <div className="rounded-md border bg-blue-500/10 px-3 py-2 text-xs text-blue-700 dark:text-blue-400">
+                    Total Hours
+                    <p className="text-sm font-semibold tabular-nums">{formatHours(selectedRow.totalHours)}</p>
+                  </div>
+                  <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs">
+                    Billable Amount
+                    <p className="text-sm font-semibold tabular-nums">{formatCurrency(selectedRow.billableAmount)}</p>
+                  </div>
+                  <div className="rounded-md border bg-emerald-500/10 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-400">
+                    Billable
+                    <p className="text-sm font-semibold tabular-nums">{formatHours(selectedRow.billableHours)}</p>
+                  </div>
+                  <div className="rounded-md border bg-orange-500/10 px-3 py-2 text-xs text-orange-700 dark:text-orange-400">
+                    Non-Billable
+                    <p className="text-sm font-semibold tabular-nums">{formatHours(selectedRow.nonBillableHours)}</p>
+                  </div>
+                </div>
+
+                {selectedRow.remarks && (
+                  <p className="mb-5 rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">Remarks: </span>{selectedRow.remarks}
+                  </p>
+                )}
+
+                {/* Project list */}
+                <p className="mb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  Projects ({selectedRow.filteredProjects.length})
+                </p>
+                {selectedRow.filteredProjects.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">No projects match the current filter.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {selectedRow.filteredProjects.map((p, pi) => (
+                      <div key={pi} className="rounded-md border px-3 py-2.5">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium" title={p.client}>{p.client || '—'}</p>
+                            <p className="truncate text-xs text-muted-foreground" title={p.projectName}>{p.projectName || '—'}</p>
+                          </div>
+                          <div className="shrink-0 text-right">
+                            <p className="text-sm font-semibold tabular-nums">{formatHours(p.projectHours)}</p>
+                            <p className="text-xs text-muted-foreground tabular-nums">
+                              {p.billableAmount ? formatCurrency(p.billableAmount) : '—'}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="mt-2 flex items-center gap-1.5">
+                          <ProjectTypeBadge value={p.projectType} />
+                          <CategoryBadge value={p.category} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 };

@@ -26,6 +26,7 @@ export const ROUTES = {
   SERVICE_PO_NEW: '/service-pos/new',
   SERVICE_PO_DETAIL: '/service-pos/:id',
   SERVICE_PO_EDIT: '/service-pos/:id/edit',
+  SERVICE_PO_IMPORT: '/service-pos/import',
 
   SUB_PROJECTS: '/sub-projects',
   SUB_PROJECT_NEW: '/sub-projects/new',

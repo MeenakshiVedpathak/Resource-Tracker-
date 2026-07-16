@@ -4,6 +4,7 @@ import { createColumnHelper } from '@tanstack/react-table';
 import { Plus, Pencil, Trash2, Download, Upload, CheckCircle2, AlertCircle, Search, Filter } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useClients, useDeleteClient, useImportClients } from '@/hooks/useClients';
+import { clientsApi } from '@/api/clients.api';
 import { useAuth } from '@/hooks/useAuth';
 import { useNotification } from '@/hooks/useNotification';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -156,6 +157,34 @@ const ClientList = () => {
     XLSX.writeFile(wb, "client_sample.xlsx");
   };
 
+  const handleExportExcel = async () => {
+    try {
+      const res = await clientsApi.getAll({
+        limit: meta.total || 10000,
+        ...(statusFilter !== 'all' && { status: statusFilter }),
+        ...(debouncedSearch && { search: debouncedSearch }),
+      });
+      const data = res?.data ?? [];
+      if (data.length === 0) {
+        showError('No data to export');
+        return;
+      }
+      const exportData = data.map((c) => ({
+        'Client Name': c.client_name,
+        'Client Code': c.client_code,
+        'Industry': c.industry,
+        'Status': c.status,
+      }));
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Clients');
+      XLSX.writeFile(wb, 'clients_export.xlsx');
+      success('Exported to Excel successfully');
+    } catch (error) {
+      showError('Failed to export Excel');
+    }
+  };
+
   const handleFileUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -287,30 +316,6 @@ const ClientList = () => {
         description="Manage client accounts"
         actions={
           <div className="flex items-center gap-3">
-            {canManage && (
-              <>
-                <Button size="sm" variant="outline" className="bg-white" onClick={handleDownloadSample}>
-                  <Download className="mr-1.5 h-4 w-4" /> Sample
-                </Button>
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  className="hidden"
-                  accept=".xlsx,.csv"
-                  onChange={handleFileUpload}
-                />
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="bg-white"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isImporting}
-                >
-                  <Upload className="mr-1.5 h-4 w-4" />
-                  {isImporting ? 'Uploading...' : 'Upload'}
-                </Button>
-              </>
-            )}
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
@@ -333,6 +338,35 @@ const ClientList = () => {
                 </span>
               )}
             </Button>
+            {clients.length > 0 && (
+              <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={handleExportExcel}>
+                <Download className="h-4 w-4" /> Export Excel
+              </Button>
+            )}
+            {canManage && (
+              <>
+                <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={handleDownloadSample}>
+                  <Download className="h-4 w-4" /> Sample
+                </Button>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  className="hidden"
+                  accept=".xlsx,.csv"
+                  onChange={handleFileUpload}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 gap-1.5"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isImporting}
+                >
+                  <Upload className="h-4 w-4" />
+                  {isImporting ? 'Importing…' : 'Import Excel'}
+                </Button>
+              </>
+            )}
             {canManage && !isPreviewOpen && !importResult && (
               <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => navigate(ROUTES.CLIENT_NEW)}>
                 <Plus className="mr-1.5 h-4 w-4" /> Add Client
@@ -431,7 +465,7 @@ const ClientList = () => {
               </Button>
               <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={handleConfirmImport} disabled={isImporting}>
                 <CheckCircle2 className="mr-2 h-4 w-4" />
-                {isImporting ? 'Importing...' : 'Confirm Import'}
+                {isImporting ? 'Importing…' : 'Confirm Import'}
               </Button>
             </div>
           </CardContent>

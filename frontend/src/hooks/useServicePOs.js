@@ -86,3 +86,11 @@ export const useDeleteServicePO = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['service-pos'] }),
   });
 };
+
+export const useImportServicePOs = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (file) => servicePOsApi.importFile(file),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['service-pos'] }),
+  });
+};

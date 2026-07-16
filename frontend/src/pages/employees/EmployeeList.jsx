@@ -495,51 +495,6 @@ const EmployeeList = () => {
         title="Employees"
         actions={
           <div className="flex items-center gap-3">
-            {isHR && (
-              <>
-                <Button size="sm" variant="outline" className="bg-white" onClick={handleDownloadSample}>
-                  <Download className="mr-1.5 h-4 w-4" /> Sample
-                </Button>
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  className="hidden"
-                  accept=".xlsx,.csv"
-                  onChange={handleFileUpload}
-                />
-                <Button 
-                  size="sm" 
-                  variant="outline" 
-                  className="bg-white" 
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={importMutation.isPending}
-                >
-                  <Upload className="mr-1.5 h-4 w-4" /> 
-                  {importMutation.isPending ? 'Uploading...' : 'Upload'}
-                </Button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button size="sm" variant="outline" className="bg-white">
-                      <FileDown className="mr-1.5 h-4 w-4" /> Export <ChevronDown className="ml-1 h-3 w-3" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={handleExportExcel} className="cursor-pointer">
-                      <FileSpreadsheet className="mr-2 h-4 w-4 text-green-600" />
-                      Excel
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={handleExportPDF} className="cursor-pointer">
-                      <FileText className="mr-2 h-4 w-4 text-red-500" />
-                      PDF
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={handlePrint} className="cursor-pointer">
-                      <Printer className="mr-2 h-4 w-4 text-slate-600" />
-                      Print / View
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </>
-            )}
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
@@ -562,6 +517,55 @@ const EmployeeList = () => {
                 </span>
               )}
             </Button>
+            {isHR && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-9 gap-1.5 bg-white">
+                    <FileDown className="h-4 w-4" /> Export <ChevronDown className="ml-1 h-3 w-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={handleExportExcel} className="cursor-pointer">
+                    <FileSpreadsheet className="mr-2 h-4 w-4 text-green-600" />
+                    Excel
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleExportPDF} className="cursor-pointer">
+                    <FileText className="mr-2 h-4 w-4 text-red-500" />
+                    PDF
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handlePrint} className="cursor-pointer">
+                    <Printer className="mr-2 h-4 w-4 text-slate-600" />
+                    Print / View
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+            {isHR && (
+              <Button variant="outline" size="sm" className="h-9 gap-1.5 bg-white" onClick={handleDownloadSample}>
+                <Download className="h-4 w-4" /> Sample
+              </Button>
+            )}
+            {isHR && (
+              <>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  className="hidden"
+                  accept=".xlsx,.csv"
+                  onChange={handleFileUpload}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 gap-1.5 bg-white"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={importMutation.isPending}
+                >
+                  <Upload className="h-4 w-4" />
+                  {importMutation.isPending ? 'Importing…' : 'Import Excel'}
+                </Button>
+              </>
+            )}
             {isHR && !isPreviewOpen && !importResult && (
               <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => navigate(ROUTES.EMPLOYEE_NEW)}>
                 <Plus className="mr-1.5 h-4 w-4" /> Add Employee
@@ -660,7 +664,7 @@ const EmployeeList = () => {
               </Button>
               <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={handleConfirmImport} disabled={importMutation.isPending}>
                 <CheckCircle2 className="mr-2 h-4 w-4" />
-                {importMutation.isPending ? 'Importing...' : 'Confirm Import'}
+                {importMutation.isPending ? 'Importing…' : 'Confirm Import'}
               </Button>
             </div>
           </CardContent>

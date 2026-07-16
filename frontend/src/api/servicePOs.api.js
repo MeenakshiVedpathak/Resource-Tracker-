@@ -13,4 +13,13 @@ export const servicePOsApi = {
     apiClient.delete(`/service-pos/${id}/resources/${employeeId}`, { data: { is_delete: true } }).then((r) => r.data),
   delete: (id) => apiClient.delete(`/service-pos/${id}`).then((r) => r.data),
   getUtilisation: (id) => apiClient.get(`/service-pos/${id}/utilisation`).then((r) => r.data?.data),
+  importFile: (file) => {
+    const form = new FormData();
+    form.append('file', file);
+    return apiClient
+      .post('/service-pos/import', form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      .then((r) => r.data?.data);
+  },
 };

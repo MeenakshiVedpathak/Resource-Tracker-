@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import { useNavigate, useSearchParams, Outlet } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Plus, Pencil, Eye, Trash2, Search, Filter, Download } from 'lucide-react';
+import { Plus, Pencil, Eye, Trash2, Search, Filter, Download, Upload } from 'lucide-react';
 import { useServicePOs, useDeleteServicePO } from '@/hooks/useServicePOs';
 import { servicePOsApi } from '@/api/servicePOs.api';
 import { useActiveClients } from '@/hooks/useClients';
@@ -52,6 +52,34 @@ const exportToExcel = (rows) => {
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Service POs');
   XLSX.writeFile(wb, 'Service_POs.xlsx');
+};
+
+// Mirrors the fields on the "New Service PO" form (ServicePOForm.jsx) in the same order.
+const SAMPLE_COLUMNS = [
+  'PO Code', 'PO Name', 'Client', 'Service Category', 'Service Type',
+  'Account Manager', 'Status', 'Service Description', 'PO Value',
+  'Expected Man Hours', 'Start Date', 'End Date', 'Invoice Frequency', 'Invoice Amount',
+];
+
+const downloadSampleExcel = () => {
+  const wsData = [
+    SAMPLE_COLUMNS,
+    [
+      '', 'Annual Support Contract', 'Acme Technologies', 'Billable', 'Managed Services',
+      'Jane Doe', 'in-progress', 'Ongoing L1/L2 support', 500000,
+      2000, '2026-01-01', '2026-12-31', 'monthly', 41666.67,
+    ],
+    [
+      '', 'Internal Tooling POC', 'Zenith Retail', 'Non-Billable', 'Project',
+      'John Smith', 'pending', 'Proof of concept, no client invoicing', '',
+      400, '2026-02-01', '2026-04-30', 'internal-no-invoice', 0,
+    ],
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+  ws['!cols'] = SAMPLE_COLUMNS.map(() => ({ wch: 20 }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Service POs');
+  XLSX.writeFile(wb, 'ServicePO_Sample.xlsx');
 };
 
 const TruncatedCell = ({ value, maxWidth = '150px', className }) => {
@@ -294,7 +322,7 @@ const ServicePOList = () => {
     <div className="space-y-4">
       <PageHeader
         title="Service POs"
-        description="Manage service purchase orders"
+        // description="Manage service purchase orders"
         actions={
           <div className="flex items-center gap-3">
             <div className="relative">
@@ -322,6 +350,16 @@ const ServicePOList = () => {
             {servicePOs.length > 0 && (
               <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={handleExport} disabled={exporting}>
                 <Download className="h-4 w-4" /> {exporting ? 'Exporting…' : 'Export Excel'}
+              </Button>
+            )}
+            {canManage && (
+              <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={downloadSampleExcel}>
+                <Download className="h-4 w-4" /> Sample
+              </Button>
+            )}
+            {canManage && (
+              <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={() => navigate(ROUTES.SERVICE_PO_IMPORT)}>
+                <Upload className="h-4 w-4" /> Import Excel
               </Button>
             )}
             {canManage && (

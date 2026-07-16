@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useNavigate, Outlet } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Plus, Pencil, Trash2, Search, Filter } from 'lucide-react';
+import * as XLSX from 'xlsx';
+import { Plus, Pencil, Trash2, Search, Filter, Download } from 'lucide-react';
 import { useServiceTypes, useDeleteServiceType } from '@/hooks/useServiceTypes';
 import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
 import { useAuth } from '@/hooks/useAuth';
@@ -20,6 +21,19 @@ import { extractApiError } from '@/services/apiClient';
 import { cn } from '@/utils/cn';
 
 const columnHelper = createColumnHelper();
+
+const exportToExcel = (rows, categoryMap) => {
+  const header = ['Service Type Name', 'Service Category', 'Created'];
+  const dataRows = rows.map((r) => [
+    r.service_type_name ?? '',
+    categoryMap[r.service_category_id] ?? '',
+    r.created_at ? formatDate(r.created_at) : '',
+  ]);
+  const ws = XLSX.utils.aoa_to_sheet([header, ...dataRows]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Service Types');
+  XLSX.writeFile(wb, 'Service_Types.xlsx');
+};
 
 const TruncatedCell = ({ value, maxWidth = '150px', className }) => {
   if (!value) return <span className="text-sm text-muted-foreground">—</span>;
@@ -80,6 +94,8 @@ const ServiceTypeList = () => {
 
   const total = meta.total ?? rows.length;
   const paginatedRows = rows.slice((page - 1) * limit, page * limit);
+
+  const handleExport = () => exportToExcel(rows, categoryMap);
 
   const columns = [
     columnHelper.display({
@@ -162,6 +178,11 @@ const ServiceTypeList = () => {
                 </span>
               )}
             </Button>
+            {rows.length > 0 && (
+              <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={handleExport}>
+                <Download className="h-4 w-4" /> Export Excel
+              </Button>
+            )}
             {canManage && (
               <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => navigate(ROUTES.SERVICE_TYPE_NEW)}>
                 <Plus className="mr-1.5 h-4 w-4" /> Add Service Type
