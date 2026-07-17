@@ -70,7 +70,7 @@ const ClientCategoryCostMatrix = ({ data = [], isLoading, periodLabel }) => {
           />
         ) : (
           <>
-            <div className="flex-1 space-y-2.5">
+            <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-2.5 content-start">
               {pageRows.map((c) => {
                 const total = c.total_cost || 0;
                 const segments = CATEGORIES.map((cat) => ({
