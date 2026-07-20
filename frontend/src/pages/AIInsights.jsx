@@ -1,9 +1,9 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Sparkles, ArrowLeft, RefreshCw, AlertCircle, AlertTriangle, Activity, DollarSign,
-  Calendar, Clock, Briefcase, ListChecks, Lightbulb, Info, CheckCircle2, ArrowRight, Users,
+  Calendar, Clock, Briefcase, ListChecks, Lightbulb, Info, CheckCircle2, ArrowRight, Users, X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -60,6 +60,18 @@ const LiveDot = ({ className }) => (
     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
     <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-primary" />
   </span>
+);
+
+const FilterChip = ({ label, onClear, capitalize }) => (
+  <button
+    onClick={onClear}
+    className={cn(
+      'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors',
+      capitalize && 'capitalize',
+    )}
+  >
+    {label} <X className="h-3 w-3" />
+  </button>
 );
 
 const TIMELINE_THEME = {
@@ -246,11 +258,15 @@ const AIInsights = () => {
     [allInsights, audience],
   );
 
+  // severity runs next — category tab counts/visibility reflect audience + severity together
+  const severityInsights = useMemo(
+    () => audienceInsights.filter((i) => !severityFilter || i.severity === severityFilter),
+    [audienceInsights, severityFilter],
+  );
+
   const insights = useMemo(() => {
-    return audienceInsights
-      .filter((i) => activeCategory === 'all' || CATEGORY_META[i.job_key]?.group === activeCategory)
-      .filter((i) => !severityFilter || i.severity === severityFilter);
-  }, [audienceInsights, activeCategory, severityFilter]);
+    return severityInsights.filter((i) => activeCategory === 'all' || CATEGORY_META[i.job_key]?.group === activeCategory);
+  }, [severityInsights, activeCategory]);
 
   const counts = useMemo(() => {
     const c = { critical: 0, warning: 0, info: 0, success: 0 };
@@ -259,13 +275,30 @@ const AIInsights = () => {
   }, [audienceInsights]);
 
   const categoryCounts = useMemo(() => {
-    const c = { all: audienceInsights.length };
-    audienceInsights.forEach((i) => {
+    const c = { all: severityInsights.length };
+    severityInsights.forEach((i) => {
       const group = CATEGORY_META[i.job_key]?.group;
       if (group) c[group] = (c[group] ?? 0) + 1;
     });
     return c;
-  }, [audienceInsights]);
+  }, [severityInsights]);
+
+  const visibleCategories = useMemo(
+    () => CATEGORIES.filter((c) => c.value === 'all' || categoryCounts[c.value] > 0),
+    [categoryCounts],
+  );
+
+  // if the active category disappears (e.g. an audience/severity change zeroes it out), fall back to "all"
+  useEffect(() => {
+    if (activeCategory !== 'all' && !categoryCounts[activeCategory]) setActiveCategory('all');
+  }, [activeCategory, categoryCounts]);
+
+  const hasActiveFilters = audience !== 'all' || activeCategory !== 'all' || !!severityFilter;
+  const clearAllFilters = () => {
+    setAudience('all');
+    setActiveCategory('all');
+    setSeverityFilter(null);
+  };
 
   return (
     <div className="pb-8">
@@ -375,7 +408,7 @@ const AIInsights = () => {
         variants={cardContainerVariants}
         initial="hidden"
         animate="show"
-        className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5"
+        className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5"
       >
         {SUMMARY_TILES.map((s) => (
           <motion.button
@@ -402,19 +435,31 @@ const AIInsights = () => {
       </motion.div>
 
       <AnimatePresence>
-        {severityFilter && (
+        {hasActiveFilters && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
             className="mb-4 overflow-hidden"
           >
-            <button
-              onClick={() => setSeverityFilter(null)}
-              className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-            >
-              Filtering by <span className="font-semibold capitalize">{severityFilter}</span> ×
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-muted-foreground">Filters:</span>
+              {audience !== 'all' && (
+                <FilterChip label={audience} onClear={() => setAudience('all')} />
+              )}
+              {activeCategory !== 'all' && (
+                <FilterChip label={CATEGORIES.find((c) => c.value === activeCategory)?.label ?? activeCategory} onClear={() => setActiveCategory('all')} />
+              )}
+              {severityFilter && (
+                <FilterChip label={severityFilter} onClear={() => setSeverityFilter(null)} capitalize />
+              )}
+              <button
+                onClick={clearAllFilters}
+                className="text-xs font-semibold text-primary hover:underline ml-1"
+              >
+                Clear all
+              </button>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -422,7 +467,7 @@ const AIInsights = () => {
       {/* ── Category tabs ── */}
       <Tabs value={activeCategory} onValueChange={setActiveCategory} className="mb-5">
         <TabsList className="flex-wrap h-auto gap-1.5 bg-transparent p-0">
-          {CATEGORIES.map((c) => (
+          {visibleCategories.map((c) => (
             <TabsTrigger
               key={c.value}
               value={c.value}
