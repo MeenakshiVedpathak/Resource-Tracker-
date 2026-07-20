@@ -1,13 +1,18 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { createColumnHelper } from '@tanstack/react-table';
 import { ArrowLeft, FileSpreadsheet } from 'lucide-react';
+import { timesheetsApi } from '@/api/timesheets.api';
 import { useTimesheetImportRows } from '@/hooks/useTimesheets';
 import { useTimesheetHistory } from '@/hooks/useTimesheets';
 import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
 import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
+import { useActiveServicePOs } from '@/hooks/useServicePOs';
+import { useNotification } from '@/hooks/useNotification';
 import { ROUTES } from '@/constants/routes';
 import { formatDate } from '@/utils/formatters';
+import { cn } from '@/utils/cn';
 import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
 import { SearchableSelect } from '@/components/ui/searchable-select';
@@ -15,9 +20,74 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const columnHelper = createColumnHelper();
+
+/*
+ * Every cell below is directly editable, spreadsheet-style — no separate
+ * "edit mode" toggle. Dropdown cells (Employee/Service PO) are always
+ * rendered as select controls; Hours is always an input, styled borderless
+ * so the table still reads like a plain grid until focused. Each field
+ * saves independently on change/blur via a partial PUT.
+ */
+const cellInputClass = 'h-8 text-xs bg-transparent border-transparent hover:border-input focus:border-input focus:bg-background transition-colors rounded-md px-2';
+
+// Employee is intentionally read-only — reassigning a timesheet entry to a
+// different employee isn't allowed here.
+const EmployeeCell = ({ row }) => (
+  <div>
+    <p className="text-sm font-medium">{row.employee?.full_name ?? '—'}</p>
+    <p className="text-xs text-muted-foreground font-mono">{row.employee?.employee_code ?? ''}</p>
+  </div>
+);
+
+const ServicePOCell = ({ row, poOptions, onSave }) => {
+  const [saving, setSaving] = useState(false);
+  const value = row.servicePO?.id != null ? String(row.servicePO.id) : '';
+  return (
+    <SearchableSelect
+      options={poOptions}
+      value={value}
+      disabled={saving}
+      onValueChange={async (v) => {
+        if (v === value) return;
+        setSaving(true);
+        try { await onSave(row.id, { service_po_id: Number(v), sub_project_id: null }); } finally { setSaving(false); }
+      }}
+      placeholder="Service PO"
+      searchPlaceholder="Search PO..."
+      className={cn('w-full', cellInputClass)}
+    />
+  );
+};
+
+const HoursCell = ({ row, onSave }) => {
+  const initial = row.hours_logged != null ? String(row.hours_logged) : '';
+  const [val, setVal] = useState(initial);
+  const [saving, setSaving] = useState(false);
+  useEffect(() => setVal(initial), [initial]);
+
+  const commit = async () => {
+    const num = Number(val);
+    if (val === '' || Number.isNaN(num) || val === initial) { setVal(initial); return; }
+    setSaving(true);
+    try { await onSave(row.id, { hours_logged: num }); } catch { setVal(initial); } finally { setSaving(false); }
+  };
+
+  return (
+    <input
+      type="number"
+      step="0.25"
+      min="0"
+      value={val}
+      disabled={saving}
+      onChange={(e) => setVal(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+      className={cn('w-20 text-right tabular-nums font-semibold border', cellInputClass)}
+    />
+  );
+};
 
 const TimesheetImportDetail = () => {
   const navigate = useNavigate();
@@ -29,6 +99,28 @@ const TimesheetImportDetail = () => {
 
   const rows = Array.isArray(rowsData?.data) ? rowsData.data : [];
   const importRecord = (historyData?.data ?? []).find((r) => String(r.id) === String(id));
+
+  // ── per-cell inline edit: each field saves independently on change/blur ──
+  const notify = useNotification();
+  const queryClient = useQueryClient();
+
+  const { data: activeServicePOsData } = useActiveServicePOs();
+
+  const servicePOOptions = (activeServicePOsData?.data ?? activeServicePOsData ?? []).map((p) => ({
+    value: String(p.service_po_id ?? p.id),
+    label: p.service_po_name ?? p.name,
+  }));
+
+  const saveField = async (rowId, payload) => {
+    try {
+      await timesheetsApi.update(rowId, payload);
+      await queryClient.invalidateQueries({ queryKey: ['timesheets'] });
+      notify.success('Entry updated.');
+    } catch (err) {
+      notify.error(err?.response?.data?.message ?? 'Failed to update timesheet entry.');
+      throw err;
+    }
+  };
 
   const [employeeFilter, setEmployeeFilter] = useState('all');
   const [poFilter, setPoFilter] = useState('all');
@@ -95,27 +187,17 @@ const TimesheetImportDetail = () => {
   const columns = [
     columnHelper.accessor('employee', {
       header: 'Employee',
-      cell: (info) => {
-        const e = info.getValue();
-        return (
-          <div>
-            <p className="text-sm font-medium">{e?.full_name ?? '—'}</p>
-            <p className="text-xs text-muted-foreground font-mono">{e?.employee_code ?? ''}</p>
-          </div>
-        );
-      },
+      size: 200,
+      cell: (info) => (
+        <EmployeeCell row={info.row.original} />
+      ),
     }),
     columnHelper.accessor('servicePO', {
       header: 'Service PO',
-      cell: (info) => {
-        const po = info.getValue();
-        return (
-          <div>
-            <p className="text-sm font-medium">{po?.service_po_name ?? '—'}</p>
-            <p className="text-xs text-muted-foreground font-mono">{po?.service_po_code ?? ''}</p>
-          </div>
-        );
-      },
+      size: 220,
+      cell: (info) => (
+        <ServicePOCell row={info.row.original} poOptions={servicePOOptions} onSave={saveField} />
+      ),
     }),
     columnHelper.accessor('servicePO.client', {
       id: 'client',
@@ -129,35 +211,10 @@ const TimesheetImportDetail = () => {
         );
       },
     }),
-    columnHelper.accessor('subProject', {
-      header: 'Sub-Project',
-      cell: (info) => {
-        const sp = info.getValue();
-        return sp ? (
-          <div>
-            <p className="text-sm">{sp.sub_project_name}</p>
-            <p className="text-xs text-muted-foreground font-mono">{sp.sub_project_code}</p>
-          </div>
-        ) : (
-          <span className="text-muted-foreground">—</span>
-        );
-      },
-    }),
-    columnHelper.accessor('timesheet_date', {
-      header: 'Date',
-      size: 120,
-      cell: (info) => (
-        <span className="text-sm tabular-nums">{formatDate(info.getValue())}</span>
-      ),
-    }),
     columnHelper.accessor('hours_logged', {
       header: 'Hours',
-      size: 90,
-      cell: (info) => (
-        <span className="tabular-nums font-semibold text-sm">
-          {info.getValue() != null ? `${Number(info.getValue()).toFixed(2)}h` : '—'}
-        </span>
-      ),
+      size: 100,
+      cell: (info) => <HoursCell row={info.row.original} onSave={saveField} />,
     }),
     columnHelper.accessor('servicePO.serviceType.serviceCategory', {
       id: 'category',

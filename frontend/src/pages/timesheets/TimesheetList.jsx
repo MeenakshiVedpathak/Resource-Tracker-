@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Upload, Info, Download, Trash2 } from 'lucide-react';
+import { Upload, Info, Download, Trash2, Loader2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useTimesheetHistory, useDeleteTimesheetImport, useDeleteTimesheetImports } from '@/hooks/useTimesheets';
+import { timesheetsApi } from '@/api/timesheets.api';
+import { QUERY_KEYS } from '@/constants/queryKeys';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import { ROUTES, buildPath } from '@/constants/routes';
@@ -24,6 +27,7 @@ const columnHelper = createColumnHelper();
 
 const TimesheetList = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { success, error: showError } = useNotification();
 
   const [page, setPage] = useState(1);
@@ -37,6 +41,7 @@ const TimesheetList = () => {
   const [selectedIds, setSelectedIds] = useState([]);
   const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
   const [monthYearFilter, setMonthYearFilter] = useState(null);
+  const [openingId, setOpeningId] = useState(null);
 
   const [sorting, setSorting] = useState([]);
 
@@ -145,9 +150,14 @@ const TimesheetList = () => {
     columnHelper.accessor('file_name', {
       header: 'File Name',
       cell: (info) => (
-        <span className="font-medium text-sm truncate max-w-[220px] block" title={info.getValue()}>
-          {info.getValue() ?? '—'}
-        </span>
+        <div className="flex items-center gap-2 max-w-[220px]">
+          <span className="font-medium text-sm truncate" title={info.getValue()}>
+            {info.getValue() ?? '—'}
+          </span>
+          {openingId === info.row.original.id && (
+            <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" />
+          )}
+        </div>
       ),
     }),
     columnHelper.accessor('importer', {
@@ -288,7 +298,22 @@ const TimesheetList = () => {
         onSortingChange={(s) => { setSorting(s); setPage(1); }}
         onPageChange={(p) => { setPage(p); setSelectedIds([]); }}
         onPageSizeChange={(s) => { setLimit(s); setPage(1); setSelectedIds([]); }}
-        onRowClick={(row) => navigate(buildPath(ROUTES.TIMESHEET_IMPORT_DETAIL, { id: row.id }))}
+        rowClassName={(row) => (openingId && openingId !== row.id ? 'opacity-50 pointer-events-none' : '')}
+        onRowClick={async (row) => {
+          if (openingId) return;
+          setOpeningId(row.id);
+          // Prefetch the (potentially large) row set so the spinner covers the
+          // whole wait here, and the details page mounts with data already cached
+          // instead of showing its own skeleton right after this one.
+          try {
+            await queryClient.prefetchQuery({
+              queryKey: QUERY_KEYS.TIMESHEET_IMPORT_ROWS(String(row.id)),
+              queryFn: () => timesheetsApi.getImportRows(row.id),
+            });
+          } finally {
+            navigate(buildPath(ROUTES.TIMESHEET_IMPORT_DETAIL, { id: row.id }));
+          }
+        }}
       />
 
       <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
