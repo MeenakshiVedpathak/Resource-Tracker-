@@ -5,6 +5,7 @@ export const ROUTES = {
 
   // Core
   DASHBOARD: '/',
+  AI_INSIGHTS: '/ai-insights',
 
   // People
   EMPLOYEES: '/employees',

@@ -7,6 +7,9 @@ export const QUERY_KEYS = {
   DASHBOARD_EMPLOYEE_BILLABLE: (params) => ['dashboard', 'employee-billable-breakdown', params],
   DASHBOARD_TOP_EMPLOYEES_BY_PO: (params) => ['dashboard', 'top-employees-by-po', params],
 
+  // AI Insights
+  AI_INSIGHTS: (params) => ['ai-insights', params],
+
   // Employees
   EMPLOYEES: (params) => ['employees', params],
   EMPLOYEES_ACTIVE: ['employees', 'active'],

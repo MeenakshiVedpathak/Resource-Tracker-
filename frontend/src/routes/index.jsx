@@ -11,6 +11,7 @@ const Login = lazy(() => import('@/pages/auth/Login'));
 
 // ── Core ──
 const Dashboard = lazy(() => import('@/pages/Dashboard'));
+const AIInsights = lazy(() => import('@/pages/AIInsights'));
 
 // ── People ──
 const EmployeeList = lazy(() => import('@/pages/employees/EmployeeList'));
@@ -81,6 +82,7 @@ const AppRoutes = () => (
         }
       >
         <Route path={ROUTES.DASHBOARD} element={<Dashboard />} />
+        <Route path={ROUTES.AI_INSIGHTS} element={<AIInsights />} />
 
         {/* Employees */}
         <Route path={ROUTES.EMPLOYEES} element={<EmployeeList />}>

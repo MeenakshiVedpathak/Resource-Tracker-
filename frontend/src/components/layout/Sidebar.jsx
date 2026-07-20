@@ -8,7 +8,7 @@ import { ROUTES } from '@/constants/routes';
 import {
   LayoutDashboard, Users, UserCog, Shield, Building2,
   FileText, FolderOpen, Clock, DollarSign, BarChart3,
-  ChevronLeft, ChevronRight, Tag, Layers,
+  ChevronLeft, ChevronRight, Tag, Layers, Sparkles,
 } from 'lucide-react';
 
 const NAV_GROUPS = [
@@ -16,6 +16,7 @@ const NAV_GROUPS = [
     label: 'Core',
     items: [
       { label: 'Dashboard', icon: LayoutDashboard, to: ROUTES.DASHBOARD, exact: true },
+      { label: 'AI Insights', icon: Sparkles, to: ROUTES.AI_INSIGHTS, exact: true },
     ],
   },
   {
