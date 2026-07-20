@@ -1,17 +1,22 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Upload, Info, Download } from 'lucide-react';
+import { Upload, Info, Download, Trash2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { useTimesheetHistory } from '@/hooks/useTimesheets';
+import { useTimesheetHistory, useDeleteTimesheetImport, useDeleteTimesheetImports } from '@/hooks/useTimesheets';
+import { useNotification } from '@/hooks/useNotification';
+import { extractApiError } from '@/services/apiClient';
 import { ROUTES, buildPath } from '@/constants/routes';
 import { formatDate } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
+import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Label } from '@/components/ui/label';
+import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 const columnHelper = createColumnHelper();
@@ -19,28 +24,41 @@ const columnHelper = createColumnHelper();
 
 const TimesheetList = () => {
   const navigate = useNavigate();
+  const { success, error: showError } = useNotification();
 
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
-  
+
   const currentDate = new Date();
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(String(currentDate.getMonth() + 1));
   const [selectedYear, setSelectedYear] = useState(String(currentDate.getFullYear()));
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
+  const [monthYearFilter, setMonthYearFilter] = useState(null);
 
   const [sorting, setSorting] = useState([]);
 
   const params = {
     page,
     limit,
+    ...(monthYearFilter && { month: monthYearFilter.month, year: monthYearFilter.year }),
     ...(sorting[0] && { sortBy: sorting[0].id, sortOrder: sorting[0].desc ? 'desc' : 'asc' }),
   };
 
   const { data, isPending } = useTimesheetHistory(params);
+  const deleteMutation = useDeleteTimesheetImport();
+  const bulkDeleteMutation = useDeleteTimesheetImports();
 
   const allRecords = Array.isArray(data?.data) ? data.data : [];
   const records    = allRecords.filter((r) => r.status === 'completed');
   const meta       = data?.meta ?? {};
+
+  const allSelected = records.length > 0 && records.every((r) => selectedIds.includes(r.id));
+  const toggleSelectAll = () => setSelectedIds(allSelected ? [] : records.map((r) => r.id));
+  const toggleSelect = (id) =>
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
   const handleDownloadSample = () => {
     const wsData = [
@@ -64,7 +82,66 @@ const TimesheetList = () => {
     XLSX.writeFile(wb, 'Timesheet_Sample.xlsx');
   };
 
+  const handleDelete = () => {
+    deleteMutation.mutate(deleteTarget.id, {
+      onSuccess: () => {
+        success(`Import "${deleteTarget.file_name}" has been deleted.`);
+        setDeleteTarget(null);
+      },
+      onError: (err) => showError(extractApiError(err)),
+    });
+  };
+
+  const handleBulkDelete = () => {
+    const count = selectedIds.length;
+    bulkDeleteMutation.mutate(selectedIds, {
+      onSuccess: () => {
+        success(`${count} import${count !== 1 ? 's' : ''} deleted.`);
+        setSelectedIds([]);
+        setIsBulkDeleteOpen(false);
+      },
+      onError: (err) => showError(extractApiError(err)),
+    });
+  };
+
   const columns = [
+    columnHelper.display({
+      id: 'select',
+      header: () => (
+        <Checkbox
+          checked={allSelected}
+          onCheckedChange={toggleSelectAll}
+          aria-label="Select all"
+        />
+      ),
+      size: 36,
+      cell: ({ row }) => (
+        <div onClick={(e) => e.stopPropagation()}>
+          <Checkbox
+            checked={selectedIds.includes(row.original.id)}
+            onCheckedChange={() => toggleSelect(row.original.id)}
+            aria-label="Select row"
+          />
+        </div>
+      ),
+    }),
+    columnHelper.display({
+      id: 'actions',
+      header: 'Actions',
+      size: 90,
+      cell: ({ row }) => (
+        <div onClick={(e) => e.stopPropagation()}>
+          <Button
+            size="sm"
+            className="h-6 px-2 bg-red-500 hover:bg-red-600 text-white rounded font-normal text-[11px] transition-colors"
+            title="Delete"
+            onClick={() => setDeleteTarget(row.original)}
+          >
+            <Trash2 className="h-3 w-3 mr-1" /> Delete
+          </Button>
+        </div>
+      ),
+    }),
     columnHelper.accessor('file_name', {
       header: 'File Name',
       cell: (info) => (
@@ -168,10 +245,36 @@ const TimesheetList = () => {
         }
       />
 
+      {selectedIds.length > 0 && (
+        <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-3 py-2">
+          <span className="text-sm font-medium">{selectedIds.length} selected</span>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => setSelectedIds([])}>
+              Clear
+            </Button>
+            <Button
+              size="sm"
+              className="bg-red-500 hover:bg-red-600 text-white"
+              onClick={() => setIsBulkDeleteOpen(true)}
+            >
+              <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Delete Selected
+            </Button>
+          </div>
+        </div>
+      )}
+
       <DataTable
         columns={columns}
         data={records}
         isLoading={isPending}
+        toolbar={
+          <MonthYearPicker
+            value={monthYearFilter}
+            onChange={(val) => { setMonthYearFilter(val); setPage(1); setSelectedIds([]); }}
+            placeholder="All months"
+            className="w-44"
+          />
+        }
         pagination={
           records.length > 0
             ? {
@@ -183,8 +286,8 @@ const TimesheetList = () => {
         }
         sorting={sorting}
         onSortingChange={(s) => { setSorting(s); setPage(1); }}
-        onPageChange={setPage}
-        onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
+        onPageChange={(p) => { setPage(p); setSelectedIds([]); }}
+        onPageSizeChange={(s) => { setLimit(s); setPage(1); setSelectedIds([]); }}
         onRowClick={(row) => navigate(buildPath(ROUTES.TIMESHEET_IMPORT_DETAIL, { id: row.id }))}
       />
 
@@ -237,6 +340,26 @@ const TimesheetList = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title="Delete this upload?"
+        description={`This will permanently remove "${deleteTarget?.file_name}" and all ${deleteTarget?.total_rows ?? ''} timesheet rows it imported. This cannot be undone.`}
+        confirmLabel="Delete"
+        onConfirm={handleDelete}
+        isLoading={deleteMutation.isPending}
+      />
+
+      <ConfirmDialog
+        open={isBulkDeleteOpen}
+        onOpenChange={setIsBulkDeleteOpen}
+        title={`Delete ${selectedIds.length} upload${selectedIds.length !== 1 ? 's' : ''}?`}
+        description="This will permanently remove the selected imports and all timesheet rows they contain. This cannot be undone."
+        confirmLabel="Delete"
+        onConfirm={handleBulkDelete}
+        isLoading={bulkDeleteMutation.isPending}
+      />
     </div>
   );
 };

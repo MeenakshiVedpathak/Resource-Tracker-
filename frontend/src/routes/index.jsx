@@ -38,6 +38,7 @@ const TimesheetList = lazy(() => import('@/pages/timesheets/TimesheetList'));
 const TimesheetUpload = lazy(() => import('@/pages/timesheets/TimesheetUpload'));
 const TimesheetImportDetail = lazy(() => import('@/pages/timesheets/TimesheetImportDetail'));
 const MonthlyCostList = lazy(() => import('@/pages/monthlyCosts/MonthlyCostList'));
+const MonthlyCostDetail = lazy(() => import('@/pages/monthlyCosts/MonthlyCostDetail'));
 const MonthlyCostForm = lazy(() => import('@/pages/monthlyCosts/MonthlyCostForm'));
 const MonthlyCostImport = lazy(() => import('@/pages/monthlyCosts/MonthlyCostImport'));
 
@@ -132,11 +133,12 @@ const AppRoutes = () => (
         <Route path={ROUTES.TIMESHEETS} element={<TimesheetList />} />
         <Route path={ROUTES.TIMESHEET_UPLOAD} element={<TimesheetUpload />} />
         <Route path={ROUTES.TIMESHEET_IMPORT_DETAIL} element={<TimesheetImportDetail />} />
-        <Route path={ROUTES.MONTHLY_COSTS} element={<MonthlyCostList />}>
+        <Route path={ROUTES.MONTHLY_COSTS} element={<MonthlyCostList />} />
+        <Route path={ROUTES.MONTHLY_COST_IMPORT} element={<MonthlyCostImport />} />
+        <Route path={ROUTES.MONTHLY_COST_DETAIL} element={<MonthlyCostDetail />}>
           <Route path="new" element={<MonthlyCostForm />} />
           <Route path=":id/edit" element={<MonthlyCostForm />} />
         </Route>
-        <Route path={ROUTES.MONTHLY_COST_IMPORT} element={<MonthlyCostImport />} />
 
         {/* Reports */}
         <Route path={ROUTES.REPORTS} element={<ReportsLayout />}>

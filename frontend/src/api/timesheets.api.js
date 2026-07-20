@@ -25,4 +25,6 @@ export const timesheetsApi = {
     apiClient.get(`/timesheets/import/${id}`).then((r) => r.data?.data),
   getImportRows: (id) =>
     apiClient.get(`/timesheets/import/${id}/rows`).then((r) => r.data),
+  deleteImports: (ids) =>
+    apiClient.delete('/timesheets', { data: { ids } }).then((r) => r.data),
 };

@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { useNavigate, Outlet } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
 import * as XLSX from 'xlsx';
-import { Pencil, Trash2, Calculator, Download, Upload, Search } from 'lucide-react';
-import { useMonthlyCosts, useDeleteMonthlyCost, useCalculateMonthlyCosts } from '@/hooks/useMonthlyCosts';
+import { Trash2, Calculator, Download, Upload } from 'lucide-react';
+import { useMonthlyCostSummary } from '@/hooks/useReports';
+import { useDeleteMonthlyCostPeriods, useCalculateMonthlyCosts } from '@/hooks/useMonthlyCosts';
 import { useAuth } from '@/hooks/useAuth';
 import { useNotification } from '@/hooks/useNotification';
-import { useDebounce } from '@/hooks/useDebounce';
 import { extractApiError } from '@/services/apiClient';
 import { buildPath, ROUTES } from '@/constants/routes';
 import { formatCurrency, formatMonthYear } from '@/utils/formatters';
@@ -14,7 +14,7 @@ import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import {
@@ -28,6 +28,7 @@ import {
 
 const columnHelper = createColumnHelper();
 
+const periodKey = (row) => `${row.month}-${row.year}`;
 
 const MonthlyCostList = () => {
   const navigate = useNavigate();
@@ -36,136 +37,38 @@ const MonthlyCostList = () => {
 
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
-  const [search, setSearch] = useState('');
-  const [monthYearFilter, setMonthYearFilter] = useState({
-    month: new Date().getMonth() + 1,
-    year: new Date().getFullYear(),
-  });
+  const [monthYearFilter, setMonthYearFilter] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [selectedKeys, setSelectedKeys] = useState([]);
+  const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
 
-  // Calculate dialog state
   const [calcOpen, setCalcOpen] = useState(false);
   const [calcMonthYear, setCalcMonthYear] = useState({
     month: new Date().getMonth() + 1,
     year: new Date().getFullYear(),
   });
 
-  const debouncedSearch = useDebounce(search, 400);
   const canManage = hasRole('Finance', 'Management');
-
-  const [sorting, setSorting] = useState([]);
 
   const params = {
     page,
     limit,
-    ...(monthYearFilter && { month: monthYearFilter.month }),
-    ...(monthYearFilter && { year: monthYearFilter.year }),
-    ...(debouncedSearch && { search: debouncedSearch }),
-    ...(sorting[0] && { sortBy: sorting[0].id, sortOrder: sorting[0].desc ? 'desc' : 'asc' }),
+    ...(monthYearFilter && { month: monthYearFilter.month, year: monthYearFilter.year }),
   };
 
-  const { data, isPending } = useMonthlyCosts(params);
-  const deleteMutation = useDeleteMonthlyCost();
+  const { data, isPending } = useMonthlyCostSummary(params);
+  const deletePeriodsMutation = useDeleteMonthlyCostPeriods();
   const calculateMutation = useCalculateMonthlyCosts();
 
-  const records = data?.data ?? [];
+  const records = Array.isArray(data?.data?.records) ? data.data.records : [];
   const meta = data?.meta ?? {};
 
-  const columns = [
-    columnHelper.display({
-      id: 'actions',
-      header: 'Actions',
-      size: 180,
-      meta: { sticky: true, left: 0 },
-      cell: ({ row }) =>
-        canManage ? (
-          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-            <Button
-              size="sm"
-              onClick={() => navigate(buildPath(ROUTES.MONTHLY_COST_EDIT, { id: row.original.id }))}
-              className="h-6 px-2 bg-blue-500 hover:bg-blue-600 text-white rounded font-normal text-[11px] transition-colors"
-            >
-              <Pencil className="h-3 w-3 mr-1" /> Edit
-            </Button>
-            <Button
-              size="sm"
-              className="h-6 px-2 bg-red-500 hover:bg-red-600 text-white rounded font-normal text-[11px] transition-colors"
-              title="Delete"
-              onClick={() => setDeleteTarget(row.original)}
-            >
-              <Trash2 className="h-3 w-3 mr-1" /> Delete
-            </Button>
-          </div>
-        ) : null,
-    }),
-    columnHelper.accessor((row) => row.employee_name ?? row.employee?.full_name, {
-      id: 'employee',
-      header: 'Employee',
-      size: 200,
-      meta: { sticky: true, left: 180 },
-      cell: (info) => (
-        <div>
-          <p className="font-medium text-sm truncate">{info.getValue() ?? '—'}</p>
-          {(info.row.original.employee_code ?? info.row.original.employee?.employee_code) && (
-            <p className="text-xs text-muted-foreground font-mono truncate">
-              {info.row.original.employee_code ?? info.row.original.employee?.employee_code}
-            </p>
-          )}
-        </div>
-      ),
-    }),
-    columnHelper.accessor('month', {
-      header: 'Month',
-      size: 140,
-      cell: (info) => (
-        <span className="text-sm">{formatMonthYear(info.getValue(), info.row.original.year)}</span>
-      ),
-    }),
-    columnHelper.accessor('salary_cost', {
-      header: 'Salary Cost',
-      size: 150,
-      cell: (info) => (
-        <span className="tabular-nums text-sm">{formatCurrency(info.getValue())}</span>
-      ),
-    }),
-    columnHelper.accessor('ops_cost', {
-      header: 'Ops Cost',
-      size: 130,
-      cell: (info) => (
-        <span className="tabular-nums text-sm">{formatCurrency(info.getValue())}</span>
-      ),
-    }),
-    columnHelper.accessor('total_cost', {
-      header: 'Total Cost',
-      size: 140,
-      cell: (info) => (
-        <span className="tabular-nums font-semibold text-sm">{formatCurrency(info.getValue())}</span>
-      ),
-    }),
-    columnHelper.accessor('billable_cost', {
-      header: 'Billable Cost',
-      size: 140,
-      cell: (info) =>
-        info.getValue() != null ? (
-          <span className="tabular-nums text-sm">{formatCurrency(info.getValue())}</span>
-        ) : (
-          <span className="text-muted-foreground">—</span>
-        ),
-    }),
-  ];
+  const allSelected = records.length > 0 && records.every((r) => selectedKeys.includes(periodKey(r)));
+  const toggleSelectAll = () => setSelectedKeys(allSelected ? [] : records.map(periodKey));
+  const toggleSelect = (key) =>
+    setSelectedKeys((prev) => (prev.includes(key) ? prev.filter((x) => x !== key) : [...prev, key]));
 
-  const handleDelete = () => {
-    deleteMutation.mutate(deleteTarget.id, {
-      onSuccess: () => {
-        success('Monthly cost record deleted.');
-        setDeleteTarget(null);
-      },
-      onError: (err) => {
-        showError(extractApiError(err));
-        setDeleteTarget(null);
-      },
-    });
-  };
+  const clearSelection = () => setSelectedKeys([]);
 
   const handleDownloadSample = () => {
     const wsData = [
@@ -192,43 +95,151 @@ const MonthlyCostList = () => {
     );
   };
 
+  const handleDelete = () => {
+    deletePeriodsMutation.mutate([{ month: deleteTarget.month, year: deleteTarget.year }], {
+      onSuccess: () => {
+        success(`${formatMonthYear(deleteTarget.month, deleteTarget.year)} records deleted.`);
+        setDeleteTarget(null);
+      },
+      onError: (err) => {
+        showError(extractApiError(err));
+        setDeleteTarget(null);
+      },
+    });
+  };
+
+  const handleBulkDelete = () => {
+    const periods = records
+      .filter((r) => selectedKeys.includes(periodKey(r)))
+      .map((r) => ({ month: r.month, year: r.year }));
+    const count = periods.length;
+    deletePeriodsMutation.mutate(periods, {
+      onSuccess: () => {
+        success(`${count} period${count !== 1 ? 's' : ''} deleted.`);
+        clearSelection();
+        setIsBulkDeleteOpen(false);
+      },
+      onError: (err) => showError(extractApiError(err)),
+    });
+  };
+
+  const columns = [
+    columnHelper.display({
+      id: 'select',
+      header: () =>
+        canManage ? (
+          <Checkbox checked={allSelected} onCheckedChange={toggleSelectAll} aria-label="Select all" />
+        ) : null,
+      size: 36,
+      cell: ({ row }) =>
+        canManage ? (
+          <div onClick={(e) => e.stopPropagation()}>
+            <Checkbox
+              checked={selectedKeys.includes(periodKey(row.original))}
+              onCheckedChange={() => toggleSelect(periodKey(row.original))}
+              aria-label="Select period"
+            />
+          </div>
+        ) : null,
+    }),
+    columnHelper.display({
+      id: 'actions',
+      header: 'Actions',
+      size: 90,
+      cell: ({ row }) =>
+        canManage ? (
+          <div onClick={(e) => e.stopPropagation()}>
+            <Button
+              size="sm"
+              className="h-6 px-2 bg-red-500 hover:bg-red-600 text-white rounded font-normal text-[11px] transition-colors"
+              title="Delete"
+              onClick={() => setDeleteTarget(row.original)}
+            >
+              <Trash2 className="h-3 w-3 mr-1" /> Delete
+            </Button>
+          </div>
+        ) : null,
+    }),
+    columnHelper.accessor((row) => formatMonthYear(row.month, row.year), {
+      id: 'month_year',
+      header: 'Period',
+      cell: (info) => <span className="font-medium text-sm">{info.getValue()}</span>,
+    }),
+    columnHelper.accessor('employee_count', {
+      header: 'Employees',
+      size: 110,
+      cell: (info) => (
+        <span className="tabular-nums text-sm font-medium text-blue-600">{info.getValue() ?? '—'}</span>
+      ),
+    }),
+    columnHelper.accessor('total_salary_cost', {
+      header: 'Salary Cost',
+      size: 140,
+      cell: (info) => <span className="tabular-nums text-sm">{formatCurrency(info.getValue())}</span>,
+    }),
+    columnHelper.accessor('total_ops_cost', {
+      header: 'Ops Cost',
+      size: 130,
+      cell: (info) => <span className="tabular-nums text-sm">{formatCurrency(info.getValue())}</span>,
+    }),
+    columnHelper.accessor('total_billable_cost', {
+      header: 'Billable Cost',
+      size: 140,
+      cell: (info) => <span className="tabular-nums text-sm">{formatCurrency(info.getValue())}</span>,
+    }),
+    columnHelper.accessor('total_cost', {
+      header: 'Total Cost',
+      size: 140,
+      cell: (info) => (
+        <span className="tabular-nums font-semibold text-sm">{formatCurrency(info.getValue())}</span>
+      ),
+    }),
+  ];
+
   return (
     <div className="space-y-4">
       <PageHeader
         title="Monthly Costs"
-        description="Manage and review monthly employee cost records"
+        description="Uploaded and calculated cost periods, grouped by month"
         actions={
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search by employee..."
-                className="pl-9 w-[250px] h-9 text-sm bg-white"
-                value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value);
-                  setPage(1);
-                }}
-              />
-            </div>
-           
+          <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={handleDownloadSample}>
               <Download className="mr-1.5 h-4 w-4" />
               Download Sample
             </Button>
-
             {canManage && (
-             
-
-               <Button size="sm" onClick={() => navigate(ROUTES.MONTHLY_COST_IMPORT)}>
-              <Upload className="mr-1.5 h-4 w-4" />
-              Upload Excel
-            </Button>
+              <>
+                {/* <Button variant="outline" size="sm" onClick={() => setCalcOpen(true)}>
+                  <Calculator className="mr-1.5 h-4 w-4" />
+                  Calculate
+                </Button> */}
+                <Button size="sm" onClick={() => navigate(ROUTES.MONTHLY_COST_IMPORT)}>
+                  <Upload className="mr-1.5 h-4 w-4" />
+                  Upload Excel
+                </Button>
+              </>
             )}
-           
           </div>
         }
       />
+
+      {selectedKeys.length > 0 && (
+        <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-3 py-2">
+          <span className="text-sm font-medium">{selectedKeys.length} selected</span>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={clearSelection}>
+              Clear
+            </Button>
+            <Button
+              size="sm"
+              className="bg-red-500 hover:bg-red-600 text-white"
+              onClick={() => setIsBulkDeleteOpen(true)}
+            >
+              <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Delete Selected
+            </Button>
+          </div>
+        </div>
+      )}
 
       <DataTable
         columns={columns}
@@ -237,44 +248,41 @@ const MonthlyCostList = () => {
         toolbar={
           <MonthYearPicker
             value={monthYearFilter}
-            onChange={(val) => {
-              setMonthYearFilter(val);
-              setPage(1);
-            }}
+            onChange={(val) => { setMonthYearFilter(val); setPage(1); clearSelection(); }}
             placeholder="All months"
             className="w-44"
           />
         }
         pagination={
           meta.total != null
-            ? {
-                page: meta.page ?? page,
-                limit: meta.limit ?? limit,
-                total: meta.total,
-              }
+            ? { page: meta.page ?? page, limit: meta.limit ?? limit, total: meta.total }
             : undefined
         }
-        sorting={sorting}
-        onSortingChange={(s) => { setSorting(s); setPage(1); }}
-        onPageChange={setPage}
-        onPageSizeChange={(s) => {
-          setLimit(s);
-          setPage(1);
-        }}
+        onPageChange={(p) => { setPage(p); clearSelection(); }}
+        onPageSizeChange={(s) => { setLimit(s); setPage(1); clearSelection(); }}
+        onRowClick={(row) => navigate(buildPath(ROUTES.MONTHLY_COST_DETAIL, { month: row.month, year: row.year }))}
       />
 
-      {/* Delete confirmation */}
       <ConfirmDialog
         open={!!deleteTarget}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
-        title="Delete monthly cost record?"
-        description="This record will be permanently deleted and cannot be recovered."
+        title="Delete this period?"
+        description={`This will permanently remove all ${deleteTarget?.employee_count ?? ''} monthly cost record(s) for ${deleteTarget ? formatMonthYear(deleteTarget.month, deleteTarget.year) : ''}. This cannot be undone.`}
         confirmLabel="Delete"
         onConfirm={handleDelete}
-        isLoading={deleteMutation.isPending}
+        isLoading={deletePeriodsMutation.isPending}
       />
 
-      {/* Calculate Month dialog */}
+      <ConfirmDialog
+        open={isBulkDeleteOpen}
+        onOpenChange={setIsBulkDeleteOpen}
+        title={`Delete ${selectedKeys.length} period${selectedKeys.length !== 1 ? 's' : ''}?`}
+        description="This will permanently remove every monthly cost record in the selected periods. This cannot be undone."
+        confirmLabel="Delete"
+        onConfirm={handleBulkDelete}
+        isLoading={deletePeriodsMutation.isPending}
+      />
+
       <Dialog open={calcOpen} onOpenChange={setCalcOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
@@ -314,8 +322,6 @@ const MonthlyCostList = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <Outlet />
     </div>
   );
 };

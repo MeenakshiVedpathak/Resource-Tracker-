@@ -7,7 +7,7 @@ import { useMonthlyCost, useCreateMonthlyCost, useUpdateMonthlyCost } from '@/ho
 import { useActiveEmployees } from '@/hooks/useEmployees';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
-import { ROUTES } from '@/constants/routes';
+import { ROUTES, buildPath } from '@/constants/routes';
 import {
   Form, FormField, FormItem, FormLabel, FormControl, FormMessage, FormDescription,
 } from '@/components/ui/form';
@@ -68,19 +68,19 @@ const FormSkeleton = () => (
 );
 
 // Rendered only after record + employees are both ready — useForm initialises from correct data immediately
-const MonthlyCostFormContent = ({ id, isEdit, record, activeEmployees }) => {
+const MonthlyCostFormContent = ({ id, isEdit, record, activeEmployees, month, year }) => {
   const navigate = useNavigate();
   const { success, error: showError } = useNotification();
   const createMutation = useCreateMonthlyCost();
   const updateMutation = useUpdateMonthlyCost(id);
-  const currentYear = new Date().getFullYear();
+  const backToDetail = () => navigate(buildPath(ROUTES.MONTHLY_COST_DETAIL, { month, year }));
 
   const form = useForm({
     resolver: zodResolver(monthlyCostSchema),
     defaultValues: {
       employee_id: record?.employee_id ? String(record.employee_id) : '',
-      month:       record?.month       ? String(record.month)       : String(new Date().getMonth() + 1),
-      year:        record?.year        ?? currentYear,
+      month:       record?.month       ? String(record.month)       : month,
+      year:        record?.year        ?? Number(year),
       salary_cost: record?.salary_cost ?? '',
       ops_cost:    record?.ops_cost    ?? '',
       billable_cost: record?.billable_cost ?? '',
@@ -105,7 +105,7 @@ const MonthlyCostFormContent = ({ id, isEdit, record, activeEmployees }) => {
     mutation.mutate(payload, {
       onSuccess: () => {
         success(isEdit ? 'Monthly cost record updated.' : 'Monthly cost record created.');
-        navigate(ROUTES.MONTHLY_COSTS);
+        backToDetail();
       },
       onError: (err) => showError(extractApiError(err)),
     });
@@ -113,7 +113,7 @@ const MonthlyCostFormContent = ({ id, isEdit, record, activeEmployees }) => {
 
   const isSubmitting = createMutation.isPending || updateMutation.isPending;
 
-  const handleClose = () => navigate(ROUTES.MONTHLY_COSTS);
+  const handleClose = () => backToDetail();
 
   return (
     <Sheet open={true} onOpenChange={(open) => !open && handleClose()}>
@@ -258,7 +258,7 @@ const MonthlyCostFormContent = ({ id, isEdit, record, activeEmployees }) => {
 
 // Outer shell — waits for all data before mounting the form
 const MonthlyCostForm = () => {
-  const { id } = useParams();
+  const { id, month, year } = useParams();
   const isEdit = !!id;
   const { data: record, isPending: isLoadingRecord } = useMonthlyCost(id);
   const { data: activeEmployees = [], isSuccess: employeesReady } = useActiveEmployees();
@@ -271,6 +271,8 @@ const MonthlyCostForm = () => {
       isEdit={isEdit}
       record={record}
       activeEmployees={activeEmployees}
+      month={month}
+      year={year}
     />
   );
 };

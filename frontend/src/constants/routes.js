@@ -46,9 +46,10 @@ export const ROUTES = {
   TIMESHEET_UPLOAD: '/timesheets/upload',
   TIMESHEET_IMPORT_DETAIL: '/timesheets/import/:id',
   MONTHLY_COSTS: '/monthly-costs',
-  MONTHLY_COST_NEW: '/monthly-costs/new',
-  MONTHLY_COST_EDIT: '/monthly-costs/:id/edit',
   MONTHLY_COST_IMPORT: '/monthly-costs/import',
+  MONTHLY_COST_DETAIL: '/monthly-costs/:month/:year',
+  MONTHLY_COST_NEW: '/monthly-costs/:month/:year/new',
+  MONTHLY_COST_EDIT: '/monthly-costs/:month/:year/:id/edit',
 
   // Analytics
   REPORTS: '/reports',

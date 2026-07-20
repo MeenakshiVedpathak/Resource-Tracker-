@@ -69,3 +69,19 @@ export const useConfirmImport = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['timesheets'] }),
   });
 };
+
+export const useDeleteTimesheetImport = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (importId) => timesheetsApi.deleteImports([importId]),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['timesheets'] }),
+  });
+};
+
+export const useDeleteTimesheetImports = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (importIds) => timesheetsApi.deleteImports(importIds),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['timesheets'] }),
+  });
+};
