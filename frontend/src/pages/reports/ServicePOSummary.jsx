@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import { createColumnHelper } from '@tanstack/react-table';
 import { Download, Filter, Search } from 'lucide-react';
-import { useServicePOSummary } from '@/hooks/useReports';
+import { useServicePOSummary, useServicePOSummaryTotals } from '@/hooks/useReports';
 import { reportsApi } from '@/api/reports.api';
 import { useActiveClients } from '@/hooks/useClients';
 import { useActiveServicePOs } from '@/hooks/useServicePOs';
@@ -233,9 +233,12 @@ const ServicePOSummary = () => {
   };
 
   const { data, isPending } = useServicePOSummary(params);
+  // The backend's own `summary` only aggregates the current page (backend bug) — this
+  // recomputes the true all-pages total client-side. See useServicePOSummaryTotals for detail.
+  const { data: totalsSummary } = useServicePOSummaryTotals(params);
 
   const records = Array.isArray(data?.data?.records) ? data.data.records : Array.isArray(data?.data) ? data.data : [];
-  const summary = data?.data?.summary ?? null;
+  const summary = totalsSummary ?? data?.data?.summary ?? null;
   const meta    = data?.meta ?? {};
 
   const activeFilterCount = [
