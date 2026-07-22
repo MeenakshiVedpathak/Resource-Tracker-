@@ -415,29 +415,33 @@ const MonthlyUtilization = () => {
                   </SelectContent>
                 </Select>
               </div>
-              {(meta.totalPages ?? 1) > 1 && (
-                <div className="flex items-center gap-1">
-                  <Button
-                    variant="outline" size="sm"
-                    className="h-7 px-2 text-xs"
-                    disabled={!meta.hasPrev}
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  >
-                    Previous
-                  </Button>
-                  <span className="text-xs text-muted-foreground px-1">
-                    {meta.page ?? page} / {meta.totalPages}
-                  </span>
-                  <Button
-                    variant="outline" size="sm"
-                    className="h-7 px-2 text-xs"
-                    disabled={!meta.hasNext}
-                    onClick={() => setPage((p) => p + 1)}
-                  >
-                    Next
-                  </Button>
-                </div>
-              )}
+              {(meta.totalPages ?? 1) > 1 && (() => {
+                const currentPage = meta.page ?? page;
+                const totalPages  = meta.totalPages ?? 1;
+                return (
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="outline" size="sm"
+                      className="h-7 px-2 text-xs"
+                      disabled={currentPage <= 1}
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    >
+                      Previous
+                    </Button>
+                    <span className="text-xs text-muted-foreground px-1">
+                      {currentPage} / {totalPages}
+                    </span>
+                    <Button
+                      variant="outline" size="sm"
+                      className="h-7 px-2 text-xs"
+                      disabled={currentPage >= totalPages}
+                      onClick={() => setPage((p) => p + 1)}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </>

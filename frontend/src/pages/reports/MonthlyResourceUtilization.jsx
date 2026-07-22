@@ -164,6 +164,13 @@ const MonthlyResourceUtilization = () => {
 
   const { data, isPending } = useMonthlyResourceUtilization(params);
 
+  // The API's `summary` only totals the current page's rows. Fetch every matching
+  // record (unpaginated) in parallel so the summary chips reflect the full filtered
+  // dataset, not just what's currently on screen — mirrors what handleExport already does.
+  const allDataParams = enabled ? { ...params, page: 1, limit: 1000 } : undefined;
+  const { data: allData } = useMonthlyResourceUtilization(allDataParams);
+  const allRecords = Array.isArray(allData?.data?.records) ? allData.data.records : null;
+
   const dynamicColumns = data?.data?.columns ?? [];
   
   const columns = STATIC_COLUMNS.map(staticCat => {
@@ -229,7 +236,21 @@ const MonthlyResourceUtilization = () => {
 
   const records = Array.isArray(data?.data?.records) ? data.data.records : [];
   const meta    = data?.meta    ?? {};
-  const summary = data?.data?.summary ?? {};
+
+  // Prefer totals computed over the full filtered dataset; fall back to the
+  // (page-scoped) API summary only until the full-dataset fetch resolves.
+  const summary = allRecords
+    ? allRecords.reduce(
+        (acc, r) => {
+          acc.billable_total     += Number(r.billable_total)     || 0;
+          acc.non_billable_total += Number(r.non_billable_total) || 0;
+          acc.leaves_hours       += Number(r.leaves_hours)       || 0;
+          acc.total_utilization  += Number(r.total_utilization)  || 0;
+          return acc;
+        },
+        { billable_total: 0, non_billable_total: 0, leaves_hours: 0, total_utilization: 0 }
+      )
+    : data?.data?.summary ?? {};
 
   const monthLabel = monthYear ? formatMonthYear(monthYear.month, monthYear.year) : '';
 
@@ -523,29 +544,33 @@ const MonthlyResourceUtilization = () => {
                   </SelectContent>
                 </Select>
               </div>
-              {(meta.totalPages ?? 1) > 1 && (
-                <div className="flex items-center gap-1">
-                  <Button
-                    variant="outline" size="sm"
-                    className="h-7 px-2 text-xs"
-                    disabled={!meta.hasPrevPage}
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  >
-                    Previous
-                  </Button>
-                  <span className="text-xs text-muted-foreground px-1">
-                    {meta.page ?? page} / {meta.totalPages}
-                  </span>
-                  <Button
-                    variant="outline" size="sm"
-                    className="h-7 px-2 text-xs"
-                    disabled={!meta.hasNextPage}
-                    onClick={() => setPage((p) => p + 1)}
-                  >
-                    Next
-                  </Button>
-                </div>
-              )}
+              {(meta.totalPages ?? 1) > 1 && (() => {
+                const currentPage = meta.page ?? page;
+                const totalPages  = meta.totalPages ?? 1;
+                return (
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="outline" size="sm"
+                      className="h-7 px-2 text-xs"
+                      disabled={currentPage <= 1}
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    >
+                      Previous
+                    </Button>
+                    <span className="text-xs text-muted-foreground px-1">
+                      {currentPage} / {totalPages}
+                    </span>
+                    <Button
+                      variant="outline" size="sm"
+                      className="h-7 px-2 text-xs"
+                      disabled={currentPage >= totalPages}
+                      onClick={() => setPage((p) => p + 1)}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </>

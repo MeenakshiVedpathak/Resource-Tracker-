@@ -198,6 +198,12 @@ const ResourceProjectUtilization = () => {
 
   const { data, isPending } = useResourceProjectUtilization(params);
 
+  // Summary chips must reflect every matching record, not just the current page —
+  // fetch the full filtered dataset in parallel (mirrors what handleExport does).
+  const allDataParams = { ...params, page: 1, limit: 1000 };
+  const { data: fullData } = useResourceProjectUtilization(allDataParams);
+  const fullRows = Array.isArray(fullData?.data) ? fullData.data : null;
+
   const allRows = Array.isArray(data?.data) ? data.data : [];
   const meta = data?.meta ?? {};
   const monthLabel = formatMonthYear(monthYear.month, monthYear.year);
@@ -223,7 +229,22 @@ const ResourceProjectUtilization = () => {
     };
   });
 
-  const pageTotals = rows.reduce(
+  // Prefer totals over the full filtered dataset; fall back to the current page's
+  // totals only until the full-dataset fetch resolves.
+  const totalsSource = fullRows
+    ? (searchTerm ? fullRows.filter((r) => r.employeeName?.toLowerCase().includes(searchTerm)) : fullRows)
+        .map((r) => {
+          const projects = r.projects ?? [];
+          return {
+            totalHours: Number(r.totalHours) || 0,
+            billableHours: sumBy(projects, isBillable),
+            nonBillableHours: sumBy(projects, (p) => !isBillable(p)),
+            billableAmount: projects.reduce((acc, p) => acc + (Number(p.billableAmount) || 0), 0),
+          };
+        })
+    : rows;
+
+  const pageTotals = totalsSource.reduce(
     (acc, r) => {
       acc.totalHours += Number(r.totalHours) || 0;
       acc.billableHours += r.billableHours;
