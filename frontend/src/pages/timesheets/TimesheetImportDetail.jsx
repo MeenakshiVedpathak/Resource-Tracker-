@@ -2,13 +2,16 @@ import { useState, useMemo, useCallback, useRef, memo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { createColumnHelper } from '@tanstack/react-table';
-import { ArrowLeft, FileSpreadsheet } from 'lucide-react';
+import { ArrowLeft, FileSpreadsheet, Plus } from 'lucide-react';
 import { timesheetsApi } from '@/api/timesheets.api';
-import { useTimesheetImportRows } from '@/hooks/useTimesheets';
+import { useTimesheetImportRows, useCreateTimesheet } from '@/hooks/useTimesheets';
 import { useTimesheetHistory } from '@/hooks/useTimesheets';
 import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
 import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
 import { useActiveServicePOs } from '@/hooks/useServicePOs';
+import { useActiveEmployees } from '@/hooks/useEmployees';
+import { useSubProjectsByPO } from '@/hooks/useSubProjects';
+import { useAuth } from '@/hooks/useAuth';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import { ROUTES } from '@/constants/routes';
@@ -21,6 +24,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 
 const columnHelper = createColumnHelper();
 
@@ -99,6 +105,8 @@ const TimesheetImportDetail = () => {
   // the server when the user clicks "Save Changes" ──
   const notify = useNotification();
   const queryClient = useQueryClient();
+  const { hasRole, user } = useAuth();
+  const canAddEntry = hasRole('Finance', 'HR', 'Management');
 
   const { data: activeServicePOsData } = useActiveServicePOs();
 
@@ -106,6 +114,49 @@ const TimesheetImportDetail = () => {
     value: String(p.service_po_id ?? p.id),
     label: p.service_po_name ?? p.name,
   }));
+
+  // ── Add a single row to this import batch — the month is fixed to this
+  // batch's own import_month/import_year, never typed in the form ──
+  const emptyAddForm = { employee_id: '', service_po_id: '', sub_project_id: '', day: '1', hours_logged: '' };
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [addForm, setAddForm] = useState(emptyAddForm);
+  const [isSavingAdd, setIsSavingAdd] = useState(false);
+  const createTimesheetMutation = useCreateTimesheet();
+  const { data: activeEmployees = [] } = useActiveEmployees();
+  const { data: addSubProjects = [] } = useSubProjectsByPO(addForm.service_po_id || null);
+
+  const openAddRow = () => {
+    setAddForm(emptyAddForm);
+    setIsAddDialogOpen(true);
+  };
+
+  const handleAddSubmit = async () => {
+    if (!addForm.employee_id || !addForm.service_po_id || !addForm.day || addForm.hours_logged === '') {
+      notify.error('Please fill in all required fields.');
+      return;
+    }
+
+    setIsSavingAdd(true);
+    try {
+      const timesheetDate = `${importRecord.import_year}-${String(importRecord.import_month).padStart(2, '0')}-${String(addForm.day).padStart(2, '0')}`;
+      await createTimesheetMutation.mutateAsync({
+        employee_id: Number(addForm.employee_id),
+        service_po_id: Number(addForm.service_po_id),
+        sub_project_id: addForm.sub_project_id ? Number(addForm.sub_project_id) : null,
+        timesheet_date: timesheetDate,
+        hours_logged: Number(addForm.hours_logged),
+        timesheet_import_id: Number(id),
+        created_by: user?.id,
+        updated_by: user?.id,
+      });
+      notify.success('Timesheet entry added.');
+      setIsAddDialogOpen(false);
+    } catch (err) {
+      notify.error(extractApiError(err));
+    } finally {
+      setIsSavingAdd(false);
+    }
+  };
 
   // rowId -> partial patch of unsaved edits for that row. Lives in a ref so
   // typing/selecting doesn't trigger a page re-render — only membership in
@@ -186,6 +237,13 @@ const TimesheetImportDetail = () => {
   const [serviceCategoryFilter, setServiceCategoryFilter] = useState('all');
   const [serviceTypeFilter, setServiceTypeFilter] = useState('all');
 
+  // Rows aren't paginated server-side (the whole import is fetched in one
+  // shot), but rendering every row at once — each wrapped in its own
+  // animated <tr> — is what made this page hang for large imports. Slice
+  // client-side so only one page's worth of rows ever mounts at a time.
+  const [detailPage, setDetailPage] = useState(1);
+  const [detailPageSize, setDetailPageSize] = useState(50);
+
   const { data: activeServiceCategories = [] } = useActiveServiceCategories();
   const { data: activeServiceTypes = [] } = useActiveServiceTypes();
 
@@ -229,11 +287,13 @@ const TimesheetImportDetail = () => {
     setServiceCategoryFilter(v);
     setServiceTypeFilter('all');
     setPoFilter('all');
+    setDetailPage(1);
   };
 
   const handleTypeChange = (v) => {
     setServiceTypeFilter(v);
     setPoFilter('all');
+    setDetailPage(1);
   };
 
   const filteredRows = useMemo(() => {
@@ -255,10 +315,13 @@ const TimesheetImportDetail = () => {
   const isFiltered = employeeFilter !== 'all' || poFilter !== 'all' || clientFilter !== 'all'
     || serviceCategoryFilter !== 'all' || serviceTypeFilter !== 'all';
 
+  const pagedRows = filteredRows.slice((detailPage - 1) * detailPageSize, detailPage * detailPageSize);
+
   const columns = [
     columnHelper.accessor('employee', {
       header: 'Employee',
       size: 200,
+      enableSorting: false,
       cell: (info) => (
         <EmployeeCell row={info.row.original} />
       ),
@@ -266,6 +329,7 @@ const TimesheetImportDetail = () => {
     columnHelper.accessor('servicePO', {
       header: 'Service PO',
       size: 220,
+      enableSorting: false,
       cell: (info) => {
         const row = info.row.original;
         const patch = editsRef.current[row.id];
@@ -284,6 +348,7 @@ const TimesheetImportDetail = () => {
     columnHelper.accessor('servicePO.client', {
       id: 'client',
       header: 'Client',
+      enableSorting: false,
       cell: (info) => {
         const client = info.getValue();
         return client ? (
@@ -296,6 +361,7 @@ const TimesheetImportDetail = () => {
     columnHelper.accessor('hours_logged', {
       header: 'Hours',
       size: 100,
+      enableSorting: false,
       cell: (info) => {
         const row = info.row.original;
         const patch = editsRef.current[row.id];
@@ -311,6 +377,7 @@ const TimesheetImportDetail = () => {
       id: 'category',
       header: 'Category',
       size: 160,
+      enableSorting: false,
       cell: (info) => {
         const cat = info.getValue();
         if (!cat) return <span className="text-muted-foreground">—</span>;
@@ -348,6 +415,12 @@ const TimesheetImportDetail = () => {
             <Button size="sm" onClick={saveChanges} disabled={editedCount === 0 || isSaving}>
               {isSaving ? 'Saving…' : 'Save & Publish'}
             </Button>
+            {canAddEntry && importRecord && (
+              <Button variant="outline" size="sm" onClick={openAddRow}>
+                <Plus className="mr-1.5 h-4 w-4" />
+                Add New Record
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={() => navigate(ROUTES.TIMESHEETS)}>
               <ArrowLeft className="mr-1.5 h-4 w-4" />
               Back
@@ -414,9 +487,16 @@ const TimesheetImportDetail = () => {
         </div>
         <DataTable
           columns={columns}
-          data={filteredRows}
+          data={pagedRows}
           isLoading={false}
           rowClassName={(row) => (dirtyRowIds.has(String(row.id)) ? 'bg-amber-50 dark:bg-amber-950/20' : '')}
+          pagination={{
+            page: detailPage,
+            limit: detailPageSize,
+            total: filteredRows.length,
+          }}
+          onPageChange={setDetailPage}
+          onPageSizeChange={(s) => { setDetailPageSize(s); setDetailPage(1); }}
           toolbar={
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4 w-full mb-2">
               <SearchableSelect
@@ -425,7 +505,7 @@ const TimesheetImportDetail = () => {
                   ...employees.map(emp => ({ label: emp, value: emp }))
                 ]}
                 value={employeeFilter}
-                onValueChange={setEmployeeFilter}
+                onValueChange={(v) => { setEmployeeFilter(v); setDetailPage(1); }}
                 placeholder="All Employees"
                 searchPlaceholder="Search employee..."
                 className="w-full h-9"
@@ -437,7 +517,7 @@ const TimesheetImportDetail = () => {
                   ...clients.map(client => ({ label: client, value: client }))
                 ]}
                 value={clientFilter}
-                onValueChange={setClientFilter}
+                onValueChange={(v) => { setClientFilter(v); setDetailPage(1); }}
                 placeholder="All Clients"
                 searchPlaceholder="Search client..."
                 className="w-full h-9"
@@ -479,7 +559,7 @@ const TimesheetImportDetail = () => {
                   ...filteredPOOptions.map(po => ({ label: po.name, value: po.name }))
                 ]}
                 value={poFilter}
-                onValueChange={setPoFilter}
+                onValueChange={(v) => { setPoFilter(v); setDetailPage(1); }}
                 placeholder="All Service POs"
                 searchPlaceholder="Search PO..."
                 className="w-full h-9"
@@ -489,6 +569,75 @@ const TimesheetImportDetail = () => {
         />
         </>
       )}
+
+      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+        <DialogContent className="sm:max-w-[440px]">
+          <DialogHeader>
+            <DialogTitle>Add New Record</DialogTitle>
+            <DialogDescription>
+              Add a single record to this import — {importRecord?.file_name ?? `Import #${id}`}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="grid gap-2">
+              <Label>Employee <span className="text-destructive">*</span></Label>
+              <SearchableSelect
+                options={activeEmployees.map((e) => ({
+                  value: String(e.id),
+                  label: `${e.full_name}${e.employee_code ? ` (${e.employee_code})` : ''}`,
+                }))}
+                value={addForm.employee_id}
+                onValueChange={(v) => setAddForm((f) => ({ ...f, employee_id: v }))}
+                placeholder="Select employee"
+                searchPlaceholder="Search employee..."
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label>Service PO <span className="text-destructive">*</span></Label>
+              <SearchableSelect
+                options={servicePOOptions}
+                value={addForm.service_po_id}
+                onValueChange={(v) => setAddForm((f) => ({ ...f, service_po_id: v, sub_project_id: '' }))}
+                placeholder="Select Service PO"
+                searchPlaceholder="Search PO..."
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label>Sub Project</Label>
+              <SearchableSelect
+                options={[
+                  { label: 'None', value: '' },
+                  ...addSubProjects.map((sp) => ({ value: String(sp.id), label: sp.sub_project_name })),
+                ]}
+                value={addForm.sub_project_id}
+                onValueChange={(v) => setAddForm((f) => ({ ...f, sub_project_id: v }))}
+                disabled={!addForm.service_po_id}
+                placeholder="Select sub project (optional)"
+                searchPlaceholder="Search sub project..."
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label>Hours Logged <span className="text-destructive">*</span></Label>
+              <Input
+                type="number"
+                step="0.25"
+                min="0"
+                className="h-9 text-sm"
+                value={addForm.hours_logged}
+                onChange={(e) => setAddForm((f) => ({ ...f, hours_logged: e.target.value }))}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleAddSubmit} disabled={isSavingAdd}>
+              {isSavingAdd ? 'Saving…' : 'Add New Record'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
