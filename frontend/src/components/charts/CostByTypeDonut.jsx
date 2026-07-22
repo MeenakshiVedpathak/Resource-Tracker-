@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Skeleton } from '@/components/ui/skeleton';
 import EmptyState from '@/components/common/EmptyState';
 import { IndianRupee } from 'lucide-react';
-import { formatCurrency, formatCompactCurrency } from '@/utils/formatters';
+import { formatCurrency } from '@/utils/formatters';
 
 const COLORS = {
   Billable: '#22c55e',
@@ -75,15 +75,15 @@ const CostByTypeDonut = ({ data = [], isLoading, periodLabel }) => {
           />
         ) : (
           <div className="flex items-center gap-4 w-full">
-            <div className="relative shrink-0" style={{ width: 140, height: 140 }}>
+            <div className="relative shrink-0" style={{ width: 170, height: 170 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
                     data={chartData}
                     cx="50%"
                     cy="50%"
-                    innerRadius={40}
-                    outerRadius={64}
+                    innerRadius={48}
+                    outerRadius={78}
                     paddingAngle={2}
                     dataKey="value"
                     strokeWidth={0}
@@ -95,21 +95,21 @@ const CostByTypeDonut = ({ data = [], isLoading, periodLabel }) => {
                   <Tooltip content={<CustomTooltip />} wrapperStyle={{ zIndex: 50 }} />
                 </PieChart>
               </ResponsiveContainer>
-              <div className="absolute inset-0 z-0 flex flex-col items-center justify-center pointer-events-none">
-                <span className="text-sm font-bold tabular-nums text-foreground">{formatCompactCurrency(totalCost)}</span>
-                <span className="text-[9px] text-muted-foreground">Total</span>
+              <div className="absolute inset-0 z-0 flex flex-col items-center justify-center pointer-events-none px-2">
+                <span className="text-[11px] font-bold tabular-nums text-foreground text-center leading-tight break-words max-w-[80px]">{formatCurrency(totalCost)}</span>
+                <span className="text-[9px] text-muted-foreground mt-0.5">Total</span>
               </div>
             </div>
 
-            <div className="flex flex-col gap-2 flex-1 min-w-0">
+            <div className="flex flex-col gap-2.5 flex-1 min-w-0">
               {chartData.map((d) => (
-                <div key={d.name} className="flex items-center justify-between gap-2 text-xs min-w-0">
-                  <span className="flex items-center gap-1.5 truncate">
+                <div key={d.name} className="flex flex-col gap-0.5 text-xs min-w-0">
+                  <span className="flex items-center gap-1.5 min-w-0">
                     <span className="inline-block h-2 w-2 rounded-full shrink-0" style={{ background: d.fill }} />
                     <span className="text-muted-foreground truncate">{d.name}</span>
                   </span>
-                  <span className="shrink-0 font-medium tabular-nums">
-                    {formatCompactCurrency(d.value)}
+                  <span className="font-medium tabular-nums pl-3.5">
+                    {formatCurrency(d.value)}
                     <span className="text-muted-foreground ml-1">({d.pct}%)</span>
                   </span>
                 </div>

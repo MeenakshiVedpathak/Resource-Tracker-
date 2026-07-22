@@ -14,26 +14,14 @@ export const formatDateTime = (date) =>
 export const formatRelativeTime = (date) =>
   date ? dayjs(date).fromNow() : '—';
 
-export const formatCurrency = (value, currency = 'INR') => {
+export const formatCurrency = (value, currency = 'INR', decimals = 2) => {
   if (value == null) return '—';
   return new Intl.NumberFormat('en-IN', {
     style: 'currency',
     currency,
-    maximumFractionDigits: 2,
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
   }).format(value);
-};
-
-// Space-constrained Indian Rupee display (KPI tiles, chart axes/legends): ₹1.25L, ₹3.40Cr.
-// Use formatCurrency instead wherever the full precise amount fits (table cells, tooltips).
-export const formatCompactCurrency = (value) => {
-  if (value == null) return '—';
-  const n = Number(value) || 0;
-  const sign = n < 0 ? '-' : '';
-  const abs = Math.abs(n);
-  if (abs >= 1e7) return `${sign}₹${(abs / 1e7).toFixed(2)} Cr`;
-  if (abs >= 1e5) return `${sign}₹${(abs / 1e5).toFixed(2)} L`;
-  if (abs >= 1e3) return `${sign}₹${(abs / 1e3).toFixed(1)}k`;
-  return `${sign}₹${Math.round(abs).toLocaleString('en-IN')}`;
 };
 
 export const formatNumber = (value, decimals = 0) => {

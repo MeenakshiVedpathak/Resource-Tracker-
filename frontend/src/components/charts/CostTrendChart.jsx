@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Skeleton } from '@/components/ui/skeleton';
 import EmptyState from '@/components/common/EmptyState';
 import { IndianRupee } from 'lucide-react';
-import { formatCurrency, formatCompactCurrency } from '@/utils/formatters';
+import { formatCurrency } from '@/utils/formatters';
 
 const SERIES = [
   { key: 'Billable',              color: '#22c55e' },
@@ -84,7 +84,7 @@ const CostTrendChart = ({ data = [], isLoading, periodLabel }) => {
           />
         ) : (
           <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={chartData} margin={{ top: 4, right: 8, left: -16, bottom: 0 }} barCategoryGap="28%">
+            <BarChart data={chartData} margin={{ top: 4, right: 8, left: 8, bottom: 0 }} barCategoryGap="28%">
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
               <XAxis
                 dataKey="label"
@@ -93,10 +93,11 @@ const CostTrendChart = ({ data = [], isLoading, periodLabel }) => {
                 axisLine={false}
               />
               <YAxis
+                width={90}
                 tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
                 tickLine={false}
                 axisLine={false}
-                tickFormatter={formatCompactCurrency}
+                tickFormatter={(v) => formatCurrency(v)}
               />
               <Tooltip content={<CustomTooltip />} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.35 }} />
               <Legend

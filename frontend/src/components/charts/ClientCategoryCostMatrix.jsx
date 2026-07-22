@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Skeleton } from '@/components/ui/skeleton';
 import EmptyState from '@/components/common/EmptyState';
 import { LayoutGrid, ChevronLeft, ChevronRight } from 'lucide-react';
-import { formatCurrency, formatCompactCurrency } from '@/utils/formatters';
+import { formatCurrency } from '@/utils/formatters';
 
 const PAGE_SIZE = 8;
 
@@ -75,9 +75,9 @@ const ClientCategoryCostMatrix = ({ data = [], isLoading, periodLabel }) => {
 
                 return (
                   <div key={c.client_id} className="rounded-md border px-3 py-2.5">
-                    <div className="flex items-center justify-between gap-2 mb-1.5">
-                      <span className="text-xs font-semibold truncate" title={c.client_name}>{c.client_name}</span>
-                      <span className="text-sm font-bold tabular-nums text-foreground shrink-0" title={formatCurrency(total)}>{formatCompactCurrency(total)}</span>
+                    <div className="flex items-center justify-between gap-2 mb-1.5 min-w-0">
+                      <span className="text-xs font-semibold truncate min-w-0" title={c.client_name}>{c.client_name}</span>
+                      <span className="text-sm font-bold tabular-nums text-foreground shrink-0">{formatCurrency(total)}</span>
                     </div>
                     <div className="flex h-2.5 w-full rounded-full overflow-hidden bg-muted">
                       {segments.map((s) => (
@@ -90,8 +90,8 @@ const ClientCategoryCostMatrix = ({ data = [], isLoading, periodLabel }) => {
                     </div>
                     <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5">
                       {segments.map((s) => (
-                        <span key={s.key} className="text-[10px] text-muted-foreground" title={formatCurrency(s.value)}>
-                          {s.key}: <span className="font-medium text-foreground">{formatCompactCurrency(s.value)}</span>
+                        <span key={s.key} className="text-[10px] text-muted-foreground">
+                          {s.key}: <span className="font-medium text-foreground">{formatCurrency(s.value)}</span>
                         </span>
                       ))}
                     </div>

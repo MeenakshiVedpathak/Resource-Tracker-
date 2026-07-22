@@ -13,7 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Skeleton } from '@/components/ui/skeleton';
 import EmptyState from '@/components/common/EmptyState';
 import { Building2, ChevronLeft, ChevronRight } from 'lucide-react';
-import { formatCurrency, formatCompactCurrency } from '@/utils/formatters';
+import { formatCurrency } from '@/utils/formatters';
 
 const PAGE_SIZE = 10;
 const CHART_HEIGHT = 320;
@@ -97,7 +97,7 @@ const ClientCostChart = ({ data = [], isLoading, periodLabel }) => {
               <BarChart
                 data={pageData}
                 layout="vertical"
-                margin={{ top: 4, right: 48, left: 8, bottom: 0 }}
+                margin={{ top: 4, right: 100, left: 8, bottom: 0 }}
                 barCategoryGap="30%"
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
@@ -106,7 +106,8 @@ const ClientCostChart = ({ data = [], isLoading, periodLabel }) => {
                   tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
                   tickLine={false}
                   axisLine={false}
-                  tickFormatter={formatCompactCurrency}
+                  tickCount={4}
+                  tickFormatter={(v) => formatCurrency(v)}
                 />
                 <YAxis
                   type="category"
@@ -118,7 +119,7 @@ const ClientCostChart = ({ data = [], isLoading, periodLabel }) => {
                   tickFormatter={(v) => v.length > 17 ? `${v.slice(0, 17)}…` : v}
                 />
                 <Tooltip content={<CustomTooltip />} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }} />
-                <Bar dataKey="total_cost" radius={[0, 4, 4, 0]} label={{ position: 'right', fontSize: 11, fill: 'hsl(var(--muted-foreground))', formatter: formatCompactCurrency }}>
+                <Bar dataKey="total_cost" radius={[0, 4, 4, 0]} label={{ position: 'right', fontSize: 11, fill: 'hsl(var(--muted-foreground))', formatter: (v) => formatCurrency(v) }}>
                   {pageData.map((_, i) => (
                     <Cell key={i} fill={COLORS[i % COLORS.length]} />
                   ))}
