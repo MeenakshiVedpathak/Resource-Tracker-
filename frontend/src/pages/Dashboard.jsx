@@ -771,36 +771,16 @@ const QUARTER_STYLES = {
   inactive: 'bg-background text-muted-foreground hover:text-foreground font-medium',
 };
 
-/* compact number: 1234 → "1.2k", 123456 → "1.2L" */
+/* plain number with grouping: 1234 → "1,234" */
 const cNum = (v) => {
   const n = Number(v) || 0;
-  if (n >= 100000) return `${(n / 100000).toFixed(1)}L`;
-  if (n >= 1000)   return `${(n / 1000).toFixed(1)}k`;
-  return String(Math.round(n * 10) / 10);
+  return (Math.round(n * 10) / 10).toLocaleString('en-IN');
 };
 
 /* flat-top hexagon clip path */
 const HEX_CLIP = 'polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)';
 
 const KPI_CONFIG = [
-  {
-    key: 'total_hours', title: 'Total Hrs', icon: Clock,
-    hexOuter: '#fed7aa', hexInner: '#ea580c',
-    bar: 'bg-orange-500', iconBg: 'bg-orange-50 dark:bg-orange-950/40', iconColor: 'text-orange-500',
-    fmt: (v) => `${cNum(v)} hrs`,
-  },
-  {
-    key: 'total_cost', title: 'Total Cost', icon: DollarSign,
-    hexOuter: '#6ee7b7', hexInner: '#059669',
-    bar: 'bg-emerald-500', iconBg: 'bg-emerald-50 dark:bg-emerald-950/40', iconColor: 'text-emerald-600',
-    fmt: (v) => `₹${cNum(v)}`,
-  },
-  {
-    key: 'utilization_pct', title: 'Utilization', icon: Activity,
-    hexOuter: '#93c5fd', hexInner: '#2563eb',
-    bar: 'bg-blue-500', iconBg: 'bg-blue-50 dark:bg-blue-950/40', iconColor: 'text-blue-500',
-    fmt: (v) => `${Number(v).toFixed(1)}%`,
-  },
   {
     key: 'active_employees', title: 'Employees', icon: Users,
     hexOuter: '#c4b5fd', hexInner: '#7c3aed',
@@ -820,16 +800,34 @@ const KPI_CONFIG = [
     fmt: (v) => cNum(v),
   },
   {
-    key: 'avg_hours_per_employee', title: 'Avg Hrs/Emp', icon: BarChart2,
-    hexOuter: '#a5b4fc', hexInner: '#4338ca',
-    bar: 'bg-indigo-500', iconBg: 'bg-indigo-50 dark:bg-indigo-950/40', iconColor: 'text-indigo-500',
-    fmt: (v) => `${cNum(v)} hrs`,
-  },
-  {
     key: 'total_po_value_current_year', title: 'PO Value', icon: TrendingUp,
     hexOuter: '#bbf7d0', hexInner: '#16a34a',
     bar: 'bg-green-500', iconBg: 'bg-green-50 dark:bg-green-950/40', iconColor: 'text-green-600',
     fmt: (v) => `₹${cNum(v)}`,
+  },
+  {
+    key: 'total_hours', title: 'Total Hrs', icon: Clock,
+    hexOuter: '#fed7aa', hexInner: '#ea580c',
+    bar: 'bg-orange-500', iconBg: 'bg-orange-50 dark:bg-orange-950/40', iconColor: 'text-orange-500',
+    fmt: (v) => `${cNum(v)} hrs`,
+  },
+  {
+    key: 'total_cost', title: 'Total Cost', icon: DollarSign,
+    hexOuter: '#6ee7b7', hexInner: '#059669',
+    bar: 'bg-emerald-500', iconBg: 'bg-emerald-50 dark:bg-emerald-950/40', iconColor: 'text-emerald-600',
+    fmt: (v) => `₹${cNum(v)}`,
+  },
+  {
+    key: 'utilization_pct', title: 'Utilization', icon: Activity,
+    hexOuter: '#93c5fd', hexInner: '#2563eb',
+    bar: 'bg-blue-500', iconBg: 'bg-blue-50 dark:bg-blue-950/40', iconColor: 'text-blue-500',
+    fmt: (v) => `${Number(v).toFixed(1)}%`,
+  },
+  {
+    key: 'avg_hours_per_employee', title: 'Avg Hrs/Emp', icon: BarChart2,
+    hexOuter: '#a5b4fc', hexInner: '#4338ca',
+    bar: 'bg-indigo-500', iconBg: 'bg-indigo-50 dark:bg-indigo-950/40', iconColor: 'text-indigo-500',
+    fmt: (v) => `${cNum(v)} hrs`,
   },
 ];
 
@@ -912,9 +910,16 @@ const KpiCard = ({ cfg, value, isLoading }) => {
         </div>
 
         {/* value */}
-        <p className="text-[17px] font-extrabold text-foreground leading-none tabular-nums">
-          {cfg.fmt(value ?? 0)}
-        </p>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <p className="text-[15px] font-extrabold text-foreground leading-tight tabular-nums break-words cursor-default">
+              {cfg.fmt(value ?? 0)}
+            </p>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="text-xs">
+            {cfg.fmt(value ?? 0)}
+          </TooltipContent>
+        </Tooltip>
 
         {/* title — full text, no truncation */}
         <p className="text-[11px] font-semibold text-muted-foreground leading-tight">

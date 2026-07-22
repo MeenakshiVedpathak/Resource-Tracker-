@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useCallback, useRef, memo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { createColumnHelper } from '@tanstack/react-table';
@@ -27,67 +27,61 @@ const columnHelper = createColumnHelper();
  * Every cell below is directly editable, spreadsheet-style — no separate
  * "edit mode" toggle. Dropdown cells (Employee/Service PO) are always
  * rendered as select controls; Hours is always an input, styled borderless
- * so the table still reads like a plain grid until focused. Each field
- * saves independently on change/blur via a partial PUT.
+ * so the table still reads like a plain grid until focused. Edits are
+ * buffered locally and only sent to the server when the user clicks
+ * "Save Changes".
+ *
+ * Each cell owns its own input state (initialized once from `initialValue`)
+ * instead of being controlled from the parent on every keystroke — with a
+ * few hundred rows on screen, lifting every keystroke up to the page
+ * component would rebuild the whole table's column defs and re-render every
+ * row each time a single character is typed. `onChange` only writes into a
+ * ref, so typing/selecting doesn't trigger a page re-render at all.
  */
 const cellInputClass = 'h-8 text-xs bg-transparent border-transparent hover:border-input focus:border-input focus:bg-background transition-colors rounded-md px-2';
 
 // Employee is intentionally read-only — reassigning a timesheet entry to a
 // different employee isn't allowed here.
-const EmployeeCell = ({ row }) => (
+const EmployeeCell = memo(({ row }) => (
   <div>
     <p className="text-sm font-medium">{row.employee?.full_name ?? '—'}</p>
     <p className="text-xs text-muted-foreground font-mono">{row.employee?.employee_code ?? ''}</p>
   </div>
-);
+));
 
-const ServicePOCell = ({ row, poOptions, onSave }) => {
-  const [saving, setSaving] = useState(false);
-  const value = row.servicePO?.id != null ? String(row.servicePO.id) : '';
+const ServicePOCell = memo(({ row, poOptions, initialValue, onChange }) => {
+  const [val, setVal] = useState(initialValue != null ? String(initialValue) : '');
   return (
     <SearchableSelect
       options={poOptions}
-      value={value}
-      disabled={saving}
-      onValueChange={async (v) => {
-        if (v === value) return;
-        setSaving(true);
-        try { await onSave(row.id, { service_po_id: Number(v), sub_project_id: null }); } finally { setSaving(false); }
+      value={val}
+      onValueChange={(v) => {
+        setVal(v);
+        onChange(row.id, { service_po_id: Number(v), sub_project_id: null });
       }}
       placeholder="Service PO"
       searchPlaceholder="Search PO..."
       className={cn('w-full', cellInputClass)}
     />
   );
-};
+});
 
-const HoursCell = ({ row, onSave }) => {
-  const initial = row.hours_logged != null ? String(row.hours_logged) : '';
-  const [val, setVal] = useState(initial);
-  const [saving, setSaving] = useState(false);
-  useEffect(() => setVal(initial), [initial]);
-
-  const commit = async () => {
-    const num = Number(val);
-    if (val === '' || Number.isNaN(num) || val === initial) { setVal(initial); return; }
-    setSaving(true);
-    try { await onSave(row.id, { hours_logged: num }); } catch { setVal(initial); } finally { setSaving(false); }
-  };
-
+const HoursCell = memo(({ row, initialValue, onChange }) => {
+  const [val, setVal] = useState(initialValue);
   return (
     <input
       type="number"
       step="0.25"
       min="0"
       value={val}
-      disabled={saving}
-      onChange={(e) => setVal(e.target.value)}
-      onBlur={commit}
-      onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+      onChange={(e) => {
+        setVal(e.target.value);
+        onChange(row.id, { hours_logged: e.target.value });
+      }}
       className={cn('w-20 text-right tabular-nums font-semibold border', cellInputClass)}
     />
   );
-};
+});
 
 const TimesheetImportDetail = () => {
   const navigate = useNavigate();
@@ -100,7 +94,8 @@ const TimesheetImportDetail = () => {
   const rows = Array.isArray(rowsData?.data) ? rowsData.data : [];
   const importRecord = (historyData?.data ?? []).find((r) => String(r.id) === String(id));
 
-  // ── per-cell inline edit: each field saves independently on change/blur ──
+  // ── per-cell inline edit: changes are buffered locally and only sent to
+  // the server when the user clicks "Save Changes" ──
   const notify = useNotification();
   const queryClient = useQueryClient();
 
@@ -111,14 +106,72 @@ const TimesheetImportDetail = () => {
     label: p.service_po_name ?? p.name,
   }));
 
-  const saveField = async (rowId, payload) => {
-    try {
-      await timesheetsApi.update(rowId, payload);
-      await queryClient.invalidateQueries({ queryKey: ['timesheets'] });
-      notify.success('Entry updated.');
-    } catch (err) {
-      notify.error(err?.response?.data?.message ?? 'Failed to update timesheet entry.');
-      throw err;
+  // rowId -> partial patch of unsaved edits for that row. Lives in a ref so
+  // typing/selecting doesn't trigger a page re-render — only membership in
+  // `dirtyRowIds` (one row entering/leaving the dirty set) does.
+  const editsRef = useRef({});
+  const [dirtyRowIds, setDirtyRowIds] = useState(() => new Set());
+  const [saveVersion, setSaveVersion] = useState(0);
+  const [isSaving, setIsSaving] = useState(false);
+  const editedCount = dirtyRowIds.size;
+
+  const updateEdit = useCallback((rowId, patch) => {
+    const key = String(rowId);
+    editsRef.current = {
+      ...editsRef.current,
+      [key]: { ...editsRef.current[key], ...patch },
+    };
+    setDirtyRowIds((prev) => (prev.has(key) ? prev : new Set(prev).add(key)));
+  }, []);
+
+  const discardChanges = () => {
+    editsRef.current = {};
+    setDirtyRowIds(new Set());
+    setSaveVersion((v) => v + 1);
+  };
+
+  const buildSavePayload = (patch) => {
+    const payload = {};
+    if (patch.hours_logged !== undefined) {
+      const num = Number(patch.hours_logged);
+      if (patch.hours_logged !== '' && !Number.isNaN(num)) payload.hours_logged = num;
+    }
+    if (patch.service_po_id !== undefined) {
+      payload.service_po_id = patch.service_po_id;
+      payload.sub_project_id = patch.sub_project_id ?? null;
+    }
+    return payload;
+  };
+
+  const saveChanges = async () => {
+    const entries = Object.entries(editsRef.current);
+    if (entries.length === 0) return;
+
+    setIsSaving(true);
+    const failedEdits = {};
+    let savedCount = 0;
+
+    await Promise.all(entries.map(async ([rowId, patch]) => {
+      const payload = buildSavePayload(patch);
+      if (Object.keys(payload).length === 0) return;
+      try {
+        await timesheetsApi.update(rowId, payload);
+        savedCount += 1;
+      } catch {
+        failedEdits[rowId] = patch;
+      }
+    }));
+
+    await queryClient.invalidateQueries({ queryKey: ['timesheets'] });
+    editsRef.current = failedEdits;
+    setDirtyRowIds(new Set(Object.keys(failedEdits)));
+    setSaveVersion((v) => v + 1);
+    setIsSaving(false);
+
+    if (Object.keys(failedEdits).length > 0) {
+      notify.error(`Saved ${savedCount} row(s); ${Object.keys(failedEdits).length} failed. Please retry.`);
+    } else {
+      notify.success(`${savedCount} row(s) updated.`);
     }
   };
 
@@ -130,6 +183,11 @@ const TimesheetImportDetail = () => {
 
   const { data: activeServiceCategories = [] } = useActiveServiceCategories();
   const { data: activeServiceTypes = [] } = useActiveServiceTypes();
+
+  const totalHours = useMemo(
+    () => rows.reduce((sum, r) => sum + (Number(r.hours_logged) || 0), 0),
+    [rows]
+  );
 
   const { employees, poOptions, clients } = useMemo(() => {
     const poMap = new Map();
@@ -184,6 +242,14 @@ const TimesheetImportDetail = () => {
     });
   }, [rows, employeeFilter, poFilter, clientFilter, serviceCategoryFilter, serviceTypeFilter]);
 
+  const filteredHours = useMemo(
+    () => filteredRows.reduce((sum, r) => sum + (Number(r.hours_logged) || 0), 0),
+    [filteredRows]
+  );
+
+  const isFiltered = employeeFilter !== 'all' || poFilter !== 'all' || clientFilter !== 'all'
+    || serviceCategoryFilter !== 'all' || serviceTypeFilter !== 'all';
+
   const columns = [
     columnHelper.accessor('employee', {
       header: 'Employee',
@@ -195,9 +261,20 @@ const TimesheetImportDetail = () => {
     columnHelper.accessor('servicePO', {
       header: 'Service PO',
       size: 220,
-      cell: (info) => (
-        <ServicePOCell row={info.row.original} poOptions={servicePOOptions} onSave={saveField} />
-      ),
+      cell: (info) => {
+        const row = info.row.original;
+        const patch = editsRef.current[row.id];
+        const initialValue = patch?.service_po_id !== undefined ? patch.service_po_id : row.servicePO?.id;
+        return (
+          <ServicePOCell
+            key={`${row.id}-${saveVersion}`}
+            row={row}
+            poOptions={servicePOOptions}
+            initialValue={initialValue}
+            onChange={updateEdit}
+          />
+        );
+      },
     }),
     columnHelper.accessor('servicePO.client', {
       id: 'client',
@@ -214,7 +291,16 @@ const TimesheetImportDetail = () => {
     columnHelper.accessor('hours_logged', {
       header: 'Hours',
       size: 100,
-      cell: (info) => <HoursCell row={info.row.original} onSave={saveField} />,
+      cell: (info) => {
+        const row = info.row.original;
+        const patch = editsRef.current[row.id];
+        const initialValue = patch?.hours_logged !== undefined
+          ? patch.hours_logged
+          : (row.hours_logged != null ? String(row.hours_logged) : '');
+        return (
+          <HoursCell key={`${row.id}-${saveVersion}`} row={row} initialValue={initialValue} onChange={updateEdit} />
+        );
+      },
     }),
     columnHelper.accessor('servicePO.serviceType.serviceCategory', {
       id: 'category',
@@ -243,10 +329,25 @@ const TimesheetImportDetail = () => {
         title="Import Details"
         description={importRecord?.file_name ?? `Import #${id}`}
         actions={
-          <Button variant="outline" size="sm" onClick={() => navigate(ROUTES.TIMESHEETS)}>
-            <ArrowLeft className="mr-1.5 h-4 w-4" />
-            Back
-          </Button>
+          <div className="flex items-center gap-2">
+            {editedCount > 0 && (
+              <>
+                <span className="text-xs text-muted-foreground">
+                  {editedCount} unsaved change{editedCount !== 1 ? 's' : ''}
+                </span>
+                <Button variant="outline" size="sm" onClick={discardChanges} disabled={isSaving}>
+                  Discard
+                </Button>
+              </>
+            )}
+            <Button size="sm" onClick={saveChanges} disabled={editedCount === 0 || isSaving}>
+              {isSaving ? 'Saving…' : 'Save & Publish'}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => navigate(ROUTES.TIMESHEETS)}>
+              <ArrowLeft className="mr-1.5 h-4 w-4" />
+              Back
+            </Button>
+          </div>
         }
       />
 
@@ -284,6 +385,10 @@ const TimesheetImportDetail = () => {
               <p className="text-xs text-muted-foreground">Employees</p>
               <p className="text-sm font-semibold tabular-nums">{employees.length}</p>
             </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Total Hours</p>
+              <p className="text-sm font-semibold tabular-nums">{totalHours.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</p>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -295,10 +400,18 @@ const TimesheetImportDetail = () => {
           ))}
         </div>
       ) : (
+        <>
+        <div className="flex justify-end mb-2">
+          <p className="text-sm text-muted-foreground">
+            {isFiltered ? 'Filtered total' : 'Total'}: <span className="font-semibold text-foreground tabular-nums">{filteredHours.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })} hrs</span>
+            {isFiltered && <span> across {filteredRows.length} rows</span>}
+          </p>
+        </div>
         <DataTable
           columns={columns}
           data={filteredRows}
           isLoading={false}
+          rowClassName={(row) => (dirtyRowIds.has(String(row.id)) ? 'bg-amber-50 dark:bg-amber-950/20' : '')}
           toolbar={
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4 w-full mb-2">
               <SearchableSelect
@@ -369,6 +482,7 @@ const TimesheetImportDetail = () => {
             </div>
           }
         />
+        </>
       )}
     </div>
   );

@@ -397,7 +397,7 @@ const AIInsights = () => {
             )}
             <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching} className="h-9 rounded-xl gap-1.5 bg-background">
               <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? 'animate-spin' : ''}`} />
-              <span className="hidden sm:inline">Refresh</span>
+              {/* <span className="hidden sm:inline">Refresh</span> */}
             </Button>
           </div>
         </div>

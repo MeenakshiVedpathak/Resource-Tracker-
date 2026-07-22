@@ -27,16 +27,17 @@ import { cn } from '@/utils/cn';
 
 const columnHelper = createColumnHelper();
 
-const exportToExcel = (rows) => {
+const exportToExcel = (rows, categoryByTypeId) => {
   const header = [
-    'PO Code', 'PO Name', 'Client', 'Service Type', 'Account Manager',
+    'PO Code', 'PO Name', 'Client', 'Service Category', 'Service Type', 'Account Manager',
     'Description', 'PO Value', 'Invoice Frequency', 'Invoice Amount',
-    'Start Date', 'End Date', 'Status', 'Billable',
+    'Start Date', 'End Date', 'Status',
   ];
   const dataRows = rows.map((r) => [
     r.service_po_code ?? '',
     r.service_po_name ?? '',
     r.client?.client_name ?? '',
+    categoryByTypeId.get(String(r.serviceType?.id)) ?? '',
     r.serviceType?.service_type_name ?? '',
     r.account_manager ?? '',
     r.service_description ?? '',
@@ -46,7 +47,6 @@ const exportToExcel = (rows) => {
     r.start_date ? formatDate(r.start_date) : '',
     r.end_date ? formatDate(r.end_date) : '',
     r.status ?? '',
-    r.is_billable ? 'Yes' : 'No',
   ]);
   const ws = XLSX.utils.aoa_to_sheet([header, ...dataRows]);
   const wb = XLSX.utils.book_new();
@@ -151,6 +151,14 @@ const ServicePOList = () => {
     return map;
   }, [serviceTypes]);
 
+  // Service type id → category name, for the export (list API doesn't nest category under serviceType)
+  const categoryNameByTypeId = useMemo(() => {
+    const categoryNameById = new Map(serviceCategories.map((c) => [String(c.id), c.name]));
+    const map = new Map();
+    serviceTypes.forEach((t) => map.set(String(t.id), categoryNameById.get(String(t.service_category_id)) ?? ''));
+    return map;
+  }, [serviceTypes, serviceCategories]);
+
   const filteredPOs = activePOs.filter((po) => {
     const poTypeId = po.serviceType?.id != null ? String(po.serviceType.id) : null;
     if (typeFilter !== 'all') return poTypeId === typeFilter;
@@ -186,7 +194,7 @@ const ServicePOList = () => {
       const total = meta.total > 0 ? meta.total : 1000;
       const res = await servicePOsApi.getAll({ ...params, page: 1, limit: total });
       const all = Array.isArray(res?.data) ? res.data : [];
-      exportToExcel(all);
+      exportToExcel(all, categoryNameByTypeId);
     } finally {
       setExporting(false);
     }
