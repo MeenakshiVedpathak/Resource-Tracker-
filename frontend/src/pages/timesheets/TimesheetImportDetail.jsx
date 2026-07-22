@@ -10,6 +10,7 @@ import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
 import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
 import { useActiveServicePOs } from '@/hooks/useServicePOs';
 import { useNotification } from '@/hooks/useNotification';
+import { extractApiError } from '@/services/apiClient';
 import { ROUTES } from '@/constants/routes';
 import { formatDate } from '@/utils/formatters';
 import { cn } from '@/utils/cn';
@@ -149,6 +150,7 @@ const TimesheetImportDetail = () => {
 
     setIsSaving(true);
     const failedEdits = {};
+    const failureMessages = {};
     let savedCount = 0;
 
     await Promise.all(entries.map(async ([rowId, patch]) => {
@@ -157,8 +159,9 @@ const TimesheetImportDetail = () => {
       try {
         await timesheetsApi.update(rowId, payload);
         savedCount += 1;
-      } catch {
+      } catch (err) {
         failedEdits[rowId] = patch;
+        failureMessages[rowId] = extractApiError(err);
       }
     }));
 
@@ -168,8 +171,10 @@ const TimesheetImportDetail = () => {
     setSaveVersion((v) => v + 1);
     setIsSaving(false);
 
-    if (Object.keys(failedEdits).length > 0) {
-      notify.error(`Saved ${savedCount} row(s); ${Object.keys(failedEdits).length} failed. Please retry.`);
+    const failedCount = Object.keys(failedEdits).length;
+    if (failedCount > 0) {
+      const uniqueMessages = [...new Set(Object.values(failureMessages))];
+      notify.error(`Saved ${savedCount} row(s); ${failedCount} failed. ${uniqueMessages.join(' ')}`);
     } else {
       notify.success(`${savedCount} row(s) updated.`);
     }

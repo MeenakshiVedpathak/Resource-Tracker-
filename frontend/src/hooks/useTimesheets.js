@@ -2,11 +2,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { timesheetsApi } from '@/api/timesheets.api';
 import { QUERY_KEYS } from '@/constants/queryKeys';
 
-export const useTimesheets = (params) =>
+export const useTimesheets = (params, options = {}) =>
   useQuery({
     queryKey: QUERY_KEYS.TIMESHEETS(params),
     queryFn: () => timesheetsApi.getAll(params),
     placeholderData: (prev) => prev,
+    ...options,
   });
 
 export const useTimesheet = (id) =>
