@@ -3,18 +3,12 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Skeleton } from '@/components/ui/skeleton';
 import EmptyState from '@/components/common/EmptyState';
 import { IndianRupee } from 'lucide-react';
+import { formatCurrency, formatCompactCurrency } from '@/utils/formatters';
 
 const COLORS = {
   Billable: '#22c55e',
   'Non-Billable': '#6366f1',
   'Customer Non-Billable': '#f97316',
-};
-
-const formatINR = (v) => {
-  const n = Number(v) || 0;
-  if (n >= 100000) return `₹${(n / 100000).toFixed(1)}L`;
-  if (n >= 1000)   return `₹${(n / 1000).toFixed(1)}k`;
-  return `₹${Math.round(n)}`;
 };
 
 const CustomTooltip = ({ active, payload }) => {
@@ -25,7 +19,7 @@ const CustomTooltip = ({ active, payload }) => {
     <div className="rounded-lg border bg-popover px-3 py-2 shadow-lg text-xs">
       <p className="font-semibold text-foreground mb-0.5">{entry.name}</p>
       <p style={{ color: entry.payload?.fill }}>
-        {formatINR(entry.value)}{pct != null ? ` (${pct}%)` : ''}
+        {formatCurrency(entry.value)}{pct != null ? ` (${pct}%)` : ''}
       </p>
     </div>
   );
@@ -102,7 +96,7 @@ const CostByTypeDonut = ({ data = [], isLoading, periodLabel }) => {
                 </PieChart>
               </ResponsiveContainer>
               <div className="absolute inset-0 z-0 flex flex-col items-center justify-center pointer-events-none">
-                <span className="text-sm font-bold tabular-nums text-foreground">{formatINR(totalCost)}</span>
+                <span className="text-sm font-bold tabular-nums text-foreground">{formatCompactCurrency(totalCost)}</span>
                 <span className="text-[9px] text-muted-foreground">Total</span>
               </div>
             </div>
@@ -115,7 +109,7 @@ const CostByTypeDonut = ({ data = [], isLoading, periodLabel }) => {
                     <span className="text-muted-foreground truncate">{d.name}</span>
                   </span>
                   <span className="shrink-0 font-medium tabular-nums">
-                    {formatINR(d.value)}
+                    {formatCompactCurrency(d.value)}
                     <span className="text-muted-foreground ml-1">({d.pct}%)</span>
                   </span>
                 </div>

@@ -12,19 +12,13 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Skeleton } from '@/components/ui/skeleton';
 import EmptyState from '@/components/common/EmptyState';
 import { IndianRupee } from 'lucide-react';
+import { formatCurrency, formatCompactCurrency } from '@/utils/formatters';
 
 const SERIES = [
   { key: 'Billable',              color: '#22c55e' },
   { key: 'Non-Billable',          color: '#6366f1' },
   { key: 'Customer Non-Billable', color: '#f97316' },
 ];
-
-const formatINR = (v) => {
-  const n = Number(v) || 0;
-  if (n >= 100000) return `₹${(n / 100000).toFixed(1)}L`;
-  if (n >= 1000)   return `₹${(n / 1000).toFixed(1)}k`;
-  return `₹${Math.round(n)}`;
-};
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
@@ -38,13 +32,13 @@ const CustomTooltip = ({ active, payload, label }) => {
             <span className="inline-block h-2 w-2 rounded-sm shrink-0" style={{ background: p.fill }} />
             <span className="text-muted-foreground">{p.name}</span>
           </span>
-          <span className="font-medium tabular-nums">{formatINR(p.value)}</span>
+          <span className="font-medium tabular-nums">{formatCurrency(p.value)}</span>
         </div>
       ))}
       {total > 0 && (
         <div className="border-t pt-1 mt-1 flex justify-between">
           <span className="text-muted-foreground">Total</span>
-          <span className="font-semibold tabular-nums text-foreground">{formatINR(total)}</span>
+          <span className="font-semibold tabular-nums text-foreground">{formatCurrency(total)}</span>
         </div>
       )}
     </div>
@@ -102,7 +96,7 @@ const CostTrendChart = ({ data = [], isLoading, periodLabel }) => {
                 tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
                 tickLine={false}
                 axisLine={false}
-                tickFormatter={formatINR}
+                tickFormatter={formatCompactCurrency}
               />
               <Tooltip content={<CustomTooltip />} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.35 }} />
               <Legend

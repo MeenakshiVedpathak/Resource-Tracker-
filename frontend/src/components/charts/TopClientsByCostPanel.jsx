@@ -3,15 +3,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Skeleton } from '@/components/ui/skeleton';
 import EmptyState from '@/components/common/EmptyState';
 import { Trophy, ChevronLeft, ChevronRight } from 'lucide-react';
+import { formatCurrency } from '@/utils/formatters';
 
 const PAGE_SIZE = 5;
-
-const formatINR = (v) => {
-  const n = Number(v) || 0;
-  if (n >= 100000) return `₹${(n / 100000).toFixed(1)}L`;
-  if (n >= 1000)   return `₹${(n / 1000).toFixed(1)}k`;
-  return `₹${Math.round(n)}`;
-};
 
 const RANK_STYLES = [
   'bg-yellow-500/15 text-yellow-600 dark:text-yellow-400',
@@ -82,7 +76,7 @@ const TopClientsByCostPanel = ({ data = [], isLoading, periodLabel }) => {
                       </div>
                     </div>
                     <div className="text-right shrink-0">
-                      <p className="text-sm font-semibold tabular-nums text-foreground">{formatINR(c.total_cost)}</p>
+                      <p className="text-sm font-semibold tabular-nums text-foreground">{formatCurrency(c.total_cost)}</p>
                       <p className="text-[10px] text-muted-foreground tabular-nums">{Number(c.total_hours ?? 0).toLocaleString('en-IN')} hrs</p>
                     </div>
                   </div>

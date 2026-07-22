@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Skeleton } from '@/components/ui/skeleton';
 import EmptyState from '@/components/common/EmptyState';
 import { Building2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { formatCurrency, formatCompactCurrency } from '@/utils/formatters';
 
 const PAGE_SIZE = 10;
 const CHART_HEIGHT = 320;
@@ -28,13 +29,6 @@ const COLORS = [
   '#0ea5e9',
 ];
 
-const formatINR = (v) => {
-  const n = Number(v) || 0;
-  if (n >= 100000) return `₹${(n / 100000).toFixed(1)}L`;
-  if (n >= 1000)   return `₹${(n / 1000).toFixed(1)}k`;
-  return `₹${Math.round(n)}`;
-};
-
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   const row = payload[0].payload;
@@ -42,7 +36,7 @@ const CustomTooltip = ({ active, payload, label }) => {
     <div className="rounded-lg border bg-popover px-3 py-2 shadow-lg text-xs space-y-0.5">
       <p className="font-medium text-foreground max-w-[200px] truncate">{label}</p>
       <p style={{ color: payload[0].fill }} className="font-semibold">
-        {formatINR(payload[0].value)}
+        {formatCurrency(payload[0].value)}
       </p>
       {row.total_hours != null && (
         <p className="text-muted-foreground">{Number(row.total_hours).toLocaleString('en-IN')} hrs</p>
@@ -112,7 +106,7 @@ const ClientCostChart = ({ data = [], isLoading, periodLabel }) => {
                   tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
                   tickLine={false}
                   axisLine={false}
-                  tickFormatter={formatINR}
+                  tickFormatter={formatCompactCurrency}
                 />
                 <YAxis
                   type="category"
@@ -124,7 +118,7 @@ const ClientCostChart = ({ data = [], isLoading, periodLabel }) => {
                   tickFormatter={(v) => v.length > 17 ? `${v.slice(0, 17)}…` : v}
                 />
                 <Tooltip content={<CustomTooltip />} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }} />
-                <Bar dataKey="total_cost" radius={[0, 4, 4, 0]} label={{ position: 'right', fontSize: 11, fill: 'hsl(var(--muted-foreground))', formatter: formatINR }}>
+                <Bar dataKey="total_cost" radius={[0, 4, 4, 0]} label={{ position: 'right', fontSize: 11, fill: 'hsl(var(--muted-foreground))', formatter: formatCompactCurrency }}>
                   {pageData.map((_, i) => (
                     <Cell key={i} fill={COLORS[i % COLORS.length]} />
                   ))}

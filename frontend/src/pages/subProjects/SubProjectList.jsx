@@ -79,18 +79,20 @@ const SubProjectList = () => {
         <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
           <Button
             size="sm"
+            title="Edit"
             onClick={() => navigate(buildPath(ROUTES.SUB_PROJECT_EDIT, { id: row.original.id }))}
-            className="h-6 px-2 bg-blue-500 hover:bg-blue-600 text-white rounded font-normal text-[11px] transition-colors"
+            className="h-6 w-6 p-0 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
           >
-            <Pencil className="h-3 w-3 mr-1" /> Edit
+            <Pencil className="h-3 w-3" />
           </Button>
           {canManage && (
             <Button
               size="sm"
-              className="h-6 px-2 bg-red-500 hover:bg-red-600 text-white rounded font-normal text-[11px] transition-colors"
+              title="Delete"
+              className="h-6 w-6 p-0 bg-red-500 hover:bg-red-600 text-white rounded transition-colors"
               onClick={() => setDeleteTarget(row.original)}
             >
-              <Trash2 className="h-3 w-3 mr-1" /> Delete
+              <Trash2 className="h-3 w-3" />
             </Button>
           )}
         </div>

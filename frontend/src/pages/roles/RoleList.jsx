@@ -68,10 +68,11 @@ const RoleList = () => {
           <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
             <Button
               size="sm"
+              title="Edit"
               onClick={() => navigate(buildPath(ROUTES.ROLES + '/' + row.original.id + '/edit'))}
-              className="h-6 px-2 bg-blue-500 hover:bg-blue-600 text-white rounded font-normal text-[11px] transition-colors"
+              className="h-6 w-6 p-0 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
             >
-              <Pencil className="h-3 w-3 mr-1" /> Edit
+              <Pencil className="h-3 w-3" />
             </Button>
           </div>
         ) : null,

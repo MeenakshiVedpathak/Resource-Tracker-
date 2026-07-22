@@ -151,11 +151,11 @@ const MonthlyCostList = () => {
           <div onClick={(e) => e.stopPropagation()}>
             <Button
               size="sm"
-              className="h-6 px-2 bg-red-500 hover:bg-red-600 text-white rounded font-normal text-[11px] transition-colors"
+              className="h-6 w-6 p-0 bg-red-500 hover:bg-red-600 text-white rounded transition-colors"
               title="Delete"
               onClick={() => setDeleteTarget(row.original)}
             >
-              <Trash2 className="h-3 w-3 mr-1" /> Delete
+              <Trash2 className="h-3 w-3" />
             </Button>
           </div>
         ) : null,

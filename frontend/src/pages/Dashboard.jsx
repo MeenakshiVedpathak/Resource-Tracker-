@@ -747,7 +747,7 @@ import { FiscalYearPicker } from '@/components/ui/fiscal-year-picker';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { formatCurrency, formatHours, formatDate } from '@/utils/formatters';
+import { formatCurrency, formatCompactCurrency, formatHours, formatDate } from '@/utils/formatters';
 
 /* ─── constants ──────────────────────────────────────────────────────────── */
 const now = new Date();
@@ -803,7 +803,8 @@ const KPI_CONFIG = [
     key: 'total_po_value_current_year', title: 'PO Value', icon: TrendingUp,
     hexOuter: '#bbf7d0', hexInner: '#16a34a',
     bar: 'bg-green-500', iconBg: 'bg-green-50 dark:bg-green-950/40', iconColor: 'text-green-600',
-    fmt: (v) => `₹${cNum(v)}`,
+    fmt: (v) => formatCompactCurrency(v),
+    fmtFull: (v) => formatCurrency(v),
   },
   {
     key: 'total_hours', title: 'Total Hrs', icon: Clock,
@@ -815,7 +816,8 @@ const KPI_CONFIG = [
     key: 'total_cost', title: 'Total Cost', icon: DollarSign,
     hexOuter: '#6ee7b7', hexInner: '#059669',
     bar: 'bg-emerald-500', iconBg: 'bg-emerald-50 dark:bg-emerald-950/40', iconColor: 'text-emerald-600',
-    fmt: (v) => `₹${cNum(v)}`,
+    fmt: (v) => formatCompactCurrency(v),
+    fmtFull: (v) => formatCurrency(v),
   },
   {
     key: 'utilization_pct', title: 'Utilization', icon: Activity,
@@ -917,7 +919,7 @@ const KpiCard = ({ cfg, value, isLoading }) => {
             </p>
           </TooltipTrigger>
           <TooltipContent side="top" className="text-xs">
-            {cfg.fmt(value ?? 0)}
+            {(cfg.fmtFull ?? cfg.fmt)(value ?? 0)}
           </TooltipContent>
         </Tooltip>
 

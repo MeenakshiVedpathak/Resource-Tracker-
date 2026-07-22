@@ -4,6 +4,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import EmptyState from '@/components/common/EmptyState';
 import { Briefcase, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/utils/cn';
+import { formatCurrency } from '@/utils/formatters';
 
 const PAGE_SIZE = 8;
 
@@ -13,11 +14,7 @@ const CATEGORY_STYLES = {
   'Customer Non-Billable': 'bg-orange-500/10 text-orange-700 dark:text-orange-400',
 };
 
-const formatINR = (v) => {
-  const n = Number(v) || 0;
-  if (!n) return '—';
-  return `₹${Math.round(n).toLocaleString('en-IN')}`;
-};
+const formatCost = (v) => (Number(v) ? formatCurrency(v) : '—');
 
 const ProjectWiseAnalyticsTable = ({ data = [], isLoading, periodLabel }) => {
   const [page, setPage] = useState(1);
@@ -109,9 +106,9 @@ const ProjectWiseAnalyticsTable = ({ data = [], isLoading, periodLabel }) => {
                               {p.category_name}
                             </span>
                           </td>
-                          <td className={cn(td, 'text-right tabular-nums font-semibold text-foreground')}>{formatINR(p.total_cost)}</td>
+                          <td className={cn(td, 'text-right tabular-nums font-semibold text-foreground')}>{formatCost(p.total_cost)}</td>
                           {months.map((m) => (
-                            <td key={m} className={cn(td, 'text-right tabular-nums text-muted-foreground')}>{formatINR(byMonth[m])}</td>
+                            <td key={m} className={cn(td, 'text-right tabular-nums text-muted-foreground')}>{formatCost(byMonth[m])}</td>
                           ))}
                         </tr>
                       );

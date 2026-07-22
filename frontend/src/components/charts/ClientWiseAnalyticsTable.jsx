@@ -4,15 +4,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import EmptyState from '@/components/common/EmptyState';
 import { Table2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/utils/cn';
+import { formatCurrency } from '@/utils/formatters';
 
 const PAGE_SIZE = 8;
-
-const formatINR = (v) => {
-  const n = Number(v) || 0;
-  if (n >= 100000) return `₹${(n / 100000).toFixed(1)}L`;
-  if (n >= 1000)   return `₹${(n / 1000).toFixed(1)}k`;
-  return `₹${Math.round(n)}`;
-};
 
 const ClientWiseAnalyticsTable = ({ data = [], isLoading, periodLabel }) => {
   const [page, setPage] = useState(1);
@@ -85,8 +79,8 @@ const ClientWiseAnalyticsTable = ({ data = [], isLoading, periodLabel }) => {
                           <p className="font-medium text-foreground truncate max-w-[220px]" title={c.client_name}>{c.client_name}</p>
                         </td>
                         <td className={cn(td, 'text-right tabular-nums')}>{Number(c.total_hours ?? 0).toLocaleString('en-IN')}</td>
-                        <td className={cn(td, 'text-right tabular-nums font-semibold text-foreground')}>{formatINR(c.total_cost)}</td>
-                        <td className={cn(td, 'text-right tabular-nums text-muted-foreground')}>₹{Number(c.average_cost_per_hour ?? 0).toFixed(2)}</td>
+                        <td className={cn(td, 'text-right tabular-nums font-semibold text-foreground')}>{formatCurrency(c.total_cost)}</td>
+                        <td className={cn(td, 'text-right tabular-nums text-muted-foreground')}>{formatCurrency(c.average_cost_per_hour ?? 0)}</td>
                         <td className={cn(td, 'text-center tabular-nums')}>{c.total_projects ?? 0}</td>
                         <td className={td}>
                           <div className="flex items-center gap-2">
