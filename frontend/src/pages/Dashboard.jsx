@@ -900,6 +900,11 @@ const KpiCard = ({ cfg, value, isLoading }) => {
     return <div className="animate-pulse rounded-xl bg-muted h-[100px]" />;
   }
 
+  // Long formatted values (e.g. full-precision PO Value) shrink to fit on one line
+  // instead of wrapping mid-number; the exact figure is always available on hover.
+  const formatted = String(cfg.fmt(value ?? 0));
+  const valueSizeClass = formatted.length > 13 ? 'text-[12px]' : formatted.length > 9 ? 'text-[13.5px]' : 'text-[15px]';
+
   return (
     <motion.div variants={itemVariants} className="cursor-default group">
       <div className="relative flex flex-col gap-2 rounded-xl border border-border bg-card pl-4 pr-3 py-3.5 shadow-sm overflow-hidden transition-all duration-200 group-hover:shadow-md group-hover:-translate-y-0.5">
@@ -914,8 +919,8 @@ const KpiCard = ({ cfg, value, isLoading }) => {
         {/* value */}
         <Tooltip>
           <TooltipTrigger asChild>
-            <p className="text-[15px] font-extrabold text-foreground leading-tight tabular-nums break-words cursor-default">
-              {cfg.fmt(value ?? 0)}
+            <p className={`${valueSizeClass} font-extrabold text-foreground leading-tight tabular-nums whitespace-nowrap overflow-hidden text-ellipsis cursor-default`}>
+              {formatted}
             </p>
           </TooltipTrigger>
           <TooltipContent side="top" className="text-xs">
