@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { cn } from '@/utils/cn';
@@ -192,9 +192,20 @@ const BillableMixPanel = ({ billableRows, periodLabel }) => {
 };
 
 /* ══════════════════════════ Sole-Contributor POs ════════════════════ */
+const SOLE_SORT_OPTIONS = ['Billable', 'Non-Billable', 'Customer Non-Billable'];
+
+const SOLE_CATEGORY_BADGE = {
+  'Billable':                'bg-green-500/10 text-green-700 dark:text-green-400',
+  'Non-Billable':            'bg-indigo-500/10 text-indigo-700 dark:text-indigo-400',
+  'Customer Non-Billable':   'bg-orange-500/10 text-orange-700 dark:text-orange-400',
+};
+const SOLE_CATEGORY_ABBR = { 'Billable': 'B', 'Non-Billable': 'NB', 'Customer Non-Billable': 'CNB' };
+
 const SoleContributorPanel = ({ employeesByPO }) => {
+  const [sortBy, setSortBy] = useState('Billable');
+
   const solePOs = useMemo(() => {
-    return (employeesByPO ?? [])
+    const list = (employeesByPO ?? [])
       .map((po) => {
         const active = (po.top_employees ?? []).filter((e) => e.hours > 0);
         const total  = active.reduce((s, e) => s + e.hours, 0);
@@ -204,9 +215,15 @@ const SoleContributorPanel = ({ employeesByPO }) => {
         if (pct < 50) return null;
         return { ...po, topEmp: top, pct, total };
       })
-      .filter(Boolean)
-      .sort((a, b) => b.total - a.total);
-  }, [employeesByPO]);
+      .filter(Boolean);
+
+    return list.sort((a, b) => {
+      const aMatch = a.category_name === sortBy;
+      const bMatch = b.category_name === sortBy;
+      if (aMatch !== bMatch) return aMatch ? -1 : 1;
+      return b.total - a.total;
+    });
+  }, [employeesByPO, sortBy]);
 
   return (
     <div className="flex flex-col h-full gap-3">
@@ -222,6 +239,28 @@ const SoleContributorPanel = ({ employeesByPO }) => {
         )}
       </div>
 
+      {solePOs.length > 0 && (
+        <div className="flex items-center gap-1 -mt-1 flex-wrap">
+          <span className="text-[10px] text-muted-foreground shrink-0">Sort:</span>
+          <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-muted flex-wrap">
+            {SOLE_SORT_OPTIONS.map((opt) => (
+              <button
+                key={opt}
+                onClick={() => setSortBy(opt)}
+                className={cn(
+                  'px-2 py-0.5 rounded-md text-[10px] font-semibold transition-all duration-150 whitespace-nowrap',
+                  sortBy === opt
+                    ? 'bg-card shadow-sm text-primary'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {opt}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {solePOs.length === 0 ? (
         <p className="text-xs text-muted-foreground italic text-center py-8">No sole-contributor POs found</p>
       ) : (
@@ -234,11 +273,11 @@ const SoleContributorPanel = ({ employeesByPO }) => {
                 </p>
                 <span className={cn(
                   'text-[9px] font-bold px-1.5 py-px rounded shrink-0 leading-none',
-                  po.is_billable
-                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                    : 'bg-orange-500/10 text-orange-600 dark:text-orange-400',
+                  SOLE_CATEGORY_BADGE[po.category_name] ?? (po.is_billable
+                    ? 'bg-green-500/10 text-green-700 dark:text-green-400'
+                    : 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-400'),
                 )}>
-                  {po.is_billable ? 'B' : 'NB'}
+                  {SOLE_CATEGORY_ABBR[po.category_name] ?? (po.is_billable ? 'B' : 'NB')}
                 </span>
               </div>
               <p className="text-[11px] text-muted-foreground">{po.client_name} · {po.total}h</p>
