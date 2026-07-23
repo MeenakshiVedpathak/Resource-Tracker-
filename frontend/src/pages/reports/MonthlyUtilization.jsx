@@ -94,6 +94,7 @@ const MonthlyUtilization = () => {
   const [employeeId, setEmployeeId] = useState('all');
   const [serviceTypeId, setServiceTypeId] = useState('all');
   const [serviceCategoryId, setServiceCategoryId] = useState('all');
+  const [hoursSource, setHoursSource] = useState('M');
   const [search, setSearch] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [page, setPage] = useState(1);
@@ -109,6 +110,7 @@ const MonthlyUtilization = () => {
   const params = enabled ? {
     month: monthYear.month,
     year:  monthYear.year,
+    hoursSource,
     ...(employeeId !== 'all'        && { employeeId }),
     ...(serviceTypeId !== 'all'     && { serviceTypeId }),
     ...(serviceCategoryId !== 'all' && { serviceCategoryId }),
@@ -164,6 +166,17 @@ const MonthlyUtilization = () => {
                 disabled={!enabled}
               />
             </div>
+            <SearchableSelect
+              showSearch={false}
+              options={[
+                { label: 'Modified', value: 'M' },
+                { label: 'Original', value: 'O' },
+              ]}
+              value={hoursSource}
+              onValueChange={(v) => { setHoursSource(v); setPage(1); }}
+              placeholder="Hours Source"
+              className="h-9 w-36 text-sm shrink-0"
+            />
             <Button
               size="sm"
               onClick={() => setFiltersOpen((p) => !p)}

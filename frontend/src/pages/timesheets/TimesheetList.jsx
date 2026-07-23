@@ -212,6 +212,18 @@ const TimesheetList = () => {
         );
       },
     }),
+    columnHelper.accessor('is_publish', {
+      header: 'Status',
+      size: 100,
+      cell: (info) => {
+        const v = !!info.getValue();
+        return (
+          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${v ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400' : 'bg-muted text-muted-foreground'}`}>
+            {v ? 'Published' : 'Unpublished'}
+          </span>
+        );
+      },
+    }),
     columnHelper.accessor('created_at', {
       header: 'Imported At',
       size: 150,

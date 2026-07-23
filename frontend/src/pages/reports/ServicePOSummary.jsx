@@ -172,6 +172,7 @@ const ServicePOSummary = () => {
 
   const [categoryId, setCategoryId] = useState('all');
   const [status, setStatus] = useState('all');
+  const [hoursSource, setHoursSource] = useState('M');
   const [dateRange, setDateRange] = useState(null);
   const [search, setSearch] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -219,6 +220,7 @@ const ServicePOSummary = () => {
 
   const params = {
     ...(monthYear && { month: monthYear.month, year: monthYear.year }),
+    hoursSource,
     ...(clientId && clientId !== 'all' && { clientId }),
     ...(serviceTypeId && serviceTypeId !== 'all' && { serviceTypeId }),
     ...(poId && poId !== 'all' && { poId }),
@@ -279,6 +281,17 @@ const ServicePOSummary = () => {
                 className="h-9 pl-9 w-56 text-sm"
               />
             </div>
+            <SearchableSelect
+              showSearch={false}
+              options={[
+                { label: 'Modified', value: 'M' },
+                { label: 'Original', value: 'O' },
+              ]}
+              value={hoursSource}
+              onValueChange={(v) => { setHoursSource(v); setPage(1); }}
+              placeholder="Hours Source"
+              className="h-9 w-36 text-sm shrink-0"
+            />
             <Button
               size="sm"
               onClick={() => setFiltersOpen((p) => !p)}
@@ -411,6 +424,7 @@ const ServicePOSummary = () => {
               className="h-9 w-full text-sm"
             />
           </div>
+
         </div>
       </div>
 

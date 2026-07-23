@@ -143,6 +143,7 @@ const SubProjectHours = () => {
   const [categoryId, setCategoryId] = useState('all');
   const [typeId, setTypeId] = useState('all');
   const [status, setStatus] = useState('all');
+  const [hoursSource, setHoursSource] = useState('M');
 
   const [search, setSearch] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -189,6 +190,7 @@ const SubProjectHours = () => {
   };
 
   const params = {
+    hoursSource,
     ...(categoryId !== 'all' && { serviceCategoryId: categoryId }),
     ...(typeId !== 'all' && { serviceTypeId: typeId }),
     ...(poId !== 'all' && { poId }),
@@ -246,6 +248,18 @@ const SubProjectHours = () => {
             className="h-9 w-56 pl-9 text-sm"
           />
         </div>
+
+        <SearchableSelect
+          showSearch={false}
+          options={[
+            { label: 'Modified', value: 'M' },
+            { label: 'Original', value: 'O' },
+          ]}
+          value={hoursSource}
+          onValueChange={(v) => { setHoursSource(v); setPage(1); }}
+          placeholder="Hours Source"
+          className="h-9 w-36 text-sm shrink-0"
+        />
 
         <Button size="sm" className="h-9 gap-2 bg-blue-600 hover:bg-blue-700 text-white" onClick={() => setFiltersOpen((o) => !o)}>
           <Filter className="h-4 w-4" />

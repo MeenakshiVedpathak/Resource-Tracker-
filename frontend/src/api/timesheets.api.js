@@ -4,7 +4,6 @@ export const timesheetsApi = {
   getAll: (params) => apiClient.get('/timesheets', { params }).then((r) => r.data),
   getById: (id) => apiClient.get(`/timesheets/${id}`).then((r) => r.data?.data),
   create: (payload) => apiClient.post('/timesheets', payload).then((r) => r.data),
-  update: (id, payload) => apiClient.put(`/timesheets/${id}`, payload).then((r) => r.data),
   delete: (id) => apiClient.delete(`/timesheets/${id}`, { data: { is_delete: true } }).then((r) => r.data),
   upload: (file, month, year) => {
     const form = new FormData();
@@ -27,4 +26,8 @@ export const timesheetsApi = {
     apiClient.get(`/timesheets/import/${id}/rows`).then((r) => r.data),
   deleteImports: (ids) =>
     apiClient.delete('/timesheets', { data: { ids } }).then((r) => r.data),
+  bulkUpdateModifiedHours: (timesheetImportId, timesheets) =>
+    apiClient.put(`/timesheets/import/${timesheetImportId}/hours`, { timesheets }).then((r) => r.data),
+  publishImport: (timesheetImportId) =>
+    apiClient.put(`/timesheets/import/${timesheetImportId}/publish`).then((r) => r.data),
 };

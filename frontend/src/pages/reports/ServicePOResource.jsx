@@ -109,6 +109,7 @@ const ServicePOResource = () => {
   const [typeId, setTypeId] = useState('all');
   const [poId, setPoId] = useState('all');
   const [clientId, setClientId] = useState('all');
+  const [hoursSource, setHoursSource] = useState('M');
 
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
@@ -156,6 +157,7 @@ const ServicePOResource = () => {
   const params = {
     ...(monthYear && { month: monthYear.month }),
     ...(monthYear && { year: monthYear.year }),
+    hoursSource,
     ...(employeeId !== 'all' && { employeeId }),
     ...(categoryId !== 'all' && { serviceCategoryId: categoryId }),
     ...(typeId !== 'all' && { serviceTypeId: typeId }),
@@ -205,6 +207,17 @@ const ServicePOResource = () => {
         description="Resources allocated per Service PO for a selected month"
         actions={
           <div className="flex items-center gap-2">
+            <SearchableSelect
+              showSearch={false}
+              options={[
+                { label: 'Modified', value: 'M' },
+                { label: 'Original', value: 'O' },
+              ]}
+              value={hoursSource}
+              onValueChange={(v) => { setHoursSource(v); setPage(1); }}
+              placeholder="Hours Source"
+              className="h-9 w-36 text-sm shrink-0"
+            />
             <Button
               size="sm"
               className="h-9 gap-2 bg-blue-600 hover:bg-blue-700 text-white"
@@ -329,6 +342,7 @@ const ServicePOResource = () => {
               className="h-9 text-sm w-full"
             />
           </div>
+
         </div>
       </div>
 

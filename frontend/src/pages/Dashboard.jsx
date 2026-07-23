@@ -1030,6 +1030,7 @@ const Dashboard = () => {
   const [employeeId, setEmployeeId]           = useState('');
   const [clientId, setClientId]               = useState('');
   const [servicePOId, setServicePOId]         = useState('');
+  const [hoursSource, setHoursSource]         = useState('M');
   const [billablePage, setBillablePage]       = useState(1);
   const [billablePageQ, setBillablePageQ]     = useState(1); // quarterly view pagination
   const [billableSortBy, setBillableSortBy]   = useState('nonBillable');  // 'nonBillable' | 'billable'
@@ -1104,6 +1105,7 @@ const Dashboard = () => {
 
   const analyticsParams = {
     fiscalYear,
+    hoursSource,
     ...(quarter     && { quarter }),
     ...(employeeId  && { employeeId }),
     ...(clientId    && { clientId }),
@@ -1121,6 +1123,7 @@ const Dashboard = () => {
   const monthlyAnalyticsParams = {
     month: bottomMonthYear.month,
     year:  bottomMonthYear.year,
+    hoursSource,
     ...(employeeId  && { employeeId }),
     ...(clientId    && { clientId }),
     ...(servicePOId && { poId: servicePOId }),
@@ -1502,6 +1505,10 @@ const Dashboard = () => {
               <div className="flex items-center gap-1.5 min-w-[150px] flex-1">
                 <FilterIconBadge icon={Briefcase} color="amber" />
                 <SearchableSelect options={servicePOOptions} value={servicePOId} onValueChange={setServicePOId} placeholder="Service PO" searchPlaceholder="Search PO…" className={`h-8 text-sm ${FILTER_FIELD_STYLES.amber}`} />
+              </div>
+              <div className="flex items-center gap-1.5 min-w-[140px] flex-1">
+                <FilterIconBadge icon={Clock} color="emerald" />
+                <SearchableSelect showSearch={false} options={[{ label: 'Modified Hours', value: 'M' }, { label: 'Original Hours', value: 'O' }]} value={hoursSource} onValueChange={setHoursSource} placeholder="Hours Source" className={`h-8 text-sm ${FILTER_FIELD_STYLES.emerald}`} />
               </div>
             </div>
 
@@ -2034,12 +2041,14 @@ const FILTER_ICON_STYLES = {
   violet:  'bg-violet-500 shadow-violet-500/30',
   sky:     'bg-sky-500 shadow-sky-500/30',
   amber:   'bg-amber-500 shadow-amber-500/30',
+  emerald: 'bg-emerald-500 shadow-emerald-500/30',
 };
 
 const FILTER_FIELD_STYLES = {
-  violet: 'border-violet-200 bg-violet-50 hover:bg-violet-100/70 focus-visible:ring-violet-400 dark:border-violet-800 dark:bg-violet-950/20 dark:hover:bg-violet-950/30',
-  sky:    'border-sky-200 bg-sky-50 hover:bg-sky-100/70 focus-visible:ring-sky-400 dark:border-sky-800 dark:bg-sky-950/20 dark:hover:bg-sky-950/30',
-  amber:  'border-amber-200 bg-amber-50 hover:bg-amber-100/70 focus-visible:ring-amber-400 dark:border-amber-800 dark:bg-amber-950/20 dark:hover:bg-amber-950/30',
+  violet:  'border-violet-200 bg-violet-50 hover:bg-violet-100/70 focus-visible:ring-violet-400 dark:border-violet-800 dark:bg-violet-950/20 dark:hover:bg-violet-950/30',
+  sky:     'border-sky-200 bg-sky-50 hover:bg-sky-100/70 focus-visible:ring-sky-400 dark:border-sky-800 dark:bg-sky-950/20 dark:hover:bg-sky-950/30',
+  amber:   'border-amber-200 bg-amber-50 hover:bg-amber-100/70 focus-visible:ring-amber-400 dark:border-amber-800 dark:bg-amber-950/20 dark:hover:bg-amber-950/30',
+  emerald: 'border-emerald-200 bg-emerald-50 hover:bg-emerald-100/70 focus-visible:ring-emerald-400 dark:border-emerald-800 dark:bg-emerald-950/20 dark:hover:bg-emerald-950/30',
 };
 
 const FilterIconBadge = ({ icon: Icon, color }) => (

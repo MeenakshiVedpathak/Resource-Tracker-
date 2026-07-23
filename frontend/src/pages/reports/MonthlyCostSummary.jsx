@@ -92,12 +92,14 @@ const MonthlyCostSummary = () => {
   });
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
+  const [hoursSource, setHoursSource] = useState('M');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
 
   const params = {
     page,
     limit,
+    hoursSource,
     ...(monthYear && { month: monthYear.month, year: monthYear.year }),
   };
 
@@ -137,6 +139,17 @@ const MonthlyCostSummary = () => {
 
       {/* Toolbar */}
       <div className="mb-3 flex items-center gap-2">
+        <SearchableSelect
+          showSearch={false}
+          options={[
+            { label: 'Modified', value: 'M' },
+            { label: 'Original', value: 'O' },
+          ]}
+          value={hoursSource}
+          onValueChange={(v) => { setHoursSource(v); setPage(1); }}
+          placeholder="Hours Source"
+          className="h-9 w-36 text-sm shrink-0"
+        />
         <Button
           size="sm"
           className="h-9 gap-2 bg-blue-600 hover:bg-blue-700 text-white"

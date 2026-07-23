@@ -1,11 +1,14 @@
 import { useState, useMemo, useCallback, useRef, memo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
 import { createColumnHelper } from '@tanstack/react-table';
 import { ArrowLeft, FileSpreadsheet, Plus } from 'lucide-react';
-import { timesheetsApi } from '@/api/timesheets.api';
-import { useTimesheetImportRows, useCreateTimesheet } from '@/hooks/useTimesheets';
-import { useTimesheetHistory } from '@/hooks/useTimesheets';
+import {
+  useTimesheetImportRows,
+  useTimesheetHistory,
+  useCreateTimesheet,
+  useBulkUpdateModifiedHours,
+  usePublishImport,
+} from '@/hooks/useTimesheets';
 import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
 import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
 import { useActiveServicePOs } from '@/hooks/useServicePOs';
@@ -19,6 +22,7 @@ import { formatDate } from '@/utils/formatters';
 import { cn } from '@/utils/cn';
 import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
+import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -30,21 +34,6 @@ import { Input } from '@/components/ui/input';
 
 const columnHelper = createColumnHelper();
 
-/*
- * Every cell below is directly editable, spreadsheet-style — no separate
- * "edit mode" toggle. Dropdown cells (Employee/Service PO) are always
- * rendered as select controls; Hours is always an input, styled borderless
- * so the table still reads like a plain grid until focused. Edits are
- * buffered locally and only sent to the server when the user clicks
- * "Save Changes".
- *
- * Each cell owns its own input state (initialized once from `initialValue`)
- * instead of being controlled from the parent on every keystroke — with a
- * few hundred rows on screen, lifting every keystroke up to the page
- * component would rebuild the whole table's column defs and re-render every
- * row each time a single character is typed. `onChange` only writes into a
- * ref, so typing/selecting doesn't trigger a page re-render at all.
- */
 const cellInputClass = 'h-8 text-xs bg-transparent border-transparent hover:border-input focus:border-input focus:bg-background transition-colors rounded-md px-2';
 
 // Employee is intentionally read-only — reassigning a timesheet entry to a
@@ -56,57 +45,60 @@ const EmployeeCell = memo(({ row }) => (
   </div>
 ));
 
-const ServicePOCell = memo(({ row, poOptions, initialValue, onChange }) => {
-  const [val, setVal] = useState(initialValue != null ? String(initialValue) : '');
-  return (
-    <SearchableSelect
-      options={poOptions}
-      value={val}
-      onValueChange={(v) => {
-        setVal(v);
-        onChange(row.id, { service_po_id: Number(v), sub_project_id: null });
-      }}
-      placeholder="Service PO"
-      searchPlaceholder="Search PO..."
-      className={cn('w-full', cellInputClass)}
-    />
-  );
-});
-
-const HoursCell = memo(({ row, initialValue, onChange }) => {
+// Modified Hours is the only editable field left on this grid — hours_logged
+// (the original, imported value) is always read-only, and edits are only
+// ever sent through the bulk update API, never a per-row endpoint.
+const ModifiedHoursCell = memo(({ row, initialValue, onChange, readOnly }) => {
   const [val, setVal] = useState(initialValue);
+  if (readOnly) {
+    return (
+      <span className="w-20 inline-block text-right tabular-nums text-sm">
+        {val === '' || val == null ? '—' : val}
+      </span>
+    );
+  }
   return (
     <input
       type="number"
       step="0.25"
       min="0"
+      max="999.99"
       value={val}
       onChange={(e) => {
         setVal(e.target.value);
-        onChange(row.id, { hours_logged: e.target.value });
+        onChange(row.id, e.target.value);
       }}
       className={cn('w-20 text-right tabular-nums font-semibold border', cellInputClass)}
     />
   );
 });
 
+const PublishPill = ({ value }) => (
+  <span className={cn(
+    'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium',
+    value ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400' : 'bg-muted text-muted-foreground'
+  )}>
+    {value ? 'Published' : 'Unpublished'}
+  </span>
+);
+
 const TimesheetImportDetail = () => {
   const navigate = useNavigate();
   const { id } = useParams();
 
   const { data: rowsData, isPending } = useTimesheetImportRows(id);
-  // fetch history to get the import metadata (file name, importer, etc.)
+  // fetch history to get the import metadata (file name, importer, is_publish, etc.)
   const { data: historyData } = useTimesheetHistory({ page: 1, limit: 100 });
 
   const rows = Array.isArray(rowsData?.data) ? rowsData.data : [];
   const importRecord = (historyData?.data ?? []).find((r) => String(r.id) === String(id));
+  const isLocked = !!importRecord?.is_publish;
 
-  // ── per-cell inline edit: changes are buffered locally and only sent to
-  // the server when the user clicks "Save Changes" ──
   const notify = useNotification();
-  const queryClient = useQueryClient();
   const { hasRole, user } = useAuth();
   const canAddEntry = hasRole('Finance', 'HR', 'Management');
+  const canEditModifiedHours = hasRole('HR');
+  const canEdit = canEditModifiedHours && !isLocked;
 
   const { data: activeServicePOsData } = useActiveServicePOs();
 
@@ -158,21 +150,20 @@ const TimesheetImportDetail = () => {
     }
   };
 
-  // rowId -> partial patch of unsaved edits for that row. Lives in a ref so
-  // typing/selecting doesn't trigger a page re-render — only membership in
-  // `dirtyRowIds` (one row entering/leaving the dirty set) does.
+  // ── Modified Hours: buffered locally per row and only sent to the server,
+  // as a single bulk request, when the user clicks "Save Changes". Lives in a
+  // ref so typing doesn't trigger a page re-render — only membership in
+  // `dirtyRowIds` (one row entering/leaving the dirty set) does. ──
   const editsRef = useRef({});
   const [dirtyRowIds, setDirtyRowIds] = useState(() => new Set());
   const [saveVersion, setSaveVersion] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const editedCount = dirtyRowIds.size;
+  const bulkUpdateMutation = useBulkUpdateModifiedHours();
 
-  const updateEdit = useCallback((rowId, patch) => {
+  const updateEdit = useCallback((rowId, value) => {
     const key = String(rowId);
-    editsRef.current = {
-      ...editsRef.current,
-      [key]: { ...editsRef.current[key], ...patch },
-    };
+    editsRef.current = { ...editsRef.current, [key]: value };
     setDirtyRowIds((prev) => (prev.has(key) ? prev : new Set(prev).add(key)));
   }, []);
 
@@ -182,52 +173,42 @@ const TimesheetImportDetail = () => {
     setSaveVersion((v) => v + 1);
   };
 
-  const buildSavePayload = (patch) => {
-    const payload = {};
-    if (patch.hours_logged !== undefined) {
-      const num = Number(patch.hours_logged);
-      if (patch.hours_logged !== '' && !Number.isNaN(num)) payload.hours_logged = num;
-    }
-    if (patch.service_po_id !== undefined) {
-      payload.service_po_id = patch.service_po_id;
-      payload.sub_project_id = patch.sub_project_id ?? null;
-    }
-    return payload;
-  };
-
   const saveChanges = async () => {
-    const entries = Object.entries(editsRef.current);
-    if (entries.length === 0) return;
+    const timesheets = Object.entries(editsRef.current)
+      .filter(([, value]) => value !== '' && !Number.isNaN(Number(value)))
+      .map(([rowId, value]) => ({ id: Number(rowId), hours: Number(value) }));
+    if (timesheets.length === 0) return;
 
     setIsSaving(true);
-    const failedEdits = {};
-    const failureMessages = {};
-    let savedCount = 0;
+    try {
+      // Transactional on the backend — either every row lands or none does,
+      // so there's no partial-success bookkeeping to do here.
+      await bulkUpdateMutation.mutateAsync({ timesheetImportId: id, timesheets });
+      editsRef.current = {};
+      setDirtyRowIds(new Set());
+      setSaveVersion((v) => v + 1);
+      notify.success(`${timesheets.length} row(s) updated.`);
+    } catch (err) {
+      // Leave local edits untouched so the user doesn't lose their input and
+      // the UI doesn't drift from what the server actually has.
+      notify.error(extractApiError(err));
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
-    await Promise.all(entries.map(async ([rowId, patch]) => {
-      const payload = buildSavePayload(patch);
-      if (Object.keys(payload).length === 0) return;
-      try {
-        await timesheetsApi.update(rowId, payload);
-        savedCount += 1;
-      } catch (err) {
-        failedEdits[rowId] = patch;
-        failureMessages[rowId] = extractApiError(err);
-      }
-    }));
+  // ── Publish: a separate, one-way action — never modifies hours, only the
+  // batch's is_publish flag. Once published nothing on this page can be edited. ──
+  const [isPublishConfirmOpen, setIsPublishConfirmOpen] = useState(false);
+  const publishMutation = usePublishImport();
 
-    await queryClient.invalidateQueries({ queryKey: ['timesheets'] });
-    editsRef.current = failedEdits;
-    setDirtyRowIds(new Set(Object.keys(failedEdits)));
-    setSaveVersion((v) => v + 1);
-    setIsSaving(false);
-
-    const failedCount = Object.keys(failedEdits).length;
-    if (failedCount > 0) {
-      const uniqueMessages = [...new Set(Object.values(failureMessages))];
-      notify.error(`Saved ${savedCount} row(s); ${failedCount} failed. ${uniqueMessages.join(' ')}`);
-    } else {
-      notify.success(`${savedCount} row(s) updated.`);
+  const handlePublish = async () => {
+    try {
+      await publishMutation.mutateAsync(id);
+      notify.success('Timesheet published.');
+      setIsPublishConfirmOpen(false);
+    } catch (err) {
+      notify.error(extractApiError(err));
     }
   };
 
@@ -331,28 +312,23 @@ const TimesheetImportDetail = () => {
       size: 220,
       enableSorting: false,
       cell: (info) => {
-        const row = info.row.original;
-        const patch = editsRef.current[row.id];
-        const initialValue = patch?.service_po_id !== undefined ? patch.service_po_id : row.servicePO?.id;
-        return (
-          <ServicePOCell
-            key={`${row.id}-${saveVersion}`}
-            row={row}
-            poOptions={servicePOOptions}
-            initialValue={initialValue}
-            onChange={updateEdit}
-          />
+        const po = info.getValue();
+        return po ? (
+          <span className="text-sm truncate block" title={po.service_po_name}>{po.service_po_name}</span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
         );
       },
     }),
     columnHelper.accessor('servicePO.client', {
       id: 'client',
       header: 'Client',
+      size: 160,
       enableSorting: false,
       cell: (info) => {
         const client = info.getValue();
         return client ? (
-          <span className="text-sm">{client.client_name}</span>
+          <span className="text-sm truncate block" title={client.client_name}>{client.client_name}</span>
         ) : (
           <span className="text-muted-foreground">—</span>
         );
@@ -363,13 +339,33 @@ const TimesheetImportDetail = () => {
       size: 100,
       enableSorting: false,
       cell: (info) => {
-        const row = info.row.original;
-        const patch = editsRef.current[row.id];
-        const initialValue = patch?.hours_logged !== undefined
-          ? patch.hours_logged
-          : (row.hours_logged != null ? String(row.hours_logged) : '');
+        const value = info.getValue();
         return (
-          <HoursCell key={`${row.id}-${saveVersion}`} row={row} initialValue={initialValue} onChange={updateEdit} />
+          <span className="w-20 inline-block text-right tabular-nums text-sm">
+            {value != null ? value : '—'}
+          </span>
+        );
+      },
+    }),
+    columnHelper.accessor('modified_hours', {
+      header: 'Modified Hours',
+      size: 120,
+      enableSorting: false,
+      cell: (info) => {
+        const row = info.row.original;
+        const edited = editsRef.current[row.id];
+        // Display modified_hours if available; otherwise the original hours_logged is the starting editable value.
+        const initialValue = edited !== undefined
+          ? edited
+          : String(row.modified_hours != null ? row.modified_hours : (row.hours_logged ?? ''));
+        return (
+          <ModifiedHoursCell
+            key={`${row.id}-${saveVersion}`}
+            row={row}
+            initialValue={initialValue}
+            onChange={updateEdit}
+            readOnly={!canEdit}
+          />
         );
       },
     }),
@@ -402,7 +398,7 @@ const TimesheetImportDetail = () => {
         description={importRecord?.file_name ?? `Import #${id}`}
         actions={
           <div className="flex items-center gap-2">
-            {editedCount > 0 && (
+            {canEdit && editedCount > 0 && (
               <>
                 <span className="text-xs text-muted-foreground">
                   {editedCount} unsaved change{editedCount !== 1 ? 's' : ''}
@@ -412,10 +408,23 @@ const TimesheetImportDetail = () => {
                 </Button>
               </>
             )}
-            <Button size="sm" onClick={saveChanges} disabled={editedCount === 0 || isSaving}>
-              {isSaving ? 'Saving…' : 'Save & Publish'}
-            </Button>
-            {canAddEntry && importRecord && (
+            {canEdit && (
+              <Button size="sm" onClick={saveChanges} disabled={editedCount === 0 || isSaving}>
+                {isSaving ? 'Saving…' : 'Save Changes'}
+              </Button>
+            )}
+            {canEdit && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsPublishConfirmOpen(true)}
+                disabled={editedCount > 0 || isSaving || publishMutation.isPending}
+                title={editedCount > 0 ? 'Save your changes before publishing' : undefined}
+              >
+                Publish
+              </Button>
+            )}
+            {canAddEntry && importRecord && !isLocked && (
               <Button variant="outline" size="sm" onClick={openAddRow}>
                 <Plus className="mr-1.5 h-4 w-4" />
                 Add New Record
@@ -451,6 +460,10 @@ const TimesheetImportDetail = () => {
             <div>
               <p className="text-xs text-muted-foreground">Imported At</p>
               <p className="text-sm tabular-nums">{formatDate(importRecord.created_at)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Status</p>
+              <PublishPill value={isLocked} />
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Rows</p>
@@ -638,6 +651,17 @@ const TimesheetImportDetail = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={isPublishConfirmOpen}
+        onOpenChange={setIsPublishConfirmOpen}
+        title="Publish this timesheet?"
+        description="Once published, this timesheet cannot be unpublished and no further edits will be allowed. Hours are not changed by publishing."
+        confirmLabel="Publish"
+        variant="default"
+        onConfirm={handlePublish}
+        isLoading={publishMutation.isPending}
+      />
     </div>
   );
 };

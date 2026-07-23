@@ -32,14 +32,20 @@ export const useCreateTimesheet = () => {
   });
 };
 
-export const useUpdateTimesheet = (id) => {
+export const useBulkUpdateModifiedHours = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (payload) => timesheetsApi.update(id, payload),
-    onSuccess: () => Promise.all([
-        qc.invalidateQueries({ queryKey: ['timesheets'] }),
-        qc.invalidateQueries({ queryKey: QUERY_KEYS.TIMESHEET(id) })
-      ]),
+    mutationFn: ({ timesheetImportId, timesheets }) =>
+      timesheetsApi.bulkUpdateModifiedHours(timesheetImportId, timesheets),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['timesheets'] }),
+  });
+};
+
+export const usePublishImport = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (timesheetImportId) => timesheetsApi.publishImport(timesheetImportId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['timesheets'] }),
   });
 };
 

@@ -134,6 +134,7 @@ const TimesheetSummary = () => {
   const [poId, setPoId] = useState('all');
   const [clientId, setClientId] = useState('all');
   const [billable, setBillable] = useState('all');
+  const [hoursSource, setHoursSource] = useState('M');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
@@ -182,6 +183,7 @@ const TimesheetSummary = () => {
   const params = {
     page,
     limit,
+    hoursSource,
     ...(startDate && { startDate }),
     ...(endDate && { endDate }),
     ...(employeeId !== 'all' && { employeeId }),
@@ -242,6 +244,18 @@ const TimesheetSummary = () => {
             className="h-9 w-56 pl-9 text-sm"
           />
         </div>
+
+        <SearchableSelect
+          showSearch={false}
+          options={[
+            { label: 'Modified', value: 'M' },
+            { label: 'Original', value: 'O' },
+          ]}
+          value={hoursSource}
+          onValueChange={(v) => { setHoursSource(v); setPage(1); }}
+          placeholder="Hours Source"
+          className="h-9 w-36 text-sm shrink-0"
+        />
 
         <Button
           size="sm"

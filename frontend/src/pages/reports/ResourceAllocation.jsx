@@ -194,6 +194,7 @@ const ResourceAllocation = () => {
   const [categoryId, setCategoryId] = useState('all');
   const [serviceTypeId, setServiceTypeId] = useState('all');
   const [poStatus, setPoStatus] = useState('all');
+  const [hoursSource, setHoursSource] = useState('M');
 
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -243,6 +244,7 @@ const ResourceAllocation = () => {
   const params = {
     page,
     limit,
+    hoursSource,
     ...(monthYear && { month: monthYear.month, year: monthYear.year }),
     ...(employeeId !== 'all' && { employeeId }),
     ...(poId !== 'all' && { poId }),
@@ -296,6 +298,17 @@ const ResourceAllocation = () => {
                 className="h-9 w-56 pl-9 text-sm"
               />
             </div>
+            <SearchableSelect
+              showSearch={false}
+              options={[
+                { label: 'Modified', value: 'M' },
+                { label: 'Original', value: 'O' },
+              ]}
+              value={hoursSource}
+              onValueChange={(v) => { setHoursSource(v); setPage(1); }}
+              placeholder="Hours Source"
+              className="h-9 w-36 text-sm shrink-0"
+            />
             <Button
               size="sm"
               className="h-9 gap-2 bg-blue-600 hover:bg-blue-700 text-white"

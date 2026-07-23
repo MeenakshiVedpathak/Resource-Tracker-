@@ -133,6 +133,7 @@ const ResourceProjectUtilization = () => {
   const [poIds, setPoIds] = useState([]);
   const [category, setCategory] = useState('all');
   const [typeIds, setTypeIds] = useState([]);
+  const [hoursSource, setHoursSource] = useState('M');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
@@ -186,6 +187,7 @@ const ResourceProjectUtilization = () => {
   const params = {
     month: monthYear.month,
     year: monthYear.year,
+    hoursSource,
     page,
     limit,
     ...(employeeIds.length > 0 && { employeeIds: employeeIds.join(',') }),
@@ -300,6 +302,17 @@ const ResourceProjectUtilization = () => {
                 className="h-9 pl-9 w-56 text-sm"
               />
             </div>
+            <SearchableSelect
+              showSearch={false}
+              options={[
+                { label: 'Modified', value: 'M' },
+                { label: 'Original', value: 'O' },
+              ]}
+              value={hoursSource}
+              onValueChange={(v) => { setHoursSource(v); setPage(1); }}
+              placeholder="Hours Source"
+              className="h-9 w-36 text-sm shrink-0"
+            />
             <Button
               size="sm"
               className="h-9 gap-2 bg-blue-600 hover:bg-blue-700 text-white"
@@ -397,6 +410,7 @@ const ResourceProjectUtilization = () => {
               className="w-full"
             />
           </div>
+
         </div>
       </div>
 

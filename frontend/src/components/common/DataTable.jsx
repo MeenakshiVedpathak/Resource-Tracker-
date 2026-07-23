@@ -122,7 +122,11 @@ const DataTable = ({
               {headerGroup.headers.map((header) => {
                   const isSticky = header.column.columnDef.meta?.sticky && hasOverflow;
                   const left = header.column.columnDef.meta?.left || 0;
-                  const w = (header.getSize() !== 150 || isSticky) ? header.getSize() : undefined;
+                  // header.getSize() falls back to TanStack's own default (150) when a column
+                  // doesn't declare `size` — comparing against that value can't tell "unset"
+                  // apart from a column that explicitly asked for 150, so check the columnDef
+                  // itself instead.
+                  const w = (header.column.columnDef.size !== undefined || isSticky) ? header.getSize() : undefined;
                   return (
                     <TableHead
                       key={header.id}
@@ -187,7 +191,7 @@ const DataTable = ({
                   {row.getVisibleCells().map((cell) => {
                     const isSticky = cell.column.columnDef.meta?.sticky && hasOverflow;
                     const left = cell.column.columnDef.meta?.left || 0;
-                    const w = (cell.column.getSize() !== 150 || isSticky) ? cell.column.getSize() : undefined;
+                    const w = (cell.column.columnDef.size !== undefined || isSticky) ? cell.column.getSize() : undefined;
                     return (
                       <TableCell
                         key={cell.id}

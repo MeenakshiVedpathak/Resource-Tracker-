@@ -98,6 +98,7 @@ const ServicePOUtilisation = () => {
   const [clientId, setClientId] = useState('all');
   const [categoryId, setCategoryId] = useState('all');
   const [typeId, setTypeId] = useState('all');
+  const [hoursSource, setHoursSource] = useState('M');
 
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -150,6 +151,7 @@ const ServicePOUtilisation = () => {
     ...(poId !== 'all' && { poId }),
     page,
     limit,
+    hoursSource,
     sortBy: 'utilisation_percentage',
     sortOrder: 'desc',
     ...(debouncedSearch && { search: debouncedSearch }),
@@ -198,6 +200,17 @@ const ServicePOUtilisation = () => {
             className="w-56 h-9 pl-9 text-sm"
           />
         </div>
+        <SearchableSelect
+          showSearch={false}
+          options={[
+            { label: 'Modified', value: 'M' },
+            { label: 'Original', value: 'O' },
+          ]}
+          value={hoursSource}
+          onValueChange={(v) => { setHoursSource(v); setPage(1); }}
+          placeholder="Hours Source"
+          className="h-9 w-36 text-sm shrink-0"
+        />
         <Button size="sm" className="h-9 gap-2 bg-blue-600 hover:bg-blue-700 text-white" onClick={() => setFiltersOpen((o) => !o)}>
           <Filter className="h-4 w-4" />
           Filters
