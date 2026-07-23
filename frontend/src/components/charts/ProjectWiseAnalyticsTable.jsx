@@ -14,14 +14,27 @@ const CATEGORY_STYLES = {
   'Customer Non-Billable': 'bg-orange-500/10 text-orange-700 dark:text-orange-400',
 };
 
+const CATEGORY_SORT_OPTIONS = ['Billable', 'Non-Billable', 'Customer Non-Billable'];
+
 const formatCost = (v) => (Number(v) ? formatCurrency(v) : '—');
 
 const ProjectWiseAnalyticsTable = ({ data = [], isLoading, periodLabel }) => {
   const [page, setPage] = useState(1);
+  const [sortByCategory, setSortByCategory] = useState('Billable');
 
   const rows = [...(data ?? [])]
     .filter((p) => (p.total_cost || 0) > 0)
-    .sort((a, b) => (b.total_cost || 0) - (a.total_cost || 0));
+    .sort((a, b) => {
+      const aMatches = a.category_name === sortByCategory;
+      const bMatches = b.category_name === sortByCategory;
+      if (aMatches !== bMatches) return aMatches ? -1 : 1;
+      return (b.total_cost || 0) - (a.total_cost || 0);
+    });
+
+  const handleCategorySort = (category) => {
+    setSortByCategory(category);
+    setPage(1);
+  };
 
   const months = useMemo(() => {
     const withBreakdown = rows.find((p) => (p.monthly_cost_breakdown ?? []).length > 0);
@@ -73,6 +86,26 @@ const ProjectWiseAnalyticsTable = ({ data = [], isLoading, periodLabel }) => {
           />
         ) : (
           <>
+            <div className="mb-3 flex items-center gap-1 flex-wrap">
+              <span className="text-[10px] text-muted-foreground shrink-0">Sort:</span>
+              <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-muted flex-wrap">
+                {CATEGORY_SORT_OPTIONS.map((category) => (
+                  <button
+                    key={category}
+                    type="button"
+                    onClick={() => handleCategorySort(category)}
+                    className={cn(
+                      'px-2 py-0.5 rounded-md text-[10px] font-semibold transition-all duration-150 whitespace-nowrap',
+                      sortByCategory === category
+                        ? 'bg-card shadow-sm text-primary'
+                        : 'text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    {category}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="rounded-md border overflow-hidden flex-1">
               <div className="overflow-x-auto">
                 <table className="w-full border-separate border-spacing-0 text-sm">
