@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useLayoutEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   flexRender,
@@ -49,6 +49,21 @@ const DataTable = ({
 }) => {
   const [internalSorting, setInternalSorting] = useState([]);
 
+  // Sticky columns only need their distinguishing background when the table actually
+  // scrolls horizontally — with nothing to hide underneath, treat every column the same.
+  const scrollRef = useRef(null);
+  const [hasOverflow, setHasOverflow] = useState(false);
+
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const check = () => setHasOverflow(el.scrollWidth > el.clientWidth + 1);
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => ro.disconnect();
+  });
+
   const isManualSort = !!onExternalSortingChange;
   const sorting = isManualSort ? (externalSorting ?? []) : internalSorting;
 
@@ -97,6 +112,7 @@ const DataTable = ({
 
       {/* Table */}
       <Table
+        ref={scrollRef}
         className="data-table table-fixed"
         containerClassName={cn("bg-white border rounded-lg overflow-auto", tableContainerClassName || "max-h-[50vh]")}
       >
@@ -104,7 +120,7 @@ const DataTable = ({
           {table.getHeaderGroups().map((headerGroup) => (
             <TableRow key={headerGroup.id} className="hover:bg-transparent border-b bg-slate-50">
               {headerGroup.headers.map((header) => {
-                  const isSticky = header.column.columnDef.meta?.sticky;
+                  const isSticky = header.column.columnDef.meta?.sticky && hasOverflow;
                   const left = header.column.columnDef.meta?.left || 0;
                   const w = (header.getSize() !== 150 || isSticky) ? header.getSize() : undefined;
                   return (
@@ -169,7 +185,7 @@ const DataTable = ({
                   onClick={() => onRowClick?.(row.original)}
                 >
                   {row.getVisibleCells().map((cell) => {
-                    const isSticky = cell.column.columnDef.meta?.sticky;
+                    const isSticky = cell.column.columnDef.meta?.sticky && hasOverflow;
                     const left = cell.column.columnDef.meta?.left || 0;
                     const w = (cell.column.getSize() !== 150 || isSticky) ? cell.column.getSize() : undefined;
                     return (
