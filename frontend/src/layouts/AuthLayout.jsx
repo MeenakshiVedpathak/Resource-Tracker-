@@ -1,4 +1,5 @@
 import { Navigate, Outlet } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { useAuth } from '@/hooks/useAuth';
 import { ROUTES } from '@/constants/routes';
 
@@ -17,9 +18,28 @@ const AuthLayout = () => {
         <div className="absolute -top-24 -left-24 h-96 w-96 rounded-full bg-primary/20 blur-3xl" />
         <div className="absolute bottom-0 right-0 h-80 w-80 rounded-full bg-primary/10 blur-3xl" />
 
-        <div className="relative z-10 flex items-center gap-3">
-          <img src="/logo.svg" alt="Logo" className="h-16 object-contain" />
-        </div>
+        <motion.div
+          className="relative z-10 flex items-center gap-3"
+          initial={{ opacity: 0, y: -14, scale: 0.9 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.7, ease: 'easeOut' }}
+        >
+          <motion.img
+            src="/logo.svg"
+            alt="Logo"
+            className="h-24 object-contain"
+            animate={{
+              scale: [1, 1.12, 1],
+              rotate: [0, 1.2, 0, -1.2, 0],
+              filter: [
+                'drop-shadow(0 0 6px rgba(139,92,246,0.5))',
+                'drop-shadow(0 0 22px rgba(37,99,235,0.75))',
+                'drop-shadow(0 0 6px rgba(139,92,246,0.5))',
+              ],
+            }}
+            transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+          />
+        </motion.div>
 
         {/* Center copy */}
         <div className="relative z-10 space-y-6">
@@ -52,9 +72,28 @@ const AuthLayout = () => {
 
       {/* Right panel — form */}
       <div className="flex flex-1 flex-col items-center justify-center bg-background px-6 py-12">
-        <div className="mb-8 flex items-center justify-center lg:hidden">
-          <img src="/logo.svg" alt="Logo" className="h-12 object-contain" />
-        </div>
+        <motion.div
+          className="mb-8 flex items-center justify-center lg:hidden"
+          initial={{ opacity: 0, y: -14, scale: 0.9 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.7, ease: 'easeOut' }}
+        >
+          <motion.img
+            src="/logo.svg"
+            alt="Logo"
+            className="h-16 object-contain"
+            animate={{
+              scale: [1, 1.1, 1],
+              rotate: [0, 1, 0, -1, 0],
+              filter: [
+                'drop-shadow(0 0 4px rgba(139,92,246,0.35))',
+                'drop-shadow(0 0 14px rgba(37,99,235,0.5))',
+                'drop-shadow(0 0 4px rgba(139,92,246,0.35))',
+              ],
+            }}
+            transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+          />
+        </motion.div>
 
         <div className="w-full max-w-sm">
           <Outlet />

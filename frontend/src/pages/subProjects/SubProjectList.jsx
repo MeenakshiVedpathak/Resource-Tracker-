@@ -73,7 +73,7 @@ const SubProjectList = () => {
     columnHelper.display({
       id: 'actions',
       header: 'Actions',
-      size: 180,
+      size: 96,
       meta: { sticky: true, left: 0 },
       cell: ({ row }) => (
         <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
@@ -101,7 +101,7 @@ const SubProjectList = () => {
     columnHelper.accessor('sub_project_name', {
       header: 'Name',
       size: 200,
-      meta: { sticky: true, left: 150 },
+      meta: { sticky: true, left: 96 },
       cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="180px" className="font-medium" />,
     }),
     columnHelper.accessor('servicePO.service_po_name', {

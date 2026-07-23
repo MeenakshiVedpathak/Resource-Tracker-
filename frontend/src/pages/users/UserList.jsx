@@ -97,7 +97,7 @@ const UserList = () => {
     columnHelper.display({
       id: 'actions',
       header: 'Actions',
-      size: 180,
+      size: 96,
       meta: { sticky: true, left: 0 },
       cell: ({ row }) => (
         isHR ? (
@@ -136,7 +136,7 @@ const UserList = () => {
     columnHelper.accessor('email', {
       header: 'Email',
       size: 250,
-      meta: { sticky: true, left: 180 },
+      meta: { sticky: true, left: 96 },
       cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="220px" className="font-medium" />,
     }),
     columnHelper.accessor('roles', {

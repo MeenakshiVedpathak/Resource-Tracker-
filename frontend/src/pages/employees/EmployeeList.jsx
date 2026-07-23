@@ -116,7 +116,7 @@ const EmployeeList = () => {
     columnHelper.display({
       id: 'actions',
       header: 'Actions',
-      size: 180,
+      size: 96,
       meta: { sticky: true, left: 0 },
       cell: ({ row }) => (
         isHR ? (
@@ -144,7 +144,7 @@ const EmployeeList = () => {
     columnHelper.accessor('employee_code', {
       header: 'Employee ID',
       size: 130,
-      meta: { sticky: true, left: 180 },
+      meta: { sticky: true, left: 96 },
       cell: (info) => (
         <TruncatedCell value={info.getValue()} maxWidth="100px" className="font-medium" />
       ),
@@ -152,7 +152,7 @@ const EmployeeList = () => {
     columnHelper.accessor('full_name', {
       header: 'Name',
       size: 200,
-      meta: { sticky: true, left: 310 },
+      meta: { sticky: true, left: 226 },
       cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="160px" />,
     }),
     columnHelper.accessor('email_id', {

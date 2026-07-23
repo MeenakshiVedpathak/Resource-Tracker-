@@ -104,7 +104,7 @@ const MonthlyCostDetail = () => {
     columnHelper.display({
       id: 'actions',
       header: 'Actions',
-      size: 180,
+      size: 96,
       cell: ({ row }) =>
         canManage ? (
           <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>

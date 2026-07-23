@@ -77,7 +77,7 @@ const ClientList = () => {
     columnHelper.display({
       id: 'actions',
       header: 'Actions',
-      size: 180,
+      size: 96,
       meta: { sticky: true, left: 0 },
       cell: ({ row }) =>
         canManage ? (
@@ -116,7 +116,7 @@ const ClientList = () => {
     columnHelper.accessor('client_name', {
       header: 'Client Name',
       size: 250,
-      meta: { sticky: true, left: 150 },
+      meta: { sticky: true, left: 96 },
       cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="230px" className="font-medium" />,
     }),
     columnHelper.accessor('client_code', {

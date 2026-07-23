@@ -96,8 +96,8 @@ const DataTable = ({
       )}
 
       {/* Table */}
-      <Table 
-        className="data-table"
+      <Table
+        className="data-table table-fixed"
         containerClassName={cn("bg-white border rounded-lg overflow-auto", tableContainerClassName || "max-h-[50vh]")}
       >
         <TableHeader className="sticky top-0 z-20 bg-slate-50 shadow-[0_1px_3px_0_rgb(0,0,0,0.1)]">
@@ -130,6 +130,9 @@ const DataTable = ({
                     </TableHead>
                   );
                 })}
+              {/* Filler column — absorbs any leftover width so real columns stay at their declared size
+                  instead of the widest one stretching to fill the container (table-layout: fixed). */}
+              <TableHead aria-hidden="true" />
               </TableRow>
             ))}
           </TableHeader>
@@ -142,11 +145,12 @@ const DataTable = ({
                       <Skeleton className="h-4 w-full" />
                     </TableCell>
                   ))}
+                  <TableCell aria-hidden="true" />
                 </TableRow>
               ))
             ) : table.getRowModel().rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={columns.length} className="p-0">
+                <TableCell colSpan={columns.length + 1} className="p-0">
                   {emptyState ?? <EmptyState title="No records found" description="Try adjusting your search or filters." />}
                 </TableCell>
               </TableRow>
@@ -181,6 +185,7 @@ const DataTable = ({
                       </TableCell>
                     );
                   })}
+                  <TableCell aria-hidden="true" />
                 </motion.tr>
               ))
             )}

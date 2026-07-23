@@ -81,7 +81,7 @@ const ServiceCategoryList = () => {
     columnHelper.display({
       id: 'actions',
       header: 'Actions',
-      size: 180,
+      size: 96,
       meta: { sticky: true, left: 0 },
       cell: ({ row }) =>
         canManage ? (
@@ -108,7 +108,7 @@ const ServiceCategoryList = () => {
     columnHelper.accessor('name', {
       header: 'Category Name',
       size: 300,
-      meta: { sticky: true, left: 90 },
+      meta: { sticky: true, left: 96 },
       cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="280px" className="font-medium" />,
     }),
     columnHelper.accessor('status', {

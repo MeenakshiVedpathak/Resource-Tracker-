@@ -191,9 +191,30 @@ const Sidebar = () => {
         'flex h-16 shrink-0 items-center border-b border-sidebar-border px-4 gap-3',
         collapsed ? 'justify-center px-2' : ''
       )}>
-        <div className="flex shrink-0 items-center justify-center rounded-lg">
-          <img src="/logo.svg" alt="Logo" className={cn("object-contain", collapsed ? "w-8" : "h-10")} />
-        </div>
+        <motion.div
+          className="relative flex shrink-0 items-center justify-center"
+          initial={{ opacity: 0, scale: 0.7, rotate: -8 }}
+          animate={{ opacity: 1, scale: 1, rotate: 0 }}
+          transition={{ duration: 0.5 }}
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.94 }}
+        >
+          <motion.img
+            src="/logo.svg"
+            alt="Logo"
+            className={cn("object-contain", collapsed ? "w-10" : "h-12")}
+            animate={{
+              scale: [1, 1.15, 1],
+              rotate: [0, 2, 0, -2, 0],
+              filter: [
+                'drop-shadow(0 0 4px rgba(139,92,246,0.5))',
+                'drop-shadow(0 0 16px rgba(37,99,235,0.8))',
+                'drop-shadow(0 0 4px rgba(139,92,246,0.5))',
+              ],
+            }}
+            transition={{ duration: 2.8, repeat: Infinity, ease: 'easeInOut' }}
+          />
+        </motion.div>
         <AnimatePresence initial={false}>
           {!collapsed && (
             <motion.span

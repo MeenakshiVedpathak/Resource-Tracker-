@@ -204,7 +204,7 @@ const ServicePOList = () => {
     columnHelper.display({
       id: 'actions',
       header: 'Actions',
-      size: 250,
+      size: 128,
       meta: { sticky: true, left: 0 },
       cell: ({ row }) => (
         <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
@@ -242,7 +242,7 @@ const ServicePOList = () => {
     columnHelper.accessor('service_po_code', {
       header: 'PO Code',
       size: 180,
-      meta: { sticky: true, left: 250 },
+      meta: { sticky: true, left: 128 },
       cell: (info) => (
         <div className="font-mono text-xs font-semibold text-muted-foreground truncate" style={{ maxWidth: "160px" }} title={info.getValue()}>
           {info.getValue()}
