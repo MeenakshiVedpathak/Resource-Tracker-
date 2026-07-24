@@ -30,6 +30,15 @@ const columnHelper = createColumnHelper();
 
 const periodKey = (row) => `${row.month}-${row.year}`;
 
+// Maps DataTable column ids to the sortBy keys the monthly-cost-summary report accepts.
+const sortByMap = {
+  month_year: 'month_year',
+  employee_count: 'employee_count',
+  total_salary_cost: 'total_salary_cost',
+  total_ops_cost: 'total_ops_cost',
+  total_cost: 'total_cost',
+};
+
 const MonthlyCostList = () => {
   const navigate = useNavigate();
   const { success, error: showError } = useNotification();
@@ -46,14 +55,15 @@ const MonthlyCostList = () => {
     month: new Date().getMonth() + 1,
     year: new Date().getFullYear(),
   });
+  const [sorting, setSorting] = useState([]);
 
   const canManage = useCanWrite();
 
   const params = {
     page,
     limit,
-    
     ...(monthYearFilter && { month: monthYearFilter.month, year: monthYearFilter.year }),
+    ...(sorting[0] && { sortBy: sortByMap[sorting[0].id] ?? sorting[0].id, sortOrder: sorting[0].desc ? 'DESC' : 'ASC' }),
   };
 
   const { data, isPending } = useMonthlyCostSummary(params);
@@ -185,6 +195,7 @@ const MonthlyCostList = () => {
     columnHelper.accessor('total_billable_cost', {
       header: 'Billable Cost',
       size: 140,
+      enableSorting: false,
       cell: (info) => <span className="tabular-nums text-sm">{formatCurrency(info.getValue())}</span>,
     }),
     columnHelper.accessor('total_cost', {
@@ -258,6 +269,8 @@ const MonthlyCostList = () => {
             ? { page: meta.page ?? page, limit: meta.limit ?? limit, total: meta.total }
             : undefined
         }
+        sorting={sorting}
+        onSortingChange={(s) => { setSorting(s); setPage(1); }}
         onPageChange={(p) => { setPage(p); clearSelection(); }}
         onPageSizeChange={(s) => { setLimit(s); setPage(1); clearSelection(); }}
         onRowClick={(row) => navigate(buildPath(ROUTES.MONTHLY_COST_DETAIL, { month: row.month, year: row.year }))}

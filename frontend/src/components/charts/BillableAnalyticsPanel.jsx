@@ -8,6 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import EmptyState from '@/components/common/EmptyState';
 import { Users, Calendar, Coffee, ShieldAlert, CheckCircle2, LayoutGrid, List, ChevronLeft, ChevronRight, BarChart2, ArrowDownWideNarrow } from 'lucide-react';
 import { cn } from '@/utils/cn';
+import { formatHours } from '@/utils/formatters';
 
 /* ── colour palette (hex — safe in recharts) ── */
 const C = {
@@ -42,7 +43,7 @@ const TypeBreakdownRows = ({ title, entries }) => {
       {entries.map(([type, hrs]) => (
         <div key={type} className="flex items-center justify-between gap-4">
           <span className="text-muted-foreground">{type}</span>
-          <span className="font-medium tabular-nums text-foreground">{hrs}h</span>
+          <span className="font-medium tabular-nums text-foreground">{formatHours(hrs)}</span>
         </div>
       ))}
     </div>
@@ -61,7 +62,7 @@ const BarTip = ({ active, payload }) => {
         <div key={p.name} className="flex items-center gap-2">
           <span className="h-2 w-2 rounded-full shrink-0" style={{ background: p.fill }} />
           <span className="text-muted-foreground">{p.name}:</span>
-          <span className="font-medium tabular-nums">{p.value}h</span>
+          <span className="font-medium tabular-nums">{formatHours(p.value)}</span>
         </div>
       ))}
       <TypeBreakdownRows title="Billable types" entries={groupByType(billableReasons)} />
@@ -87,7 +88,7 @@ const PieTip = ({ active, payload }) => {
         {name}
       </p>
       <p className="text-muted-foreground mt-0.5">
-        {value}h{pctStr ? ` · ${pctStr}%` : ''}
+        {formatHours(value)}{pctStr ? ` · ${pctStr}%` : ''}
       </p>
       <TypeBreakdownRows title="By type" entries={breakdown} />
     </div>
@@ -127,7 +128,7 @@ const NBBadge = ({ name, hours, type, category }) => (
         ? 'bg-red-500/10 text-red-700 dark:text-red-400'
         : 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-400'
   )}>
-    {name}: {hours}h
+    {name}: {formatHours(hours)}
   </span>
 );
 
@@ -245,11 +246,11 @@ const BillableAnalyticsPanel = ({
               iconBg={overallPct >= 75 ? 'bg-emerald-100 dark:bg-emerald-900/50' : 'bg-red-100 dark:bg-red-900/50'}
               iconColor={overallPct >= 75 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}
               valueColor={effTier.text}
-              subtext={`${totalBillable}h of ${totalHours}h`}
+              subtext={`${formatHours(totalBillable)} of ${formatHours(totalHours)}`}
             />
             <Stat
               label="Non-Billable Hours"
-              value={`${totalNonBillable}h`}
+              value={formatHours(totalNonBillable)}
               icon={Coffee}
               cardBg="bg-indigo-50 dark:bg-indigo-950/30"
               borderColor="border-indigo-200 dark:border-indigo-800"
@@ -260,7 +261,7 @@ const BillableAnalyticsPanel = ({
             />
             <Stat
               label="Customer Non-Billable"
-              value={`${totalCustomerNonBillable}h`}
+              value={formatHours(totalCustomerNonBillable)}
               icon={Calendar}
               cardBg="bg-orange-50 dark:bg-orange-950/30"
               borderColor="border-orange-200 dark:border-orange-800"
@@ -400,7 +401,7 @@ const BillableAnalyticsPanel = ({
                       {pieData.map((d) => (
                         <div key={d.name} className="flex items-center gap-1 text-[10px] text-muted-foreground">
                           <span className="h-2 w-2 rounded-full inline-block shrink-0" style={{ background: d.fill }} />
-                          {d.name}: {d.value}h
+                          {d.name}: {formatHours(d.value)}
                         </div>
                       ))}
                     </div>
@@ -490,7 +491,7 @@ const BillableAnalyticsPanel = ({
                                   </span>
                                 </div>
                                 <p className="text-[10px] text-muted-foreground mt-0.5 tabular-nums">
-                                  {row.billable_hours}h / {row.total_hours}h
+                                  {formatHours(row.billable_hours)} / {formatHours(row.total_hours)}
                                 </p>
                               </td>
                               <td className={td}>
@@ -500,7 +501,7 @@ const BillableAnalyticsPanel = ({
                                       <span key={r.service_po_id} className="inline-flex items-center gap-1 text-[10px] text-foreground">
                                         <span className="inline-block h-1.5 w-1.5 rounded-full shrink-0" style={{ background: C.billable }} />
                                         <span className="truncate max-w-[130px]" title={r.service_po_name}>{r.service_po_name}</span>
-                                        <span className="text-muted-foreground shrink-0">{r.hours}h</span>
+                                        <span className="text-muted-foreground shrink-0">{formatHours(r.hours)}</span>
                                       </span>
                                     ))}
                                   </div>
@@ -519,7 +520,7 @@ const BillableAnalyticsPanel = ({
                                   <span className="text-[10px] text-emerald-600 font-medium">Fully billable</span>
                                 )}
                               </td>
-                              <td className={cn(td, 'text-right tabular-nums font-medium')}>{row.total_hours}h</td>
+                              <td className={cn(td, 'text-right tabular-nums font-medium')}>{formatHours(row.total_hours)}</td>
                             </tr>
                           );
                         })}

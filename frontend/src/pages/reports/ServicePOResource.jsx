@@ -178,6 +178,12 @@ const ServicePOResource = () => {
 
   const { data, isPending } = useServicePOResourceReport(params);
 
+  // Total Hours must reflect every matching record (respecting whatever filters are
+  // active), not just the current page — fetch the full filtered dataset in parallel.
+  const allDataParams = { ...params, page: 1, limit: 1000 };
+  const { data: fullData } = useServicePOResourceReport(allDataParams);
+  const fullRows = Array.isArray(fullData?.data) ? fullData.data : null;
+
   const rows   = data?.data ?? [];
   const meta   = data?.meta ?? {};
   const groups = useMemo(() => groupRows(rows), [rows]);
@@ -196,7 +202,7 @@ const ServicePOResource = () => {
   };
 
   const monthLabel  = monthYear ? formatMonthYear(monthYear.month, monthYear.year) : '';
-  const totalHours  = rows.reduce((sum, r) => {
+  const totalHours  = (fullRows ?? rows).reduce((sum, r) => {
     const h = getField(r, 'total_hours_logged', 'hours_logged', 'hours', 'time_in_hrs');
     return sum + (h ? Number(h) : 0);
   }, 0);
@@ -376,6 +382,13 @@ const ServicePOResource = () => {
         </div>
       ) : (
         <>
+          {/* ── Summary ── */}
+          <div className="mb-4 flex flex-wrap gap-3">
+            <div className="rounded-md border bg-blue-500/10 px-3 py-1.5 text-xs text-blue-700 dark:text-blue-400">
+              Total Hours&nbsp;
+              <span className="font-semibold tabular-nums">{totalHours.toFixed(1)} hrs</span>
+            </div>
+          </div>
 
           {/* ── Table ── */}
           <div className="rounded-lg border overflow-hidden">

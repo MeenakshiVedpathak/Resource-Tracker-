@@ -269,6 +269,13 @@ const ResourceAllocation = () => {
   const rows = Array.isArray(data?.data) ? data.data : [];
   const meta = data?.meta ?? {};
 
+  // Total Hours must reflect every matching record (respecting whatever filters are
+  // active), not just the current page — fetch the full filtered dataset in parallel.
+  const allDataParams = { ...params, page: 1, limit: 1000 };
+  const { data: fullData } = useResourceAllocationReport(allDataParams);
+  const fullRows = Array.isArray(fullData?.data) ? fullData.data : null;
+  const totalHours = (fullRows ?? rows).reduce((sum, r) => sum + (Number(r.total_hours_logged) || 0), 0);
+
   // Export pulls every matching record (not just the current page) with one extra request.
   const handleExport = async () => {
     setExporting(true);
@@ -471,6 +478,15 @@ const ResourceAllocation = () => {
           </div>
         </div>
       </div>
+
+      {rows.length > 0 && (
+        <div className="mb-4 flex flex-wrap gap-3">
+          <div className="rounded-md border bg-blue-500/10 px-3 py-1.5 text-xs text-blue-700 dark:text-blue-400">
+            Total Hours&nbsp;
+            <span className="font-semibold tabular-nums">{formatHours(totalHours)}</span>
+          </div>
+        </div>
+      )}
 
       <DataTable
         tableContainerClassName="max-h-[50vh]"
