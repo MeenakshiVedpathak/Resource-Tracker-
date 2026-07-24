@@ -5,7 +5,7 @@ import * as XLSX from 'xlsx';
 import { Plus, Pencil, Trash2, Search, Filter, Download } from 'lucide-react';
 import { useServiceTypes, useDeleteServiceType } from '@/hooks/useServiceTypes';
 import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
-import { useAuth } from '@/hooks/useAuth';
+import { useCanWrite } from '@/hooks/usePermissions';
 import { useDebounce } from '@/hooks/useDebounce';
 import { buildPath, ROUTES } from '@/constants/routes';
 import { formatDate } from '@/utils/formatters';
@@ -46,7 +46,6 @@ const TruncatedCell = ({ value, maxWidth = '150px', className }) => {
 
 const ServiceTypeList = () => {
   const navigate = useNavigate();
-  const { hasRole } = useAuth();
   const { success, showError } = useNotification();
 
   const [search, setSearch] = useState('');
@@ -57,7 +56,7 @@ const ServiceTypeList = () => {
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const debouncedSearch = useDebounce(search, 400);
-  const canManage = hasRole('Finance', 'Management');
+  const canManage = useCanWrite();
 
   const { data: serviceCategories = [] } = useActiveServiceCategories();
   const categoryMap = Object.fromEntries(serviceCategories.map((c) => [c.id, c.name]));

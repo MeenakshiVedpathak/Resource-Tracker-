@@ -9,7 +9,7 @@ import {
   useDeallocateResource,
 } from '@/hooks/useServicePOs';
 import { useActiveEmployees } from '@/hooks/useEmployees';
-import { useAuth } from '@/hooks/useAuth';
+import { useCanWrite } from '@/hooks/usePermissions';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import { buildPath, ROUTES } from '@/constants/routes';
@@ -50,7 +50,6 @@ const InfoRow = ({ label, value }) => (
 const ServicePODetail = () => {
   const navigate = useNavigate();
   const { id } = useParams();
-  const { hasRole } = useAuth();
   const { success, error: showError } = useNotification();
 
   const [confirmClose, setConfirmClose] = useState(false);
@@ -67,9 +66,10 @@ const ServicePODetail = () => {
   const allocateMutation = useAllocateResources(id);
   const deallocateMutation = useDeallocateResource(id);
 
-  const canManageResources = hasRole('Finance', 'HR', 'Project Manager', 'Management');
-  const canClose = hasRole('Finance', 'Management');
-  const canEdit = hasRole('Finance', 'Management');
+  const canWrite = useCanWrite();
+  const canManageResources = canWrite;
+  const canClose = canWrite;
+  const canEdit = canWrite;
 
   const isActive = po?.status === 'active';
 

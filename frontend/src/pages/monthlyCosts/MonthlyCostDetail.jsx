@@ -3,7 +3,7 @@ import { useNavigate, useParams, Outlet } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
 import { Pencil, Trash2, ArrowLeft, Plus, Search } from 'lucide-react';
 import { useMonthlyCosts, useDeleteMonthlyCost, useDeleteMonthlyCosts } from '@/hooks/useMonthlyCosts';
-import { useAuth } from '@/hooks/useAuth';
+import { useCanWrite } from '@/hooks/usePermissions';
 import { useNotification } from '@/hooks/useNotification';
 import { useDebounce } from '@/hooks/useDebounce';
 import { extractApiError } from '@/services/apiClient';
@@ -21,7 +21,6 @@ const columnHelper = createColumnHelper();
 const MonthlyCostDetail = () => {
   const navigate = useNavigate();
   const { month, year } = useParams();
-  const { hasRole } = useAuth();
   const { success, error: showError } = useNotification();
 
   const [page, setPage] = useState(1);
@@ -33,7 +32,7 @@ const MonthlyCostDetail = () => {
   const [sorting, setSorting] = useState([]);
 
   const debouncedSearch = useDebounce(search, 400);
-  const canManage = hasRole('Finance', 'Management');
+  const canManage = useCanWrite();
 
   const params = {
     page,
@@ -41,7 +40,7 @@ const MonthlyCostDetail = () => {
     month,
     year,
     ...(debouncedSearch && { search: debouncedSearch }),
-    ...(sorting[0] && { sortBy: sorting[0].id, sortOrder: sorting[0].desc ? 'desc' : 'asc' }),
+    ...(sorting[0] && { sort_by: sorting[0].id, sort_order: sorting[0].desc ? 'desc' : 'asc' }),
   };
 
   const { data, isPending } = useMonthlyCosts(params);

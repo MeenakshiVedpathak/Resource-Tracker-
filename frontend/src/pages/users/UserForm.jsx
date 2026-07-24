@@ -10,6 +10,7 @@ import { useActiveEmployees } from '@/hooks/useEmployees';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import { ROUTES } from '@/constants/routes';
+import { isProtectedAccount } from '@/constants/protectedAccounts';
 import {
   Form, FormField, FormItem, FormLabel, FormControl, FormMessage,
 } from '@/components/ui/form';
@@ -66,6 +67,16 @@ const UserForm = () => {
   const { data: user, isPending: isLoadingUser } = useUser(id);
   const createMutation = useCreateUser();
   const updateMutation = useUpdateUser(id);
+
+  // Direct-URL/row-click safety net — the Edit action is already hidden in UserList for this
+  // account, but nothing stops someone navigating to /users/:id/edit by hand.
+  useEffect(() => {
+    if (isEdit && user && isProtectedAccount(user.email)) {
+      showError('This account is protected and cannot be edited.');
+      navigate(ROUTES.USERS, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEdit, user]);
 
   const { data: rolesData } = useRoles({ status: 'active', limit: 100 });
   const { data: activeEmployees, isSuccess: employeesReady } = useActiveEmployees();

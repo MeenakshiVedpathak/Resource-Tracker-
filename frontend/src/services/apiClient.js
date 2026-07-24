@@ -67,9 +67,13 @@ apiClient.interceptors.response.use(
 
       try {
         const { data } = await plainAxios.post('/auth/refresh-token', { refresh_token: refreshToken });
-        const { accessToken, refreshToken: newRefreshToken } = data.data;
+        // ⚠️ `roles`/`forms` keys here are a guess — per the "refresh-token has the same
+        // roles+forms shape as login" API reference. Guarded with `if (...)` below so a
+        // wrong/absent key name is a no-op, not a crash.
+        const { accessToken, refreshToken: newRefreshToken, roles, forms } = data.data;
 
         saveTokens(accessToken, newRefreshToken);
+        if (refreshDataCallback && (roles || forms)) refreshDataCallback({ roles, forms });
         processQueue(null, accessToken);
 
         original.headers.Authorization = `Bearer ${accessToken}`;
@@ -92,6 +96,9 @@ const TOKEN_KEYS = {
   ACCESS: 'rut_access_token',
   REFRESH: 'rut_refresh_token',
   USER: 'rut_user',
+  ROLES: 'rut_roles',
+  ACCESSIBLE_FORMS: 'rut_accessible_forms',
+  ORIGINAL_DATA_VISIBLE: 'rut_original_data_visible',
 };
 
 export const getAccessToken = () => localStorage.getItem(TOKEN_KEYS.ACCESS);
@@ -105,6 +112,30 @@ export const getStoredUser = () => {
   }
 };
 
+// Roles from login response: [{ id, name, permission }]
+export const getStoredRoles = () => {
+  try {
+    const raw = localStorage.getItem(TOKEN_KEYS.ROLES);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
+
+// Accessible-forms map from POST /roles/forms: { [moduleName]: [{ id, name }] }
+export const getStoredAccessibleForms = () => {
+  try {
+    const raw = localStorage.getItem(TOKEN_KEYS.ACCESSIBLE_FORMS);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+};
+
+// Gates the Modified/Original hours-source toggle — derived from GET /roles/form-mappings/:userId
+export const getStoredOriginalDataVisible = () =>
+  localStorage.getItem(TOKEN_KEYS.ORIGINAL_DATA_VISIBLE) === 'true';
+
 export const saveTokens = (accessToken, refreshToken) => {
   localStorage.setItem(TOKEN_KEYS.ACCESS, accessToken);
   localStorage.setItem(TOKEN_KEYS.REFRESH, refreshToken);
@@ -114,10 +145,25 @@ export const saveUser = (user) => {
   localStorage.setItem(TOKEN_KEYS.USER, JSON.stringify(user));
 };
 
+export const saveRoles = (roles) => {
+  localStorage.setItem(TOKEN_KEYS.ROLES, JSON.stringify(roles ?? []));
+};
+
+export const saveAccessibleForms = (accessibleForms) => {
+  localStorage.setItem(TOKEN_KEYS.ACCESSIBLE_FORMS, JSON.stringify(accessibleForms ?? {}));
+};
+
+export const saveOriginalDataVisible = (visible) => {
+  localStorage.setItem(TOKEN_KEYS.ORIGINAL_DATA_VISIBLE, visible ? 'true' : 'false');
+};
+
 export const clearAuth = () => {
   localStorage.removeItem(TOKEN_KEYS.ACCESS);
   localStorage.removeItem(TOKEN_KEYS.REFRESH);
   localStorage.removeItem(TOKEN_KEYS.USER);
+  localStorage.removeItem(TOKEN_KEYS.ROLES);
+  localStorage.removeItem(TOKEN_KEYS.ACCESSIBLE_FORMS);
+  localStorage.removeItem(TOKEN_KEYS.ORIGINAL_DATA_VISIBLE);
 };
 
 // ── Logout handler (avoids circular dependency with store) ──
@@ -130,6 +176,15 @@ export const registerLogoutCallback = (cb) => {
 const handleLogout = () => {
   clearAuth();
   if (logoutCallback) logoutCallback();
+};
+
+// ── Silent token-refresh data handler (same circular-dependency workaround) ──
+// Lets the interceptor push updated roles/forms into the Redux store without
+// importing the store directly.
+let refreshDataCallback = null;
+
+export const registerRefreshDataCallback = (cb) => {
+  refreshDataCallback = cb;
 };
 
 // ── API error normalizer ──

@@ -1,10 +1,11 @@
 import { useState, useMemo } from 'react';
 import { useNavigate, Outlet } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Plus, Pencil, Trash2, Search, Filter } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Filter, Lock } from 'lucide-react';
 import { useUsers, useDeleteUser, useToggleUserStatus } from '@/hooks/useUsers';
 import { useRoles } from '@/hooks/useRoles';
-import { useAuth } from '@/hooks/useAuth';
+import { useCanWrite } from '@/hooks/usePermissions';
+import { isProtectedAccount } from '@/constants/protectedAccounts';
 import { useNotification } from '@/hooks/useNotification';
 import { useDebounce } from '@/hooks/useDebounce';
 import { extractApiError } from '@/services/apiClient';
@@ -37,11 +38,12 @@ const TruncatedCell = ({ value, maxWidth = '150px', className }) => {
 const StatusToggle = ({ user }) => {
   const { mutate, isPending } = useToggleUserStatus();
   const isActive = user.status === 'active';
+  const isProtected = isProtectedAccount(user.email);
   return (
     <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
       <Switch
         checked={isActive}
-        disabled={isPending}
+        disabled={isPending || isProtected}
         onCheckedChange={(checked) =>
           mutate({ id: user.id, status: checked ? 'active' : 'inactive' })
         }
@@ -55,7 +57,6 @@ const StatusToggle = ({ user }) => {
 
 const UserList = () => {
   const navigate = useNavigate();
-  const { hasRole } = useAuth();
   const { success, error: showError } = useNotification();
 
   const [page, setPage] = useState(1);
@@ -67,7 +68,7 @@ const UserList = () => {
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const debouncedSearch = useDebounce(search, 400);
-  const isHR = hasRole('HR', 'Management');
+  const isHR = useCanWrite();
 
   const [sorting, setSorting] = useState([]);
 
@@ -99,8 +100,15 @@ const UserList = () => {
       header: 'Actions',
       size: 96,
       meta: { sticky: true, left: 0 },
-      cell: ({ row }) => (
-        isHR ? (
+      cell: ({ row }) => {
+        if (isProtectedAccount(row.original.email)) {
+          return (
+            <div className="flex items-center gap-1 text-muted-foreground" onClick={(e) => e.stopPropagation()} title="Protected system account">
+              <Lock className="h-3 w-3" />
+            </div>
+          );
+        }
+        return isHR ? (
           <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
             <Button
               size="sm"
@@ -130,8 +138,8 @@ const UserList = () => {
               <Pencil className="h-3 w-3" />
             </Button>
           </div>
-        )
-      ),
+        );
+      },
     }),
     columnHelper.accessor('email', {
       header: 'Email',
@@ -198,6 +206,11 @@ const UserList = () => {
   ], [navigate, isHR]);
 
   const handleDelete = () => {
+    if (isProtectedAccount(deleteTarget?.email)) {
+      showError('This account is protected and cannot be deleted.');
+      setDeleteTarget(null);
+      return;
+    }
     deleteMutation.mutate(deleteTarget.id, {
       onSuccess: () => {
         success(`${deleteTarget.email} will be Deleted.`);
@@ -317,7 +330,7 @@ const UserList = () => {
         onSortingChange={(s) => { setSorting(s); setPage(1); }}
         onPageChange={setPage}
         onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
-        onRowClick={(row) => navigate(buildPath(ROUTES.USER_EDIT, { id: row.id }))}
+        onRowClick={(row) => !isProtectedAccount(row.email) && navigate(buildPath(ROUTES.USER_EDIT, { id: row.id }))}
       />
 
       <ConfirmDialog

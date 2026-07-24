@@ -1,8 +1,9 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { createColumnHelper } from '@tanstack/react-table';
 import { Download, Filter, Search } from 'lucide-react';
 import { useResourceAllocationReport } from '@/hooks/useReports';
+import { useCanViewOriginalData } from '@/hooks/usePermissions';
 import { reportsApi } from '@/api/reports.api';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useActiveEmployees } from '@/hooks/useEmployees';
@@ -194,7 +195,12 @@ const ResourceAllocation = () => {
   const [categoryId, setCategoryId] = useState('all');
   const [serviceTypeId, setServiceTypeId] = useState('all');
   const [poStatus, setPoStatus] = useState('all');
+  const canViewOriginal = useCanViewOriginalData();
   const [hoursSource, setHoursSource] = useState('M');
+
+  useEffect(() => {
+    if (!canViewOriginal) setHoursSource('M');
+  }, [canViewOriginal]);
 
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -298,17 +304,25 @@ const ResourceAllocation = () => {
                 className="h-9 w-56 pl-9 text-sm"
               />
             </div>
-            <SearchableSelect
-              showSearch={false}
-              options={[
-                { label: 'Modified', value: 'M' },
-                { label: 'Original', value: 'O' },
-              ]}
-              value={hoursSource}
-              onValueChange={(v) => { setHoursSource(v); setPage(1); }}
-              placeholder="Hours Source"
-              className="h-9 w-36 text-sm shrink-0"
-            />
+            {canViewOriginal && (
+              <div className="flex items-center gap-0.5 p-0.5 rounded-xl bg-muted border shrink-0">
+                {[
+                  { value: 'O', label: 'Original' },
+                  { value: 'M', label: 'Published' },
+                ].map(({ value, label }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => { setHoursSource(value); setPage(1); }}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 whitespace-nowrap ${
+                      hoursSource === value ? 'bg-card shadow-sm text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
             <Button
               size="sm"
               className="h-9 gap-2 bg-blue-600 hover:bg-blue-700 text-white"

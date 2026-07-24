@@ -4,7 +4,7 @@ import { createColumnHelper } from '@tanstack/react-table';
 import { Plus, Pencil, Trash2, Search, Filter } from 'lucide-react';
 import { useSubProjects, useDeleteSubProject } from '@/hooks/useSubProjects';
 import { useActiveServicePOs } from '@/hooks/useServicePOs';
-import { useAuth } from '@/hooks/useAuth';
+import { useCanWrite } from '@/hooks/usePermissions';
 import { useNotification } from '@/hooks/useNotification';
 import { useDebounce } from '@/hooks/useDebounce';
 import { extractApiError } from '@/services/apiClient';
@@ -32,7 +32,6 @@ const TruncatedCell = ({ value, maxWidth = '150px', className }) => {
 
 const SubProjectList = () => {
   const navigate = useNavigate();
-  const { hasRole } = useAuth();
   const { success, error: showError } = useNotification();
 
   const [page, setPage] = useState(1);
@@ -44,7 +43,7 @@ const SubProjectList = () => {
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const debouncedSearch = useDebounce(search, 400);
-  const canManage = hasRole('Finance', 'Management', 'Project Manager');
+  const canManage = useCanWrite();
 
   const [sorting, setSorting] = useState([]);
 

@@ -5,7 +5,7 @@ import { Plus, Pencil, Trash2, Download, Upload, CheckCircle2, AlertCircle, Sear
 import * as XLSX from 'xlsx';
 import { useClients, useDeleteClient, useImportClients } from '@/hooks/useClients';
 import { clientsApi } from '@/api/clients.api';
-import { useAuth } from '@/hooks/useAuth';
+import { useCanWrite } from '@/hooks/usePermissions';
 import { useNotification } from '@/hooks/useNotification';
 import { useDebounce } from '@/hooks/useDebounce';
 import { extractApiError } from '@/services/apiClient';
@@ -35,7 +35,6 @@ const TruncatedCell = ({ value, maxWidth = '150px', className }) => {
 
 const ClientList = () => {
   const navigate = useNavigate();
-  const { hasRole } = useAuth();
   const { success, error: showError } = useNotification();
 
   const [page, setPage] = useState(1);
@@ -46,7 +45,7 @@ const ClientList = () => {
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const debouncedSearch = useDebounce(search, 400);
-  const canManage = hasRole('Project Manager', 'HR', 'Management');
+  const canManage = useCanWrite();
 
   const [sorting, setSorting] = useState([]);
 

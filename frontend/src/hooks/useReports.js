@@ -2,15 +2,6 @@ import { useQuery } from '@tanstack/react-query';
 import { reportsApi } from '@/api/reports.api';
 import { QUERY_KEYS } from '@/constants/queryKeys';
 
-export const useEmployeeHourlyRate = (params) =>
-  useQuery({
-    queryKey: QUERY_KEYS.REPORT_HOURLY_RATE(params),
-    queryFn: () => reportsApi.getEmployeeHourlyRate(params),
-    enabled: !!(params?.month && params?.year),
-    staleTime: 0,
-    placeholderData: (prev) => prev,
-  });
-
 export const useMonthlyCostSummary = (params) =>
   useQuery({
     queryKey: QUERY_KEYS.REPORT_MONTHLY_COST_SUMMARY(params),
@@ -19,51 +10,10 @@ export const useMonthlyCostSummary = (params) =>
     placeholderData: (prev) => prev,
   });
 
-export const useTimesheetSummary = (params) =>
-  useQuery({
-    queryKey: QUERY_KEYS.REPORT_TIMESHEET_SUMMARY(params),
-    queryFn: () => reportsApi.getTimesheetSummary(params),
-    staleTime: 0,
-    placeholderData: (prev) => prev,
-  });
-
-export const useServicePOUtilisationReport = (params) =>
-  useQuery({
-    queryKey: QUERY_KEYS.REPORT_PO_UTILISATION(params),
-    queryFn: () => reportsApi.getServicePOUtilisation(params),
-    staleTime: 0,
-    placeholderData: (prev) => prev,
-  });
-
-export const useSubProjectHours = (params) =>
-  useQuery({
-    queryKey: QUERY_KEYS.REPORT_SUB_PROJECT_HOURS(params),
-    queryFn: () => reportsApi.getSubProjectHours(params),
-    staleTime: 0,
-    placeholderData: (prev) => prev,
-  });
-
 export const useResourceAllocationReport = (params) =>
   useQuery({
     queryKey: QUERY_KEYS.REPORT_RESOURCE_ALLOCATION(params),
     queryFn: () => reportsApi.getResourceAllocation(params),
-    staleTime: 0,
-    placeholderData: (prev) => prev,
-  });
-
-export const useOperationalCost = (params) =>
-  useQuery({
-    queryKey: QUERY_KEYS.REPORT_OPERATIONAL_COST(params),
-    queryFn: () => reportsApi.getOperationalCost(params),
-    staleTime: 0,
-    placeholderData: (prev) => prev,
-  });
-
-export const useMonthlyUtilization = (params) =>
-  useQuery({
-    queryKey: QUERY_KEYS.REPORT_MONTHLY_UTILIZATION(params),
-    queryFn: () => reportsApi.getMonthlyUtilization(params),
-    enabled: !!(params?.month && params?.year),
     staleTime: 0,
     placeholderData: (prev) => prev,
   });

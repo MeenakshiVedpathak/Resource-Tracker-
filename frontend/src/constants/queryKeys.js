@@ -22,6 +22,13 @@ export const QUERY_KEYS = {
   // Roles
   ROLES: (params) => ['roles', params],
   ROLE: (id) => ['roles', id],
+  ACCESSIBLE_FORMS: (roleIds) => ['roles', 'forms', [...roleIds].sort()],
+  USER_ROLE_MAPPINGS: (userId) => ['roles', 'user-mappings', userId],
+  ROLE_FORM_MAPPINGS: (roleId) => ['roles', 'form-mappings', roleId],
+
+  // Forms (Form Master)
+  FORMS: (params) => ['forms', params],
+  FORM: (id) => ['forms', id],
 
   // Clients
   CLIENTS: (params) => ['clients', params],
@@ -59,14 +66,8 @@ export const QUERY_KEYS = {
   TIMESHEET_IMPORT_ROWS: (id) => ['timesheets', 'import', id, 'rows'],
 
   // Reports
-  REPORT_HOURLY_RATE: (params) => ['reports', 'hourly-rate', params],
   REPORT_MONTHLY_COST_SUMMARY: (params) => ['reports', 'monthly-cost-summary', params],
-  REPORT_TIMESHEET_SUMMARY: (params) => ['reports', 'timesheet-summary', params],
-  REPORT_PO_UTILISATION: (params) => ['reports', 'po-utilisation', params],
-  REPORT_SUB_PROJECT_HOURS: (params) => ['reports', 'sub-project-hours', params],
   REPORT_RESOURCE_ALLOCATION: (params) => ['reports', 'resource-allocation', params],
-  REPORT_OPERATIONAL_COST: (params) => ['reports', 'operational-cost', params],
-  REPORT_MONTHLY_UTILIZATION: (params) => ['reports', 'monthly-utilization', params],
   REPORT_SERVICE_PO_RESOURCE: (params) => ['reports', 'service-po-resource', params],
   REPORT_SERVICE_PO_SUMMARY: (params) => ['reports', 'service-po-summary', params],
   REPORT_SERVICE_PO_SUMMARY_TOTALS: (params) => ['reports', 'service-po-summary-totals', params],

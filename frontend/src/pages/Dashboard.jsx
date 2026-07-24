@@ -720,6 +720,7 @@ import {
 } from 'lucide-react';
 import { ROUTES } from '@/constants/routes';
 import { useDashboardAnalytics, useDashboardAnalytics2 } from '@/hooks/useDashboard';
+import { useCanViewOriginalData } from '@/hooks/usePermissions';
 import { useActiveEmployees } from '@/hooks/useEmployees';
 import { useActiveClients } from '@/hooks/useClients';
 import { useActiveServicePOs } from '@/hooks/useServicePOs';
@@ -1030,7 +1031,12 @@ const Dashboard = () => {
   const [employeeId, setEmployeeId]           = useState('');
   const [clientId, setClientId]               = useState('');
   const [servicePOId, setServicePOId]         = useState('');
+  const canViewOriginal = useCanViewOriginalData();
   const [hoursSource, setHoursSource]         = useState('M');
+
+  useEffect(() => {
+    if (!canViewOriginal) setHoursSource('M');
+  }, [canViewOriginal]);
   const [billablePage, setBillablePage]       = useState(1);
   const [billablePageQ, setBillablePageQ]     = useState(1); // quarterly view pagination
   const [billableSortBy, setBillableSortBy]   = useState('nonBillable');  // 'nonBillable' | 'billable'
@@ -1421,7 +1427,25 @@ const Dashboard = () => {
             ))}
           </div>
 
-
+          {/* Hours source toggle */}
+          {canViewOriginal && (
+            <div className="flex items-center gap-0.5 p-0.5 rounded-xl bg-muted border">
+              {[
+                { value: 'O', label: 'Original' },
+                { value: 'M', label: 'Published' },
+              ].map(({ value, label }) => (
+                <button
+                  key={value}
+                  onClick={() => setHoursSource(value)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 whitespace-nowrap ${
+                    hoursSource === value ? 'bg-card shadow-sm text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
 
           <motion.button
             onClick={() => navigate(ROUTES.AI_INSIGHTS)}
@@ -1435,7 +1459,7 @@ const Dashboard = () => {
               ],
             }}
             transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
-            className="h-9 pl-1.5 pr-3.5 rounded-xl inline-flex items-center gap-2 text-xs font-extrabold text-white border border-white/20"
+            className="group h-9 pl-1.5 pr-1.5 hover:pr-3.5 rounded-xl inline-flex items-center gap-0 hover:gap-2 text-xs font-extrabold text-white border border-white/20 transition-all duration-300"
             style={{ background: 'linear-gradient(135deg, #8b5cf6, #6d28d9 45%, #2563eb)' }}
           >
             {/* spinning gradient ring + pulsing sparkle — same mark as the AI Insights page */}
@@ -1456,7 +1480,7 @@ const Dashboard = () => {
                 </motion.span>
               </span>
             </span>
-            <span className="hidden sm:inline">AI Insights</span>
+            <span className="max-w-0 group-hover:max-w-[90px] overflow-hidden whitespace-nowrap opacity-0 group-hover:opacity-100 transition-all duration-300">AI Insights</span>
           </motion.button>
 
           <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching} className="h-9 rounded-xl gap-1.5">
@@ -1505,10 +1529,6 @@ const Dashboard = () => {
               <div className="flex items-center gap-1.5 min-w-[150px] flex-1">
                 <FilterIconBadge icon={Briefcase} color="amber" />
                 <SearchableSelect options={servicePOOptions} value={servicePOId} onValueChange={setServicePOId} placeholder="Service PO" searchPlaceholder="Search PO…" className={`h-8 text-sm ${FILTER_FIELD_STYLES.amber}`} />
-              </div>
-              <div className="flex items-center gap-1.5 min-w-[140px] flex-1">
-                <FilterIconBadge icon={Clock} color="emerald" />
-                <SearchableSelect showSearch={false} options={[{ label: 'Modified Hours', value: 'M' }, { label: 'Original Hours', value: 'O' }]} value={hoursSource} onValueChange={setHoursSource} placeholder="Hours Source" className={`h-8 text-sm ${FILTER_FIELD_STYLES.emerald}`} />
               </div>
             </div>
 

@@ -15,6 +15,8 @@ import { useActiveServicePOs } from '@/hooks/useServicePOs';
 import { useActiveEmployees } from '@/hooks/useEmployees';
 import { useSubProjectsByPO } from '@/hooks/useSubProjects';
 import { useAuth } from '@/hooks/useAuth';
+import { useCanWrite } from '@/hooks/usePermissions';
+import { isProtectedAccount } from '@/constants/protectedAccounts';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import { ROUTES } from '@/constants/routes';
@@ -96,8 +98,11 @@ const TimesheetImportDetail = () => {
 
   const notify = useNotification();
   const { hasRole, user } = useAuth();
-  const canAddEntry = hasRole('Finance', 'HR', 'Management');
-  const canEditModifiedHours = hasRole('HR');
+  const canWrite = useCanWrite();
+  const canAddEntry = canWrite;
+  // "HR" is the general business rule; admin@rutportal.com is a hardcoded override so this
+  // one account always has access regardless of its actual role name/permission level.
+  const canEditModifiedHours = (hasRole('HR') && canWrite) || isProtectedAccount(user?.email);
   const canEdit = canEditModifiedHours && !isLocked;
 
   const { data: activeServicePOsData } = useActiveServicePOs();

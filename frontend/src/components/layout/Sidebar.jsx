@@ -1,74 +1,56 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useDispatch, useSelector } from 'react-redux';
 import { selectSidebarCollapsed, toggleSidebar, setSidebarCollapsed } from '@/store/slices/uiSlice';
 import { cn } from '@/utils/cn';
-import { ROUTES } from '@/constants/routes';
-import {
-  LayoutDashboard, Users, UserCog, Shield, Building2,
-  FileText, FolderOpen, Clock, DollarSign, BarChart3,
-  ChevronLeft, ChevronRight, Tag, Layers, Sparkles,
-} from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+import { resolveFormRoute } from '@/constants/rbacForms';
+import { isProtectedAccount } from '@/constants/protectedAccounts';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
-const NAV_GROUPS = [
-  {
-    label: 'Core',
-    items: [
-      { label: 'Dashboard', icon: LayoutDashboard, to: ROUTES.DASHBOARD, exact: true },
-      { label: 'AI Insights', icon: Sparkles, to: ROUTES.AI_INSIGHTS, exact: true },
-    ],
-  },
-  {
-    label: 'People',
-    items: [
-      { label: 'Employees', icon: Users, to: ROUTES.EMPLOYEES },
-      { label: 'Users', icon: UserCog, to: ROUTES.USERS },
-      // { label: 'Roles', icon: Shield, to: ROUTES.ROLES },
-    ],
-  },
-  {
-    label: 'Business',
-    items: [
-      { label: 'Service Categories', icon: Tag, to: ROUTES.SERVICE_CATEGORIES },
-      { label: 'Service Types', icon: Layers, to: ROUTES.SERVICE_TYPES },
+// Modules hidden from the sidebar for everyone except the protected super-admin account,
+// regardless of what any role's own form mappings say — a hardcoded UI restriction on top
+// of the RBAC data, not derived from it.
+const RESTRICTED_MODULES = ['administration'];
 
-      { label: 'Clients', icon: Building2, to: ROUTES.CLIENTS },
-      { label: 'Service POs', icon: FileText, to: ROUTES.SERVICE_POS },
-      { label: 'Sub-Projects', icon: FolderOpen, to: ROUTES.SUB_PROJECTS },
+// Fixed display order for module sections, overriding whatever order the API happens to
+// return them in (it's alphabetical server-side). Any module not listed here keeps its
+// original relative position, appended after these (Array.sort is stable).
+const MODULE_ORDER = ['core', 'administration', 'people', 'business', 'resources', 'reports'];
+const moduleRank = (moduleName) => {
+  const i = MODULE_ORDER.indexOf(moduleName.trim().toLowerCase());
+  return i === -1 ? MODULE_ORDER.length : i;
+};
 
-    ],
-  },
-  {
-    label: 'Resources',
-    items: [
-      { label: 'Timesheets', icon: Clock, to: ROUTES.TIMESHEETS },
-      { label: 'Monthly Costs', icon: DollarSign, to: ROUTES.MONTHLY_COSTS },
-    ],
-  },
-  {
-    label: 'Analytics',
-    items: [
-      {
-        label: 'Reports',
-        icon: BarChart3,
-        to: ROUTES.REPORTS,
-        children: [
-          { label: 'PO vs Resource', to: ROUTES.REPORT_SERVICE_PO_RESOURCE },
-          { label: 'Service PO Summary', to: ROUTES.REPORT_SERVICE_PO_SUMMARY },
-          { label: 'Monthly Utilization', to: ROUTES.REPORT_MONTHLY_RESOURCE_UTILIZATION },
-          // { label: 'Employee Hourly Rate', to: ROUTES.REPORT_HOURLY_RATE },
-          // { label: 'Monthly Cost Summary', to: ROUTES.REPORT_MONTHLY_COST },
-          // { label: 'Timesheet Summary', to: ROUTES.REPORT_TIMESHEET },
-          // { label: 'Sub-Project Hours', to: ROUTES.REPORT_SUB_PROJECT_HOURS },
-          { label: 'Resource Allocation', to: ROUTES.REPORT_RESOURCE_ALLOCATION },
-          { label: 'Resource Project Utilization', to: ROUTES.REPORT_RESOURCE_PROJECT_UTILIZATION },
-          // { label: 'Operational Cost', to: ROUTES.REPORT_OPERATIONAL_COST },
-        ],
-      },
-    ],
-  },
-];
+// Builds one nav group per module, one item per form — driven entirely by the RBAC
+// accessible-forms map (module -> [{ id, name }]) so a user only ever sees what their
+// roles actually grant. Section order follows MODULE_ORDER above, not the API's own
+// (alphabetical) key order. A form with no known route mapping is dropped (and logged)
+// rather than rendered as a dead link — see constants/rbacForms.js.
+const buildNavGroups = (accessibleForms, { isSuperAdmin }) =>
+  Object.entries(accessibleForms ?? {})
+    .filter(
+      ([moduleName]) => isSuperAdmin || !RESTRICTED_MODULES.includes(moduleName.trim().toLowerCase())
+    )
+    .map(([moduleName, forms]) => ({
+      label: moduleName,
+      items: (forms ?? [])
+        .map((form) => {
+          const cfg = resolveFormRoute(form.name);
+          if (!cfg) {
+            console.warn(
+              `[RBAC] Sidebar: no route mapping for form "${form.name}" (module "${moduleName}"). ` +
+              `Add it to src/constants/rbacForms.js.`
+            );
+            return null;
+          }
+          return { label: form.name, icon: cfg.icon, to: cfg.to, exact: cfg.exact };
+        })
+        .filter(Boolean),
+    }))
+    .filter((group) => group.items.length > 0)
+    .sort((a, b) => moduleRank(a.label) - moduleRank(b.label));
 
 const isActive = (to, pathname, exact) => {
   if (exact) return pathname === to;
@@ -160,6 +142,12 @@ const Sidebar = () => {
   const dispatch = useDispatch();
   const collapsed = useSelector(selectSidebarCollapsed);
   const { pathname } = useLocation();
+  const { accessibleForms, user } = useAuth();
+  const isSuperAdmin = isProtectedAccount(user?.email);
+  const navGroups = useMemo(
+    () => buildNavGroups(accessibleForms, { isSuperAdmin }),
+    [accessibleForms, isSuperAdmin]
+  );
 
   // Drawer on mobile: start closed, and close again after each navigation
   useEffect(() => {
@@ -232,7 +220,7 @@ const Sidebar = () => {
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto overflow-x-hidden py-3 px-2 space-y-4 scrollbar-thin">
-        {NAV_GROUPS.map((group) => (
+        {navGroups.map((group) => (
           <div key={group.label} className="space-y-0.5">
             <AnimatePresence initial={false}>
               {!collapsed && (

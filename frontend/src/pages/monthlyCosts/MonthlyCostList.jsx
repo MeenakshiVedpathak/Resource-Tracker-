@@ -5,7 +5,7 @@ import * as XLSX from 'xlsx';
 import { Trash2, Calculator, Download, Upload } from 'lucide-react';
 import { useMonthlyCostSummary } from '@/hooks/useReports';
 import { useDeleteMonthlyCostPeriods, useCalculateMonthlyCosts } from '@/hooks/useMonthlyCosts';
-import { useAuth } from '@/hooks/useAuth';
+import { useCanWrite } from '@/hooks/usePermissions';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import { buildPath, ROUTES } from '@/constants/routes';
@@ -32,7 +32,6 @@ const periodKey = (row) => `${row.month}-${row.year}`;
 
 const MonthlyCostList = () => {
   const navigate = useNavigate();
-  const { hasRole } = useAuth();
   const { success, error: showError } = useNotification();
 
   const [page, setPage] = useState(1);
@@ -48,7 +47,7 @@ const MonthlyCostList = () => {
     year: new Date().getFullYear(),
   });
 
-  const canManage = hasRole('Finance', 'Management');
+  const canManage = useCanWrite();
 
   const params = {
     page,

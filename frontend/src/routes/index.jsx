@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { Route, Routes } from 'react-router-dom';
 import { ROUTES } from '@/constants/routes';
+import { FORM_NAMES } from '@/constants/rbacForms';
 import ProtectedRoute from './ProtectedRoute';
 import AuthLayout from '@/layouts/AuthLayout';
 import MainLayout from '@/layouts/MainLayout';
@@ -19,6 +20,14 @@ const EmployeeForm = lazy(() => import('@/pages/employees/EmployeeForm'));
 const UserList = lazy(() => import('@/pages/users/UserList'));
 const UserForm = lazy(() => import('@/pages/users/UserForm'));
 const RoleList = lazy(() => import('@/pages/roles/RoleList'));
+const RoleForm = lazy(() => import('@/pages/roles/RoleForm'));
+
+// ── RBAC admin (access gated by Role-Form Mapping, not a hard-coded role) ──
+const FormList = lazy(() => import('@/pages/forms/FormList'));
+const FormForm = lazy(() => import('@/pages/forms/FormForm'));
+const UserRoleMappingList = lazy(() => import('@/pages/userRoleMapping/UserRoleMappingList'));
+const UserRoleMappingForm = lazy(() => import('@/pages/userRoleMapping/UserRoleMappingForm'));
+const RoleFormMappingForm = lazy(() => import('@/pages/roleFormMapping/RoleFormMappingForm'));
 
 // ── Business ──
 const ClientList = lazy(() => import('@/pages/clients/ClientList'));
@@ -45,14 +54,7 @@ const MonthlyCostImport = lazy(() => import('@/pages/monthlyCosts/MonthlyCostImp
 
 // ── Reports ──
 const ReportsLayout = lazy(() => import('@/pages/reports/ReportsLayout'));
-const EmployeeHourlyRate = lazy(() => import('@/pages/reports/EmployeeHourlyRate'));
-const MonthlyCostSummary = lazy(() => import('@/pages/reports/MonthlyCostSummary'));
-const TimesheetSummary = lazy(() => import('@/pages/reports/TimesheetSummary'));
-const ServicePOUtilisation = lazy(() => import('@/pages/reports/ServicePOUtilisation'));
-const SubProjectHours = lazy(() => import('@/pages/reports/SubProjectHours'));
 const ResourceAllocation = lazy(() => import('@/pages/reports/ResourceAllocation'));
-const OperationalCost = lazy(() => import('@/pages/reports/OperationalCost'));
-const MonthlyUtilization = lazy(() => import('@/pages/reports/MonthlyUtilization'));
 const ServicePOResource = lazy(() => import('@/pages/reports/ServicePOResource'));
 const ServicePOSummary = lazy(() => import('@/pages/reports/ServicePOSummary'));
 const MonthlyResourceUtilization = lazy(() => import('@/pages/reports/MonthlyResourceUtilization'));
@@ -81,86 +83,118 @@ const AppRoutes = () => (
           </ProtectedRoute>
         }
       >
-        <Route path={ROUTES.DASHBOARD} element={<Dashboard />} />
-        <Route path={ROUTES.AI_INSIGHTS} element={<AIInsights />} />
+        <Route path={ROUTES.DASHBOARD} element={<ProtectedRoute formName={FORM_NAMES.DASHBOARD}><Dashboard /></ProtectedRoute>} />
+        <Route path={ROUTES.AI_INSIGHTS} element={<ProtectedRoute formName={FORM_NAMES.AI_INSIGHTS}><AIInsights /></ProtectedRoute>} />
 
         {/* Employees */}
-        <Route path={ROUTES.EMPLOYEES} element={<EmployeeList />}>
+        <Route path={ROUTES.EMPLOYEES} element={<ProtectedRoute formName={FORM_NAMES.EMPLOYEES}><EmployeeList /></ProtectedRoute>}>
           <Route path="new" element={<EmployeeForm />} />
           <Route path=":id/edit" element={<EmployeeForm />} />
         </Route>
 
         {/* Users */}
-        <Route path={ROUTES.USERS} element={<UserList />}>
+        <Route path={ROUTES.USERS} element={<ProtectedRoute formName={FORM_NAMES.USERS}><UserList /></ProtectedRoute>}>
           <Route path="new" element={<UserForm />} />
           <Route path=":id/edit" element={<UserForm />} />
         </Route>
 
-        {/* Roles */}
-        <Route path={ROUTES.ROLES} element={<RoleList />} />
+        {/* Roles — form-mapping is a per-row action on this same page, not a separate menu item */}
+        <Route path={ROUTES.ROLES} element={<ProtectedRoute formName={FORM_NAMES.ROLES}><RoleList /></ProtectedRoute>}>
+          <Route path="new" element={<RoleForm />} />
+          <Route path=":id/edit" element={<RoleForm />} />
+          <Route
+            path=":roleId/forms"
+            element={
+              <ProtectedRoute formName={FORM_NAMES.ROLE_FORM_MAPPING}>
+                <RoleFormMappingForm />
+              </ProtectedRoute>
+            }
+          />
+        </Route>
+
+        {/* Form Master — access controlled by Role-Form Mapping, not a hard-coded role */}
+        <Route
+          path={ROUTES.FORMS}
+          element={
+            <ProtectedRoute formName={FORM_NAMES.FORMS}>
+              <FormList />
+            </ProtectedRoute>
+          }
+        >
+          <Route path="new" element={<FormForm />} />
+          <Route path=":id/edit" element={<FormForm />} />
+        </Route>
+
+        {/* User <-> Role mapping — access controlled by Role-Form Mapping */}
+        <Route
+          path={ROUTES.USER_ROLE_MAPPING}
+          element={
+            <ProtectedRoute formName={FORM_NAMES.USER_ROLE_MAPPING}>
+              <UserRoleMappingList />
+            </ProtectedRoute>
+          }
+        >
+          <Route path=":userId/edit" element={<UserRoleMappingForm />} />
+        </Route>
 
         {/* Clients */}
-        <Route path={ROUTES.CLIENTS} element={<ClientList />}>
+        <Route path={ROUTES.CLIENTS} element={<ProtectedRoute formName={FORM_NAMES.CLIENTS}><ClientList /></ProtectedRoute>}>
           <Route path="new" element={<ClientForm />} />
           <Route path=":id/edit" element={<ClientForm />} />
         </Route>
 
         {/* Service POs */}
-        <Route path={ROUTES.SERVICE_POS} element={<ServicePOList />}>
+        <Route path={ROUTES.SERVICE_POS} element={<ProtectedRoute formName={FORM_NAMES.SERVICE_POS}><ServicePOList /></ProtectedRoute>}>
           <Route path="new" element={<ServicePOForm />} />
           <Route path=":id/edit" element={<ServicePOForm />} />
         </Route>
-        <Route path={ROUTES.SERVICE_PO_IMPORT} element={<ServicePOImport />} />
-        <Route path={ROUTES.SERVICE_PO_DETAIL} element={<ServicePODetail />} />
+        <Route path={ROUTES.SERVICE_PO_IMPORT} element={<ProtectedRoute formName={FORM_NAMES.SERVICE_POS}><ServicePOImport /></ProtectedRoute>} />
+        <Route path={ROUTES.SERVICE_PO_DETAIL} element={<ProtectedRoute formName={FORM_NAMES.SERVICE_POS}><ServicePODetail /></ProtectedRoute>} />
 
         {/* Sub-projects */}
-        <Route path={ROUTES.SUB_PROJECTS} element={<SubProjectList />}>
+        <Route path={ROUTES.SUB_PROJECTS} element={<ProtectedRoute formName={FORM_NAMES.SUB_PROJECTS}><SubProjectList /></ProtectedRoute>}>
           <Route path="new" element={<SubProjectForm />} />
           <Route path=":id/edit" element={<SubProjectForm />} />
         </Route>
 
         {/* Service Types */}
-        <Route path={ROUTES.SERVICE_TYPES} element={<ServiceTypeList />}>
+        <Route path={ROUTES.SERVICE_TYPES} element={<ProtectedRoute formName={FORM_NAMES.SERVICE_TYPES}><ServiceTypeList /></ProtectedRoute>}>
           <Route path="new" element={<ServiceTypeForm />} />
           <Route path=":id/edit" element={<ServiceTypeForm />} />
         </Route>
 
         {/* Service Categories */}
-        <Route path={ROUTES.SERVICE_CATEGORIES} element={<ServiceCategoryList />}>
+        <Route path={ROUTES.SERVICE_CATEGORIES} element={<ProtectedRoute formName={FORM_NAMES.SERVICE_CATEGORIES}><ServiceCategoryList /></ProtectedRoute>}>
           <Route path="new" element={<ServiceCategoryForm />} />
           <Route path=":id/edit" element={<ServiceCategoryForm />} />
         </Route>
 
         {/* Resources */}
-        <Route path={ROUTES.TIMESHEETS} element={<TimesheetList />} />
-        <Route path={ROUTES.TIMESHEET_UPLOAD} element={<TimesheetUpload />} />
-        <Route path={ROUTES.TIMESHEET_IMPORT_DETAIL} element={<TimesheetImportDetail />} />
-        <Route path={ROUTES.MONTHLY_COSTS} element={<MonthlyCostList />} />
-        <Route path={ROUTES.MONTHLY_COST_IMPORT} element={<MonthlyCostImport />} />
-        <Route path={ROUTES.MONTHLY_COST_DETAIL} element={<MonthlyCostDetail />}>
+        <Route path={ROUTES.TIMESHEETS} element={<ProtectedRoute formName={FORM_NAMES.TIMESHEETS}><TimesheetList /></ProtectedRoute>} />
+        <Route path={ROUTES.TIMESHEET_UPLOAD} element={<ProtectedRoute formName={FORM_NAMES.TIMESHEETS}><TimesheetUpload /></ProtectedRoute>} />
+        <Route path={ROUTES.TIMESHEET_IMPORT_DETAIL} element={<ProtectedRoute formName={FORM_NAMES.TIMESHEETS}><TimesheetImportDetail /></ProtectedRoute>} />
+        <Route path={ROUTES.MONTHLY_COSTS} element={<ProtectedRoute formName={FORM_NAMES.MONTHLY_COSTS}><MonthlyCostList /></ProtectedRoute>} />
+        <Route path={ROUTES.MONTHLY_COST_IMPORT} element={<ProtectedRoute formName={FORM_NAMES.MONTHLY_COSTS}><MonthlyCostImport /></ProtectedRoute>} />
+        <Route path={ROUTES.MONTHLY_COST_DETAIL} element={<ProtectedRoute formName={FORM_NAMES.MONTHLY_COSTS}><MonthlyCostDetail /></ProtectedRoute>}>
           <Route path="new" element={<MonthlyCostForm />} />
           <Route path=":id/edit" element={<MonthlyCostForm />} />
         </Route>
 
         {/* Reports */}
         <Route path={ROUTES.REPORTS} element={<ReportsLayout />}>
-          <Route path={ROUTES.REPORT_HOURLY_RATE} element={<EmployeeHourlyRate />} />
-          <Route path={ROUTES.REPORT_MONTHLY_COST} element={<MonthlyCostSummary />} />
-          <Route path={ROUTES.REPORT_TIMESHEET} element={<TimesheetSummary />} />
-          <Route path={ROUTES.REPORT_PO_UTILISATION} element={<ServicePOUtilisation />} />
-          <Route path={ROUTES.REPORT_SUB_PROJECT_HOURS} element={<SubProjectHours />} />
-          <Route path={ROUTES.REPORT_RESOURCE_ALLOCATION} element={<ResourceAllocation />} />
-          <Route path={ROUTES.REPORT_OPERATIONAL_COST} element={<OperationalCost />} />
-          <Route path={ROUTES.REPORT_MONTHLY_UTILIZATION} element={<MonthlyUtilization />} />
-          <Route path={ROUTES.REPORT_SERVICE_PO_RESOURCE} element={<ServicePOResource />} />
-          <Route path={ROUTES.REPORT_SERVICE_PO_SUMMARY} element={<ServicePOSummary />} />
-          <Route path={ROUTES.REPORT_MONTHLY_RESOURCE_UTILIZATION} element={<MonthlyResourceUtilization />} />
-          <Route path={ROUTES.REPORT_RESOURCE_PROJECT_UTILIZATION} element={<ResourceProjectUtilization />} />
+          <Route path={ROUTES.REPORT_RESOURCE_ALLOCATION} element={<ProtectedRoute formName={FORM_NAMES.REPORT_RESOURCE_ALLOCATION}><ResourceAllocation /></ProtectedRoute>} />
+          <Route path={ROUTES.REPORT_SERVICE_PO_RESOURCE} element={<ProtectedRoute formName={FORM_NAMES.REPORT_PO_VS_RESOURCE}><ServicePOResource /></ProtectedRoute>} />
+          <Route path={ROUTES.REPORT_SERVICE_PO_SUMMARY} element={<ProtectedRoute formName={FORM_NAMES.REPORT_SERVICE_PO_SUMMARY}><ServicePOSummary /></ProtectedRoute>} />
+          <Route path={ROUTES.REPORT_MONTHLY_RESOURCE_UTILIZATION} element={<ProtectedRoute formName={FORM_NAMES.REPORT_MONTHLY_UTILIZATION}><MonthlyResourceUtilization /></ProtectedRoute>} />
+          <Route path={ROUTES.REPORT_RESOURCE_PROJECT_UTILIZATION} element={<ProtectedRoute formName={FORM_NAMES.REPORT_RESOURCE_PROJECT_UTILIZATION}><ResourceProjectUtilization /></ProtectedRoute>} />
         </Route>
 
-        {/* Settings */}
+        {/* Settings — personal-account pages, always available to any authenticated user */}
         <Route path={ROUTES.PROFILE} element={<Profile />} />
         <Route path={ROUTES.NOTIFICATIONS} element={<Notifications />} />
+
+        {/* RBAC guard redirect target — a real path, unlike the '*' catch-all below */}
+        <Route path={ROUTES.NOT_AUTHORIZED} element={<NotFound />} />
       </Route>
 
       <Route path={ROUTES.NOT_FOUND} element={<NotFound />} />

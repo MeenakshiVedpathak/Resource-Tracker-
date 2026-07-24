@@ -8,7 +8,7 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { useEmployees, useDeleteEmployee, useImportEmployees, useToggleEmployeeStatus } from '@/hooks/useEmployees';
 import { employeesApi } from '@/api/employees.api';
-import { useAuth } from '@/hooks/useAuth';
+import { useCanWrite } from '@/hooks/usePermissions';
 import { useNotification } from '@/hooks/useNotification';
 import { useDebounce } from '@/hooks/useDebounce';
 import { extractApiError } from '@/services/apiClient';
@@ -74,7 +74,6 @@ const StatusToggle = ({ employee }) => {
 
 const EmployeeList = () => {
   const navigate = useNavigate();
-  const { hasRole } = useAuth();
   const { success, error: showError } = useNotification();
 
   const [page, setPage] = useState(1);
@@ -110,7 +109,7 @@ const EmployeeList = () => {
 
   const employees = data?.data ?? [];
   const meta = data?.meta ?? {};
-  const isHR = hasRole('HR', 'Management');
+  const isHR = useCanWrite();
 
   const columns = useMemo(() => [
     columnHelper.display({

@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { motion } from 'framer-motion';
 import { Eye, EyeOff, LogIn } from 'lucide-react';
 import { authApi } from '@/api/auth.api';
+import { rolesApi } from '@/api/roles.api';
 import { useAuth } from '@/hooks/useAuth';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
@@ -24,7 +25,7 @@ const loginSchema = z.object({
 const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { setCredentials } = useAuth();
+  const { setCredentials, setAccessibleForms, setIsOriginalDataVisible } = useAuth();
   const { error: showError } = useNotification();
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -40,8 +41,28 @@ const Login = () => {
     setIsLoading(true);
     try {
       const res = await authApi.login(values);
-      const { user, accessToken, refreshToken } = res.data;
-      setCredentials({ user, accessToken, refreshToken });
+      const { user, accessToken, refreshToken, roles, forms } = res.data;
+      setCredentials({ user, accessToken, refreshToken, roles });
+
+      // Paint immediately from whatever the login response embedded, if anything — avoids a
+      // blank sidebar flash while the call below is in flight.
+      if (forms) setAccessibleForms(forms);
+
+      // POST /roles/forms is the authoritative source of truth for what each user can see —
+      // always call it after login (not just when the login response happens to omit `forms`),
+      // and let its result win. Fired in the background so it doesn't delay navigation.
+      const roleIds = (roles ?? []).map((r) => r.id);
+      if (roleIds.length) {
+        rolesApi.getAccessibleForms(roleIds)
+          .then(setAccessibleForms)
+          .catch(() => {
+            // Non-fatal: MainLayout's useSyncAccessibleForms fallback will retry
+            // if the store ends up with no accessible-forms cached at all.
+          });
+      }
+
+      setIsOriginalDataVisible((roles ?? []).some((r) => r.is_original_data_visible === true));
+
       navigate(from, { replace: true });
     } catch (err) {
       showError(extractApiError(err));

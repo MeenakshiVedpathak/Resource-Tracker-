@@ -17,6 +17,18 @@ export const ROUTES = {
   USER_EDIT: '/users/:id/edit',
 
   ROLES: '/roles',
+  ROLE_NEW: '/roles/new',
+  ROLE_EDIT: '/roles/:id/edit',
+
+  FORMS: '/forms',
+  FORM_NEW: '/forms/new',
+  FORM_EDIT: '/forms/:id/edit',
+
+  USER_ROLE_MAPPING: '/user-role-mapping',
+  USER_ROLE_MAPPING_EDIT: '/user-role-mapping/:userId/edit',
+
+  // Role-Form Mapping is a per-row action on the Roles page, not its own menu item
+  ROLE_FORM_MAPPING_EDIT: '/roles/:roleId/forms',
 
   // Business
   CLIENTS: '/clients',
@@ -54,14 +66,7 @@ export const ROUTES = {
 
   // Analytics
   REPORTS: '/reports',
-  REPORT_HOURLY_RATE: '/reports/hourly-rate',
-  REPORT_MONTHLY_COST: '/reports/monthly-cost',
-  REPORT_TIMESHEET: '/reports/timesheet-summary',
-  REPORT_PO_UTILISATION: '/reports/po-utilisation',
-  REPORT_SUB_PROJECT_HOURS: '/reports/sub-project-hours',
   REPORT_RESOURCE_ALLOCATION: '/reports/resource-allocation',
-  REPORT_OPERATIONAL_COST: '/reports/operational-cost',
-  REPORT_MONTHLY_UTILIZATION: '/reports/monthly-utilization',
   REPORT_SERVICE_PO_RESOURCE: '/reports/service-po-resource',
   REPORT_SERVICE_PO_SUMMARY: '/reports/service-po-summary',
   REPORT_MONTHLY_RESOURCE_UTILIZATION: '/reports/monthly-resource-utilization',
@@ -74,6 +79,7 @@ export const ROUTES = {
 
   // Error
   NOT_FOUND: '*',
+  NOT_AUTHORIZED: '/not-authorized',
 };
 
 export const buildPath = (route, params = {}) => {

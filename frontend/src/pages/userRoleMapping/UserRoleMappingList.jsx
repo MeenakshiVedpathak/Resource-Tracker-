@@ -1,20 +1,19 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate, Outlet } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Pencil, Layers, Plus, Search, Filter } from 'lucide-react';
-import { useRoles } from '@/hooks/useRoles';
-import { useCanWrite, useHasForm } from '@/hooks/usePermissions';
+import { ShieldCheck, Search, Filter } from 'lucide-react';
+import { useUsers } from '@/hooks/useUsers';
+import { useCanWrite } from '@/hooks/usePermissions';
+import { isProtectedAccount } from '@/constants/protectedAccounts';
 import { useDebounce } from '@/hooks/useDebounce';
 import { buildPath, ROUTES } from '@/constants/routes';
-import { FORM_NAMES } from '@/constants/rbacForms';
-import { formatDate } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
 import StatusBadge from '@/components/common/StatusBadge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { SearchableSelect } from '@/components/ui/searchable-select';
+import { Badge } from '@/components/ui/badge';
 import { cn } from '@/utils/cn';
 
 const columnHelper = createColumnHelper();
@@ -28,23 +27,18 @@ const TruncatedCell = ({ value, maxWidth = '150px', className }) => {
   );
 };
 
-const RoleList = () => {
+const UserRoleMappingList = () => {
   const navigate = useNavigate();
+  const canWrite = useCanWrite();
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [sorting, setSorting] = useState([]);
 
   const debouncedSearch = useDebounce(search, 400);
-  const canWrite = useCanWrite();
-  // Managing role<->form mappings is its own grantable Administration capability on the
-  // backend, distinct from just having write access to Roles — require both.
-  const hasFormMappingAccess = useHasForm(FORM_NAMES.ROLE_FORM_MAPPING);
-  const canManageFormMapping = canWrite && hasFormMappingAccess;
-
-  const [sorting, setSorting] = useState([]);
 
   const params = {
     page,
@@ -54,81 +48,77 @@ const RoleList = () => {
     ...(sorting[0] && { sortBy: sorting[0].id, sortOrder: sorting[0].desc ? 'desc' : 'asc' }),
   };
 
-  const { data, isPending } = useRoles(params);
+  const { data, isPending } = useUsers(params);
 
-  const roles = data?.data ?? [];
+  const users = data?.data ?? [];
   const meta = data?.meta ?? {};
+  const activeFilterCount = statusFilter !== 'all' ? 1 : 0;
 
-  const activeFilterCount = [statusFilter !== 'all' ? 1 : 0].reduce((a, b) => a + b, 0);
-
-  const columns = [
+  const columns = useMemo(() => [
     columnHelper.display({
       id: 'actions',
       header: 'Actions',
-      size: 130,
+      size: 96,
       meta: { sticky: true, left: 0 },
-      cell: ({ row }) =>
-        canWrite || canManageFormMapping ? (
+      cell: ({ row }) => {
+        const isProtected = isProtectedAccount(row.original.email);
+        return (
           <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-            {canWrite && (
-              <Button
-                size="sm"
-                title="Edit"
-                onClick={() => navigate(buildPath(ROUTES.ROLES + '/' + row.original.id + '/edit'))}
-                className="h-6 w-6 p-0 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
-              >
-                <Pencil className="h-3 w-3" />
-              </Button>
-            )}
-            {canManageFormMapping && (
-              <Button
-                size="sm"
-                title="Manage Forms"
-                onClick={() => navigate(buildPath(ROUTES.ROLES + '/' + row.original.id + '/forms'))}
-                className="h-6 w-6 p-0 bg-indigo-500 hover:bg-indigo-600 text-white rounded transition-colors"
-              >
-                <Layers className="h-3 w-3" />
-              </Button>
-            )}
+            <Button
+              size="sm"
+              title={isProtected ? 'Protected system account' : 'Manage Roles'}
+              disabled={!canWrite || isProtected}
+              onClick={() => navigate(buildPath(ROUTES.USER_ROLE_MAPPING_EDIT, { userId: row.original.id }))}
+              className="h-6 w-6 p-0 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors disabled:opacity-40"
+            >
+              <ShieldCheck className="h-3 w-3" />
+            </Button>
           </div>
-        ) : null,
+        );
+      },
     }),
-    columnHelper.accessor('role_name', {
-      header: 'Role Name',
+    columnHelper.accessor('email', {
+      header: 'Email',
       size: 250,
-      meta: { sticky: true, left: 130 },
-      cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="230px" className="font-medium" />,
+      meta: { sticky: true, left: 96 },
+      cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="220px" className="font-medium" />,
     }),
-    columnHelper.accessor('permission', {
-      header: 'Permission',
-      size: 140,
-      cell: (info) => <span className="text-sm">{info.getValue()}</span>,
+    columnHelper.accessor('roles', {
+      header: 'Current Roles',
+      size: 320,
+      cell: (info) => {
+        const raw = info.getValue();
+        const list = Array.isArray(raw) ? raw : [];
+        if (!list.length) return <span className="text-muted-foreground">—</span>;
+        return (
+          <div className="flex flex-wrap gap-1">
+            {list.map((r) => (
+              <Badge key={r.id ?? r} variant="secondary" className="text-xs">
+                {r.role_name ?? r.name ?? '—'}
+              </Badge>
+            ))}
+          </div>
+        );
+      },
     }),
     columnHelper.accessor('status', {
       header: 'Status',
       size: 100,
       cell: (info) => <StatusBadge status={info.getValue()} />,
     }),
-    columnHelper.accessor('created_at', {
-      header: 'Created',
-      size: 140,
-      cell: (info) => (
-        <span className="text-xs text-muted-foreground">{formatDate(info.getValue())}</span>
-      ),
-    }),
-  ];
+  ], [navigate, canWrite]);
 
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Roles"
-        description="Manage user roles and access levels"
+        title="User ↔ Role Mapping"
+        description="Assign or remove roles for a portal user"
         actions={
           <div className="flex items-center gap-3">
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search roles…"
+                placeholder="Search by email…"
                 className="pl-9 w-[250px] h-9 text-sm bg-white"
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setPage(1); }}
@@ -147,16 +137,10 @@ const RoleList = () => {
                 </span>
               )}
             </Button>
-            {canWrite && (
-              <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => navigate(ROUTES.ROLE_NEW)}>
-                <Plus className="mr-1.5 h-4 w-4" /> Add Role
-              </Button>
-            )}
           </div>
         }
       />
 
-      {/* Collapsible filter panel */}
       <div className={`overflow-hidden transition-all duration-500 ease-in-out ${filtersOpen ? 'max-h-[160px] opacity-100 mb-2' : 'max-h-0 opacity-0 mb-0'}`}>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full rounded-lg border bg-muted/30 p-4">
           <div className="flex flex-col gap-1.5">
@@ -187,16 +171,12 @@ const RoleList = () => {
 
       <DataTable
         columns={columns}
-        data={roles}
+        data={users}
         isLoading={isPending}
         toolbar={null}
         pagination={
           meta.total != null
-            ? {
-                page: meta.current_page ?? page,
-                limit: meta.per_page ?? limit,
-                total: meta.total,
-              }
+            ? { page: meta.current_page ?? page, limit: meta.per_page ?? limit, total: meta.total }
             : undefined
         }
         sorting={sorting}
@@ -210,4 +190,4 @@ const RoleList = () => {
   );
 };
 
-export default RoleList;
+export default UserRoleMappingList;

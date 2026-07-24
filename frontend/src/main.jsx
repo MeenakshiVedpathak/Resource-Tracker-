@@ -6,8 +6,8 @@ import { Toaster } from 'react-hot-toast';
 import store from '@/store';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { registerLogoutCallback } from '@/services/apiClient';
-import { logout } from '@/store/slices/authSlice';
+import { registerLogoutCallback, registerRefreshDataCallback } from '@/services/apiClient';
+import { logout, setRoles, setAccessibleForms } from '@/store/slices/authSlice';
 import App from './App';
 import '@/styles/index.css';
 
@@ -15,6 +15,13 @@ import '@/styles/index.css';
 registerLogoutCallback(() => {
   store.dispatch(logout());
   window.location.href = '/login';
+});
+
+// Silent token refresh may carry updated roles/forms (e.g. an admin changed this
+// user's role mappings since they logged in) — keep the store in sync.
+registerRefreshDataCallback(({ roles, forms }) => {
+  if (roles) store.dispatch(setRoles(roles));
+  if (forms) store.dispatch(setAccessibleForms(forms));
 });
 
 const queryClient = new QueryClient({

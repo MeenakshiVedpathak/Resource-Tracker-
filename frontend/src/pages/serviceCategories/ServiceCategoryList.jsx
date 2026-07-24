@@ -3,7 +3,7 @@ import { useNavigate, Outlet } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
 import { Plus, Pencil, Trash2, Search, Filter } from 'lucide-react';
 import { useServiceCategories, useDeleteServiceCategory } from '@/hooks/useServiceCategories';
-import { useAuth } from '@/hooks/useAuth';
+import { useCanWrite } from '@/hooks/usePermissions';
 import { useDebounce } from '@/hooks/useDebounce';
 import { buildPath, ROUTES } from '@/constants/routes';
 import { formatDate } from '@/utils/formatters';
@@ -31,7 +31,6 @@ const TruncatedCell = ({ value, maxWidth = '150px', className }) => {
 
 const ServiceCategoryList = () => {
   const navigate = useNavigate();
-  const { hasRole } = useAuth();
   const { success, showError } = useNotification();
 
   const [search, setSearch] = useState('');
@@ -42,7 +41,7 @@ const ServiceCategoryList = () => {
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const debouncedSearch = useDebounce(search, 400);
-  const canManage = hasRole('Finance', 'Management');
+  const canManage = useCanWrite();
 
   const [sorting, setSorting] = useState([]);
 

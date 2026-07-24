@@ -9,7 +9,7 @@ import { useActiveClients } from '@/hooks/useClients';
 import { useActiveServicePOs } from '@/hooks/useServicePOs';
 import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
 import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
-import { useAuth } from '@/hooks/useAuth';
+import { useCanWrite } from '@/hooks/usePermissions';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
@@ -93,7 +93,6 @@ const TruncatedCell = ({ value, maxWidth = '150px', className }) => {
 
 const ServicePOList = () => {
   const navigate = useNavigate();
-  const { hasRole } = useAuth();
   const [searchParams] = useSearchParams();
   const categoryIdParam = searchParams.get('service_category_id');
   const servicePoIdParam = searchParams.get('service_po_id');
@@ -111,7 +110,7 @@ const ServicePOList = () => {
 
   const debouncedSearch = useDebounce(search, 400);
 
-  const canManage = hasRole('Finance', 'Management');
+  const canManage = useCanWrite();
   const { success, error: showError } = useNotification();
   const [deleteTarget, setDeleteTarget] = useState(null);
   const deleteMutation = useDeleteServicePO();
