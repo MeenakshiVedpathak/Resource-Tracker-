@@ -20,6 +20,7 @@ import { Label } from '@/components/ui/label';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import { cn } from '@/utils/cn';
+import { useAuth } from '@/hooks/useAuth';
 
 const columnHelper = createColumnHelper();
 
@@ -246,11 +247,13 @@ const ResourceAllocation = () => {
     setPoId('all');
     setPage(1);
   };
+  const { user } = useAuth();
 
   const params = {
     page,
     limit,
     hoursSource,
+     roleId: user?.role_id,
     ...(monthYear && { month: monthYear.month, year: monthYear.year }),
     ...(employeeId !== 'all' && { employeeId }),
     ...(poId !== 'all' && { poId }),

@@ -23,10 +23,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { cn } from '@/utils/cn';
+import { useAuth } from '@/hooks/useAuth';
 
 const CATEGORY_COLORS = {
   billable: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
   'non-billable': 'bg-orange-500/10 text-orange-700 dark:text-orange-400',
+  'customer non-billable': 'bg-sky-500/10 text-sky-700 dark:text-sky-400',
 };
 
 const PROJECT_TYPE_COLORS = {
@@ -80,10 +82,12 @@ const sumBy = (projects, predicate) =>
   projects.reduce((acc, p) => (predicate(p) ? acc + (Number(p.projectHours) || 0) : acc), 0);
 
 const isBillable = (p) => p.category?.toLowerCase() === 'billable';
+const isCustomerNonBillable = (p) => p.category?.toLowerCase() === 'customer non-billable';
+const isNonBillable = (p) => !isBillable(p) && !isCustomerNonBillable(p);
 
 const exportToExcel = (rows, monthLabel) => {
   const header = [
-    'Employee', 'Total Hours', 'Billable Hours', 'Non-Billable Hours', 'Billable Amount',
+    'Employee', 'Total Hours', 'Billable Hours', 'Non-Billable Hours', 'Customer Non-Billable Hours', 'Billable Amount',
     'Client', 'Project', 'Project Type', 'Category', 'Project Hours', 'Project Billable Amount',
   ];
 
@@ -91,11 +95,12 @@ const exportToExcel = (rows, monthLabel) => {
   rows.forEach((r) => {
     const projects = r.projects ?? [];
     const billableHours = sumBy(projects, isBillable);
-    const nonBillableHours = sumBy(projects, (p) => !isBillable(p));
+    const nonBillableHours = sumBy(projects, isNonBillable);
+    const customerNonBillableHours = sumBy(projects, isCustomerNonBillable);
     const billableAmount = projects.reduce((acc, p) => acc + (Number(p.billableAmount) || 0), 0);
 
     if (projects.length === 0) {
-      dataRows.push([r.employeeName ?? '', r.totalHours ?? '', billableHours, nonBillableHours, billableAmount, '', '', '', '', '', '']);
+      dataRows.push([r.employeeName ?? '', r.totalHours ?? '', billableHours, nonBillableHours, customerNonBillableHours, billableAmount, '', '', '', '', '', '']);
       return;
     }
 
@@ -105,6 +110,7 @@ const exportToExcel = (rows, monthLabel) => {
         i === 0 ? (r.totalHours ?? '') : '',
         i === 0 ? billableHours : '',
         i === 0 ? nonBillableHours : '',
+        i === 0 ? customerNonBillableHours : '',
         i === 0 ? billableAmount : '',
         p.client ?? '',
         p.projectName ?? '',
@@ -189,12 +195,15 @@ const ResourceProjectUtilization = () => {
     setPoIds([]);
     setPage(1);
   };
+    const { user } = useAuth();
+
 
   const params = {
     month: monthYear.month,
     year: monthYear.year,
     hoursSource,
     page,
+     roleId: user?.role_id,
     limit,
     ...(employeeIds.length > 0 && { employeeIds: employeeIds.join(',') }),
     ...(clientIds.length > 0 && { clientIds: clientIds.join(',') }),
@@ -231,7 +240,8 @@ const ResourceProjectUtilization = () => {
     return {
       ...r,
       billableHours: sumBy(projects, isBillable),
-      nonBillableHours: sumBy(projects, (p) => !isBillable(p)),
+      nonBillableHours: sumBy(projects, isNonBillable),
+      customerNonBillableHours: sumBy(projects, isCustomerNonBillable),
       billableAmount: projects.reduce((acc, p) => acc + (Number(p.billableAmount) || 0), 0),
       filteredProjects,
     };
@@ -246,7 +256,8 @@ const ResourceProjectUtilization = () => {
           return {
             totalHours: Number(r.totalHours) || 0,
             billableHours: sumBy(projects, isBillable),
-            nonBillableHours: sumBy(projects, (p) => !isBillable(p)),
+            nonBillableHours: sumBy(projects, isNonBillable),
+            customerNonBillableHours: sumBy(projects, isCustomerNonBillable),
             billableAmount: projects.reduce((acc, p) => acc + (Number(p.billableAmount) || 0), 0),
           };
         })
@@ -257,10 +268,11 @@ const ResourceProjectUtilization = () => {
       acc.totalHours += Number(r.totalHours) || 0;
       acc.billableHours += r.billableHours;
       acc.nonBillableHours += r.nonBillableHours;
+      acc.customerNonBillableHours += r.customerNonBillableHours;
       acc.billableAmount += r.billableAmount;
       return acc;
     },
-    { totalHours: 0, billableHours: 0, nonBillableHours: 0, billableAmount: 0 }
+    { totalHours: 0, billableHours: 0, nonBillableHours: 0, customerNonBillableHours: 0, billableAmount: 0 }
   );
 
   // Export pulls every matching record (not just the current page) with one extra request.
@@ -451,6 +463,10 @@ const ResourceProjectUtilization = () => {
               Non-Billable&nbsp;
               <span className="font-semibold tabular-nums">{pageTotals.nonBillableHours.toFixed(1)} hrs</span>
             </div>
+            <div className="rounded-md border bg-sky-500/10 px-3 py-1.5 text-xs text-sky-700 dark:text-sky-400">
+              Customer Non-Billable&nbsp;
+              <span className="font-semibold tabular-nums">{pageTotals.customerNonBillableHours.toFixed(1)} hrs</span>
+            </div>
             <div className="rounded-md border bg-muted/40 px-3 py-1.5 text-xs">
               Billable Amount&nbsp;
               <span className="font-semibold tabular-nums">{formatCurrency(pageTotals.billableAmount)}</span>
@@ -466,6 +482,7 @@ const ResourceProjectUtilization = () => {
                   <col />
                   <col className="w-[110px]" />
                   <col className="w-[110px]" />
+                  <col className="w-[130px]" />
                   <col className="w-[120px]" />
                   <col className="w-[140px]" />
                   <col className="w-[140px]" />
@@ -477,6 +494,7 @@ const ResourceProjectUtilization = () => {
                     <th className="px-2.5 py-2 text-right text-xs font-semibold">Total Hours</th>
                     <th className="px-2.5 py-2 text-right text-xs font-semibold">Billable</th>
                     <th className="px-2.5 py-2 text-right text-xs font-semibold">Non-Billable</th>
+                    <th className="px-2.5 py-2 text-right text-xs font-semibold">Customer Non-Billable</th>
                     <th className="px-2.5 py-2 text-right text-xs font-semibold">Billable Amount</th>
                     <th className="px-2.5 py-2 text-left text-xs font-semibold">Projects</th>
                   </tr>
@@ -505,6 +523,7 @@ const ResourceProjectUtilization = () => {
                       <td className="px-2.5 py-2 text-right tabular-nums font-medium">{formatHours(row.totalHours)}</td>
                       <td className="px-2.5 py-2 text-right tabular-nums text-emerald-700 dark:text-emerald-400">{formatHours(row.billableHours)}</td>
                       <td className="px-2.5 py-2 text-right tabular-nums text-orange-700 dark:text-orange-400">{formatHours(row.nonBillableHours)}</td>
+                      <td className="px-2.5 py-2 text-right tabular-nums text-sky-700 dark:text-sky-400">{formatHours(row.customerNonBillableHours)}</td>
                       <td className="px-2.5 py-2 text-right tabular-nums font-medium">{formatCurrency(row.billableAmount)}</td>
                       <td className="px-2.5 py-2 text-xs text-muted-foreground">{row.projects?.length ?? 0} project{(row.projects?.length ?? 0) !== 1 ? 's' : ''}</td>
                     </tr>
@@ -592,6 +611,10 @@ const ResourceProjectUtilization = () => {
                   <div className="rounded-md border bg-orange-500/10 px-3 py-2 text-xs text-orange-700 dark:text-orange-400">
                     Non-Billable
                     <p className="text-sm font-semibold tabular-nums">{formatHours(selectedRow.nonBillableHours)}</p>
+                  </div>
+                  <div className="rounded-md border bg-sky-500/10 px-3 py-2 text-xs text-sky-700 dark:text-sky-400">
+                    Customer Non-Billable
+                    <p className="text-sm font-semibold tabular-nums">{formatHours(selectedRow.customerNonBillableHours)}</p>
                   </div>
                 </div>
 

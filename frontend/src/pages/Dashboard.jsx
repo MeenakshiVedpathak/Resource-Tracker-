@@ -1205,6 +1205,7 @@ const Dashboard = () => {
     // Build per-employee reasons from non-billable POs in employees_by_po, split by category
     const nbByEmp = {};       // combined (internal + customer) — kept for back-compat consumers
     const customerByEmp = {}; // customer non-billable only
+    const billableByEmp = {}; // billable POs only — for the "Billable types" hover breakdown
 
     (empsByPO ?? [])
       .filter((po) => !po.is_billable)
@@ -1223,6 +1224,21 @@ const Dashboard = () => {
           };
           (nbByEmp[e.employee_id] ??= []).push(entry);
           if (isCustomer) (customerByEmp[e.employee_id] ??= []).push(entry);
+        });
+      });
+
+    (empsByPO ?? [])
+      .filter((po) => po.is_billable)
+      .forEach((po) => {
+        const typeLabel = po.service_type_name || po.service_po_name;
+        (po.top_employees ?? []).forEach((e) => {
+          (billableByEmp[e.employee_id] ??= []).push({
+            service_po_id:     po.service_po_id,
+            service_po_name:   po.service_po_name,
+            service_type_name: typeLabel,
+            category_name:     po.category_name,
+            hours:             e.hours,
+          });
         });
       });
 
@@ -1251,7 +1267,7 @@ const Dashboard = () => {
         non_billable_reasons: allReasons,           // combined — back-compat
         internal_non_billable_reasons: internalReasons,
         customer_non_billable_reasons: customerReasons,
-        billable_reasons: [],
+        billable_reasons: billableByEmp[e.employee_id] ?? [],
       };
     });
   };

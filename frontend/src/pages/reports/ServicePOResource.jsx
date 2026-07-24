@@ -20,6 +20,7 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/utils/cn';
+import useAuth from '@/hooks/useAuth';
 
 
 const SERVICE_TYPE_COLORS = {
@@ -159,11 +160,13 @@ const ServicePOResource = () => {
     setPoId('all');
     setPage(1);
   };
+  const { user } = useAuth();
 
   const params = {
     ...(monthYear && { month: monthYear.month }),
     ...(monthYear && { year: monthYear.year }),
     hoursSource,
+    ...(user?.role_id && { roleId: user.role_id }),
     ...(employeeId !== 'all' && { employeeId }),
     ...(categoryId !== 'all' && { serviceCategoryId: categoryId }),
     ...(typeId !== 'all' && { serviceTypeId: typeId }),

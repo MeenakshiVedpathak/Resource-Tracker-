@@ -20,6 +20,7 @@ import { Label } from '@/components/ui/label';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
+import useAuth from '@/hooks/useAuth';
 
 
 const columnHelper = createColumnHelper();
@@ -224,6 +225,7 @@ const ServicePOSummary = () => {
     setPoId('all');
     setPage(1);
   };
+  const { user } = useAuth();
 
   const params = {
     ...(monthYear && { month: monthYear.month, year: monthYear.year }),
@@ -238,6 +240,7 @@ const ServicePOSummary = () => {
     ...(dateRange?.endDate && { endDate: dateRange.endDate }),
     page,
     limit,
+     roleId: user?.role_id,
     ...(debouncedSearch && { search: debouncedSearch }),
   };
 

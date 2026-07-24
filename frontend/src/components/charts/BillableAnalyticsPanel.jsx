@@ -51,7 +51,7 @@ const TypeBreakdownRows = ({ title, entries }) => {
 
 const BarTip = ({ active, payload }) => {
   if (!active || !payload?.length) return null;
-  const { fullName, billablePct, internalReasons, customerReasons } = payload[0].payload;
+  const { fullName, billablePct, billableReasons, internalReasons, customerReasons } = payload[0].payload;
   const tier = getTier(billablePct);
   return (
     <div className="rounded-lg border bg-popover p-3 shadow-lg text-xs space-y-1 min-w-[180px]">
@@ -64,6 +64,7 @@ const BarTip = ({ active, payload }) => {
           <span className="font-medium tabular-nums">{p.value}h</span>
         </div>
       ))}
+      <TypeBreakdownRows title="Billable types" entries={groupByType(billableReasons)} />
       <TypeBreakdownRows title="Non-Billable types" entries={groupByType(internalReasons)} />
       <TypeBreakdownRows title="Customer non-billable types" entries={groupByType(customerReasons)} />
     </div>
@@ -175,6 +176,7 @@ const BillableAnalyticsPanel = ({
     'Non-Billable'           : r.internal_non_billable_hours ?? r.non_billable_hours ?? 0,
     'Customer Non-Billable'  : r.customer_non_billable_hours || 0,
     billablePct   : r.billable_pct || 0,
+    billableReasons: r.billable_reasons ?? [],
     internalReasons: r.internal_non_billable_reasons ?? r.non_billable_reasons ?? [],
     customerReasons: r.customer_non_billable_reasons ?? [],
   }));
@@ -310,7 +312,7 @@ const BillableAnalyticsPanel = ({
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
                 {/* Horizontal stacked bar chart */}
                 <div className="lg:col-span-2">
-                  <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+                  <div className="flex items-center flex-wrap gap-3 mb-3">
                     <p className="text-xs font-semibold text-foreground">Hours by Employee</p>
                     <label className="flex items-center gap-1.5 shrink-0 text-[11px] text-muted-foreground">
                       <ArrowDownWideNarrow className="h-3.5 w-3.5" />

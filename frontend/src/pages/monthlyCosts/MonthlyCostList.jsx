@@ -52,6 +52,7 @@ const MonthlyCostList = () => {
   const params = {
     page,
     limit,
+    
     ...(monthYearFilter && { month: monthYearFilter.month, year: monthYearFilter.year }),
   };
 

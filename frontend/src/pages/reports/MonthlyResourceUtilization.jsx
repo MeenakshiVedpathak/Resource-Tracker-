@@ -17,6 +17,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/utils/cn';
+import { useAuth } from '@/hooks/useAuth';
 
 const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
@@ -160,7 +161,9 @@ const MonthlyResourceUtilization = () => {
 
   const enabled = !!(monthYear?.year >= 2000 && monthYear?.year <= 2100);
 
+  const { user } = useAuth();
   const params = enabled ? {
+     roleId: user?.role_id,
     month: monthYear.month,
     year:  monthYear.year,
     hoursSource,
