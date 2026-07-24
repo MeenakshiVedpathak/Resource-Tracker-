@@ -23,6 +23,15 @@ const moduleRank = (moduleName) => {
   return i === -1 ? MODULE_ORDER.length : i;
 };
 
+// Fixed display order for individual nav items within a module, overriding the API's own
+// (alphabetical) order — e.g. Resources comes back as "Monthly Costs" then "Timesheets".
+// Any form not listed here keeps its original relative position, appended after these.
+const FORM_ORDER = ['timesheets', 'monthly costs'];
+const formRank = (formName) => {
+  const i = FORM_ORDER.indexOf(formName.trim().toLowerCase());
+  return i === -1 ? FORM_ORDER.length : i;
+};
+
 // Builds one nav group per module, one item per form — driven entirely by the RBAC
 // accessible-forms map (module -> [{ id, name }]) so a user only ever sees what their
 // roles actually grant. Section order follows MODULE_ORDER above, not the API's own
@@ -47,7 +56,8 @@ const buildNavGroups = (accessibleForms, { isSuperAdmin }) =>
           }
           return { label: form.name, icon: cfg.icon, to: cfg.to, exact: cfg.exact };
         })
-        .filter(Boolean),
+        .filter(Boolean)
+        .sort((a, b) => formRank(a.label) - formRank(b.label)),
     }))
     .filter((group) => group.items.length > 0)
     .sort((a, b) => moduleRank(a.label) - moduleRank(b.label));

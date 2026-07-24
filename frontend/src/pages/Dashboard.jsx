@@ -721,6 +721,7 @@ import {
 import { ROUTES } from '@/constants/routes';
 import { useDashboardAnalytics, useDashboardAnalytics2 } from '@/hooks/useDashboard';
 import { useCanViewOriginalData } from '@/hooks/usePermissions';
+import { useAuth } from '@/hooks/useAuth';
 import { useActiveEmployees } from '@/hooks/useEmployees';
 import { useActiveClients } from '@/hooks/useClients';
 import { useActiveServicePOs } from '@/hooks/useServicePOs';
@@ -1025,6 +1026,7 @@ const FilterPanel = ({ open, onToggle, children, badge }) => (
 /* ─── Dashboard ──────────────────────────────────────────────────────────── */
 const Dashboard = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [fiscalYear, setFiscalYear]           = useState(currentFY);
   const [bottomMonthYear, setBottomMonthYear] = useState({ month: now.getMonth() + 1, year: now.getFullYear() });
   const [quarter, setQuarter]                 = useState(null);
@@ -1112,6 +1114,7 @@ const Dashboard = () => {
   const analyticsParams = {
     fiscalYear,
     hoursSource,
+    roleId: user?.role_id,
     ...(quarter     && { quarter }),
     ...(employeeId  && { employeeId }),
     ...(clientId    && { clientId }),
@@ -1130,6 +1133,7 @@ const Dashboard = () => {
     month: bottomMonthYear.month,
     year:  bottomMonthYear.year,
     hoursSource,
+    roleId: user?.role_id,
     ...(employeeId  && { employeeId }),
     ...(clientId    && { clientId }),
     ...(servicePOId && { poId: servicePOId }),
