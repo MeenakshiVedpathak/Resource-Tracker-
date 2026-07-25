@@ -269,12 +269,39 @@ const ResourceAllocation = () => {
   const rows = Array.isArray(data?.data) ? data.data : [];
   const meta = data?.meta ?? {};
 
-  // Total Hours must reflect every matching record (respecting whatever filters are
+  // Summary chips must reflect every matching record (respecting whatever filters are
   // active), not just the current page — fetch the full filtered dataset in parallel.
   const allDataParams = { ...params, page: 1, limit: 1000 };
   const { data: fullData } = useResourceAllocationReport(allDataParams);
   const fullRows = Array.isArray(fullData?.data) ? fullData.data : null;
-  const totalHours = (fullRows ?? rows).reduce((sum, r) => sum + (Number(r.total_hours_logged) || 0), 0);
+  const summaryRows = fullRows ?? rows;
+
+  // This report is a flat allocation list (one row per employee × PO × service
+  // type), not a per-employee pivot, so billable/non-billable/leave totals are
+  // derived here the same way the Monthly Utilization report's backend does:
+  // billable = category name contains "billable" but not "non"; everything
+  // else (including "Customer Non-Billable") counts as non-billable, and
+  // Customer Non-Billable is additionally broken out on its own; leave hours
+  // are identified by service type name and subtracted from utilization.
+  const reportSummary = summaryRows.reduce((acc, r) => {
+    const hours = Number(r.total_hours_logged) || 0;
+    const catLower = (r.service_category_name || '').toLowerCase();
+    const typeLower = (r.service_type_name || '').toLowerCase();
+
+    const isBillable = catLower.includes('billable') && !catLower.includes('non');
+    const isCustomerNonBillable = catLower.includes('customer') && catLower.includes('non') && catLower.includes('billable');
+    const isLeave = typeLower.includes('leave') || typeLower.includes('vacation') || typeLower.includes('holiday');
+
+    if (isBillable) acc.billable_total += hours;
+    else acc.non_billable_total += hours;
+
+    if (isCustomerNonBillable) acc.customer_non_billable_total += hours;
+    if (isLeave) acc.leaves_hours += hours;
+
+    return acc;
+  }, { billable_total: 0, non_billable_total: 0, customer_non_billable_total: 0, leaves_hours: 0 });
+
+  const totalUtilization = reportSummary.billable_total + reportSummary.non_billable_total - reportSummary.leaves_hours;
 
   // Export pulls every matching record (not just the current page) with one extra request.
   const handleExport = async () => {
@@ -481,9 +508,25 @@ const ResourceAllocation = () => {
 
       {rows.length > 0 && (
         <div className="mb-4 flex flex-wrap gap-3">
+          <div className="rounded-md border bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-700 dark:text-emerald-400">
+            Billable Total&nbsp;
+            <span className="font-semibold tabular-nums">{reportSummary.billable_total.toFixed(1)} hrs</span>
+          </div>
+          <div className="rounded-md border bg-orange-500/10 px-3 py-1.5 text-xs text-orange-700 dark:text-orange-400">
+            Non-Billable Total&nbsp;
+            <span className="font-semibold tabular-nums">{reportSummary.non_billable_total.toFixed(1)} hrs</span>
+          </div>
+          <div className="rounded-md border bg-cyan-500/10 px-3 py-1.5 text-xs text-cyan-700 dark:text-cyan-400">
+            Customer Non-Billable&nbsp;
+            <span className="font-semibold tabular-nums">{reportSummary.customer_non_billable_total.toFixed(1)} hrs</span>
+          </div>
           <div className="rounded-md border bg-blue-500/10 px-3 py-1.5 text-xs text-blue-700 dark:text-blue-400">
-            Total Hours&nbsp;
-            <span className="font-semibold tabular-nums">{formatHours(totalHours)}</span>
+            Total Utilization&nbsp;
+            <span className="font-semibold tabular-nums">{totalUtilization.toFixed(1)} hrs</span>
+          </div>
+          <div className="rounded-md border bg-muted/40 px-3 py-1.5 text-xs">
+            Leaves&nbsp;
+            <span className="font-semibold tabular-nums">{reportSummary.leaves_hours.toFixed(1)} hrs</span>
           </div>
         </div>
       )}

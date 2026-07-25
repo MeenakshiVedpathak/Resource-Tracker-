@@ -248,20 +248,34 @@ const MonthlyResourceUtilization = () => {
   const records = Array.isArray(data?.data?.records) ? data.data.records : [];
   const meta    = data?.meta    ?? {};
 
+  // The backend folds "Customer Non-Billable" hours into non_billable_total and
+  // doesn't expose them separately, so derive that figure on the frontend from
+  // each row's per-service-type hours map instead.
+  const customerNonBillableServiceTypeIds = (
+    columns.find(c => c.category_name === 'Customer Non-Billable')?.service_types ?? []
+  ).map(st => st.id);
+
+  const sumCustomerNonBillable = (r) =>
+    customerNonBillableServiceTypeIds.reduce((sum, id) => sum + (Number(r.hours?.[id]) || 0), 0);
+
   // Prefer totals computed over the full filtered dataset; fall back to the
   // (page-scoped) API summary only until the full-dataset fetch resolves.
   const summary = allRecords
     ? allRecords.reduce(
         (acc, r) => {
-          acc.billable_total     += Number(r.billable_total)     || 0;
-          acc.non_billable_total += Number(r.non_billable_total) || 0;
-          acc.leaves_hours       += Number(r.leaves_hours)       || 0;
-          acc.total_utilization  += Number(r.total_utilization)  || 0;
+          acc.billable_total              += Number(r.billable_total)     || 0;
+          acc.non_billable_total          += Number(r.non_billable_total) || 0;
+          acc.leaves_hours                += Number(r.leaves_hours)       || 0;
+          acc.total_utilization           += Number(r.total_utilization)  || 0;
+          acc.customer_non_billable_total += sumCustomerNonBillable(r);
           return acc;
         },
-        { billable_total: 0, non_billable_total: 0, leaves_hours: 0, total_utilization: 0 }
+        { billable_total: 0, non_billable_total: 0, leaves_hours: 0, total_utilization: 0, customer_non_billable_total: 0 }
       )
-    : data?.data?.summary ?? {};
+    : {
+        ...(data?.data?.summary ?? {}),
+        customer_non_billable_total: records.reduce((sum, r) => sum + sumCustomerNonBillable(r), 0),
+      };
 
   const monthLabel = monthYear ? formatMonthYear(monthYear.month, monthYear.year) : '';
 
@@ -447,6 +461,12 @@ const MonthlyResourceUtilization = () => {
               <div className="rounded-md border bg-orange-500/10 px-3 py-1.5 text-xs text-orange-700 dark:text-orange-400">
                 Non-Billable Total&nbsp;
                 <span className="font-semibold tabular-nums">{Number(summary.non_billable_total).toFixed(1)} hrs</span>
+              </div>
+            )}
+            {summary.customer_non_billable_total != null && (
+              <div className="rounded-md border bg-cyan-500/10 px-3 py-1.5 text-xs text-cyan-700 dark:text-cyan-400">
+                Customer Non-Billable&nbsp;
+                <span className="font-semibold tabular-nums">{Number(summary.customer_non_billable_total).toFixed(1)} hrs</span>
               </div>
             )}
             {summary.total_utilization != null && (

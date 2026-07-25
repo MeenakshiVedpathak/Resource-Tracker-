@@ -1,13 +1,15 @@
-import { useEffect, useMemo } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useDispatch, useSelector } from 'react-redux';
 import { selectSidebarCollapsed, toggleSidebar, setSidebarCollapsed } from '@/store/slices/uiSlice';
+import { selectIsDirty, selectDirtyMessage, clearDirty } from '@/store/slices/navigationGuardSlice';
 import { cn } from '@/utils/cn';
 import { useAuth } from '@/hooks/useAuth';
 import { resolveFormRoute } from '@/constants/rbacForms';
 import { isProtectedAccount } from '@/constants/protectedAccounts';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import ConfirmDialog from '@/components/common/ConfirmDialog';
 
 // Modules hidden from the sidebar for everyone except the protected super-admin account,
 // regardless of what any role's own form mappings say — a hardcoded UI restriction on top
@@ -68,13 +70,14 @@ const isActive = (to, pathname, exact) => {
 };
 
 // Indented child link rendered below a parent with children
-const SubNavItem = ({ item }) => {
+const SubNavItem = ({ item, onNavAttempt }) => {
   const { pathname } = useLocation();
   const active = pathname === item.to;
 
   return (
     <Link
       to={item.to}
+      onClick={(e) => onNavAttempt(e, item.to)}
       className={cn(
         'relative flex items-center rounded-md py-1.5 pl-9 pr-3 text-xs transition-colors',
         active
@@ -90,7 +93,7 @@ const SubNavItem = ({ item }) => {
   );
 };
 
-const NavItem = ({ item, collapsed }) => {
+const NavItem = ({ item, collapsed, onNavAttempt }) => {
   const { pathname } = useLocation();
   const active = isActive(item.to, pathname, item.exact);
   const hasChildren = !collapsed && Array.isArray(item.children) && item.children.length > 0;
@@ -99,6 +102,7 @@ const NavItem = ({ item, collapsed }) => {
     <div>
       <Link
         to={item.to}
+        onClick={(e) => onNavAttempt(e, item.to)}
         className={cn(
           'nav-item group relative flex items-center gap-3 transition-all',
           active && 'active',
@@ -138,7 +142,7 @@ const NavItem = ({ item, collapsed }) => {
             {/* Vertical connector line */}
             <div className="relative ml-[22px] mt-0.5 mb-1 border-l border-sidebar-border/60 pl-0">
               {item.children.map((child) => (
-                <SubNavItem key={child.to} item={child} />
+                <SubNavItem key={child.to} item={child} onNavAttempt={onNavAttempt} />
               ))}
             </div>
           </motion.div>
@@ -150,6 +154,7 @@ const NavItem = ({ item, collapsed }) => {
 
 const Sidebar = () => {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const collapsed = useSelector(selectSidebarCollapsed);
   const { pathname } = useLocation();
   const { accessibleForms, user } = useAuth();
@@ -158,6 +163,19 @@ const Sidebar = () => {
     () => buildNavGroups(accessibleForms, { isSuperAdmin }),
     [accessibleForms, isSuperAdmin]
   );
+
+  // Guards navigation away from a page with unsaved changes (e.g. Timesheet
+  // Import Detail's Modified Hours edits) — any page can opt in via the
+  // useUnsavedChangesGuard hook, which is what populates this global flag.
+  const isDirty = useSelector(selectIsDirty);
+  const dirtyMessage = useSelector(selectDirtyMessage);
+  const [pendingTo, setPendingTo] = useState(null);
+
+  const handleNavAttempt = (e, to) => {
+    if (!isDirty) return;
+    e.preventDefault();
+    setPendingTo(to);
+  };
 
   // Drawer on mobile: start closed, and close again after each navigation
   useEffect(() => {
@@ -245,7 +263,7 @@ const Sidebar = () => {
               )}
             </AnimatePresence>
             {group.items.map((item) => (
-              <NavItem key={item.to} item={item} collapsed={collapsed} />
+              <NavItem key={item.to} item={item} collapsed={collapsed} onNavAttempt={handleNavAttempt} />
             ))}
           </div>
         ))}
@@ -272,6 +290,22 @@ const Sidebar = () => {
         </button>
       </div>
       </motion.aside>
+
+      <ConfirmDialog
+        open={!!pendingTo}
+        onOpenChange={(open) => !open && setPendingTo(null)}
+        title="Leave without saving?"
+        description={dirtyMessage || 'You have unsaved changes. If you leave now, they will be lost.'}
+        confirmLabel="Leave"
+        cancelLabel="Stay"
+        variant="destructive"
+        onConfirm={() => {
+          const to = pendingTo;
+          setPendingTo(null);
+          dispatch(clearDirty());
+          navigate(to);
+        }}
+      />
     </>
   );
 };

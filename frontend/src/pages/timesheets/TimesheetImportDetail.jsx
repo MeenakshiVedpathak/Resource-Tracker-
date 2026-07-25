@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useRef, memo } from 'react';
+import { useState, useMemo, useCallback, useRef, useEffect, memo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
 import { ArrowLeft, FileSpreadsheet, Plus, Filter } from 'lucide-react';
@@ -16,6 +16,7 @@ import { useActiveEmployees } from '@/hooks/useEmployees';
 import { useSubProjectsByPO } from '@/hooks/useSubProjects';
 import { useAuth } from '@/hooks/useAuth';
 import { useCanWrite } from '@/hooks/usePermissions';
+import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import { isProtectedAccount } from '@/constants/protectedAccounts';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
@@ -102,8 +103,8 @@ const TimesheetImportDetail = () => {
   const canAddEntry = canWrite;
   // "HR" is the general business rule; admin@rutportal.com is a hardcoded override so this
   // one account always has access regardless of its actual role name/permission level.
-  const canEditModifiedHours = (hasRole('HR') && canWrite) || isProtectedAccount(user?.email);
-  const canEdit = canEditModifiedHours && !isLocked;
+  // Modified Hours stays editable even after publish — only the publish action itself is one-way.
+  const canEdit = (hasRole('HR') && canWrite) || isProtectedAccount(user?.email);
 
   const { data: activeServicePOsData } = useActiveServicePOs();
 
@@ -166,6 +167,41 @@ const TimesheetImportDetail = () => {
   const editedCount = dirtyRowIds.size;
   const bulkUpdateMutation = useBulkUpdateModifiedHours();
 
+  const unsavedChangesMessage = `You have ${editedCount} unsaved change${editedCount !== 1 ? 's' : ''} to Modified Hours. If you leave now, they will be lost.`;
+
+  // Registers this page's dirty state globally so leaving via the Sidebar (or
+  // any other in-app navigation) prompts too, not just this page's own Back
+  // button / browser Back / tab close.
+  useUnsavedChangesGuard(editedCount > 0, unsavedChangesMessage);
+
+  // ── Unsaved-changes guard: warn before losing edits on tab close/refresh
+  // (beforeunload) or the browser Back/Forward buttons (popstate — react-router's
+  // useBlocker needs a data router, which this app's plain BrowserRouter doesn't use,
+  // so a buffer history entry + popstate listener is the only way to intercept it). ──
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+
+  useEffect(() => {
+    if (editedCount === 0) return undefined;
+
+    const handleBeforeUnload = (e) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    window.history.pushState(null, '', window.location.href);
+    const handlePopState = () => {
+      window.history.pushState(null, '', window.location.href);
+      setShowLeaveConfirm(true);
+    };
+    window.addEventListener('popstate', handlePopState);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [editedCount]);
+
   const updateEdit = useCallback((rowId, value) => {
     const key = String(rowId);
     editsRef.current = { ...editsRef.current, [key]: value };
@@ -203,7 +239,8 @@ const TimesheetImportDetail = () => {
   };
 
   // ── Publish: a separate, one-way action — never modifies hours, only the
-  // batch's is_publish flag. Once published nothing on this page can be edited. ──
+  // batch's is_publish flag. Modified Hours stay editable after publish; only
+  // publishing itself and adding new rows are locked once is_publish is set. ──
   const [isPublishConfirmOpen, setIsPublishConfirmOpen] = useState(false);
   const publishMutation = usePublishImport();
 
@@ -440,7 +477,7 @@ const TimesheetImportDetail = () => {
                 {isSaving ? 'Saving…' : 'Save Changes'}
               </Button>
             )}
-            {canEdit && (
+            {canEdit && !isLocked && (
               <Button
                 variant="outline"
                 size="sm"
@@ -457,7 +494,11 @@ const TimesheetImportDetail = () => {
                 Add New Record
               </Button>
             )}
-            <Button variant="outline" size="sm" onClick={() => navigate(ROUTES.TIMESHEETS)}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => (editedCount > 0 ? setShowLeaveConfirm(true) : navigate(ROUTES.TIMESHEETS))}
+            >
               <ArrowLeft className="mr-1.5 h-4 w-4" />
               Back
             </Button>
@@ -701,11 +742,25 @@ const TimesheetImportDetail = () => {
         open={isPublishConfirmOpen}
         onOpenChange={setIsPublishConfirmOpen}
         title="Publish this timesheet?"
-        description="Once published, this timesheet cannot be unpublished and no further edits will be allowed. Hours are not changed by publishing."
+        description="Once published, this timesheet cannot be unpublished. Modified Hours can still be edited afterward; hours are not changed by publishing itself."
         confirmLabel="Publish"
         variant="default"
         onConfirm={handlePublish}
         isLoading={publishMutation.isPending}
+      />
+
+      <ConfirmDialog
+        open={showLeaveConfirm}
+        onOpenChange={setShowLeaveConfirm}
+        title="Leave without saving?"
+        description={unsavedChangesMessage}
+        confirmLabel="Leave"
+        cancelLabel="Stay"
+        variant="destructive"
+        onConfirm={() => {
+          setShowLeaveConfirm(false);
+          navigate(ROUTES.TIMESHEETS, { replace: true });
+        }}
       />
     </div>
   );
