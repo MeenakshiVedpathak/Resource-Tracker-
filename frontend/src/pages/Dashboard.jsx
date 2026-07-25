@@ -1046,7 +1046,7 @@ const Dashboard = () => {
   const [billableSortBy, setBillableSortBy]   = useState('nonBillable');  // 'nonBillable' | 'billable'
   const [billableSortByQ, setBillableSortByQ] = useState('nonBillable'); // quarterly view sort
   const [topPOFilter, setTopPOFilter]         = useState('billable');
-  const [filtersOpen, setFiltersOpen]         = useState(true);
+  const [filtersOpen, setFiltersOpen]         = useState(false);
   const [viewMode, setViewMode]               = useState('quarterly');
 
   const headerRef       = useRef(null);
