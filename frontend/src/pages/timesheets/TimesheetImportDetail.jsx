@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useRef, memo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
-import { ArrowLeft, FileSpreadsheet, Plus } from 'lucide-react';
+import { ArrowLeft, FileSpreadsheet, Plus, Filter } from 'lucide-react';
 import {
   useTimesheetImportRows,
   useTimesheetHistory,
@@ -54,7 +54,7 @@ const ModifiedHoursCell = memo(({ row, initialValue, onChange, readOnly }) => {
   const [val, setVal] = useState(initialValue);
   if (readOnly) {
     return (
-      <span className="w-20 inline-block text-right tabular-nums text-sm">
+      <span className="block w-full text-right tabular-nums text-sm">
         {val === '' || val == null ? '—' : val}
       </span>
     );
@@ -70,7 +70,7 @@ const ModifiedHoursCell = memo(({ row, initialValue, onChange, readOnly }) => {
         setVal(e.target.value);
         onChange(row.id, e.target.value);
       }}
-      className={cn('w-20 text-right tabular-nums font-semibold border', cellInputClass)}
+      className={cn('w-full text-right tabular-nums font-semibold border', cellInputClass)}
     />
   );
 });
@@ -222,6 +222,7 @@ const TimesheetImportDetail = () => {
   const [clientFilter, setClientFilter] = useState('all');
   const [serviceCategoryFilter, setServiceCategoryFilter] = useState('all');
   const [serviceTypeFilter, setServiceTypeFilter] = useState('all');
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   // Rows aren't paginated server-side (the whole import is fetched in one
   // shot), but rendering every row at once — each wrapped in its own
@@ -301,9 +302,17 @@ const TimesheetImportDetail = () => {
   const isFiltered = employeeFilter !== 'all' || poFilter !== 'all' || clientFilter !== 'all'
     || serviceCategoryFilter !== 'all' || serviceTypeFilter !== 'all';
 
+  const activeFilterCount = [
+    employeeFilter !== 'all' ? 1 : 0,
+    clientFilter !== 'all' ? 1 : 0,
+    serviceCategoryFilter !== 'all' ? 1 : 0,
+    serviceTypeFilter !== 'all' ? 1 : 0,
+    poFilter !== 'all' ? 1 : 0,
+  ].reduce((a, b) => a + b, 0);
+
   const pagedRows = filteredRows.slice((detailPage - 1) * detailPageSize, detailPage * detailPageSize);
 
-  const columns = [
+  const columns = useMemo(() => [
     columnHelper.accessor('employee', {
       header: 'Employee',
       size: 200,
@@ -340,21 +349,21 @@ const TimesheetImportDetail = () => {
       },
     }),
     columnHelper.accessor('hours_logged', {
-      header: 'Hours',
+      header: () => <span className="block text-right">Hours</span>,
       size: 100,
       enableSorting: false,
       cell: (info) => {
         const value = info.getValue();
         return (
-          <span className="w-20 inline-block text-right tabular-nums text-sm">
+          <span className="block w-full text-right tabular-nums text-sm">
             {value != null ? value : '—'}
           </span>
         );
       },
     }),
     columnHelper.accessor('modified_hours', {
-      header: 'Modified Hours',
-      size: 120,
+      header: () => <span className="block text-right">Modified Hours</span>,
+      size: 130,
       enableSorting: false,
       cell: (info) => {
         const row = info.row.original;
@@ -377,7 +386,7 @@ const TimesheetImportDetail = () => {
     columnHelper.accessor('servicePO.serviceType.serviceCategory', {
       id: 'category',
       header: 'Category',
-      size: 160,
+      size: 200,
       enableSorting: false,
       cell: (info) => {
         const cat = info.getValue();
@@ -388,13 +397,13 @@ const TimesheetImportDetail = () => {
           3: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 hover:bg-amber-100',
         };
         return (
-          <Badge className={`text-xs ${colorMap[cat.id] ?? 'bg-muted text-muted-foreground'}`}>
+          <Badge className={`text-xs whitespace-nowrap ${colorMap[cat.id] ?? 'bg-muted text-muted-foreground'}`}>
             {cat.name}
           </Badge>
         );
       },
     }),
-  ];
+  ], [canEdit, saveVersion, updateEdit]);
 
   return (
     <div>
@@ -403,6 +412,19 @@ const TimesheetImportDetail = () => {
         description={importRecord?.file_name ?? `Import #${id}`}
         actions={
           <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+              onClick={() => setFiltersOpen((prev) => !prev)}
+            >
+              <Filter className="h-4 w-4" />
+              Filters
+              {activeFilterCount > 0 && (
+                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+                  {activeFilterCount}
+                </span>
+              )}
+            </Button>
             {canEdit && editedCount > 0 && (
               <>
                 <span className="text-xs text-muted-foreground">
@@ -489,6 +511,92 @@ const TimesheetImportDetail = () => {
         </Card>
       )}
 
+      {/* Collapsible filter panel */}
+      <div className={`overflow-hidden transition-all duration-500 ease-in-out ${filtersOpen ? 'max-h-[420px] opacity-100 mb-2' : 'max-h-0 opacity-0 mb-0'}`}>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 w-full rounded-lg border bg-muted/30 p-4">
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Employee</Label>
+            <SearchableSelect
+              options={[
+                { label: "All Employees", value: "all" },
+                ...employees.map(emp => ({ label: emp, value: emp }))
+              ]}
+              value={employeeFilter}
+              onValueChange={(v) => { setEmployeeFilter(v); setDetailPage(1); }}
+              placeholder="All Employees"
+              searchPlaceholder="Search employee..."
+              className="h-9 w-full text-sm bg-white"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Client</Label>
+            <SearchableSelect
+              options={[
+                { label: "All Clients", value: "all" },
+                ...clients.map(client => ({ label: client, value: client }))
+              ]}
+              value={clientFilter}
+              onValueChange={(v) => { setClientFilter(v); setDetailPage(1); }}
+              placeholder="All Clients"
+              searchPlaceholder="Search client..."
+              className="h-9 w-full text-sm bg-white"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Category</Label>
+            <SearchableSelect
+              options={[
+                { label: "All Categories", value: "all" },
+                ...activeServiceCategories.map((sc) => ({
+                  label: sc.name,
+                  value: String(sc.id),
+                })),
+              ]}
+              value={serviceCategoryFilter}
+              onValueChange={handleCategoryChange}
+              placeholder="All Categories"
+              searchPlaceholder="Search category..."
+              className="h-9 w-full text-sm bg-white"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Type</Label>
+            <SearchableSelect
+              options={[
+                { label: "All Types", value: "all" },
+                ...filteredServiceTypes.map((t) => ({
+                  label: t.service_type_name,
+                  value: String(t.id),
+                })),
+              ]}
+              value={serviceTypeFilter}
+              onValueChange={handleTypeChange}
+              placeholder="All Types"
+              searchPlaceholder="Search type..."
+              className="h-9 w-full text-sm bg-white"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Service PO</Label>
+            <SearchableSelect
+              options={[
+                { label: "All Service POs", value: "all" },
+                ...filteredPOOptions.map(po => ({ label: po.name, value: po.name }))
+              ]}
+              value={poFilter}
+              onValueChange={(v) => { setPoFilter(v); setDetailPage(1); }}
+              placeholder="All Service POs"
+              searchPlaceholder="Search PO..."
+              className="h-9 w-full text-sm bg-white"
+            />
+          </div>
+        </div>
+      </div>
+
       {isPending ? (
         <div className="space-y-2">
           {Array.from({ length: 6 }).map((_, i) => (
@@ -515,75 +623,7 @@ const TimesheetImportDetail = () => {
           }}
           onPageChange={setDetailPage}
           onPageSizeChange={(s) => { setDetailPageSize(s); setDetailPage(1); }}
-          toolbar={
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4 w-full mb-2">
-              <SearchableSelect
-                options={[
-                  { label: "All Employees", value: "all" },
-                  ...employees.map(emp => ({ label: emp, value: emp }))
-                ]}
-                value={employeeFilter}
-                onValueChange={(v) => { setEmployeeFilter(v); setDetailPage(1); }}
-                placeholder="All Employees"
-                searchPlaceholder="Search employee..."
-                className="w-full h-9"
-              />
-
-              <SearchableSelect
-                options={[
-                  { label: "All Clients", value: "all" },
-                  ...clients.map(client => ({ label: client, value: client }))
-                ]}
-                value={clientFilter}
-                onValueChange={(v) => { setClientFilter(v); setDetailPage(1); }}
-                placeholder="All Clients"
-                searchPlaceholder="Search client..."
-                className="w-full h-9"
-              />
-
-              <SearchableSelect
-                options={[
-                  { label: "All Categories", value: "all" },
-                  ...activeServiceCategories.map((sc) => ({
-                    label: sc.name,
-                    value: String(sc.id),
-                  })),
-                ]}
-                value={serviceCategoryFilter}
-                onValueChange={handleCategoryChange}
-                placeholder="All Categories"
-                searchPlaceholder="Search category..."
-                className="w-full h-9"
-              />
-
-              <SearchableSelect
-                options={[
-                  { label: "All Types", value: "all" },
-                  ...filteredServiceTypes.map((t) => ({
-                    label: t.service_type_name,
-                    value: String(t.id),
-                  })),
-                ]}
-                value={serviceTypeFilter}
-                onValueChange={handleTypeChange}
-                placeholder="All Types"
-                searchPlaceholder="Search type..."
-                className="w-full h-9"
-              />
-
-              <SearchableSelect
-                options={[
-                  { label: "All Service POs", value: "all" },
-                  ...filteredPOOptions.map(po => ({ label: po.name, value: po.name }))
-                ]}
-                value={poFilter}
-                onValueChange={(v) => { setPoFilter(v); setDetailPage(1); }}
-                placeholder="All Service POs"
-                searchPlaceholder="Search PO..."
-                className="w-full h-9"
-              />
-            </div>
-          }
+          toolbar={null}
         />
         </>
       )}
