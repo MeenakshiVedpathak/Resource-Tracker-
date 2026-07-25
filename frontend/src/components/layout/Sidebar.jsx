@@ -240,7 +240,7 @@ const Sidebar = () => {
               transition={{ duration: 0.15 }}
               className="font-bold text-lg text-white whitespace-nowrap overflow-hidden"
             >
-              PMS Portal
+              RUT Portal
             </motion.span>
           )}
         </AnimatePresence>

@@ -1091,6 +1091,8 @@ const Dashboard = () => {
     const scrollEl = outerRef.current?.closest('main') ?? document.documentElement;
     let lastY = scrollEl.scrollTop;
     let visible = true;
+    let hovering = false;
+    let autoHideTimer = null;
 
     // Driven directly through the ref (not React state) so hiding/showing the sticky
     // header never triggers a re-render of this whole (very large, chart-heavy) page —
@@ -1098,23 +1100,55 @@ const Dashboard = () => {
     // flip re-rendered ~12 unmemoized charts, so rapid scrolling queued up a pile of
     // full-page re-renders behind each other. A direct style mutation is instant
     // regardless of how expensive the rest of the tree is.
+    const hide = () => {
+      if (!visible) return;
+      visible = false;
+      if (headerRef.current) headerRef.current.style.transform = 'translateY(-110%)';
+    };
+    const show = () => {
+      if (visible) return;
+      visible = true;
+      if (headerRef.current) headerRef.current.style.transform = 'translateY(0)';
+    };
+
+    // A scroll-up reveal is meant as a quick peek, not a permanent pin — unless the
+    // user actually moves onto it, it drops back out of view once scrolling settles.
+    // Skipped right at the true top (scrollTop <= 4), where the header is just sitting
+    // in its normal in-flow spot rather than floating over content.
+    const scheduleAutoHide = () => {
+      clearTimeout(autoHideTimer);
+      autoHideTimer = setTimeout(() => {
+        if (!hovering && scrollEl.scrollTop > 4) hide();
+      }, 1000);
+    };
+
     const onScroll = () => {
       const y = scrollEl.scrollTop;
-      const shouldShow = y < lastY;
-      const shouldHide = y > lastY && y > 4;
+      const scrollingUp   = y < lastY;
+      const scrollingDown = y > lastY && y > 4;
       lastY = y;
 
-      if (shouldHide && visible) {
-        visible = false;
-        if (headerRef.current) headerRef.current.style.transform = 'translateY(-110%)';
-      } else if (shouldShow && !visible) {
-        visible = true;
-        if (headerRef.current) headerRef.current.style.transform = 'translateY(0)';
+      if (scrollingDown) {
+        clearTimeout(autoHideTimer);
+        hide();
+      } else if (scrollingUp) {
+        show();
+        scheduleAutoHide();
       }
     };
 
+    const onMouseEnter = () => { hovering = true; clearTimeout(autoHideTimer); };
+    const onMouseLeave = () => { hovering = false; scheduleAutoHide(); };
+
     scrollEl.addEventListener('scroll', onScroll, { passive: true });
-    return () => scrollEl.removeEventListener('scroll', onScroll);
+    headerRef.current?.addEventListener('mouseenter', onMouseEnter);
+    headerRef.current?.addEventListener('mouseleave', onMouseLeave);
+    return () => {
+      scrollEl.removeEventListener('scroll', onScroll);
+      headerRef.current?.removeEventListener('mouseenter', onMouseEnter);
+      headerRef.current?.removeEventListener('mouseleave', onMouseLeave);
+      clearTimeout(autoHideTimer);
+    };
   }, []);
 
   const month = String(bottomMonthYear.month);

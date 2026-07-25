@@ -279,7 +279,7 @@ const ServicePOSummary = () => {
     <div>
       <PageHeader
         title="Service PO Summary"
-        description="Comprehensive summary of Service POs including hours and billing data."
+        description="Service PO Summary with Hours & Billing"
         actions={
           <div className="flex items-center gap-2">
             <div className="relative">

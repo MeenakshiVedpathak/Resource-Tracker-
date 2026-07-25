@@ -26,8 +26,8 @@ const Topbar = ({ title }) => {
 
         {/* Brand / page title */}
         <div className="flex items-center gap-2 min-w-0">
-          <span className="text-sm font-semibold text-foreground truncate">
-            {title || 'Resource Tracker'}
+          <span className="text-lg font-bold text-foreground truncate">
+            {title || 'Resource Utilization Tracker'}
           </span>
         </div>
 
