@@ -476,7 +476,7 @@ const MonthlyResourceUtilization = () => {
               </div>
             )}
             {summary.leaves_hours != null && (
-              <div className="rounded-md border bg-muted/40 px-3 py-1.5 text-xs">
+              <div className="rounded-md border bg-amber-500/10 px-3 py-1.5 text-xs text-amber-700 dark:text-amber-400">
                 Leaves&nbsp;
                 <span className="font-semibold tabular-nums">{Number(summary.leaves_hours).toFixed(1)} hrs</span>
               </div>

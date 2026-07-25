@@ -177,16 +177,16 @@ const MonthlyCostDetail = () => {
         description={formatMonthYear(Number(month), Number(year))}
         actions={
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => navigate(ROUTES.MONTHLY_COSTS)}>
-              <ArrowLeft className="mr-1.5 h-4 w-4" />
-              Back
-            </Button>
             {canManage && (
               <Button size="sm" onClick={() => navigate(buildPath(ROUTES.MONTHLY_COST_NEW, { month, year }))}>
                 <Plus className="mr-1.5 h-4 w-4" />
                 Add Record
               </Button>
             )}
+            <Button variant="outline" size="sm" onClick={() => navigate(ROUTES.MONTHLY_COSTS)}>
+              <ArrowLeft className="mr-1.5 h-4 w-4" />
+              Back
+            </Button>
           </div>
         }
       />

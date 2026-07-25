@@ -1048,7 +1048,6 @@ const Dashboard = () => {
   const [topPOFilter, setTopPOFilter]         = useState('billable');
   const [filtersOpen, setFiltersOpen]         = useState(true);
   const [viewMode, setViewMode]               = useState('quarterly');
-  const [headerVisible, setHeaderVisible]     = useState(true);
 
   const headerRef       = useRef(null);
   const outerRef        = useRef(null);
@@ -1090,19 +1089,27 @@ const Dashboard = () => {
   useEffect(() => {
     // Use closest('main') — the definitive scroll container per MainLayout
     const scrollEl = outerRef.current?.closest('main') ?? document.documentElement;
-    let lastChangeY = 0;
+    let lastY = scrollEl.scrollTop;
     let visible = true;
 
+    // Driven directly through the ref (not React state) so hiding/showing the sticky
+    // header never triggers a re-render of this whole (very large, chart-heavy) page —
+    // routing it through setState was the actual cause of the multi-second lag: every
+    // flip re-rendered ~12 unmemoized charts, so rapid scrolling queued up a pile of
+    // full-page re-renders behind each other. A direct style mutation is instant
+    // regardless of how expensive the rest of the tree is.
     const onScroll = () => {
       const y = scrollEl.scrollTop;
-      if (visible && y > lastChangeY + 60 && y > 80) {
-        setHeaderVisible(false);
+      const shouldShow = y < lastY;
+      const shouldHide = y > lastY && y > 4;
+      lastY = y;
+
+      if (shouldHide && visible) {
         visible = false;
-        lastChangeY = y;
-      } else if (!visible && y < lastChangeY - 20) {
-        setHeaderVisible(true);
+        if (headerRef.current) headerRef.current.style.transform = 'translateY(-110%)';
+      } else if (shouldShow && !visible) {
         visible = true;
-        lastChangeY = y;
+        if (headerRef.current) headerRef.current.style.transform = 'translateY(0)';
       }
     };
 
@@ -1394,7 +1401,7 @@ const Dashboard = () => {
         ref={headerRef}
         className="sticky top-0 z-20 -mx-6 px-6 bg-background/95 backdrop-blur-sm border-b shadow-sm"
         style={{
-          transform: headerVisible ? 'translateY(0)' : 'translateY(-110%)',
+          transform: 'translateY(0)',
           transition: 'transform 0.3s cubic-bezier(0.4,0,0.2,1)',
         }}
       >

@@ -381,7 +381,7 @@ const AIInsights = () => {
                 </motion.span>
               )}
             </AnimatePresence>
-            {audienceOptions.length > 0 && (
+            {/* {audienceOptions.length > 0 && (
               <Select value={audience} onValueChange={setAudience}>
                 <SelectTrigger className="w-40 h-9 rounded-xl gap-1.5 bg-background">
                   <Users className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
@@ -394,7 +394,7 @@ const AIInsights = () => {
                   ))}
                 </SelectContent>
               </Select>
-            )}
+            )} */}
             <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching} className="h-9 rounded-xl gap-1.5 bg-background">
               <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? 'animate-spin' : ''}`} />
               {/* <span className="hidden sm:inline">Refresh</span> */}

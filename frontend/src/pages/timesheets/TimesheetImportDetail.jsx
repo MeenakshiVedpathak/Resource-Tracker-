@@ -479,7 +479,7 @@ const TimesheetImportDetail = () => {
             )}
             {canEdit && !isLocked && (
               <Button
-                variant="outline"
+                variant="success"
                 size="sm"
                 onClick={() => setIsPublishConfirmOpen(true)}
                 disabled={editedCount > 0 || isSaving || publishMutation.isPending}
@@ -489,9 +489,9 @@ const TimesheetImportDetail = () => {
               </Button>
             )}
             {canAddEntry && importRecord && !isLocked && (
-              <Button variant="outline" size="sm" onClick={openAddRow}>
+              <Button size="sm" onClick={openAddRow}>
                 <Plus className="mr-1.5 h-4 w-4" />
-                Add New Record
+                Add Record
               </Button>
             )}
             <Button

@@ -467,7 +467,7 @@ const ResourceProjectUtilization = () => {
               Customer Non-Billable&nbsp;
               <span className="font-semibold tabular-nums">{pageTotals.customerNonBillableHours.toFixed(1)} hrs</span>
             </div>
-            <div className="rounded-md border bg-muted/40 px-3 py-1.5 text-xs">
+            <div className="rounded-md border bg-green-500/10 px-3 py-1.5 text-xs text-green-700 dark:text-green-400">
               Billable Amount&nbsp;
               <span className="font-semibold tabular-nums">{formatCurrency(pageTotals.billableAmount)}</span>
             </div>
@@ -600,7 +600,7 @@ const ResourceProjectUtilization = () => {
                     Total Hours
                     <p className="text-sm font-semibold tabular-nums">{formatHours(selectedRow.totalHours)}</p>
                   </div>
-                  <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs">
+                  <div className="rounded-md border bg-green-500/10 px-3 py-2 text-xs text-green-700 dark:text-green-400">
                     Billable Amount
                     <p className="text-sm font-semibold tabular-nums">{formatCurrency(selectedRow.billableAmount)}</p>
                   </div>

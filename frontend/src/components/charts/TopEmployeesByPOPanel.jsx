@@ -13,12 +13,7 @@ const PAGE_SIZE = 9;
 
 const EMP_COLORS = ['#6366f1', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6'];
 
-const cNum = (v) => {
-  const n = Number(v) || 0;
-  if (n >= 100000) return `${(n / 100000).toFixed(1)}L`;
-  if (n >= 1000)   return `${(n / 1000).toFixed(1)}k`;
-  return String(Math.round(n));
-};
+const cNum = (v) => (Math.round((Number(v) || 0) * 10) / 10).toLocaleString('en-IN');
 
 /* ── Stat card ── */
 const StatItem = ({ label, value, icon: Icon, cardBg, borderColor, iconBg, iconColor, valueColor, subtext }) => (
