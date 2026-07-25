@@ -720,7 +720,8 @@ import {
 } from 'lucide-react';
 import { ROUTES } from '@/constants/routes';
 import { useDashboardAnalytics, useDashboardAnalytics2 } from '@/hooks/useDashboard';
-import { useCanViewOriginalData } from '@/hooks/usePermissions';
+import { useCanViewOriginalData, useHasForm } from '@/hooks/usePermissions';
+import { FORM_NAMES } from '@/constants/rbacForms';
 import { useAuth } from '@/hooks/useAuth';
 import { useActiveEmployees } from '@/hooks/useEmployees';
 import { useActiveClients } from '@/hooks/useClients';
@@ -1034,6 +1035,7 @@ const Dashboard = () => {
   const [clientId, setClientId]               = useState('');
   const [servicePOId, setServicePOId]         = useState('');
   const canViewOriginal = useCanViewOriginalData();
+  const canViewAIInsights = useHasForm(FORM_NAMES.AI_INSIGHTS);
   const [hoursSource, setHoursSource]         = useState('M');
 
   useEffect(() => {
@@ -1467,41 +1469,43 @@ const Dashboard = () => {
             </div>
           )}
 
-          <motion.button
-            onClick={() => navigate(ROUTES.AI_INSIGHTS)}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.96 }}
-            animate={{
-              boxShadow: [
-                '0 2px 10px 0 rgba(124,58,237,0.25)',
-                '0 4px 20px 2px rgba(37,99,235,0.35)',
-                '0 2px 10px 0 rgba(124,58,237,0.25)',
-              ],
-            }}
-            transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
-            className="group h-9 pl-1.5 pr-1.5 hover:pr-3.5 rounded-xl inline-flex items-center gap-0 hover:gap-2 text-xs font-extrabold text-white border border-white/20 transition-all duration-300"
-            style={{ background: 'linear-gradient(135deg, #8b5cf6, #6d28d9 45%, #2563eb)' }}
-          >
-            {/* spinning gradient ring + pulsing sparkle — same mark as the AI Insights page */}
-            <span className="relative h-6 w-6 shrink-0">
-              <motion.span
-                className="absolute inset-0 rounded-lg"
-                style={{ background: 'conic-gradient(from 0deg, #fff 0deg, transparent 100deg, transparent 260deg, #fff 360deg)' }}
-                animate={{ rotate: 360 }}
-                transition={{ duration: 4, repeat: Infinity, ease: 'linear' }}
-              />
-              <span className="absolute inset-[1.5px] rounded-[7px] bg-white flex items-center justify-center">
+          {canViewAIInsights && (
+            <motion.button
+              onClick={() => navigate(ROUTES.AI_INSIGHTS)}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.96 }}
+              animate={{
+                boxShadow: [
+                  '0 2px 10px 0 rgba(124,58,237,0.25)',
+                  '0 4px 20px 2px rgba(37,99,235,0.35)',
+                  '0 2px 10px 0 rgba(124,58,237,0.25)',
+                ],
+              }}
+              transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
+              className="group h-9 pl-1.5 pr-1.5 hover:pr-3.5 rounded-xl inline-flex items-center gap-0 hover:gap-2 text-xs font-extrabold text-white border border-white/20 transition-all duration-300"
+              style={{ background: 'linear-gradient(135deg, #8b5cf6, #6d28d9 45%, #2563eb)' }}
+            >
+              {/* spinning gradient ring + pulsing sparkle — same mark as the AI Insights page */}
+              <span className="relative h-6 w-6 shrink-0">
                 <motion.span
-                  className="inline-flex"
-                  animate={{ scale: [1, 1.18, 1] }}
-                  transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
-                >
-                  <Sparkles className="h-3.5 w-3.5 text-violet-600" />
-                </motion.span>
+                  className="absolute inset-0 rounded-lg"
+                  style={{ background: 'conic-gradient(from 0deg, #fff 0deg, transparent 100deg, transparent 260deg, #fff 360deg)' }}
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 4, repeat: Infinity, ease: 'linear' }}
+                />
+                <span className="absolute inset-[1.5px] rounded-[7px] bg-white flex items-center justify-center">
+                  <motion.span
+                    className="inline-flex"
+                    animate={{ scale: [1, 1.18, 1] }}
+                    transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
+                  >
+                    <Sparkles className="h-3.5 w-3.5 text-violet-600" />
+                  </motion.span>
+                </span>
               </span>
-            </span>
-            <span className="max-w-0 group-hover:max-w-[90px] overflow-hidden whitespace-nowrap opacity-0 group-hover:opacity-100 transition-all duration-300">AI Insights</span>
-          </motion.button>
+              <span className="max-w-0 group-hover:max-w-[90px] overflow-hidden whitespace-nowrap opacity-0 group-hover:opacity-100 transition-all duration-300">AI Insights</span>
+            </motion.button>
+          )}
 
           <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching} className="h-9 rounded-xl gap-1.5">
             <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? 'animate-spin' : ''}`} />

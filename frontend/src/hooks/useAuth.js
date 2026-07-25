@@ -8,6 +8,7 @@ import {
   selectAuthRoles,
   selectAuthRoleIds,
   selectAccessibleForms,
+  selectAccessibleFormsLoaded,
   selectIsOriginalDataVisible,
   selectHasWriteAccess,
   logout,
@@ -27,6 +28,7 @@ export const useAuth = () => {
   const roleObjects = useSelector(selectAuthRoles);   // [{ id, name, permission }] — RBAC source of truth
   const roleIds = useSelector(selectAuthRoleIds);
   const accessibleForms = useSelector(selectAccessibleForms); // { [module]: [{ id, name }] }
+  const accessibleFormsLoaded = useSelector(selectAccessibleFormsLoaded); // false only right after a fresh login, until forms are fetched
   const isOriginalDataVisible = useSelector(selectIsOriginalDataVisible); // gates Modified/Original toggle
   const hasWriteAccess = useSelector(selectHasWriteAccess);   // any role carries "Read & Write"
 
@@ -54,6 +56,7 @@ export const useAuth = () => {
     roleObjects,
     roleIds,
     accessibleForms,
+    accessibleFormsLoaded,
     isOriginalDataVisible,
     hasWriteAccess,
     hasRole,

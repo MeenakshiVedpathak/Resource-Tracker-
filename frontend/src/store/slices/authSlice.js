@@ -14,6 +14,12 @@ const initialState = {
   roles: getStoredRoles(),
   // RBAC: module -> [{ id, name }] accessible-forms map from POST /roles/forms
   accessibleForms: getStoredAccessibleForms(),
+  // False only in the brief window right after a fresh login, while accessibleForms has been
+  // cleared and the authoritative POST /roles/forms fetch is still in flight — lets
+  // ProtectedRoute show a loader instead of misreading "not loaded yet" as "not authorized".
+  // True by default (including on a hard refresh) since the localStorage-restored map above is
+  // usable immediately; MainLayout's useSyncAccessibleForms silently refreshes it regardless.
+  accessibleFormsLoaded: true,
   // Gates the Modified/Original hours-source toggle — from GET /roles/form-mappings/:userId
   isOriginalDataVisible: getStoredOriginalDataVisible(),
 };
@@ -40,6 +46,7 @@ const authSlice = createSlice({
       // post-login fetch (Step 3) repopulates it for the new roles.
       state.accessibleForms = {};
       saveAccessibleForms({});
+      state.accessibleFormsLoaded = false;
 
       state.isOriginalDataVisible = false;
       saveOriginalDataVisible(false);
@@ -64,6 +71,7 @@ const authSlice = createSlice({
       const forms = action.payload ?? {};
       state.accessibleForms = forms;
       saveAccessibleForms(forms);
+      state.accessibleFormsLoaded = true;
     },
     setIsOriginalDataVisible: (state, action) => {
       const visible = !!action.payload;
@@ -77,6 +85,7 @@ const authSlice = createSlice({
       state.isAuthenticated = false;
       state.roles = [];
       state.accessibleForms = {};
+      state.accessibleFormsLoaded = true;
       state.isOriginalDataVisible = false;
       clearAuth();
     },
@@ -101,6 +110,7 @@ export const selectAuthRoleIds = createSelector([selectAuthRoles], (roles) => ro
 
 // module -> [{ id, name }]
 export const selectAccessibleForms = (state) => state.auth.accessibleForms ?? EMPTY_FORMS;
+export const selectAccessibleFormsLoaded = (state) => state.auth.accessibleFormsLoaded ?? true;
 
 // Gates the Modified/Original hours-source toggle in Reports & Dashboard
 export const selectIsOriginalDataVisible = (state) => !!state.auth.isOriginalDataVisible;
