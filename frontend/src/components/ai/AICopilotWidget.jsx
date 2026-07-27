@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import dayjs from 'dayjs';
 import { Bot, X } from 'lucide-react';
@@ -32,6 +32,7 @@ const AICopilotWidget = () => {
   const { user } = useAuth();
   const displayName = user?.name ?? user?.username ?? user?.email?.split('@')[0] ?? 'there';
   const copilot = useAICopilot();
+  const widgetRef = useRef(null);
   const [chatOpen, setChatOpen] = useState(false);
   const [bubbleVisible, setBubbleVisible] = useState(false);
   // Lazy-init from a sessionStorage cache: MainLayout (and this widget along with it) gets
@@ -79,6 +80,30 @@ const AICopilotWidget = () => {
     sessionStorage.setItem(BUBBLE_SESSION_KEY, '1');
   };
 
+  const closeChat = () => {
+    dismissBubble();
+    setChatOpen(false);
+  };
+
+  // Click-outside-to-close: only while the chat panel is open. Ignores clicks inside Radix
+  // Popover/Select content (e.g. the employee picker in AICopilotHub) — that content renders
+  // via a portal straight onto <body>, outside this widget's own DOM subtree, so a plain
+  // "is the click inside my container" check would otherwise treat picking an option as an
+  // outside click and close the whole panel out from under it.
+  useEffect(() => {
+    if (!chatOpen) return undefined;
+
+    const handlePointerDown = (e) => {
+      if (widgetRef.current?.contains(e.target)) return;
+      if (e.target.closest?.('[data-radix-popper-content-wrapper]')) return;
+      closeChat();
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatOpen]);
+
   const openChatFromBubble = () => {
     if (copilot.messages.length === 0) {
       if (digest.answer) {
@@ -97,10 +122,10 @@ const AICopilotWidget = () => {
   };
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
+    <div ref={widgetRef} className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
       <AnimatePresence>
         {chatOpen && (
-          <AIChatPanel key="chat-panel" copilot={copilot} onClose={() => { dismissBubble(); setChatOpen(false); }} />
+          <AIChatPanel key="chat-panel" copilot={copilot} onClose={closeChat} />
         )}
         {!chatOpen && bubbleVisible && (
           <AICopilotBubble
