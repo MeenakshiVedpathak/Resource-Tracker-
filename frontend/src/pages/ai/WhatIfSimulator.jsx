@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import dayjs from 'dayjs';
 import { Sliders, CalendarClock, Wallet, Users, Activity } from 'lucide-react';
 import AIPageHeader from '@/components/ai/AIPageHeader';
 import { useActiveServicePOs, useServicePO, useServicePOUtilisation } from '@/hooks/useServicePOs';
@@ -8,8 +9,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatCurrency, formatDate, formatPercentage } from '@/utils/formatters';
 
 const now = new Date();
-const CURRENT_MONTH = now.getMonth() + 1;
-const CURRENT_YEAR = now.getFullYear();
+// Monthly costs are only uploaded at month-end, so the current calendar month never has a
+// real cost record yet — use the last COMPLETED month as the real-cost baseline instead.
+const lastCompletedMonth = dayjs().subtract(1, 'month');
+const REPORT_MONTH = lastCompletedMonth.month() + 1;
+const REPORT_YEAR = lastCompletedMonth.year();
 
 const Slider = ({ label, value, onChange, min, max, step = 1, format }) => (
   <div>
@@ -52,7 +56,7 @@ const WhatIfSimulator = () => {
   const { data: activePOs = [] } = useActiveServicePOs();
   const { data: po } = useServicePO(poId);
   const { data: utilisation } = useServicePOUtilisation(poId);
-  const { data: costsRes } = useMonthlyCosts({ month: CURRENT_MONTH, year: CURRENT_YEAR, limit: 200 });
+  const { data: costsRes } = useMonthlyCosts({ month: REPORT_MONTH, year: REPORT_YEAR, limit: 200 });
 
   const options = useMemo(
     () => activePOs.map((p) => ({ value: p.id, label: `${p.service_po_name} (${p.service_po_code ?? p.client_name ?? ''})` })),

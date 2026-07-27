@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import dayjs from 'dayjs';
 import { Bot, X } from 'lucide-react';
 import AICopilotBubble from './AICopilotBubble';
 import AIChatPanel from './AIChatPanel';
@@ -10,8 +11,17 @@ import { formatGreetingMarkdown } from '@/utils/aiCopilotEngine';
 import { cn } from '@/utils/cn';
 
 const BUBBLE_SESSION_KEY = 'rut_ai_copilot_bubble_shown';
+const DIGEST_CACHE_KEY = 'rut_ai_copilot_digest_cache';
 const BUBBLE_DELAY_MS = 1200;
-const DIGEST_QUESTION = 'Give me an executive summary for this month';
+// Timesheets/costs are only uploaded at month-end, so the current calendar month always
+// has zero real data — an unqualified "this month" question gets answered against that
+// empty period by the backend's own period defaulting. Ask about the last COMPLETED month.
+const DIGEST_QUESTION = `Give me an executive summary for ${dayjs().subtract(1, 'month').format('MMMM YYYY')}`;
+
+// Module-level (not component state) so every mount within the same page load shares ONE
+// in-flight request instead of racing — see the comment above the digest useState below for
+// why this widget can end up mounting more than once per "session" from the user's perspective.
+let sharedDigestPromise = null;
 
 // Single mount point for the whole AI Copilot experience (Features 1 & 3): a floating
 // action button, a proactive greeting bubble that surfaces once per session (backed by
@@ -24,16 +34,41 @@ const AICopilotWidget = () => {
   const copilot = useAICopilot();
   const [chatOpen, setChatOpen] = useState(false);
   const [bubbleVisible, setBubbleVisible] = useState(false);
-  const [digest, setDigest] = useState({ loading: true, answer: null, error: null });
+  // Lazy-init from a sessionStorage cache: MainLayout (and this widget along with it) gets
+  // remounted more often than it looks like it should — the app wraps its entire route tree,
+  // layout included, in one top-level <Suspense>, so the first visit to any not-yet-loaded
+  // lazy page suspends and remounts everything under it, not just that page. Rather than
+  // touch that (pre-existing, app-wide routing structure), this widget just makes its own
+  // digest fetch remount-proof: once fetched, cache it for the rest of the browser session
+  // so a remount reads the cache instead of re-hitting the shared aiLimiter-limited endpoint.
+  const [digest, setDigest] = useState(() => {
+    try {
+      const cached = sessionStorage.getItem(DIGEST_CACHE_KEY);
+      return cached ? { loading: false, answer: JSON.parse(cached), error: null } : { loading: true, answer: null, error: null };
+    } catch {
+      return { loading: true, answer: null, error: null };
+    }
+  });
 
   useEffect(() => {
-    if (sessionStorage.getItem(BUBBLE_SESSION_KEY)) return undefined;
+    let timer;
+    if (!sessionStorage.getItem(BUBBLE_SESSION_KEY)) {
+      timer = setTimeout(() => setBubbleVisible(true), BUBBLE_DELAY_MS);
+    }
 
-    const timer = setTimeout(() => setBubbleVisible(true), BUBBLE_DELAY_MS);
-
-    aiCopilotApi.query({ question: DIGEST_QUESTION, roleId: user?.role_id, hoursSource: 'M' })
-      .then((res) => setDigest({ loading: false, answer: res?.data?.answer ?? null, error: null }))
-      .catch(() => setDigest({ loading: false, answer: null, error: true }));
+    if (!sessionStorage.getItem(DIGEST_CACHE_KEY)) {
+      if (!sharedDigestPromise) {
+        sharedDigestPromise = aiCopilotApi.query({ question: DIGEST_QUESTION, roleId: user?.role_id, hoursSource: 'M' })
+          .then((res) => res?.data?.answer ?? null)
+          .catch(() => null);
+      }
+      sharedDigestPromise.then((answer) => {
+        setDigest({ loading: false, answer, error: answer ? null : true });
+        if (answer) {
+          try { sessionStorage.setItem(DIGEST_CACHE_KEY, JSON.stringify(answer)); } catch { /* storage full/unavailable — just won't cache */ }
+        }
+      });
+    }
 
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -65,7 +100,7 @@ const AICopilotWidget = () => {
     <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
       <AnimatePresence>
         {chatOpen && (
-          <AIChatPanel key="chat-panel" copilot={copilot} onClose={() => setChatOpen(false)} />
+          <AIChatPanel key="chat-panel" copilot={copilot} onClose={() => { dismissBubble(); setChatOpen(false); }} />
         )}
         {!chatOpen && bubbleVisible && (
           <AICopilotBubble

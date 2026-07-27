@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import dayjs from 'dayjs';
 import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -19,6 +20,9 @@ import { formatCurrency, formatNumber, formatPercentage } from '@/utils/formatte
 const now = new Date();
 const DEFAULT_FY = now.getMonth() + 1 >= 4 ? now.getFullYear() : now.getFullYear() - 1;
 const FY_OPTIONS = [DEFAULT_FY - 1, DEFAULT_FY, DEFAULT_FY + 1];
+// Timesheets are only uploaded at month-end, so bench status (utilization-dependent) is
+// asked about the last COMPLETED month rather than left to default to the empty current one.
+const LAST_MONTH_LABEL = dayjs().subtract(1, 'month').format('MMMM YYYY');
 
 const Tile = ({ icon: Icon, label, value, loading }) => (
   <Card>
@@ -45,7 +49,7 @@ const ExecutiveReport = () => {
   useEffect(() => {
     financials.ask(`What is our total revenue, cost, and profit for fiscal year ${fiscalYear}?`);
     summary.ask('Give me an executive summary for this fiscal year, including risks and recommendations.');
-    bench.ask('How many resources are on the bench and what should we do about it?');
+    bench.ask(`How many resources were on the bench in ${LAST_MONTH_LABEL} and what should we do about it?`);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fiscalYear]);
 

@@ -14,12 +14,14 @@ import { formatDate, formatHours, formatMonthYear, getInitials } from '@/utils/f
 import { ROUTES, buildPath } from '@/constants/routes';
 
 const now = new Date();
-// Last 3 calendar months (current + previous 2), oldest first — a small real trend
-// without needing a new backend endpoint.
-const TREND_MONTHS = [2, 1, 0].map((offset) => {
+// Last 3 COMPLETED calendar months, oldest first — timesheets are only uploaded at
+// month-end, so the current calendar month (offset 0) always has zero real data and would
+// show as a fake "drop" at the end of the trend. Offsets start at 3, not 0.
+const TREND_MONTHS = [3, 2, 1].map((offset) => {
   const d = new Date(now.getFullYear(), now.getMonth() - offset, 1);
   return { month: d.getMonth() + 1, year: d.getFullYear() };
 });
+const LAST_MONTH_LABEL = formatMonthYear(TREND_MONTHS[2].month, TREND_MONTHS[2].year);
 
 const useEmployeeMonth = (employeeId, month, year) => {
   const { user } = useAuth();
@@ -48,7 +50,7 @@ const EmployeeAIProfile = () => {
 
   useEffect(() => {
     if (employee?.full_name) {
-      perf.ask(`How is ${employee.full_name} performing and what would you recommend for them?`);
+      perf.ask(`How did ${employee.full_name} perform in ${LAST_MONTH_LABEL} and what would you recommend for them?`);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [employee?.full_name]);
@@ -129,13 +131,13 @@ const EmployeeAIProfile = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-1.5"><Briefcase className="h-4 w-4 text-primary" /> Current Projects</CardTitle>
+            <CardTitle className="text-sm flex items-center gap-1.5"><Briefcase className="h-4 w-4 text-primary" /> Projects ({LAST_MONTH_LABEL})</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             {latest.isPending ? (
               <Skeleton className="h-16 w-full" />
             ) : projects.length === 0 ? (
-              <p className="text-xs text-muted-foreground italic">No project hours logged this month.</p>
+              <p className="text-xs text-muted-foreground italic">No project hours logged in {LAST_MONTH_LABEL}.</p>
             ) : projects.map((p, i) => (
               <div key={i} className="flex items-center justify-between text-sm gap-2">
                 <span className="truncate">{p.projectName ?? '—'}</span>
@@ -147,7 +149,7 @@ const EmployeeAIProfile = () => {
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-1.5"><Clock className="h-4 w-4 text-primary" /> This Month</CardTitle>
+            <CardTitle className="text-sm flex items-center gap-1.5"><Clock className="h-4 w-4 text-primary" /> Last Month</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
             <div className="flex items-center justify-between">

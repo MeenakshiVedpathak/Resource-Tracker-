@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import dayjs from 'dayjs';
 import { HeartPulse, Wallet, CalendarClock, Activity, Users, Sparkles } from 'lucide-react';
 import AIPageHeader from '@/components/ai/AIPageHeader';
 import { useAIQuery } from '@/hooks/useAIQuery';
@@ -14,6 +15,8 @@ import { formatDate, formatHours, formatPercentage } from '@/utils/formatters';
 // docs — project_health is on the unsupported list), so the health score here is computed
 // deterministically from real Service PO data rather than asked of the AI. The AI Notes
 // section below still asks a real, supported "project" question for qualitative commentary.
+const LAST_MONTH_LABEL = dayjs().subtract(1, 'month').format('MMMM YYYY');
+
 const computeHealth = (po, utilisation) => {
   const expectedHours = Number(po?.expected_man_hours ?? 0);
   const loggedHours = Number(utilisation?.total_hours_logged ?? utilisation?.hours_logged ?? 0);
@@ -65,7 +68,7 @@ const ProjectHealthCard = () => {
 
   useEffect(() => {
     if (po?.service_po_name) {
-      notes.ask(`How is the project "${po.service_po_name}" performing?`);
+      notes.ask(`How did the project "${po.service_po_name}" perform in ${LAST_MONTH_LABEL}?`);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [po?.service_po_name]);

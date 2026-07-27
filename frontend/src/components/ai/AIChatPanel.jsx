@@ -65,27 +65,30 @@ const AIChatPanel = ({ copilot, onClose, className }) => {
               <p className="text-[10px] text-white/75 mt-1">Ask about utilization, budget, bench &amp; more</p>
             </div>
           </div>
-          <div className="flex items-center gap-1 shrink-0">
+          <div className="flex items-center gap-1.5 shrink-0">
             <button
+              type="button"
               onClick={() => setView((v) => (v === 'chat' ? 'hub' : 'chat'))}
               title={view === 'chat' ? 'Explore AI Copilot pages' : 'Back to chat'}
-              className="h-7 w-7 rounded-lg flex items-center justify-center text-white/80 hover:text-white hover:bg-white/15 transition-colors"
+              className="h-9 w-9 shrink-0 rounded-lg flex items-center justify-center text-white/80 hover:text-white hover:bg-white/15 active:bg-white/25 transition-colors touch-manipulation"
             >
-              {view === 'chat' ? <LayoutGrid className="h-3.5 w-3.5" /> : <MessageSquare className="h-3.5 w-3.5" />}
+              {view === 'chat' ? <LayoutGrid className="h-4 w-4" /> : <MessageSquare className="h-4 w-4" />}
             </button>
             <button
+              type="button"
               onClick={clearConversation}
               title="Clear conversation"
-              className="h-7 w-7 rounded-lg flex items-center justify-center text-white/80 hover:text-white hover:bg-white/15 transition-colors"
+              className="h-9 w-9 shrink-0 rounded-lg flex items-center justify-center text-white/80 hover:text-white hover:bg-white/15 active:bg-white/25 transition-colors touch-manipulation"
             >
-              <Trash2 className="h-3.5 w-3.5" />
+              <Trash2 className="h-4 w-4" />
             </button>
             <button
+              type="button"
               onClick={onClose}
               title="Close"
-              className="h-7 w-7 rounded-lg flex items-center justify-center text-white/80 hover:text-white hover:bg-white/15 transition-colors"
+              className="h-9 w-9 shrink-0 rounded-lg flex items-center justify-center text-white/80 hover:text-white hover:bg-white/15 active:bg-white/25 transition-colors touch-manipulation"
             >
-              <X className="h-4 w-4" />
+              <X className="h-5 w-5" />
             </button>
           </div>
         </div>

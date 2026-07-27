@@ -115,7 +115,7 @@ const ForecastDashboard = () => {
               ))}
             </div>
           ) : <p className="text-xs text-muted-foreground italic">Not enough historical data yet.</p>}
-          <p className="text-[11px] text-muted-foreground mt-3">Based on the last 3 months' real revenue.</p>
+          <p className="text-[11px] text-muted-foreground mt-3">Based on the last 3 completed months' real revenue.</p>
         </ForecastCard>
 
         <ForecastCard icon={Activity} title="Utilization Forecast" loading={analyticsLoading}>
