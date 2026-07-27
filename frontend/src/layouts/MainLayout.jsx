@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom';
 import Sidebar from '@/components/layout/Sidebar';
 import Topbar from '@/components/layout/Topbar';
+import AICopilotWidget from '@/components/ai/AICopilotWidget';
 import { useSyncAccessibleForms } from '@/hooks/useAccessibleForms';
 
 const MainLayout = () => {
@@ -32,6 +33,7 @@ const MainLayout = () => {
           </footer>
         </main>
       </div>
+      <AICopilotWidget />
     </div>
   );
 };

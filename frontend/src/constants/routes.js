@@ -7,6 +7,17 @@ export const ROUTES = {
   DASHBOARD: '/',
   AI_INSIGHTS: '/ai-insights',
 
+  // AI Copilot — new pages added on top of the existing app, reachable from the
+  // floating AI Copilot widget's launcher rather than the RBAC-driven sidebar
+  // (see components/ai/AICopilotHub.jsx for why).
+  AI_ROOT_CAUSE: '/ai/root-cause',
+  AI_EXECUTIVE_REPORT: '/ai/executive-report',
+  AI_FORECAST: '/ai/forecast',
+  AI_RECOMMENDATIONS: '/ai/recommendations',
+  AI_WHAT_IF: '/ai/what-if',
+  AI_PROJECT_HEALTH: '/ai/project-health',
+  EMPLOYEE_AI_PROFILE: '/employees/:id/ai-profile',
+
   // People
   EMPLOYEES: '/employees',
   EMPLOYEE_NEW: '/employees/new',

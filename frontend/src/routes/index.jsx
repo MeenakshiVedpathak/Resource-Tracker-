@@ -60,6 +60,15 @@ const ServicePOSummary = lazy(() => import('@/pages/reports/ServicePOSummary'));
 const MonthlyResourceUtilization = lazy(() => import('@/pages/reports/MonthlyResourceUtilization'));
 const ResourceProjectUtilization = lazy(() => import('@/pages/reports/ResourceProjectUtilization'));
 
+// ── AI Copilot (new pages, launched from the floating AI Copilot widget) ──
+const RootCauseView = lazy(() => import('@/pages/ai/RootCauseView'));
+const ExecutiveReport = lazy(() => import('@/pages/ai/ExecutiveReport'));
+const ForecastDashboard = lazy(() => import('@/pages/ai/ForecastDashboard'));
+const ResourceRecommendations = lazy(() => import('@/pages/ai/ResourceRecommendations'));
+const WhatIfSimulator = lazy(() => import('@/pages/ai/WhatIfSimulator'));
+const ProjectHealthCard = lazy(() => import('@/pages/ai/ProjectHealthCard'));
+const EmployeeAIProfile = lazy(() => import('@/pages/ai/EmployeeAIProfile'));
+
 // ── Settings ──
 const Profile = lazy(() => import('@/pages/Profile'));
 const Notifications = lazy(() => import('@/pages/Notifications'));
@@ -188,6 +197,18 @@ const AppRoutes = () => (
           <Route path={ROUTES.REPORT_MONTHLY_RESOURCE_UTILIZATION} element={<ProtectedRoute formName={FORM_NAMES.REPORT_MONTHLY_UTILIZATION}><MonthlyResourceUtilization /></ProtectedRoute>} />
           <Route path={ROUTES.REPORT_RESOURCE_PROJECT_UTILIZATION} element={<ProtectedRoute formName={FORM_NAMES.REPORT_RESOURCE_PROJECT_UTILIZATION}><ResourceProjectUtilization /></ProtectedRoute>} />
         </Route>
+
+        {/* AI Copilot — new, additive pages. No RBAC form rows exist for these yet (they're
+            brand new), so — same as Profile/Notifications below — they're available to any
+            authenticated user rather than blocked behind a formName gate that would 404 for
+            everyone until an admin manually creates matching Forms + Role-Form-Mapping rows. */}
+        <Route path={ROUTES.AI_ROOT_CAUSE} element={<RootCauseView />} />
+        <Route path={ROUTES.AI_EXECUTIVE_REPORT} element={<ExecutiveReport />} />
+        <Route path={ROUTES.AI_FORECAST} element={<ForecastDashboard />} />
+        <Route path={ROUTES.AI_RECOMMENDATIONS} element={<ResourceRecommendations />} />
+        <Route path={ROUTES.AI_WHAT_IF} element={<WhatIfSimulator />} />
+        <Route path={ROUTES.AI_PROJECT_HEALTH} element={<ProjectHealthCard />} />
+        <Route path={ROUTES.EMPLOYEE_AI_PROFILE} element={<EmployeeAIProfile />} />
 
         {/* Settings — personal-account pages, always available to any authenticated user */}
         <Route path={ROUTES.PROFILE} element={<Profile />} />
