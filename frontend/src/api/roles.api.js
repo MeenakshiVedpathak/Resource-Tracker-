@@ -5,7 +5,9 @@ export const rolesApi = {
   getById: (id) => apiClient.get(`/roles/${id}`).then((r) => r.data?.data),
   create: (payload) => apiClient.post('/roles', payload).then((r) => r.data),
   update: (id, payload) => apiClient.put(`/roles/${id}`, payload).then((r) => r.data),
-  delete: (id) => apiClient.delete(`/roles/${id}`, { data: { is_delete: true } }).then((r) => r.data),
+  // Hard delete — no request body. Backend blocks it (409) if the role is assigned to any
+  // user, so no soft-delete `is_delete` flag here unlike other masters' delete calls.
+  delete: (id) => apiClient.delete(`/roles/${id}`).then((r) => r.data),
 
   // RBAC: menu/navigation source of truth — always pass the roleIds from the logged-in
   // user's own stored roles, never a client-tampered list.

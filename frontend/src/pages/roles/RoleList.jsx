@@ -1,16 +1,19 @@
 import { useState } from 'react';
 import { useNavigate, Outlet } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Pencil, Layers, Plus, Search, Filter } from 'lucide-react';
-import { useRoles } from '@/hooks/useRoles';
+import { Pencil, Layers, Trash2, Plus, Search, Filter } from 'lucide-react';
+import { useRoles, useDeleteRole } from '@/hooks/useRoles';
 import { useCanWrite, useHasForm } from '@/hooks/usePermissions';
+import { useNotification } from '@/hooks/useNotification';
 import { useDebounce } from '@/hooks/useDebounce';
+import { extractApiError } from '@/services/apiClient';
 import { buildPath, ROUTES } from '@/constants/routes';
 import { FORM_NAMES } from '@/constants/rbacForms';
 import { formatDate } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
 import StatusBadge from '@/components/common/StatusBadge';
+import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -30,12 +33,14 @@ const TruncatedCell = ({ value, maxWidth = '150px', className }) => {
 
 const RoleList = () => {
   const navigate = useNavigate();
+  const { success, error: showError } = useNotification();
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   const debouncedSearch = useDebounce(search, 400);
   const canWrite = useCanWrite();
@@ -55,9 +60,23 @@ const RoleList = () => {
   };
 
   const { data, isPending } = useRoles(params);
+  const deleteMutation = useDeleteRole();
 
   const roles = data?.data ?? [];
   const meta = data?.meta ?? {};
+
+  const handleDelete = () => {
+    deleteMutation.mutate(deleteTarget.id, {
+      onSuccess: () => {
+        success(`${deleteTarget.role_name} has been deleted.`);
+        setDeleteTarget(null);
+      },
+      onError: (err) => {
+        showError(extractApiError(err));
+        setDeleteTarget(null);
+      },
+    });
+  };
 
   const activeFilterCount = [statusFilter !== 'all' ? 1 : 0].reduce((a, b) => a + b, 0);
 
@@ -65,7 +84,7 @@ const RoleList = () => {
     columnHelper.display({
       id: 'actions',
       header: 'Actions',
-      size: 130,
+      size: 160,
       meta: { sticky: true, left: 0 },
       cell: ({ row }) =>
         canWrite || canManageFormMapping ? (
@@ -90,13 +109,23 @@ const RoleList = () => {
                 <Layers className="h-3 w-3" />
               </Button>
             )}
+            {canWrite && (
+              <Button
+                size="sm"
+                title="Delete"
+                onClick={() => setDeleteTarget(row.original)}
+                className="h-6 w-6 p-0 bg-red-500 hover:bg-red-600 text-white rounded transition-colors"
+              >
+                <Trash2 className="h-3 w-3" />
+              </Button>
+            )}
           </div>
         ) : null,
     }),
     columnHelper.accessor('role_name', {
       header: 'Role Name',
       size: 250,
-      meta: { sticky: true, left: 130 },
+      meta: { sticky: true, left: 160 },
       cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="230px" className="font-medium" />,
     }),
     columnHelper.accessor('permission', {
@@ -203,6 +232,16 @@ const RoleList = () => {
         onSortingChange={(s) => { setSorting(s); setPage(1); }}
         onPageChange={setPage}
         onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
+      />
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title="Delete role?"
+        description={`${deleteTarget?.role_name} will be permanently deleted. This can't be undone, and it's blocked if the role is still assigned to any user.`}
+        confirmLabel="Delete"
+        onConfirm={handleDelete}
+        isLoading={deleteMutation.isPending}
       />
 
       <Outlet />

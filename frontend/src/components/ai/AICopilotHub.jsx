@@ -25,9 +25,15 @@ const AICopilotHub = ({ onNavigated }) => {
   const [pickingEmployee, setPickingEmployee] = useState(false);
   const { data: employees = [] } = useActiveEmployees();
 
+  // Close the panel FIRST, navigate on the next tick — not the other way round. Closing and
+  // routing in the exact same commit confuses framer-motion's AnimatePresence: chatOpen
+  // genuinely flips to false (verified with logging) and the widget stops re-rendering, but
+  // the panel's DOM node is never actually removed, leaving it stuck on screen over the new
+  // page indefinitely. Letting the close animation start in its own isolated commit, with the
+  // route change deferred to a separate tick, avoids the collision.
   const go = (to) => {
-    navigate(to);
     onNavigated?.();
+    setTimeout(() => navigate(to), 0);
   };
 
   return (

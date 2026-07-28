@@ -158,6 +158,9 @@ const AIChatPanel = ({ copilot, onClose, className }) => {
               <Send className="h-4 w-4" />
             </Button>
           </div>
+          <p className="shrink-0 pb-2 text-center text-[10px] text-muted-foreground">
+            AI Copilot can make mistakes. Check important info.
+          </p>
         </>
       )}
     </motion.div>
