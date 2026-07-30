@@ -41,6 +41,11 @@ export const ROUTES = {
   // Role-Form Mapping is a per-row action on the Roles page, not its own menu item
   ROLE_FORM_MAPPING_EDIT: '/roles/:roleId/forms',
 
+  // Company Management (Platform Admin only — multi-tenancy retrofit)
+  COMPANIES: '/companies',
+  COMPANY_NEW: '/companies/new',
+  COMPANY_EDIT: '/companies/:id/edit',
+
   // Business
   CLIENTS: '/clients',
   CLIENT_NEW: '/clients/new',

@@ -61,7 +61,7 @@ const UserRoleMappingList = () => {
       size: 96,
       meta: { sticky: true, left: 0 },
       cell: ({ row }) => {
-        const isProtected = isProtectedAccount(row.original.email);
+        const isProtected = isProtectedAccount(row.original);
         return (
           <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
             <Button

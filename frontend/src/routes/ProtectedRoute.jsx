@@ -6,12 +6,18 @@ import LoadingScreen from '@/components/common/LoadingScreen';
 // formName: gate direct URL access against the RBAC accessible-forms map (Step 5) —
 // blocks navigation to a page whose form isn't granted to any of the user's roles.
 // allowedRoles: gate against role names directly (e.g. the Management-only admin screens).
-const ProtectedRoute = ({ children, allowedRoles, formName }) => {
-  const { isAuthenticated, hasRole, accessibleForms, accessibleFormsLoaded } = useAuth();
+// platformAdminOnly: gate against the backend's `is_platform_admin` user flag (multi-tenancy
+// retrofit's Company Management routes) — not a role, since a Platform Admin has none.
+const ProtectedRoute = ({ children, allowedRoles, formName, platformAdminOnly }) => {
+  const { isAuthenticated, hasRole, isPlatformAdmin, accessibleForms, accessibleFormsLoaded } = useAuth();
   const location = useLocation();
 
   if (!isAuthenticated) {
     return <Navigate to={ROUTES.LOGIN} state={{ from: location }} replace />;
+  }
+
+  if (platformAdminOnly && !isPlatformAdmin) {
+    return <Navigate to={ROUTES.NOT_AUTHORIZED} replace />;
   }
 
   if (allowedRoles?.length && !hasRole(...allowedRoles)) {

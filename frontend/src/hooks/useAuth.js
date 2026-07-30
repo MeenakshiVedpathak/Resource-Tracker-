@@ -11,11 +11,15 @@ import {
   selectAccessibleFormsLoaded,
   selectIsOriginalDataVisible,
   selectHasWriteAccess,
+  selectCurrentCompany,
+  selectCompanyId,
+  selectIsPlatformAdmin,
   logout,
   setCredentials,
   setUser,
   setAccessibleForms,
   setIsOriginalDataVisible,
+  setCompany,
 } from '@/store/slices/authSlice';
 
 export const useAuth = () => {
@@ -31,6 +35,9 @@ export const useAuth = () => {
   const accessibleFormsLoaded = useSelector(selectAccessibleFormsLoaded); // false only right after a fresh login, until forms are fetched
   const isOriginalDataVisible = useSelector(selectIsOriginalDataVisible); // gates Modified/Original toggle
   const hasWriteAccess = useSelector(selectHasWriteAccess);   // any role carries "Read & Write"
+  const company = useSelector(selectCurrentCompany); // multi-tenancy retrofit — null until backend sends one
+  const companyId = useSelector(selectCompanyId);
+  const isPlatformAdmin = useSelector(selectIsPlatformAdmin); // authoritative backend flag, not a role
 
   // true if the user has ANY of the specified roles
   const hasRole = (...requiredRoles) => roles.some((r) => requiredRoles.includes(r));
@@ -47,6 +54,8 @@ export const useAuth = () => {
 
   const updateIsOriginalDataVisible = (visible) => dispatch(setIsOriginalDataVisible(visible));
 
+  const updateCompany = (company) => dispatch(setCompany(company));
+
   return {
     user,
     isAuthenticated,
@@ -59,6 +68,9 @@ export const useAuth = () => {
     accessibleFormsLoaded,
     isOriginalDataVisible,
     hasWriteAccess,
+    company,
+    companyId,
+    isPlatformAdmin,
     hasRole,
     hasPermission,
     logout: handleLogout,
@@ -66,6 +78,7 @@ export const useAuth = () => {
     setUser: updateUser,
     setAccessibleForms: updateAccessibleForms,
     setIsOriginalDataVisible: updateIsOriginalDataVisible,
+    setCompany: updateCompany,
   };
 };
 

@@ -35,6 +35,10 @@ export const QUERY_KEYS = {
   CLIENTS_ACTIVE: ['clients', 'active'],
   CLIENT: (id) => ['clients', id],
 
+  // Companies (Platform Admin — multi-tenancy retrofit)
+  COMPANIES: (params) => ['companies', params],
+  COMPANY: (id) => ['companies', id],
+
   // Service POs
   SERVICE_POS: (params) => ['service-pos', params],
   SERVICE_POS_ACTIVE: ['service-pos', 'active'],

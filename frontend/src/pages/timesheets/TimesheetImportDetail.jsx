@@ -17,7 +17,6 @@ import { useSubProjectsByPO } from '@/hooks/useSubProjects';
 import { useAuth } from '@/hooks/useAuth';
 import { useCanWrite } from '@/hooks/usePermissions';
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
-import { isProtectedAccount } from '@/constants/protectedAccounts';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import { ROUTES } from '@/constants/routes';
@@ -101,10 +100,10 @@ const TimesheetImportDetail = () => {
   const { hasRole, user } = useAuth();
   const canWrite = useCanWrite();
   const canAddEntry = canWrite;
-  // "HR" is the general business rule; admin@rutportal.com is a hardcoded override so this
-  // one account always has access regardless of its actual role name/permission level.
+  // "HR" is the general business rule; Company Admin is a role override so that account
+  // always has access regardless of its actual permission level.
   // Modified Hours stays editable even after publish — only the publish action itself is one-way.
-  const canEdit = (hasRole('HR') && canWrite) || isProtectedAccount(user?.email);
+  const canEdit = (hasRole('HR') && canWrite) || hasRole('Company Admin');
 
   const { data: activeServicePOsData } = useActiveServicePOs();
 

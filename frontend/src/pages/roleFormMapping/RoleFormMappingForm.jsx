@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useRole } from '@/hooks/useRoles';
 import { useForms } from '@/hooks/useForms';
-import { useRoleFormMappings, useSetRoleFormMapping } from '@/hooks/useRoleFormMappings';
+import { useRoleFormMappings, useReplaceRoleFormMappings } from '@/hooks/useRoleFormMappings';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import { ROUTES } from '@/constants/routes';
@@ -29,7 +29,7 @@ const RoleFormMappingForm = () => {
   const { data: formsData, isPending: isLoadingForms } = useForms({ status: 'active', limit: 1000 });
   const { data: currentMappings, isPending: isLoadingMappings } = useRoleFormMappings(roleId);
 
-  const setMappingMutation = useSetRoleFormMapping(roleId);
+  const replaceMutation = useReplaceRoleFormMappings(roleId);
 
   // Administration forms (Users, Roles, Forms, mapping screens, etc.) are RBAC-admin-only —
   // never offered here so a role can't be granted access to manage RBAC itself.
@@ -37,10 +37,11 @@ const RoleFormMappingForm = () => {
     (f) => (f.module_name ?? '').trim().toLowerCase() !== 'administration'
   );
   const [checkedIds, setCheckedIds] = useState([]);
-  const [pendingIds, setPendingIds] = useState([]);
+  const didInitRef = useRef(false);
 
   useEffect(() => {
-    if (currentMappings) {
+    if (currentMappings && !didInitRef.current) {
+      didInitRef.current = true;
       // GET /roles/form-mappings/:roleId returns EVERY mapping row ever created for this
       // role, including ones since unmapped (soft-deleted to status:false) — it is not
       // pre-filtered to "currently mapped." Must filter to status===true here, same as
@@ -66,27 +67,29 @@ const RoleFormMappingForm = () => {
     return groups;
   }, [allForms]);
 
+  const allFormIds = useMemo(() => allForms.map((f) => f.id), [allForms]);
+  const allChecked = allFormIds.length > 0 && allFormIds.every((id) => checkedIds.includes(id));
+  const someChecked = allFormIds.some((id) => checkedIds.includes(id));
+  const selectAllState = allChecked ? true : someChecked ? 'indeterminate' : false;
+
   const handleClose = () => navigate(ROUTES.ROLES);
 
   const toggleForm = (formId, checked) => {
-    setPendingIds((prev) => [...prev, formId]);
-    const onSettled = () => setPendingIds((prev) => prev.filter((id) => id !== formId));
-    const revert = () => setCheckedIds((prev) =>
-      checked ? prev.filter((id) => id !== formId) : [...prev, formId]
-    );
-
     setCheckedIds((prev) => (checked ? [...prev, formId] : prev.filter((id) => id !== formId)));
-    setMappingMutation.mutate(
-      { formId, status: checked },
-      {
-        onError: (err) => {
-          revert();
-          showError(extractApiError(err));
-        },
-        onSuccess: () => success(checked ? 'Form added to role.' : 'Form removed from role.'),
-        onSettled,
-      }
-    );
+  };
+
+  const handleSelectAll = (checked) => {
+    setCheckedIds(checked ? allFormIds : []);
+  };
+
+  const handleSave = () => {
+    replaceMutation.mutate(checkedIds, {
+      onSuccess: () => {
+        success('Role forms updated successfully.');
+        handleClose();
+      },
+      onError: (err) => showError(extractApiError(err)),
+    });
   };
 
   const isLoading = isLoadingRole || isLoadingForms || isLoadingMappings;
@@ -107,13 +110,23 @@ const RoleFormMappingForm = () => {
             <p className="text-sm text-muted-foreground">No active forms found. Add forms in Form Master first.</p>
           ) : (
             <div className="space-y-5">
+              <label className="flex cursor-pointer items-center gap-3 rounded border px-3 py-2 bg-muted/40 hover:bg-accent transition-colors">
+                <Checkbox
+                  checked={selectAllState}
+                  onCheckedChange={(val) => handleSelectAll(!!val)}
+                />
+                <span className="text-sm font-medium leading-none flex-1">Select All Forms</span>
+                <span className="text-[11px] text-muted-foreground">
+                  {checkedIds.length} of {allFormIds.length} selected
+                </span>
+              </label>
+
               {Object.entries(groupedByModule).map(([moduleName, forms]) => (
                 <div key={moduleName} className="space-y-2">
                   <h3 className="text-xs font-semibold text-foreground border-b pb-1">{moduleName}</h3>
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     {forms.map((form) => {
                       const checked = checkedIds.includes(form.id);
-                      const isPendingRow = pendingIds.includes(form.id);
                       return (
                         <label
                           key={form.id}
@@ -121,7 +134,6 @@ const RoleFormMappingForm = () => {
                         >
                           <Checkbox
                             checked={checked}
-                            disabled={isPendingRow}
                             onCheckedChange={(val) => toggleForm(form.id, !!val)}
                           />
                           <span className="text-sm font-medium leading-none flex-1 min-w-0 truncate">{form.form_name}</span>
@@ -136,8 +148,16 @@ const RoleFormMappingForm = () => {
         </div>
 
         <SheetFooter className="px-5 py-3 border-t mt-auto flex-row justify-end gap-3 items-center bg-white">
-          <Button type="button" className="bg-blue-600 hover:bg-blue-700 h-8 text-sm" onClick={handleClose}>
-            Done
+          <Button type="button" variant="outline" className="border-gray-200 h-8 text-sm" onClick={handleClose}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            className="bg-blue-600 hover:bg-blue-700 h-8 text-sm"
+            onClick={handleSave}
+            disabled={replaceMutation.isPending || isLoading}
+          >
+            {replaceMutation.isPending ? 'Saving…' : 'Save & Close'}
           </Button>
         </SheetFooter>
       </SheetContent>

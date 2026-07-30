@@ -42,7 +42,11 @@ const Login = () => {
     try {
       const res = await authApi.login(values);
       const { user, accessToken, refreshToken, roles, forms } = res.data;
-      setCredentials({ user, accessToken, refreshToken, roles });
+
+      // Multi-tenancy retrofit: `user.company` (full object, incl. `id`) and `user.is_platform_admin`
+      // are both confirmed fields on the login response's user object — `null`/`false` respectively
+      // for a Platform Admin, who belongs to no company.
+      setCredentials({ user, accessToken, refreshToken, roles, company: user?.company ?? null });
 
       // Paint immediately from whatever the login response embedded, if anything — avoids a
       // blank sidebar flash while the call below is in flight.
@@ -63,7 +67,10 @@ const Login = () => {
 
       setIsOriginalDataVisible((roles ?? []).some((r) => r.is_original_data_visible === true));
 
-      navigate(from, { replace: true });
+      // Multi-tenancy retrofit: a Platform Admin's only screen is Company Management, so send
+      // them straight there rather than `from`/Dashboard (MainLayout also enforces this on
+      // every navigation, but this avoids an unnecessary bounce right after login).
+      navigate(user?.is_platform_admin ? ROUTES.COMPANIES : from, { replace: true });
     } catch (err) {
       showError(extractApiError(err));
     } finally {

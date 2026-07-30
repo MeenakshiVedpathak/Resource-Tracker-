@@ -29,6 +29,10 @@ const UserRoleMappingList = lazy(() => import('@/pages/userRoleMapping/UserRoleM
 const UserRoleMappingForm = lazy(() => import('@/pages/userRoleMapping/UserRoleMappingForm'));
 const RoleFormMappingForm = lazy(() => import('@/pages/roleFormMapping/RoleFormMappingForm'));
 
+// ── Company Management (Platform Admin only — multi-tenancy retrofit) ──
+const CompanyList = lazy(() => import('@/pages/companies/CompanyList'));
+const CompanyForm = lazy(() => import('@/pages/companies/CompanyForm'));
+
 // ── Business ──
 const ClientList = lazy(() => import('@/pages/clients/ClientList'));
 const ClientForm = lazy(() => import('@/pages/clients/ClientForm'));
@@ -144,6 +148,14 @@ const AppRoutes = () => (
           }
         >
           <Route path=":userId/edit" element={<UserRoleMappingForm />} />
+        </Route>
+
+        {/* Company Management — Platform Admin only, gated by the backend's `is_platform_admin`
+            user flag (not the Form Master model, since a Platform Admin sits above the
+            per-company RBAC system entirely and has no roles at all). */}
+        <Route path={ROUTES.COMPANIES} element={<ProtectedRoute platformAdminOnly><CompanyList /></ProtectedRoute>}>
+          <Route path="new" element={<CompanyForm />} />
+          <Route path=":id/edit" element={<CompanyForm />} />
         </Route>
 
         {/* Clients */}

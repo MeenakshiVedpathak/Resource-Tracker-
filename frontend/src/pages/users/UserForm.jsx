@@ -71,7 +71,7 @@ const UserForm = () => {
   // Direct-URL/row-click safety net — the Edit action is already hidden in UserList for this
   // account, but nothing stops someone navigating to /users/:id/edit by hand.
   useEffect(() => {
-    if (isEdit && user && isProtectedAccount(user.email)) {
+    if (isEdit && user && isProtectedAccount(user)) {
       showError('This account is protected and cannot be edited.');
       navigate(ROUTES.USERS, { replace: true });
     }
@@ -108,7 +108,7 @@ const UserForm = () => {
       didResetRef.current = true;
 
       let ids = [];
-      if (Array.isArray(user.roles)) {
+      if (Array.isArray(user.roles) && user.roles.length > 0) {
         ids = user.roles.map((r) => r.id ?? r);
       } else if (Array.isArray(user.role_ids)) {
         ids = user.role_ids;

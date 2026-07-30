@@ -9,11 +9,11 @@ export const useRoleFormMappings = (roleId) =>
     enabled: !!roleId,
   });
 
-// Primary map/unmap mutation — POST /roles/forms/mapping with an explicit status flag.
-export const useSetRoleFormMapping = (roleId) => {
+// Bulk replace — PUT /roles/form-mappings/:roleId with the complete list of active form_ids.
+export const useReplaceRoleFormMappings = (roleId) => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ formId, status }) => rolesApi.setFormMapping({ roleId, formId, status }),
+    mutationFn: (formIds) => rolesApi.replaceRoleFormMappings(roleId, formIds),
     onSuccess: () => qc.invalidateQueries({ queryKey: QUERY_KEYS.ROLE_FORM_MAPPINGS(roleId) }),
   });
 };

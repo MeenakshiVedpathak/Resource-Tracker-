@@ -52,13 +52,9 @@ export const rolesApi = {
   // RBAC: Role <-> Form mapping
   getRoleFormMappings: (roleId) =>
     apiClient.get(`/roles/form-mappings/${roleId}`).then((r) => r.data?.data ?? []),
-  // Legacy add/remove pair — the backend now implements these as status:true/false
-  // wrappers around setFormMapping below. Kept only as a fallback reference.
-  addRoleFormMapping: (payload) =>
-    apiClient.post('/roles/form-mappings', payload).then((r) => r.data),
-  removeRoleFormMapping: (roleId, formId) =>
-    apiClient.delete(`/roles/form-mappings/${roleId}/${formId}`).then((r) => r.data),
-  // Primary way to map/unmap a form on a role — explicit status flag.
-  setFormMapping: ({ roleId, formId, status }) =>
-    apiClient.post('/roles/forms/mapping', { roleId, formId, status }).then((r) => r.data),
+  // Bulk replace — give it every form_id that should be active for the role; the backend
+  // activates those and soft-unmaps everything else in one transaction. Replaces the old
+  // one-request-per-checkbox POST/DELETE pair entirely.
+  replaceRoleFormMappings: (roleId, formIds) =>
+    apiClient.put(`/roles/form-mappings/${roleId}`, { form_ids: formIds }).then((r) => r.data),
 };

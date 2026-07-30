@@ -1,8 +1,10 @@
-import { Outlet } from 'react-router-dom';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import Sidebar from '@/components/layout/Sidebar';
 import Topbar from '@/components/layout/Topbar';
 import AICopilotWidget from '@/components/ai/AICopilotWidget';
 import { useSyncAccessibleForms } from '@/hooks/useAccessibleForms';
+import { useAuth } from '@/hooks/useAuth';
+import { ROUTES } from '@/constants/routes';
 
 const MainLayout = () => {
   // Mounted for every authenticated page load — including a hard refresh (a fresh page
@@ -10,6 +12,18 @@ const MainLayout = () => {
   // just when the store happens to be empty) — so the sidebar/route guards reflect the
   // logged-in user's current role-form mappings, not a stale snapshot from last login.
   useSyncAccessibleForms();
+
+  const { isPlatformAdmin } = useAuth();
+  const { pathname } = useLocation();
+
+  // Multi-tenancy retrofit: a Platform Admin's only screen is Company Management — enforced here
+  // (rather than in ProtectedRoute) since this is the one layout every authenticated route
+  // renders inside, regardless of whether that route uses formName/allowedRoles guards or none
+  // at all (e.g. Profile, Notifications, AI Copilot pages). `isPlatformAdmin` is the backend's
+  // authoritative `is_platform_admin` flag on the user object, not a role.
+  if (isPlatformAdmin && !pathname.startsWith(ROUTES.COMPANIES)) {
+    return <Navigate to={ROUTES.COMPANIES} replace />;
+  }
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -33,7 +47,7 @@ const MainLayout = () => {
           </footer>
         </main>
       </div>
-      <AICopilotWidget />
+      {!isPlatformAdmin && <AICopilotWidget />}
     </div>
   );
 };

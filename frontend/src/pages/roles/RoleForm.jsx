@@ -127,7 +127,15 @@ const RoleForm = () => {
                   render={({ field }) => (
                     <FormItem className="space-y-1">
                       <FormLabel className="text-[11px] text-muted-foreground font-medium"><span className="text-destructive mr-0.5">*</span> Permission</FormLabel>
-                      <Select value={field.value} onValueChange={field.onChange}>
+                      <Select
+                        value={field.value}
+                        onValueChange={(v) => {
+                          // Radix's hidden native <select> (used for browser autofill) fires a
+                          // spurious change to "" shortly after mount — ignore it so it can't
+                          // clobber a value just set via form.reset() on load.
+                          if (v) field.onChange(v);
+                        }}
+                      >
                         <FormControl>
                           <SelectTrigger className="h-8 text-sm border-gray-200">
                             <SelectValue />

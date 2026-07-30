@@ -3,6 +3,7 @@ import {
   clearAuth, getAccessToken, getRefreshToken, getStoredUser, saveTokens, saveUser,
   getStoredRoles, saveRoles, getStoredAccessibleForms, saveAccessibleForms,
   getStoredOriginalDataVisible, saveOriginalDataVisible,
+  getStoredCompany, saveCompany,
 } from '@/services/apiClient';
 
 const initialState = {
@@ -22,6 +23,9 @@ const initialState = {
   accessibleFormsLoaded: true,
   // Gates the Modified/Original hours-source toggle — from GET /roles/form-mappings/:userId
   isOriginalDataVisible: getStoredOriginalDataVisible(),
+  // Multi-tenancy retrofit: the logged-in user's company, once the backend sends one on login.
+  // `null` for every user today (no backend support yet) — see services/apiClient.js.
+  company: getStoredCompany(),
 };
 
 const authSlice = createSlice({
@@ -29,13 +33,19 @@ const authSlice = createSlice({
   initialState,
   reducers: {
     setCredentials: (state, action) => {
-      const { user, accessToken, refreshToken, roles } = action.payload;
+      const { user, accessToken, refreshToken, roles, company } = action.payload;
       state.user = user;
       state.accessToken = accessToken;
       state.refreshToken = refreshToken;
       state.isAuthenticated = true;
       saveTokens(accessToken, refreshToken);
       saveUser(user);
+
+      // `company` is optional and absent from today's real login response — defaults to null
+      // (no fabricated tenant data) until the backend actually sends one.
+      const nextCompany = company ?? null;
+      state.company = nextCompany;
+      saveCompany(nextCompany);
 
       // Roles are re-issued on every login, so always overwrite (never merge with stale ones).
       const nextRoles = roles ?? [];
@@ -78,6 +88,11 @@ const authSlice = createSlice({
       state.isOriginalDataVisible = visible;
       saveOriginalDataVisible(visible);
     },
+    setCompany: (state, action) => {
+      const company = action.payload ?? null;
+      state.company = company;
+      saveCompany(company);
+    },
     logout: (state) => {
       state.user = null;
       state.accessToken = null;
@@ -87,13 +102,15 @@ const authSlice = createSlice({
       state.accessibleForms = {};
       state.accessibleFormsLoaded = true;
       state.isOriginalDataVisible = false;
+      state.company = null;
       clearAuth();
     },
   },
 });
 
 export const {
-  setCredentials, setTokens, setUser, setRoles, setAccessibleForms, setIsOriginalDataVisible, logout,
+  setCredentials, setTokens, setUser, setRoles, setAccessibleForms, setIsOriginalDataVisible,
+  setCompany, logout,
 } = authSlice.actions;
 
 const EMPTY_PERMISSIONS = [];
@@ -114,6 +131,15 @@ export const selectAccessibleFormsLoaded = (state) => state.auth.accessibleForms
 
 // Gates the Modified/Original hours-source toggle in Reports & Dashboard
 export const selectIsOriginalDataVisible = (state) => !!state.auth.isOriginalDataVisible;
+
+// Multi-tenancy retrofit — null for every user until the backend sends a real company
+export const selectCurrentCompany = (state) => state.auth.company ?? null;
+export const selectCompanyId = (state) => state.auth.company?.id ?? null;
+
+// Authoritative Platform Admin flag from POST /auth/login's user object (`is_platform_admin`) —
+// a user-level flag, independent of the company-scoped Role/Form RBAC system entirely (a Platform
+// Admin has no roles/company at all).
+export const selectIsPlatformAdmin = (state) => !!state.auth.user?.is_platform_admin;
 
 // Returns array of role name strings — prefers the RBAC roles[] from login, falling back to the
 // legacy user.roles/user.role shape so any pre-RBAC session data still resolves.

@@ -38,7 +38,7 @@ const TruncatedCell = ({ value, maxWidth = '150px', className }) => {
 const StatusToggle = ({ user }) => {
   const { mutate, isPending } = useToggleUserStatus();
   const isActive = user.status === 'active';
-  const isProtected = isProtectedAccount(user.email);
+  const isProtected = isProtectedAccount(user);
   return (
     <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
       <Switch
@@ -101,7 +101,7 @@ const UserList = () => {
       size: 96,
       meta: { sticky: true, left: 0 },
       cell: ({ row }) => {
-        if (isProtectedAccount(row.original.email)) {
+        if (isProtectedAccount(row.original)) {
           return (
             <div className="flex items-center gap-1 text-muted-foreground" onClick={(e) => e.stopPropagation()} title="Protected system account">
               <Lock className="h-3 w-3" />
@@ -154,10 +154,9 @@ const UserList = () => {
         // backend may return roles (array) or role (single object)
         const raw = info.getValue();
         const row = info.row.original;
-        const list = Array.isArray(raw) ? raw
-          : Array.isArray(row.role) ? row.role
-            : row.role ? [row.role]
-              : [];
+        const list = Array.isArray(raw) && raw.length > 0 ? raw
+          : row.role ? [row.role]
+            : [];
         if (!list.length) return <span className="text-muted-foreground">—</span>;
         return (
           <div className="flex flex-wrap gap-1">
@@ -206,7 +205,7 @@ const UserList = () => {
   ], [navigate, isHR]);
 
   const handleDelete = () => {
-    if (isProtectedAccount(deleteTarget?.email)) {
+    if (isProtectedAccount(deleteTarget)) {
       showError('This account is protected and cannot be deleted.');
       setDeleteTarget(null);
       return;
@@ -330,7 +329,7 @@ const UserList = () => {
         onSortingChange={(s) => { setSorting(s); setPage(1); }}
         onPageChange={setPage}
         onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
-        onRowClick={(row) => !isProtectedAccount(row.email) && navigate(buildPath(ROUTES.USER_EDIT, { id: row.id }))}
+        onRowClick={(row) => !isProtectedAccount(row) && navigate(buildPath(ROUTES.USER_EDIT, { id: row.id }))}
       />
 
       <ConfirmDialog

@@ -7,11 +7,21 @@ import { selectIsDirty, selectDirtyMessage, clearDirty } from '@/store/slices/na
 import { cn } from '@/utils/cn';
 import { useAuth } from '@/hooks/useAuth';
 import { resolveFormRoute } from '@/constants/rbacForms';
-import { isProtectedAccount } from '@/constants/protectedAccounts';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ROUTES } from '@/constants/routes';
+import { ChevronLeft, ChevronRight, Landmark } from 'lucide-react';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 
-// Modules hidden from the sidebar for everyone except the protected super-admin account,
+// Multi-tenancy retrofit: a Platform Admin (backend's `is_platform_admin` user flag, distinct
+// from the Company Admin role bypass below) sees ONLY this single nav item —
+// everything else the RBAC-driven buildNavGroups() would otherwise show is skipped for them.
+const SUPER_ADMIN_NAV_GROUPS = [
+  {
+    label: 'Administration',
+    items: [{ label: 'Company Management', icon: Landmark, to: ROUTES.COMPANIES, exact: false }],
+  },
+];
+
+// Modules hidden from the sidebar for everyone except users with the Company Admin role,
 // regardless of what any role's own form mappings say — a hardcoded UI restriction on top
 // of the RBAC data, not derived from it.
 const RESTRICTED_MODULES = ['administration'];
@@ -157,11 +167,14 @@ const Sidebar = () => {
   const navigate = useNavigate();
   const collapsed = useSelector(selectSidebarCollapsed);
   const { pathname } = useLocation();
-  const { accessibleForms, user } = useAuth();
-  const isSuperAdmin = isProtectedAccount(user?.email);
+  const { accessibleForms, hasRole, isPlatformAdmin } = useAuth();
+  const isSuperAdmin = hasRole('Company Admin');
+  // isPlatformAdmin comes from the backend's `is_platform_admin` user flag (multi-tenancy
+  // retrofit) — separate from the Company Admin role bypass above. Overrides the normal
+  // accessible-forms-driven nav entirely.
   const navGroups = useMemo(
-    () => buildNavGroups(accessibleForms, { isSuperAdmin }),
-    [accessibleForms, isSuperAdmin]
+    () => (isPlatformAdmin ? SUPER_ADMIN_NAV_GROUPS : buildNavGroups(accessibleForms, { isSuperAdmin })),
+    [accessibleForms, isSuperAdmin, isPlatformAdmin]
   );
 
   // Guards navigation away from a page with unsaved changes (e.g. Timesheet

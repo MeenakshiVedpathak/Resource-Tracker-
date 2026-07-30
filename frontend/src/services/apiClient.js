@@ -31,6 +31,13 @@ apiClient.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    // Multi-tenancy retrofit: attach the logged-in user's company on every request, once the
+    // backend actually sends one on login (see authSlice.js). Additive and a no-op today —
+    // no company is ever stored yet, so this header is simply absent, same as before this change.
+    const company = getStoredCompany();
+    if (company?.id) {
+      config.headers['X-Company-Id'] = company.id;
+    }
     return config;
   },
   (error) => Promise.reject(error)
@@ -99,6 +106,7 @@ const TOKEN_KEYS = {
   ROLES: 'rut_roles',
   ACCESSIBLE_FORMS: 'rut_accessible_forms',
   ORIGINAL_DATA_VISIBLE: 'rut_original_data_visible',
+  COMPANY: 'rut_company',
 };
 
 export const getAccessToken = () => localStorage.getItem(TOKEN_KEYS.ACCESS);
@@ -136,6 +144,17 @@ export const getStoredAccessibleForms = () => {
 export const getStoredOriginalDataVisible = () =>
   localStorage.getItem(TOKEN_KEYS.ORIGINAL_DATA_VISIBLE) === 'true';
 
+// Multi-tenancy retrofit: the logged-in user's company, once the backend sends one on login.
+// `null` today for every user (no backend support yet) — see authSlice.js.
+export const getStoredCompany = () => {
+  try {
+    const raw = localStorage.getItem(TOKEN_KEYS.COMPANY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
 export const saveTokens = (accessToken, refreshToken) => {
   localStorage.setItem(TOKEN_KEYS.ACCESS, accessToken);
   localStorage.setItem(TOKEN_KEYS.REFRESH, refreshToken);
@@ -157,6 +176,14 @@ export const saveOriginalDataVisible = (visible) => {
   localStorage.setItem(TOKEN_KEYS.ORIGINAL_DATA_VISIBLE, visible ? 'true' : 'false');
 };
 
+export const saveCompany = (company) => {
+  if (company) {
+    localStorage.setItem(TOKEN_KEYS.COMPANY, JSON.stringify(company));
+  } else {
+    localStorage.removeItem(TOKEN_KEYS.COMPANY);
+  }
+};
+
 export const clearAuth = () => {
   localStorage.removeItem(TOKEN_KEYS.ACCESS);
   localStorage.removeItem(TOKEN_KEYS.REFRESH);
@@ -164,6 +191,7 @@ export const clearAuth = () => {
   localStorage.removeItem(TOKEN_KEYS.ROLES);
   localStorage.removeItem(TOKEN_KEYS.ACCESSIBLE_FORMS);
   localStorage.removeItem(TOKEN_KEYS.ORIGINAL_DATA_VISIBLE);
+  localStorage.removeItem(TOKEN_KEYS.COMPANY);
 };
 
 // ── Logout handler (avoids circular dependency with store) ──

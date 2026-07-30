@@ -35,7 +35,7 @@ const UserRoleMappingForm = () => {
   // Direct-URL safety net — the "Manage Roles" action is already disabled in the list for
   // this account, but nothing stops someone navigating to the edit URL by hand.
   useEffect(() => {
-    if (user && isProtectedAccount(user.email)) {
+    if (user && isProtectedAccount(user)) {
       showError('This account is protected and its roles cannot be changed.');
       navigate(ROUTES.USER_ROLE_MAPPING, { replace: true });
     }
