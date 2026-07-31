@@ -65,3 +65,10 @@ export const useToggleEmployeeStatus = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['employees'] }),
   });
 };
+
+// Enables an Employee's dynamic login — doesn't touch the employees list, so no cache to
+// invalidate.
+export const useResetEmployeePassword = () =>
+  useMutation({
+    mutationFn: ({ id, password }) => employeesApi.resetPassword(id, password),
+  });

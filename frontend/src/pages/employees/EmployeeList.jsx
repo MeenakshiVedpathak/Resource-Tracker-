@@ -2,16 +2,20 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, Outlet } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
 import { useIsMutating } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2, Search, Download, Upload, CheckCircle2, AlertCircle, FileDown, FileText, Printer, FileSpreadsheet, ChevronDown, Filter } from 'lucide-react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { Plus, Pencil, Trash2, KeyRound, Search, Download, Upload, CheckCircle2, AlertCircle, FileDown, FileText, Printer, FileSpreadsheet, ChevronDown, Filter } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { useEmployees, useDeleteEmployee, useImportEmployees, useToggleEmployeeStatus } from '@/hooks/useEmployees';
+import { useEmployees, useDeleteEmployee, useImportEmployees, useToggleEmployeeStatus, useResetEmployeePassword } from '@/hooks/useEmployees';
 import { employeesApi } from '@/api/employees.api';
 import { useCanWrite } from '@/hooks/usePermissions';
 import { useNotification } from '@/hooks/useNotification';
 import { useDebounce } from '@/hooks/useDebounce';
 import { extractApiError } from '@/services/apiClient';
+import { passwordSchema } from '@/utils/validators';
 import { buildPath, ROUTES } from '@/constants/routes';
 import { formatDate } from '@/utils/formatters';
 import { cn } from '@/utils/cn';
@@ -19,6 +23,12 @@ import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
 import StatusBadge from '@/components/common/StatusBadge';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  Form, FormField, FormItem, FormLabel, FormControl, FormMessage,
+} from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -48,6 +58,73 @@ const TruncatedCell = ({ value, maxWidth = '150px', className }) => {
     <div className={cn("text-sm truncate", className)} style={{ maxWidth }} title={value}>
       {value}
     </div>
+  );
+};
+
+const resetPasswordSchema = z.object({
+  password: passwordSchema,
+});
+
+// Enables an Employee's dynamic login (PUT /employees/:id/reset-password) — the one path for
+// setting a password after creation, kept separate from the general Edit form.
+const ResetPasswordDialog = ({ employee, onOpenChange }) => {
+  const { success, error: showError } = useNotification();
+  const resetMutation = useResetEmployeePassword();
+
+  const form = useForm({
+    resolver: zodResolver(resetPasswordSchema),
+    defaultValues: { password: '' },
+  });
+
+  useEffect(() => {
+    if (employee) form.reset({ password: '' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [employee]);
+
+  const onSubmit = (values) => {
+    resetMutation.mutate({ id: employee.id, password: values.password }, {
+      onSuccess: () => {
+        success(`Password reset for ${employee.full_name}.`);
+        onOpenChange(false);
+      },
+      onError: (err) => showError(extractApiError(err)),
+    });
+  };
+
+  return (
+    <Dialog open={!!employee} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Reset password</DialogTitle>
+          <DialogDescription>Set a new password for {employee?.full_name}.</DialogDescription>
+        </DialogHeader>
+        <Form {...form}>
+          <form id="reset-password-form" onSubmit={form.handleSubmit(onSubmit)}>
+            <FormField
+              control={form.control}
+              name="password"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>New Password</FormLabel>
+                  <FormControl>
+                    <Input type="password" placeholder="At least 8 characters" autoComplete="new-password" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </form>
+        </Form>
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={resetMutation.isPending}>
+            Cancel
+          </Button>
+          <Button size="sm" type="submit" form="reset-password-form" disabled={resetMutation.isPending}>
+            {resetMutation.isPending ? 'Saving…' : 'Reset Password'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };
 
@@ -81,6 +158,7 @@ const EmployeeList = () => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [resetPasswordTarget, setResetPasswordTarget] = useState(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const debouncedSearch = useDebounce(search, 400);
@@ -115,7 +193,7 @@ const EmployeeList = () => {
     columnHelper.display({
       id: 'actions',
       header: 'Actions',
-      size: 96,
+      size: 120,
       meta: { sticky: true, left: 0 },
       cell: ({ row }) => (
         isHR ? (
@@ -127,6 +205,14 @@ const EmployeeList = () => {
               className="h-6 w-6 p-0 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
             >
               <Pencil className="h-3 w-3" />
+            </Button>
+            <Button
+              size="sm"
+              className="h-6 w-6 p-0 bg-slate-500 hover:bg-slate-600 text-white rounded transition-colors"
+              title="Reset Password"
+              onClick={() => setResetPasswordTarget(row.original)}
+            >
+              <KeyRound className="h-3 w-3" />
             </Button>
             <Button
               size="sm"
@@ -143,7 +229,7 @@ const EmployeeList = () => {
     columnHelper.accessor('employee_code', {
       header: 'Employee ID',
       size: 130,
-      meta: { sticky: true, left: 96 },
+      meta: { sticky: true, left: 120 },
       cell: (info) => (
         <TruncatedCell value={info.getValue()} maxWidth="100px" className="font-medium" />
       ),
@@ -151,7 +237,7 @@ const EmployeeList = () => {
     columnHelper.accessor('full_name', {
       header: 'Name',
       size: 200,
-      meta: { sticky: true, left: 226 },
+      meta: { sticky: true, left: 250 },
       cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="160px" />,
     }),
     columnHelper.accessor('email_id', {
@@ -698,7 +784,10 @@ const EmployeeList = () => {
         isLoading={deleteMutation.isPending}
       />
 
-
+      <ResetPasswordDialog
+        employee={resetPasswordTarget}
+        onOpenChange={(open) => !open && setResetPasswordTarget(null)}
+      />
 
       <Outlet />
     </div>

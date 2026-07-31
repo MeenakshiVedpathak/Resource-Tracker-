@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Pencil, X, UserPlus, XCircle, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Pencil, X, UserPlus, XCircle, CheckCircle2, ListChecks } from 'lucide-react';
 import {
   useServicePO,
   useServicePOUtilisation,
@@ -9,22 +9,30 @@ import {
   useDeallocateResource,
 } from '@/hooks/useServicePOs';
 import { useActiveEmployees } from '@/hooks/useEmployees';
+import {
+  useServicePOEmployeeMappings,
+  useCreateEmployeeServicePOMapping,
+  useDeleteEmployeeServicePOMapping,
+  useSetEmployeeServicePOMappingStatus,
+} from '@/hooks/useEmployeeServicePOMapping';
 import { useCanWrite } from '@/hooks/usePermissions';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import { buildPath, ROUTES } from '@/constants/routes';
 import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
 import { formatCurrency, formatDate, formatHours, formatPercentage } from '@/utils/formatters';
+import { cn } from '@/utils/cn';
 import PageHeader from '@/components/common/PageHeader';
 import StatusBadge from '@/components/common/StatusBadge';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
 
 const DetailSkeleton = () => (
   <div className="space-y-4">
@@ -55,6 +63,8 @@ const ServicePODetail = () => {
   const [confirmClose, setConfirmClose] = useState(false);
   const [selectedEmployees, setSelectedEmployees] = useState([]);
   const [removeTarget, setRemoveTarget] = useState(null);
+  const [selectedForMapping, setSelectedForMapping] = useState([]);
+  const [deleteMappingTarget, setDeleteMappingTarget] = useState(null);
 
   const { data: po, isPending: isLoadingPO } = useServicePO(id);
   const { data: utilisation } = useServicePOUtilisation(id);
@@ -65,6 +75,11 @@ const ServicePODetail = () => {
   const closeMutation = useCloseServicePO();
   const allocateMutation = useAllocateResources(id);
   const deallocateMutation = useDeallocateResource(id);
+
+  const { data: mappings = [], isPending: isLoadingMappings } = useServicePOEmployeeMappings(id);
+  const createMappingMutation = useCreateEmployeeServicePOMapping();
+  const deleteMappingMutation = useDeleteEmployeeServicePOMapping();
+  const mappingStatusMutation = useSetEmployeeServicePOMappingStatus();
 
   const canWrite = useCanWrite();
   const canManageResources = canWrite;
@@ -79,6 +94,11 @@ const ServicePODetail = () => {
 
   // Available employees to allocate (active, not already allocated)
   const availableEmployees = activeEmployees.filter((e) => !allocatedIds.has(e.id));
+
+  // Employees mapped for timesheet entry against this PO — separate from the resource
+  // allocation above (that's planning; this is what shows up in the employee's Project dropdown).
+  const mappedEmployeeIds = new Set(mappings.map((m) => m.employee_id));
+  const availableForMapping = activeEmployees.filter((e) => !mappedEmployeeIds.has(e.id));
 
   // Utilisation progress
   const loggedHours = Number(utilisation?.total_hours_logged ?? utilisation?.hours_logged ?? 0);
@@ -112,6 +132,41 @@ const ServicePODetail = () => {
       onError: (err) => {
         showError(extractApiError(err));
         setRemoveTarget(null);
+      },
+    });
+  };
+
+  const toggleMappingSelection = (empId) => {
+    setSelectedForMapping((prev) =>
+      prev.includes(empId) ? prev.filter((x) => x !== empId) : [...prev, empId]
+    );
+  };
+
+  const handleMapSelected = async () => {
+    if (selectedForMapping.length === 0) return;
+    try {
+      await Promise.all(
+        selectedForMapping.map((empId) =>
+          createMappingMutation.mutateAsync({ employeeId: empId, servicePOId: id })
+        )
+      );
+      success('Employees mapped for timesheet entry.');
+      setSelectedForMapping([]);
+    } catch (err) {
+      showError(extractApiError(err));
+    }
+  };
+
+  const handleDeleteMapping = () => {
+    if (!deleteMappingTarget) return;
+    deleteMappingMutation.mutate(deleteMappingTarget.id, {
+      onSuccess: () => {
+        success('Mapping removed.');
+        setDeleteMappingTarget(null);
+      },
+      onError: (err) => {
+        showError(extractApiError(err));
+        setDeleteMappingTarget(null);
       },
     });
   };
@@ -326,7 +381,7 @@ const ServicePODetail = () => {
                       />
                       <div className="min-w-0">
                         <p className="text-sm font-medium leading-none">
-                          {emp.employee_name ?? emp.name}
+                          {emp.full_name ?? emp.employee_name ?? emp.name}
                         </p>
                         <p className="mt-0.5 text-xs text-muted-foreground">
                           <span className="font-mono">{emp.employee_code ?? emp.code}</span>
@@ -356,6 +411,138 @@ const ServicePODetail = () => {
         </Card>
       )}
 
+      {/* Timesheet Project Mapping — separate from resource allocation above; this is what
+          feeds the employee's Project dropdown in My Timesheet. */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <ListChecks className="h-4 w-4" />
+            Timesheet Project Mapping
+            {mappings.length > 0 && (
+              <Badge variant="secondary" className="ml-2 text-xs">{mappings.length}</Badge>
+            )}
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Employees mapped here see this Service PO in their Timesheet's Project dropdown.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {isLoadingMappings ? (
+            <Skeleton className="h-24 w-full" />
+          ) : mappings.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No employees mapped yet.</p>
+          ) : (
+            <div className="rounded-lg border overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/30">
+                    <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Name</th>
+                    <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Code</th>
+                    <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Status</th>
+                    {canManageResources && (
+                      <th className="px-4 py-2.5 text-right text-xs font-medium text-muted-foreground">Actions</th>
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {mappings.map((m) => {
+                    const isMappingActive = (m.status ?? 'active') === 'active';
+                    return (
+                      <tr key={m.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                        <td className="px-4 py-2.5 font-medium">{m.employee_name ?? m.full_name ?? '—'}</td>
+                        <td className="px-4 py-2.5">
+                          <span className="font-mono text-xs text-muted-foreground">{m.employee_code ?? '—'}</span>
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                            <Switch
+                              checked={isMappingActive}
+                              disabled={mappingStatusMutation.isPending}
+                              onCheckedChange={(checked) =>
+                                mappingStatusMutation.mutate({ id: m.id, active: checked })
+                              }
+                            />
+                            <span className={cn('text-xs font-medium', isMappingActive ? 'text-green-600' : 'text-slate-400')}>
+                              {isMappingActive ? 'Active' : 'Inactive'}
+                            </span>
+                          </div>
+                        </td>
+                        {canManageResources && (
+                          <td className="px-4 py-2.5 text-right">
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                              title="Remove mapping"
+                              onClick={() => setDeleteMappingTarget(m)}
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </Button>
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {canManageResources && (
+            <>
+              <Separator />
+              {availableForMapping.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  All active employees are already mapped to this PO.
+                </p>
+              ) : (
+                <>
+                  <p className="text-xs text-muted-foreground">
+                    Select employees to map for timesheet entry.
+                  </p>
+                  <div className="max-h-64 overflow-y-auto rounded-lg border divide-y">
+                    {availableForMapping.map((emp) => (
+                      <label
+                        key={emp.id}
+                        className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted/40 cursor-pointer transition-colors"
+                      >
+                        <Checkbox
+                          checked={selectedForMapping.includes(emp.id)}
+                          onCheckedChange={() => toggleMappingSelection(emp.id)}
+                        />
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium leading-none">
+                            {emp.full_name ?? emp.employee_name ?? emp.name}
+                          </p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            <span className="font-mono">{emp.employee_code ?? emp.code}</span>
+                            {emp.designation && ` · ${emp.designation}`}
+                          </p>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-xs text-muted-foreground">
+                      {selectedForMapping.length} selected
+                    </span>
+                    <Button
+                      size="sm"
+                      onClick={handleMapSelected}
+                      disabled={selectedForMapping.length === 0 || createMappingMutation.isPending}
+                    >
+                      <UserPlus className="mr-1.5 h-4 w-4" />
+                      {createMappingMutation.isPending ? 'Mapping…' : 'Map Selected'}
+                    </Button>
+                  </div>
+                </>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Confirm remove employee */}
       <ConfirmDialog
         open={!!removeTarget}
@@ -365,6 +552,17 @@ const ServicePODetail = () => {
         confirmLabel="Remove"
         onConfirm={handleDeallocate}
         isLoading={deallocateMutation.isPending}
+      />
+
+      {/* Confirm remove timesheet mapping */}
+      <ConfirmDialog
+        open={!!deleteMappingTarget}
+        onOpenChange={(open) => !open && setDeleteMappingTarget(null)}
+        title="Remove timesheet mapping?"
+        description={`${deleteMappingTarget?.employee_name ?? 'This employee'} will no longer see this Service PO in their Timesheet's Project dropdown.`}
+        confirmLabel="Remove"
+        onConfirm={handleDeleteMapping}
+        isLoading={deleteMappingMutation.isPending}
       />
 
       {/* Confirm close PO */}

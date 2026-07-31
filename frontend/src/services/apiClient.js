@@ -107,6 +107,7 @@ const TOKEN_KEYS = {
   ACCESSIBLE_FORMS: 'rut_accessible_forms',
   ORIGINAL_DATA_VISIBLE: 'rut_original_data_visible',
   COMPANY: 'rut_company',
+  LOGIN_TYPE: 'rut_login_type',
 };
 
 export const getAccessToken = () => localStorage.getItem(TOKEN_KEYS.ACCESS);
@@ -184,6 +185,19 @@ export const saveCompany = (company) => {
   }
 };
 
+// Dynamic login: `loginType` ('employee' | 'user') from the login response, discriminating
+// which dashboard/layout to route into — same pattern as `is_platform_admin`, but a
+// top-level field on the response rather than a flag on `user`.
+export const getStoredLoginType = () => localStorage.getItem(TOKEN_KEYS.LOGIN_TYPE);
+
+export const saveLoginType = (loginType) => {
+  if (loginType) {
+    localStorage.setItem(TOKEN_KEYS.LOGIN_TYPE, loginType);
+  } else {
+    localStorage.removeItem(TOKEN_KEYS.LOGIN_TYPE);
+  }
+};
+
 export const clearAuth = () => {
   localStorage.removeItem(TOKEN_KEYS.ACCESS);
   localStorage.removeItem(TOKEN_KEYS.REFRESH);
@@ -192,6 +206,7 @@ export const clearAuth = () => {
   localStorage.removeItem(TOKEN_KEYS.ACCESSIBLE_FORMS);
   localStorage.removeItem(TOKEN_KEYS.ORIGINAL_DATA_VISIBLE);
   localStorage.removeItem(TOKEN_KEYS.COMPANY);
+  localStorage.removeItem(TOKEN_KEYS.LOGIN_TYPE);
 };
 
 // ── Logout handler (avoids circular dependency with store) ──
@@ -213,6 +228,19 @@ let refreshDataCallback = null;
 
 export const registerRefreshDataCallback = (cb) => {
   refreshDataCallback = cb;
+};
+
+// Field-level validation errors (422, Joi) -> { field: message } for RHF's setError.
+// ⚠️ Exact error envelope shape unconfirmed beyond "errors[].field" — written defensively so an
+// unexpected shape just yields {} and falls back to the generic toast in extractApiError.
+export const extractFieldErrors = (error) => {
+  const errors = error?.response?.data?.errors;
+  if (!Array.isArray(errors)) return {};
+  return Object.fromEntries(
+    errors
+      .filter((e) => e?.field && e?.message)
+      .map((e) => [e.field, e.message])
+  );
 };
 
 // ── API error normalizer ──

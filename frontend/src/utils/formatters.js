@@ -67,6 +67,14 @@ export const capitalize = (str) => {
   return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
 };
 
+// Seconds -> "MM:SS", for the Forgot Password OTP/resend countdowns.
+export const formatCountdown = (totalSeconds) => {
+  const s = Math.max(0, totalSeconds);
+  const minutes = Math.floor(s / 60);
+  const seconds = s % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+};
+
 export const formatFileSize = (bytes) => {
   if (!bytes) return '0 B';
   const k = 1024;

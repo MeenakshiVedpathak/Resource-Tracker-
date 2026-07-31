@@ -13,8 +13,15 @@ const MainLayout = () => {
   // logged-in user's current role-form mappings, not a stale snapshot from last login.
   useSyncAccessibleForms();
 
-  const { isPlatformAdmin } = useAuth();
+  const { isPlatformAdmin, isEmployee } = useAuth();
   const { pathname } = useLocation();
+
+  // Dynamic login: an Employee has no business on any RBAC-driven Admin/User route — enforced
+  // here (not just by hiding nav items) so a direct URL visit still bounces them to their own
+  // dashboard, same as the Platform Admin check below.
+  if (isEmployee) {
+    return <Navigate to={ROUTES.EMPLOYEE_DASHBOARD} replace />;
+  }
 
   // Multi-tenancy retrofit: a Platform Admin's only screen is Company Management — enforced here
   // (rather than in ProtectedRoute) since this is the one layout every authenticated route

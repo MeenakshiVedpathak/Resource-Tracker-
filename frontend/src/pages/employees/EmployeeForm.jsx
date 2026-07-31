@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { useEmployee, useCreateEmployee, useUpdateEmployee } from '@/hooks/useEmployees';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
+import { passwordSchema } from '@/utils/validators';
 import { ROUTES } from '@/constants/routes';
 import {
   Form, FormField, FormItem, FormLabel, FormControl, FormMessage,
@@ -29,6 +30,9 @@ const employeeSchema = z.object({
   date_of_joining: z.string().min(1, 'Date of joining is required'),
   date_of_leaving: z.string().optional().or(z.literal('')),
   status: z.enum(['active', 'inactive']).default('active'),
+  // Only sent on create — editing a password goes through the dedicated Reset Password
+  // action on the list instead, so there's exactly one path for it.
+  password: passwordSchema.optional().or(z.literal('')),
 });
 
 const FormSkeleton = () => (
@@ -62,6 +66,7 @@ const EmployeeForm = () => {
       date_of_joining: '',
       date_of_leaving: '',
       status: 'active',
+      password: 'Gtt@123',
     },
   });
 
@@ -197,6 +202,28 @@ const EmployeeForm = () => {
                         </FormItem>
                       )}
                     />
+
+                    {!isEdit && (
+                      <FormField
+                        control={form.control}
+                        name="password"
+                        render={({ field }) => (
+                          <FormItem className="space-y-1">
+                            <FormLabel className="text-[11px] text-muted-foreground font-medium">Password</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="text"
+                                placeholder="Leave blank to set later"
+                                autoComplete="new-password"
+                                {...field}
+                                className="h-8 text-sm border-gray-200"
+                              />
+                            </FormControl>
+                            <FormMessage className="text-[10px]" />
+                          </FormItem>
+                        )}
+                      />
+                    )}
                   </div>
                 </div>
 

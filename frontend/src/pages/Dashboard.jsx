@@ -716,7 +716,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Clock, DollarSign, TrendingUp, TrendingDown, Users, Building2, Briefcase,
   BarChart2, RefreshCw, X, ChevronDown, ChevronLeft, ChevronRight, CalendarDays, AlertCircle,
-  Activity, Zap, Award, Calendar, IndianRupee, Table2, CalendarOff, Sparkles,
+  Activity, Zap, Award, Calendar, IndianRupee, Table2, CalendarOff, Sparkles, ShieldAlert,
 } from 'lucide-react';
 import { ROUTES } from '@/constants/routes';
 import { useDashboardAnalytics, useDashboardAnalytics2 } from '@/hooks/useDashboard';
@@ -1027,7 +1027,7 @@ const FilterPanel = ({ open, onToggle, children, badge }) => (
 /* ─── Dashboard ──────────────────────────────────────────────────────────── */
 const Dashboard = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, accessibleForms, accessibleFormsLoaded, isPlatformAdmin } = useAuth();
   const [fiscalYear, setFiscalYear]           = useState(currentFY);
   const [bottomMonthYear, setBottomMonthYear] = useState({ month: now.getMonth() + 1, year: now.getFullYear() });
   const [quarter, setQuarter]                 = useState(null);
@@ -1426,6 +1426,34 @@ const Dashboard = () => {
 
   const lastUpdated = dataUpdatedAt ? formatDate(new Date(dataUpdatedAt), 'DD MMM YYYY, hh:mm A') : null;
   const fyLabel = `FY ${fiscalYear}–${String(fiscalYear + 1).slice(-2)}`;
+
+  // The Dashboard route has no formName gate (it's always the landing page for any
+  // authenticated user — see routes/index.jsx), so a role with zero forms mapped would
+  // otherwise land on an empty/broken analytics view instead of a clear explanation.
+  const hasNoAccessibleForms = accessibleFormsLoaded
+    && !isPlatformAdmin
+    && Object.values(accessibleForms ?? {}).flat().length === 0;
+
+  if (hasNoAccessibleForms) {
+    return (
+      <div className="flex min-h-[70vh] items-center justify-center px-4">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center max-w-sm"
+        >
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/30">
+            <ShieldAlert className="h-8 w-8 text-amber-600 dark:text-amber-400" />
+          </div>
+          <h1 className="text-lg font-semibold text-foreground">No modules assigned yet</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Your role doesn't have any forms mapped to it, so there's nothing to show here.
+            Please contact your administrator to get access.
+          </p>
+        </motion.div>
+      </div>
+    );
+  }
 
   return (
     <div className="-mt-6 pb-8" ref={outerRef} id="dashboard-root">

@@ -69,6 +69,12 @@ export const useUploadTimesheets = () =>
     mutationFn: (file) => timesheetsApi.upload(file),
   });
 
+// Preview only — no cache invalidation here, that happens on useConfirmImport below.
+export const useSyncEmployeeWorkLogs = () =>
+  useMutation({
+    mutationFn: ({ month, year }) => timesheetsApi.syncEmployeeWorkLogs(month, year),
+  });
+
 export const useConfirmImport = () => {
   const qc = useQueryClient();
   return useMutation({

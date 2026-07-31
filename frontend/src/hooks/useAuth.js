@@ -14,6 +14,7 @@ import {
   selectCurrentCompany,
   selectCompanyId,
   selectIsPlatformAdmin,
+  selectIsEmployee,
   logout,
   setCredentials,
   setUser,
@@ -38,6 +39,7 @@ export const useAuth = () => {
   const company = useSelector(selectCurrentCompany); // multi-tenancy retrofit — null until backend sends one
   const companyId = useSelector(selectCompanyId);
   const isPlatformAdmin = useSelector(selectIsPlatformAdmin); // authoritative backend flag, not a role
+  const isEmployee = useSelector(selectIsEmployee); // dynamic login: 'employee' loginType
 
   // true if the user has ANY of the specified roles
   const hasRole = (...requiredRoles) => roles.some((r) => requiredRoles.includes(r));
@@ -71,6 +73,7 @@ export const useAuth = () => {
     company,
     companyId,
     isPlatformAdmin,
+    isEmployee,
     hasRole,
     hasPermission,
     logout: handleLogout,

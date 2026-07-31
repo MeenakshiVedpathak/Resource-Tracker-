@@ -30,4 +30,8 @@ export const timesheetsApi = {
     apiClient.put(`/timesheets/import/${timesheetImportId}/hours`, { timesheets }).then((r) => r.data),
   publishImport: (timesheetImportId) =>
     apiClient.put(`/timesheets/import/${timesheetImportId}/publish`).then((r) => r.data),
+  // Preview call — returns the same shape as upload()'s preview response. Confirming reuses
+  // the existing confirm() above, since both sources feed the same import pipeline.
+  syncEmployeeWorkLogs: (month, year) =>
+    apiClient.post('/timesheets/sync-employee-worklogs', { month, year }).then((r) => r.data?.data),
 };

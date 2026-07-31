@@ -1,11 +1,20 @@
 export const ROUTES = {
-  // Auth
+  // Auth — a real route per screen (not just steps in one page): the Forgot Password flow's
+  // state (email/loginType/otp/timers) needs "refresh/back-button/direct-URL -> Email screen"
+  // semantics, which only make sense with separate URLs to refresh/navigate/back into.
   LOGIN: '/login',
   FORGOT_PASSWORD: '/forgot-password',
+  FORGOT_PASSWORD_OTP: '/forgot-password/verify-otp',
+  FORGOT_PASSWORD_RESET: '/forgot-password/reset-password',
 
   // Core
   DASHBOARD: '/',
   AI_INSIGHTS: '/ai-insights',
+
+  // Employee self-service (dynamic login)
+  EMPLOYEE_DASHBOARD: '/employee/dashboard',
+  EMPLOYEE_TIMESHEET: '/employee/timesheet',
+  EMPLOYEE_REPORTS: '/employee/reports',
 
   // AI Copilot — new pages added on top of the existing app, reachable from the
   // floating AI Copilot widget's launcher rather than the RBAC-driven sidebar
@@ -89,7 +98,6 @@ export const ROUTES = {
   REPORT_RESOURCE_PROJECT_UTILIZATION: '/reports/resource-project-utilization',
 
   // Settings
-  PROFILE: '/profile',
   NOTIFICATIONS: '/notifications',
   SETTINGS: '/settings',
 

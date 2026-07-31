@@ -5,10 +5,20 @@ import { FORM_NAMES } from '@/constants/rbacForms';
 import ProtectedRoute from './ProtectedRoute';
 import AuthLayout from '@/layouts/AuthLayout';
 import MainLayout from '@/layouts/MainLayout';
+import EmployeeLayout from '@/layouts/EmployeeLayout';
+import ForgotPasswordLayout from '@/layouts/ForgotPasswordLayout';
 import LoadingScreen from '@/components/common/LoadingScreen';
 
 // ── Auth pages ──
 const Login = lazy(() => import('@/pages/auth/Login'));
+const ForgotPasswordEmail = lazy(() => import('@/pages/auth/ForgotPasswordEmail'));
+const ForgotPasswordOtp = lazy(() => import('@/pages/auth/ForgotPasswordOtp'));
+const ForgotPasswordReset = lazy(() => import('@/pages/auth/ForgotPasswordReset'));
+
+// ── Employee self-service (dynamic login) ──
+const EmployeeDashboard = lazy(() => import('@/pages/employee/EmployeeDashboard'));
+const EmployeeTimesheet = lazy(() => import('@/pages/employee/EmployeeTimesheet'));
+const EmployeeReports = lazy(() => import('@/pages/employee/EmployeeReports'));
 
 // ── Core ──
 const Dashboard = lazy(() => import('@/pages/Dashboard'));
@@ -74,7 +84,6 @@ const ProjectHealthCard = lazy(() => import('@/pages/ai/ProjectHealthCard'));
 const EmployeeAIProfile = lazy(() => import('@/pages/ai/EmployeeAIProfile'));
 
 // ── Settings ──
-const Profile = lazy(() => import('@/pages/Profile'));
 const Notifications = lazy(() => import('@/pages/Notifications'));
 
 // ── Errors ──
@@ -86,6 +95,15 @@ const AppRoutes = () => (
       {/* Auth */}
       <Route element={<AuthLayout />}>
         <Route path={ROUTES.LOGIN} element={<Login />} />
+
+        {/* Forgot Password — three real routes sharing one in-memory ForgotPasswordProvider,
+            so refresh/back-button/direct-URL on any of them correctly lands back on the Email
+            screen (the provider unmounts, clearing state, whenever none of the three match). */}
+        <Route element={<ForgotPasswordLayout />}>
+          <Route path={ROUTES.FORGOT_PASSWORD} element={<ForgotPasswordEmail />} />
+          <Route path={ROUTES.FORGOT_PASSWORD_OTP} element={<ForgotPasswordOtp />} />
+          <Route path={ROUTES.FORGOT_PASSWORD_RESET} element={<ForgotPasswordReset />} />
+        </Route>
       </Route>
 
       {/* Protected app */}
@@ -96,7 +114,10 @@ const AppRoutes = () => (
           </ProtectedRoute>
         }
       >
-        <Route path={ROUTES.DASHBOARD} element={<ProtectedRoute formName={FORM_NAMES.DASHBOARD}><Dashboard /></ProtectedRoute>} />
+        {/* Dashboard — always available to any authenticated user, even with zero forms
+            mapped, so there's always a landing page to fall back to (see NotFound's
+            "Back to Dashboard" button, and the post-login redirect). */}
+        <Route path={ROUTES.DASHBOARD} element={<Dashboard />} />
         <Route path={ROUTES.AI_INSIGHTS} element={<ProtectedRoute formName={FORM_NAMES.AI_INSIGHTS}><AIInsights /></ProtectedRoute>} />
 
         {/* Employees */}
@@ -222,12 +243,23 @@ const AppRoutes = () => (
         <Route path={ROUTES.AI_PROJECT_HEALTH} element={<ProjectHealthCard />} />
         <Route path={ROUTES.EMPLOYEE_AI_PROFILE} element={<EmployeeAIProfile />} />
 
-        {/* Settings — personal-account pages, always available to any authenticated user */}
-        <Route path={ROUTES.PROFILE} element={<Profile />} />
+        {/* Settings — personal-account pages, always available to any authenticated user.
+            Change Password used to live at ROUTES.PROFILE as a full page — it's now a modal
+            (ChangePasswordDialog) opened from UserMenu instead, so that route is gone. */}
         <Route path={ROUTES.NOTIFICATIONS} element={<Notifications />} />
 
         {/* RBAC guard redirect target — a real path, unlike the '*' catch-all below */}
         <Route path={ROUTES.NOT_AUTHORIZED} element={<NotFound />} />
+      </Route>
+
+      {/* Employee self-service — dynamic login's 'employee' loginType (Phases 1-3). Separate
+          from MainLayout entirely: an Employee has no roles/accessible-forms, so this can't be
+          gated by formName like the RBAC routes above — `employeeOnly` checks the login-type
+          flag directly (see ProtectedRoute.jsx). */}
+      <Route element={<ProtectedRoute employeeOnly><EmployeeLayout /></ProtectedRoute>}>
+        <Route path={ROUTES.EMPLOYEE_DASHBOARD} element={<EmployeeDashboard />} />
+        <Route path={ROUTES.EMPLOYEE_TIMESHEET} element={<EmployeeTimesheet />} />
+        <Route path={ROUTES.EMPLOYEE_REPORTS} element={<EmployeeReports />} />
       </Route>
 
       <Route path={ROUTES.NOT_FOUND} element={<NotFound />} />

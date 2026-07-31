@@ -8,12 +8,19 @@ import LoadingScreen from '@/components/common/LoadingScreen';
 // allowedRoles: gate against role names directly (e.g. the Management-only admin screens).
 // platformAdminOnly: gate against the backend's `is_platform_admin` user flag (multi-tenancy
 // retrofit's Company Management routes) — not a role, since a Platform Admin has none.
-const ProtectedRoute = ({ children, allowedRoles, formName, platformAdminOnly }) => {
-  const { isAuthenticated, hasRole, isPlatformAdmin, accessibleForms, accessibleFormsLoaded } = useAuth();
+// employeeOnly: gate against the dynamic-login `loginType === 'employee'` flag (Employee
+// self-service routes) — sends a non-Employee back to their own dashboard, not not-authorized,
+// since an Admin/User simply has a different home, not a permissions problem.
+const ProtectedRoute = ({ children, allowedRoles, formName, platformAdminOnly, employeeOnly }) => {
+  const { isAuthenticated, hasRole, isPlatformAdmin, isEmployee, accessibleForms, accessibleFormsLoaded } = useAuth();
   const location = useLocation();
 
   if (!isAuthenticated) {
     return <Navigate to={ROUTES.LOGIN} state={{ from: location }} replace />;
+  }
+
+  if (employeeOnly && !isEmployee) {
+    return <Navigate to={ROUTES.DASHBOARD} replace />;
   }
 
   if (platformAdminOnly && !isPlatformAdmin) {

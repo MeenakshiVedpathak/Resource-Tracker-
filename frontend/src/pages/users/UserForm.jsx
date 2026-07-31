@@ -1,9 +1,9 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useForm, Controller, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { ArrowLeft, Save } from 'lucide-react';
+import { ArrowLeft, Save, Eye, EyeOff } from 'lucide-react';
 import { useUser, useCreateUser, useUpdateUser } from '@/hooks/useUsers';
 import { useRoles } from '@/hooks/useRoles';
 import { useActiveEmployees } from '@/hooks/useEmployees';
@@ -67,6 +67,8 @@ const UserForm = () => {
   const { data: user, isPending: isLoadingUser } = useUser(id);
   const createMutation = useCreateUser();
   const updateMutation = useUpdateUser(id);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // Direct-URL/row-click safety net — the Edit action is already hidden in UserList for this
   // account, but nothing stops someone navigating to /users/:id/edit by hand.
@@ -279,7 +281,23 @@ const UserForm = () => {
                           <FormItem className="space-y-1">
                             <FormLabel className="text-[11px] text-muted-foreground font-medium"><span className="text-destructive mr-0.5">*</span> Password</FormLabel>
                             <FormControl>
-                              <Input type="password" placeholder="Min 8 chars, upper, lower, digit, special" className="h-8 text-sm border-gray-200" {...field} />
+                              <div className="relative">
+                                <Input
+                                  type={showPassword ? 'text' : 'password'}
+                                  placeholder="Min 8 chars, upper, lower, digit, special"
+                                  autoComplete="new-password"
+                                  className="h-8 text-sm border-gray-200 pr-9"
+                                  {...field}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => setShowPassword((v) => !v)}
+                                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                                  tabIndex={-1}
+                                >
+                                  {showPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                </button>
+                              </div>
                             </FormControl>
                             <FormMessage className="text-[10px]" />
                           </FormItem>
@@ -292,7 +310,23 @@ const UserForm = () => {
                           <FormItem className="space-y-1">
                             <FormLabel className="text-[11px] text-muted-foreground font-medium"><span className="text-destructive mr-0.5">*</span> Confirm Password</FormLabel>
                             <FormControl>
-                              <Input type="password" placeholder="Repeat password" className="h-8 text-sm border-gray-200" {...field} />
+                              <div className="relative">
+                                <Input
+                                  type={showConfirmPassword ? 'text' : 'password'}
+                                  placeholder="Repeat password"
+                                  autoComplete="new-password"
+                                  className="h-8 text-sm border-gray-200 pr-9"
+                                  {...field}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => setShowConfirmPassword((v) => !v)}
+                                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                                  tabIndex={-1}
+                                >
+                                  {showConfirmPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                </button>
+                              </div>
                             </FormControl>
                             <FormMessage className="text-[10px]" />
                           </FormItem>

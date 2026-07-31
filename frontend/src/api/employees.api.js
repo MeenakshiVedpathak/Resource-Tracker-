@@ -19,6 +19,9 @@ export const employeesApi = {
   delete: (id) =>
     apiClient.delete(`/employees/${id}`, { data: { is_delete: true } }).then((r) => r.data),
 
+  resetPassword: (id, password) =>
+    apiClient.put(`/employees/${id}/reset-password`, { password }).then((r) => r.data),
+
   import: (file) => {
     const formData = new FormData();
     formData.append('file', file);

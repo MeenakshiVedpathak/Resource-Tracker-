@@ -4,10 +4,10 @@ import { useAuth } from '@/hooks/useAuth';
 import { ROUTES } from '@/constants/routes';
 
 const AuthLayout = () => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isEmployee } = useAuth();
 
   if (isAuthenticated) {
-    return <Navigate to={ROUTES.DASHBOARD} replace />;
+    return <Navigate to={isEmployee ? ROUTES.EMPLOYEE_DASHBOARD : ROUTES.DASHBOARD} replace />;
   }
 
   return (

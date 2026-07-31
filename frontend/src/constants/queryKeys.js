@@ -80,4 +80,19 @@ export const QUERY_KEYS = {
 
   // Notifications
   NOTIFICATIONS: (params) => ['notifications', params],
+
+  // Employee self-service Work Log (draft/synced two-stage model)
+  EMPLOYEE_WORKLOG_CALENDAR: (month, year) => ['employee-worklog', 'calendar', month, year],
+  EMPLOYEE_WORKLOG_DAILY: (date) => ['employee-worklog', 'daily', date],
+  EMPLOYEE_WORKLOG_MONTHLY_SUMMARY: (month, year) => ['employee-worklog', 'monthly-summary', month, year],
+  EMPLOYEE_PROJECTS: ['employee-worklog', 'projects'],
+
+  // Employee <-> Service PO mapping (Admin-side, backs the Project dropdown above)
+  EMPLOYEE_SERVICEPO_MAPPING_BY_EMPLOYEE: (employeeId) => ['employee-servicepo-mapping', 'employee', employeeId],
+  EMPLOYEE_SERVICEPO_MAPPING_BY_SERVICE_PO: (servicePOId) => ['employee-servicepo-mapping', 'service-po', servicePOId],
+
+  // Employee Reports
+  EMPLOYEE_REPORT_DAILY: (date) => ['employee-report', 'daily', date],
+  EMPLOYEE_REPORT_MONTHLY: (month, year) => ['employee-report', 'monthly', month, year],
+  EMPLOYEE_REPORT_RANGE: (startDate, endDate) => ['employee-report', 'range', startDate, endDate],
 };

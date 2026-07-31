@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Upload, Info, Download, Trash2, Loader2 } from 'lucide-react';
+import { Upload, Info, Download, Trash2, Loader2, RefreshCw } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useTimesheetHistory, useDeleteTimesheetImport, useDeleteTimesheetImports } from '@/hooks/useTimesheets';
 import { timesheetsApi } from '@/api/timesheets.api';
@@ -14,6 +14,7 @@ import { formatDate } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
+import SyncWorkLogsDialog from '@/components/timesheets/SyncWorkLogsDialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
@@ -35,6 +36,7 @@ const TimesheetList = () => {
 
   const currentDate = new Date();
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
+  const [isSyncDialogOpen, setIsSyncDialogOpen] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(String(currentDate.getMonth() + 1));
   const [selectedYear, setSelectedYear] = useState(String(currentDate.getFullYear()));
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -259,6 +261,10 @@ const TimesheetList = () => {
               <Download className="mr-1.5 h-4 w-4" />
               Download Sample
             </Button>
+            <Button variant="outline" size="sm" onClick={() => setIsSyncDialogOpen(true)}>
+              <RefreshCw className="mr-1.5 h-4 w-4" />
+              Sync Employee Work Logs
+            </Button>
             <Button size="sm" onClick={() => setIsUploadDialogOpen(true)}>
               <Upload className="mr-1.5 h-4 w-4" />
               Upload Excel
@@ -377,6 +383,8 @@ const TimesheetList = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <SyncWorkLogsDialog open={isSyncDialogOpen} onOpenChange={setIsSyncDialogOpen} />
 
       <ConfirmDialog
         open={!!deleteTarget}

@@ -1,10 +1,11 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useNotification } from '@/hooks/useNotification';
 import { authApi } from '@/api/auth.api';
 import { getInitials } from '@/utils/formatters';
 import { ROUTES } from '@/constants/routes';
-import { UserCircle, Settings, LogOut, ChevronDown } from 'lucide-react';
+import { KeyRound, LogOut, ChevronDown } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,12 +15,14 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import ChangePasswordDialog from '@/components/profile/ChangePasswordDialog';
 import { cn } from '@/utils/cn';
 
 const UserMenu = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { error } = useNotification();
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
 
   const handleLogout = async () => {
     try {
@@ -32,10 +35,14 @@ const UserMenu = () => {
     }
   };
 
-  const displayName = user?.name ?? user?.username ?? user?.email ?? '';
+  // full_name/email_id are the actual fields on both the User and Employee login response
+  // shapes — name/username/email were never populated, which is why this was blank before.
+  const displayName = user?.full_name ?? user?.name ?? user?.username ?? user?.email_id ?? user?.email ?? '';
+  const email = user?.email_id ?? user?.email;
   const roleName = user?.role?.role_name ?? null;
 
   return (
+    <>
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button className="flex items-center gap-2.5 rounded-xl border border-border/60 bg-muted/40 px-2.5 py-1.5 hover:bg-accent hover:border-border transition-all outline-none shadow-sm">
@@ -54,13 +61,13 @@ const UserMenu = () => {
       <DropdownMenuContent align="end" className="w-48">
         <DropdownMenuLabel className="font-normal">
           <p className="text-sm font-medium">{displayName}</p>
-          <p className="text-xs text-muted-foreground">{user?.email}</p>
+          <p className="text-xs text-muted-foreground">{email}</p>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        {/* <DropdownMenuItem onClick={() => navigate(ROUTES.PROFILE)}>
-          <UserCircle className="mr-2 h-4 w-4" />
-          Profile
-        </DropdownMenuItem> */}
+        <DropdownMenuItem onClick={() => setIsChangePasswordOpen(true)}>
+          <KeyRound className="mr-2 h-4 w-4" />
+          Change Password
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">
           <LogOut className="mr-2 h-4 w-4" />
@@ -68,6 +75,9 @@ const UserMenu = () => {
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+
+    <ChangePasswordDialog open={isChangePasswordOpen} onOpenChange={setIsChangePasswordOpen} />
+    </>
   );
 };
 
