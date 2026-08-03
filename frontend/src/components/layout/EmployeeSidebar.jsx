@@ -5,12 +5,13 @@ import { useDispatch, useSelector } from 'react-redux';
 import { selectSidebarCollapsed, toggleSidebar, setSidebarCollapsed } from '@/store/slices/uiSlice';
 import { cn } from '@/utils/cn';
 import { ROUTES } from '@/constants/routes';
-import { ChevronLeft, ChevronRight, LayoutDashboard, Clock, FileBarChart2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, LayoutDashboard, Clock, Table2, FileBarChart2 } from 'lucide-react';
 
 // Static (not RBAC-driven) — an Employee always sees exactly these, per spec.
 const NAV_ITEMS = [
   { label: 'Dashboard', icon: LayoutDashboard, to: ROUTES.EMPLOYEE_DASHBOARD, exact: true },
   { label: 'My Work Log', icon: Clock, to: ROUTES.EMPLOYEE_TIMESHEET, exact: false },
+  { label: 'Monthly Summary', icon: Table2, to: ROUTES.EMPLOYEE_MONTHLY_SUMMARY, exact: false },
   { label: 'Reports', icon: FileBarChart2, to: ROUTES.EMPLOYEE_REPORTS, exact: false },
 ];
 

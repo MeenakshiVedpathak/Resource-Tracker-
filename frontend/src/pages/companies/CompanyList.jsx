@@ -86,13 +86,13 @@ const CompanyList = () => {
       },
     }),
     columnHelper.accessor('company_name', {
-      header: 'Company Name',
+      header: 'BU Name',
       size: 250,
       meta: { sticky: true, left: 110 },
       cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="230px" className="font-medium" />,
     }),
     columnHelper.accessor('company_code', {
-      header: 'Company Code',
+      header: 'BU Code',
       size: 150,
       cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="130px" />,
     }),
@@ -124,21 +124,21 @@ const CompanyList = () => {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Company Management"
-        description="Create and manage companies on the platform"
+        title="BU Management"
+        description="Create and manage BUs on the platform"
         actions={
           <div className="flex items-center gap-3">
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search companies…"
+                placeholder="Search BUs…"
                 className="pl-9 w-[250px] h-9 text-sm bg-white"
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setPage(1); }}
               />
             </div>
             <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => navigate(ROUTES.COMPANY_NEW)}>
-              <Plus className="mr-1.5 h-4 w-4" /> Add Company
+              <Plus className="mr-1.5 h-4 w-4" /> Add BU
             </Button>
           </div>
         }
@@ -164,7 +164,7 @@ const CompanyList = () => {
       <ConfirmDialog
         open={!!statusTarget}
         onOpenChange={(open) => !open && setStatusTarget(null)}
-        title={statusTarget?.nextStatus === 'active' ? 'Activate company?' : 'Deactivate company?'}
+        title={statusTarget?.nextStatus === 'active' ? 'Activate BU?' : 'Deactivate BU?'}
         description={
           statusTarget?.nextStatus === 'active'
             ? `${statusTarget?.company?.company_name} will regain access to the platform.`

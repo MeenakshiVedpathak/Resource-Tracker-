@@ -15,7 +15,7 @@ import { useCreateWorkLogEntry, useUpdateWorkLogEntry } from '@/hooks/useEmploye
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError, extractFieldErrors } from '@/services/apiClient';
 
-const DAILY_HOURS_CAP = 12;
+export const DAILY_HOURS_CAP = 12;
 
 // Client-side messages match the backend's Joi wording exactly, so an error looks the same
 // whether it's caught here or comes back from the server. The cross-entry daily-total cap

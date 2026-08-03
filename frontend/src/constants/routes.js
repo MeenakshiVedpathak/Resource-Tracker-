@@ -14,6 +14,7 @@ export const ROUTES = {
   // Employee self-service (dynamic login)
   EMPLOYEE_DASHBOARD: '/employee/dashboard',
   EMPLOYEE_TIMESHEET: '/employee/timesheet',
+  EMPLOYEE_MONTHLY_SUMMARY: '/employee/monthly-summary',
   EMPLOYEE_REPORTS: '/employee/reports',
 
   // AI Copilot — new pages added on top of the existing app, reachable from the

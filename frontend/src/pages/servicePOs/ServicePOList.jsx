@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import { useNavigate, useSearchParams, Outlet } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Plus, Pencil, Eye, Trash2, Search, Filter, Download, Upload } from 'lucide-react';
+import { Plus, Pencil, Eye, Trash2, Search, Filter, Download, Upload, Users } from 'lucide-react';
 import { useServicePOs, useDeleteServicePO } from '@/hooks/useServicePOs';
 import { servicePOsApi } from '@/api/servicePOs.api';
 import { useActiveClients } from '@/hooks/useClients';
@@ -19,6 +19,7 @@ import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
 import StatusBadge from '@/components/common/StatusBadge';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
+import ServicePOMappingDialog from './ServicePOMappingDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -114,6 +115,7 @@ const ServicePOList = () => {
   const { success, error: showError } = useNotification();
   const [deleteTarget, setDeleteTarget] = useState(null);
   const deleteMutation = useDeleteServicePO();
+  const [mappingTarget, setMappingTarget] = useState(null);
 
   const [sorting, setSorting] = useState([]);
 
@@ -203,7 +205,7 @@ const ServicePOList = () => {
     columnHelper.display({
       id: 'actions',
       header: 'Actions',
-      size: 128,
+      size: 160,
       meta: { sticky: true, left: 0 },
       cell: ({ row }) => (
         <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
@@ -217,6 +219,14 @@ const ServicePOList = () => {
           </Button>
           {canManage && (
             <>
+              <Button
+                size="sm"
+                title="Map Employees"
+                onClick={() => setMappingTarget(row.original)}
+                className="h-6 w-6 p-0 bg-emerald-500 hover:bg-emerald-600 text-white rounded transition-colors"
+              >
+                <Users className="h-3 w-3" />
+              </Button>
               <Button
                 size="sm"
                 title="Edit"
@@ -241,7 +251,7 @@ const ServicePOList = () => {
     columnHelper.accessor('service_po_code', {
       header: 'PO Code',
       size: 180,
-      meta: { sticky: true, left: 128 },
+      meta: { sticky: true, left: 160 },
       cell: (info) => (
         <div className="font-mono text-xs font-semibold text-muted-foreground truncate" style={{ maxWidth: "160px" }} title={info.getValue()}>
           {info.getValue()}
@@ -502,6 +512,12 @@ const ServicePOList = () => {
         confirmLabel="Delete"
         onConfirm={handleDelete}
         isLoading={deleteMutation.isPending}
+      />
+
+      <ServicePOMappingDialog
+        servicePO={mappingTarget}
+        open={!!mappingTarget}
+        onOpenChange={(open) => !open && setMappingTarget(null)}
       />
 
       <Outlet />

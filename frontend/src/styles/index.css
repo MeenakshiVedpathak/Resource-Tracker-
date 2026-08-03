@@ -266,6 +266,28 @@
   th.sticky-col {
     @apply z-20 bg-slate-50 dark:bg-slate-800/80;
   }
+
+  /* ── Monthly Summary — freeze-pane table (sticky header + first/last column + footer row) ── */
+  .summary-table-head {
+    @apply sticky top-0 z-20 bg-slate-50 dark:bg-slate-800/80;
+  }
+
+  .summary-table-foot {
+    @apply sticky bottom-0 z-20 bg-slate-50 dark:bg-slate-800/80 font-semibold;
+  }
+
+  .summary-col-pinned {
+    @apply sticky z-10 bg-white dark:bg-slate-900;
+  }
+
+  tr:hover td.summary-col-pinned {
+    @apply bg-slate-50 dark:bg-slate-800;
+  }
+
+  .summary-col-pinned.summary-table-head,
+  .summary-col-pinned.summary-table-foot {
+    @apply z-30;
+  }
 }
 
 @layer utilities {

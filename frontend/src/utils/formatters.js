@@ -37,6 +37,10 @@ export const formatHours = (hours) => {
   return `${Number(hours).toFixed(1)}h`;
 };
 
+// Plain numeric hours for dense grids (Monthly Summary table) — "0" instead of "—" for empty
+// cells, and no unnecessary trailing zeros (8, 7.5, 2.25), unlike formatHours above.
+export const formatHoursCell = (hours) => Number(Number(hours ?? 0).toFixed(2)).toString();
+
 export const formatPercentage = (value, decimals = 1) => {
   if (value == null) return '—';
   return `${Number(value).toFixed(decimals)}%`;

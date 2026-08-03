@@ -18,6 +18,7 @@ const ForgotPasswordReset = lazy(() => import('@/pages/auth/ForgotPasswordReset'
 // ── Employee self-service (dynamic login) ──
 const EmployeeDashboard = lazy(() => import('@/pages/employee/EmployeeDashboard'));
 const EmployeeTimesheet = lazy(() => import('@/pages/employee/EmployeeTimesheet'));
+const EmployeeMonthlySummary = lazy(() => import('@/pages/employee/EmployeeMonthlySummary'));
 const EmployeeReports = lazy(() => import('@/pages/employee/EmployeeReports'));
 
 // ── Core ──
@@ -259,6 +260,7 @@ const AppRoutes = () => (
       <Route element={<ProtectedRoute employeeOnly><EmployeeLayout /></ProtectedRoute>}>
         <Route path={ROUTES.EMPLOYEE_DASHBOARD} element={<EmployeeDashboard />} />
         <Route path={ROUTES.EMPLOYEE_TIMESHEET} element={<EmployeeTimesheet />} />
+        <Route path={ROUTES.EMPLOYEE_MONTHLY_SUMMARY} element={<EmployeeMonthlySummary />} />
         <Route path={ROUTES.EMPLOYEE_REPORTS} element={<EmployeeReports />} />
       </Route>
 

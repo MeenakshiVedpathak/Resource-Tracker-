@@ -17,7 +17,7 @@ import ConfirmDialog from '@/components/common/ConfirmDialog';
 const SUPER_ADMIN_NAV_GROUPS = [
   {
     label: 'Administration',
-    items: [{ label: 'Company Management', icon: Landmark, to: ROUTES.COMPANIES, exact: false }],
+    items: [{ label: 'BU Management', icon: Landmark, to: ROUTES.COMPANIES, exact: false }],
   },
 ];
 

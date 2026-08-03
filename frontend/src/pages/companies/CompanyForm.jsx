@@ -26,14 +26,14 @@ import {
 // Edit only accepts company_name/status per the backend's PATCH contract — company_code and the
 // admin account are immutable after creation.
 const createSchema = z.object({
-  company_code: z.string().min(1, 'Company code is required').max(50),
-  company_name: z.string().min(1, 'Company name is required').max(100),
+  company_code: z.string().min(1, 'BU code is required').max(50),
+  company_name: z.string().min(1, 'BU name is required').max(100),
   admin_email: z.string().min(1, 'Admin email is required').email('Enter a valid email'),
   admin_password: z.string().min(8, 'Password must be at least 8 characters'),
 });
 
 const editSchema = z.object({
-  company_name: z.string().min(1, 'Company name is required').max(100),
+  company_name: z.string().min(1, 'BU name is required').max(100),
   status: z.enum(['active', 'inactive']).default('active'),
 });
 
@@ -75,7 +75,7 @@ const CompanyForm = () => {
     const mutation = isEdit ? updateMutation : createMutation;
     mutation.mutate(values, {
       onSuccess: () => {
-        success(isEdit ? 'Company updated successfully.' : 'Company created successfully.');
+        success(isEdit ? 'BU updated successfully.' : 'BU created successfully.');
         handleClose();
       },
       onError: (err) => showError(extractApiError(err)),
@@ -95,7 +95,7 @@ const CompanyForm = () => {
       <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col bg-white overflow-hidden">
         <SheetHeader className="px-5 py-4 border-b">
           <SheetTitle className="text-base font-medium text-left">
-            {isEdit ? 'Edit Company' : 'Create Company'}
+            {isEdit ? 'Edit BU' : 'Create BU'}
           </SheetTitle>
         </SheetHeader>
 
@@ -106,11 +106,11 @@ const CompanyForm = () => {
             <Form {...form}>
               <form id="company-form" onSubmit={form.handleSubmit(onSubmit)} className="p-5 flex flex-col gap-6">
                 <div className="space-y-2">
-                  <h3 className="text-xs font-semibold text-foreground border-b pb-1">Company Details</h3>
+                  <h3 className="text-xs font-semibold text-foreground border-b pb-1">BU Details</h3>
                   <div className="grid grid-cols-1 gap-4">
                     {isEdit && (
                       <div className="space-y-1">
-                        <span className="text-[11px] text-muted-foreground font-medium">Company Code</span>
+                        <span className="text-[11px] text-muted-foreground font-medium">BU Code</span>
                         <Input value={company?.company_code ?? ''} disabled className="h-8 text-sm border-gray-200 bg-muted/40" />
                       </div>
                     )}
@@ -122,7 +122,7 @@ const CompanyForm = () => {
                         render={({ field }) => (
                           <FormItem className="space-y-1">
                             <FormLabel className="text-[11px] text-muted-foreground font-medium">
-                              <span className="text-destructive mr-0.5">*</span> Company Code
+                              <span className="text-destructive mr-0.5">*</span> BU Code
                             </FormLabel>
                             <FormControl>
                               <Input placeholder="e.g. ACME" className="h-8 text-sm border-gray-200" {...field} />
@@ -139,7 +139,7 @@ const CompanyForm = () => {
                       render={({ field }) => (
                         <FormItem className="space-y-1">
                           <FormLabel className="text-[11px] text-muted-foreground font-medium">
-                            <span className="text-destructive mr-0.5">*</span> Company Name
+                            <span className="text-destructive mr-0.5">*</span> BU Name
                           </FormLabel>
                           <FormControl>
                             <Input placeholder="e.g. Acme Corporation" className="h-8 text-sm border-gray-200" {...field} />
@@ -180,9 +180,9 @@ const CompanyForm = () => {
                     {!isEdit && (
                       <>
                         <div className="border-t pt-4 space-y-1">
-                          <h3 className="text-xs font-semibold text-foreground pb-1">Company Admin Account</h3>
+                          <h3 className="text-xs font-semibold text-foreground pb-1">BU Admin Account</h3>
                           <p className="text-[11px] text-muted-foreground">
-                            Creates the first admin login for this company.
+                            Creates the first admin login for this BU.
                           </p>
                         </div>
                         <FormField
@@ -230,7 +230,7 @@ const CompanyForm = () => {
           </Button>
           <Button type="submit" form="company-form" disabled={isSubmitting} size="sm" className="h-8 text-xs bg-blue-600 hover:bg-blue-700 text-white">
             <Save className="mr-2 h-3.5 w-3.5" />
-            {isSubmitting ? 'Saving...' : isEdit ? 'Save Changes' : 'Create Company'}
+            {isSubmitting ? 'Saving...' : isEdit ? 'Save Changes' : 'Create BU'}
           </Button>
         </SheetFooter>
       </SheetContent>
