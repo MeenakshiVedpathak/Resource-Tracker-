@@ -5,7 +5,9 @@ const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
 // Fixed standard monthly hours target (22 working days x 8 hrs) — not derived from the actual
 // number of weekdays in the given month, since the backend has no monthly-target concept.
-const STANDARD_MONTHLY_HOURS = 176;
+// Exported so other employee-facing views (e.g. the dashboard) share this one target instead of
+// redefining the same magic number.
+export const STANDARD_MONTHLY_HOURS = 176;
 
 // Sums the same per-day `totalHours` the calendar heatmap reads (GET /employee-timesheets/
 // calendar) against the fixed standard monthly target above.

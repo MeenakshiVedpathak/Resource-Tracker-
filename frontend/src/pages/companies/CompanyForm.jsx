@@ -1,9 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Save } from 'lucide-react';
+import { Save, Eye, EyeOff } from 'lucide-react';
 import { useCompany, useCreateCompany, useUpdateCompany } from '@/hooks/useCompanies';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
@@ -50,6 +50,7 @@ const CompanyForm = () => {
   const { id } = useParams();
   const isEdit = !!id;
   const { success, error: showError } = useNotification();
+  const [showPassword, setShowPassword] = useState(false);
 
   const { data: company, isPending: isLoadingCompany } = useCompany(id);
   const createMutation = useCreateCompany();
@@ -209,7 +210,23 @@ const CompanyForm = () => {
                                 <span className="text-destructive mr-0.5">*</span> Admin Password
                               </FormLabel>
                               <FormControl>
-                                <Input type="password" placeholder="Min. 8 characters" className="h-8 text-sm border-gray-200" {...field} />
+                                <div className="relative">
+                                  <Input
+                                    type={showPassword ? 'text' : 'password'}
+                                    placeholder="Min. 8 characters"
+                                    autoComplete="new-password"
+                                    className="h-8 text-sm border-gray-200 pr-9"
+                                    {...field}
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowPassword((v) => !v)}
+                                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                                    tabIndex={-1}
+                                  >
+                                    {showPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                  </button>
+                                </div>
                               </FormControl>
                               <FormMessage className="text-[10px]" />
                             </FormItem>

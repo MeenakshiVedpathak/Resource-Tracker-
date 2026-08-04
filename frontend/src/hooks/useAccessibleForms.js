@@ -30,8 +30,8 @@ export const useSyncAccessibleForms = () => {
 // Imperative re-fetch, bypassing useSyncAccessibleForms's "only once" gate — call this after
 // a Role Master edit (permission, form mapping, etc.) so the current session's own
 // accessible-forms map (sidebar visibility) picks up the change immediately instead of
-// waiting for the next login. See useOriginalDataVisibility.js for the is_original_data_visible
-// counterpart, refreshed via a separate endpoint.
+// waiting for the next login. is_original_data_visible has no such mid-session refresh —
+// it's only ever set at login time.
 export const useRefreshAccessibleForms = () => {
   const { roleIds, isAuthenticated, setAccessibleForms } = useAuth();
   return async () => {

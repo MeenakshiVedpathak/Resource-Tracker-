@@ -5,7 +5,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useRole, useCreateRole, useUpdateRole } from '@/hooks/useRoles';
 import { useRefreshAccessibleForms } from '@/hooks/useAccessibleForms';
-import { useRefreshOriginalDataVisibility } from '@/hooks/useOriginalDataVisibility';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import { ROUTES } from '@/constants/routes';
@@ -44,7 +43,6 @@ const RoleForm = () => {
   const createMutation = useCreateRole();
   const updateMutation = useUpdateRole(id);
   const refreshAccessibleForms = useRefreshAccessibleForms();
-  const refreshOriginalDataVisibility = useRefreshOriginalDataVisibility();
 
   const form = useForm({
     resolver: zodResolver(roleSchema),
@@ -74,12 +72,10 @@ const RoleForm = () => {
     mutation.mutate(values, {
       onSuccess: () => {
         success(isEdit ? 'Role updated successfully.' : 'Role created successfully.');
-        // Permission/is_original_data_visible/status changes should apply to the current
-        // session immediately, not wait for the next login — refresh the accessible-forms
-        // cache and the is_original_data_visible flag (the Roles list itself already
-        // refetches via useUpdateRole's invalidation).
+        // Accessible-forms changes should apply to the current session immediately, not wait
+        // for the next login (the Roles list itself already refetches via useUpdateRole's
+        // invalidation). is_original_data_visible is only ever set at login time.
         refreshAccessibleForms();
-        refreshOriginalDataVisibility();
         handleClose();
       },
       onError: (err) => showError(extractApiError(err)),

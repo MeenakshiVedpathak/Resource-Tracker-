@@ -69,30 +69,25 @@ const ProjectGroup = ({ poRow, childrenByParent, day, edits, onCellChange, isPas
       <button
         type="button"
         onClick={() => setIsOpen((o) => !o)}
-        className="flex w-full items-center gap-2.5 px-4 py-3 text-left transition-colors hover:bg-muted/40"
+        className="flex w-full items-center gap-2 px-4 py-2 text-left transition-colors hover:bg-muted/40"
       >
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400">
-          <Folder className="h-4 w-4" />
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400">
+          <Folder className="h-3.5 w-3.5" />
         </span>
-        <span className="flex-1 truncate text-sm font-semibold">{poRow.label}</span>
-        <span className="text-sm font-semibold text-primary">{groupTotal} {groupTotal === 1 ? 'hr' : 'hrs'}</span>
-        {isOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+        <span className="flex-1 truncate text-xs font-semibold">{poRow.label}</span>
+        <span className="text-xs font-semibold text-primary">{groupTotal} {groupTotal === 1 ? 'hr' : 'hrs'}</span>
+        {isOpen ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
       </button>
 
       {isOpen && (
         <div className="border-t">
-          <div className="grid grid-cols-[2.5rem_1fr_7.5rem] gap-2 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            <span>#</span>
-            <span>Task / Feature</span>
-            <span className="text-right">Hours</span>
-          </div>
           {nodeRows.map((row, i) => {
             const value = cellValueOf(row);
             const isDirty = edits?.[row.rowKey]?.[day] !== undefined;
             return (
               <div
                 key={row.rowKey}
-                className={cn('grid grid-cols-[2.5rem_1fr_7.5rem] items-center gap-2 px-4 py-2.5', i > 0 && 'border-t border-dashed')}
+                className={cn('grid grid-cols-[2.5rem_1fr_7.5rem] items-center gap-2 px-4 py-0.5', i > 0 && 'border-t border-dashed')}
               >
                 <span className="text-xs text-muted-foreground">{i + 1}</span>
                 <span className={cn('truncate text-sm', row.relDepth > 0 && 'text-muted-foreground')} style={{ paddingLeft: row.relDepth * 14 }}>
@@ -139,7 +134,7 @@ const WorkLogEntryTable = ({ rows, day, isLoading, isPastOrToday, edits, onCellC
 
   return (
     <div className="space-y-3">
-      <h3 className="text-sm font-semibold">Work Log Entries</h3>
+      <h3 className="text-xs font-semibold">Work Log Entries</h3>
 
       <div className="space-y-2">
         {topLevelRows.map((row) => (

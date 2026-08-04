@@ -32,10 +32,10 @@ export const useHasForm = (formName) => {
     .some((f) => f.name === formName);
 };
 
-// Gates the Modified/Original hours-source toggle in Reports & Dashboard. Backed by
-// GET /roles/form-mappings/:userId (see useOriginalDataVisibility.js), refreshed at login
-// and after any Role Master edit — not derived from the login roleObjects snapshot, since
-// that would go stale until the next login.
+// Gates the Modified/Original hours-source toggle in Reports & Dashboard, and the Modified
+// Hours visibility on the Timesheet Import screens. Set once from the POST /auth/login
+// response's roles[] and never refreshed mid-session — a Role Master edit only takes effect
+// on the user's next login.
 export const useCanViewOriginalData = () => {
   const { isOriginalDataVisible } = useAuth();
   return isOriginalDataVisible;

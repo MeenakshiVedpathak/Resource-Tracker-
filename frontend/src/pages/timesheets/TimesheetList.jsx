@@ -5,6 +5,7 @@ import { createColumnHelper } from '@tanstack/react-table';
 import { Upload, Info, Download, Trash2, Loader2, RefreshCw } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useTimesheetHistory, useDeleteTimesheetImport, useDeleteTimesheetImports } from '@/hooks/useTimesheets';
+import { useCanViewOriginalData } from '@/hooks/usePermissions';
 import { timesheetsApi } from '@/api/timesheets.api';
 import { QUERY_KEYS } from '@/constants/queryKeys';
 import { useNotification } from '@/hooks/useNotification';
@@ -30,6 +31,7 @@ const TimesheetList = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { success, error: showError } = useNotification();
+  const canViewOriginal = useCanViewOriginalData();
 
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
@@ -151,6 +153,7 @@ const TimesheetList = () => {
     }),
     columnHelper.accessor('file_name', {
       header: 'File Name',
+      size: 220,
       cell: (info) => (
         <div className="flex items-center gap-2 max-w-[220px]">
           <span className="font-medium text-sm truncate" title={info.getValue()}>
@@ -164,6 +167,7 @@ const TimesheetList = () => {
     }),
     columnHelper.accessor('importer', {
       header: 'Imported By',
+      size: 200,
       cell: (info) => {
         const imp = info.getValue();
         const name = imp?.employee?.full_name ?? imp?.email ?? '—';
@@ -214,7 +218,7 @@ const TimesheetList = () => {
         );
       },
     }),
-    columnHelper.accessor('is_publish', {
+    ...(canViewOriginal ? [columnHelper.accessor('is_publish', {
       header: 'Status',
       size: 100,
       cell: (info) => {
@@ -225,7 +229,7 @@ const TimesheetList = () => {
           </span>
         );
       },
-    }),
+    })] : []),
     columnHelper.accessor('created_at', {
       header: 'Imported At',
       size: 150,
@@ -265,10 +269,12 @@ const TimesheetList = () => {
               <RefreshCw className="mr-1.5 h-4 w-4" />
               Sync Employee Work Logs
             </Button>
-            <Button size="sm" onClick={() => setIsUploadDialogOpen(true)}>
-              <Upload className="mr-1.5 h-4 w-4" />
-              Upload Excel
-            </Button>
+            {canViewOriginal && (
+              <Button size="sm" onClick={() => setIsUploadDialogOpen(true)}>
+                <Upload className="mr-1.5 h-4 w-4" />
+                Upload Excel
+              </Button>
+            )}
           </div>
         }
       />

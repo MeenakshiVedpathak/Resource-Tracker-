@@ -15,7 +15,7 @@ import { useActiveServicePOs } from '@/hooks/useServicePOs';
 import { useActiveEmployees } from '@/hooks/useEmployees';
 import { useSubProjectsByPO } from '@/hooks/useSubProjects';
 import { useAuth } from '@/hooks/useAuth';
-import { useCanWrite } from '@/hooks/usePermissions';
+import { useCanWrite, useCanViewOriginalData } from '@/hooks/usePermissions';
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
@@ -49,16 +49,10 @@ const EmployeeCell = memo(({ row }) => (
 
 // Modified Hours is the only editable field left on this grid — hours_logged
 // (the original, imported value) is always read-only, and edits are only
-// ever sent through the bulk update API, never a per-row endpoint.
-const ModifiedHoursCell = memo(({ row, initialValue, onChange, readOnly }) => {
+// ever sent through the bulk update API, never a per-row endpoint. The column
+// only renders at all when canViewOriginal is true, so this cell is always editable.
+const ModifiedHoursCell = memo(({ row, initialValue, onChange }) => {
   const [val, setVal] = useState(initialValue);
-  if (readOnly) {
-    return (
-      <span className="block w-full text-right tabular-nums text-sm">
-        {val === '' || val == null ? '—' : val}
-      </span>
-    );
-  }
   return (
     <input
       type="number"
@@ -97,13 +91,13 @@ const TimesheetImportDetail = () => {
   const isLocked = !!importRecord?.is_publish;
 
   const notify = useNotification();
-  const { hasRole, user } = useAuth();
+  const { user } = useAuth();
   const canWrite = useCanWrite();
   const canAddEntry = canWrite;
-  // "HR" is the general business rule; Company Admin is a role override so that account
-  // always has access regardless of its actual permission level.
+  // Modified Hours, the Status badge, and Publish are all gated purely by the Role Master's
+  // is_original_data_visible flag — visible/usable only when that flag is set on the user's role.
   // Modified Hours stays editable even after publish — only the publish action itself is one-way.
-  const canEdit = (hasRole('HR') && canWrite) || hasRole('Company Admin');
+  const canViewOriginal = useCanViewOriginalData();
 
   const { data: activeServicePOsData } = useActiveServicePOs();
 
@@ -397,7 +391,7 @@ const TimesheetImportDetail = () => {
         );
       },
     }),
-    columnHelper.accessor('modified_hours', {
+    ...(canViewOriginal ? [columnHelper.accessor('modified_hours', {
       header: () => <span className="block text-right">Modified Hours</span>,
       size: 130,
       enableSorting: false,
@@ -414,11 +408,10 @@ const TimesheetImportDetail = () => {
             row={row}
             initialValue={initialValue}
             onChange={updateEdit}
-            readOnly={!canEdit}
           />
         );
       },
-    }),
+    })] : []),
     columnHelper.accessor('servicePO.serviceType.serviceCategory', {
       id: 'category',
       header: 'Category',
@@ -439,7 +432,7 @@ const TimesheetImportDetail = () => {
         );
       },
     }),
-  ], [canEdit, saveVersion, updateEdit]);
+  ], [canViewOriginal, saveVersion, updateEdit]);
 
   return (
     <div>
@@ -461,7 +454,7 @@ const TimesheetImportDetail = () => {
                 </span>
               )}
             </Button>
-            {canEdit && editedCount > 0 && (
+            {canViewOriginal && editedCount > 0 && (
               <>
                 <span className="text-xs text-muted-foreground">
                   {editedCount} unsaved change{editedCount !== 1 ? 's' : ''}
@@ -471,12 +464,12 @@ const TimesheetImportDetail = () => {
                 </Button>
               </>
             )}
-            {canEdit && (
+            {canViewOriginal && (
               <Button size="sm" onClick={saveChanges} disabled={editedCount === 0 || isSaving}>
                 {isSaving ? 'Saving…' : 'Save Changes'}
               </Button>
             )}
-            {canEdit && !isLocked && (
+            {canViewOriginal && !isLocked && (
               <Button
                 variant="success"
                 size="sm"
@@ -528,10 +521,12 @@ const TimesheetImportDetail = () => {
               <p className="text-xs text-muted-foreground">Imported At</p>
               <p className="text-sm tabular-nums">{formatDate(importRecord.created_at)}</p>
             </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Status</p>
-              <PublishPill value={isLocked} />
-            </div>
+            {canViewOriginal && (
+              <div>
+                <p className="text-xs text-muted-foreground">Status</p>
+                <PublishPill value={isLocked} />
+              </div>
+            )}
             <div>
               <p className="text-xs text-muted-foreground">Rows</p>
               <p className="text-sm tabular-nums">

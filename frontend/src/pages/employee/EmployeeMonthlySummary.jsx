@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import dayjs from 'dayjs';
+import * as XLSX from 'xlsx';
 import { useQueryClient } from '@tanstack/react-query';
-import { Save } from 'lucide-react';
+import { Save, Download } from 'lucide-react';
 import { useEmployeeMonthlySummary, useSaveWorkLogDay } from '@/hooks/useEmployeeWorkLog';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
@@ -10,6 +11,31 @@ import MonthNavigator from '@/components/employee/MonthNavigator';
 import SummaryTable from '@/components/employee/SummaryTable';
 import { DAILY_HOURS_CAP } from '@/components/employee/WorkLogEntryModal';
 import { Button } from '@/components/ui/button';
+
+// Mirrors SummaryTable's own cell/total computation so the export matches exactly what's on
+// screen, including any unsaved edits — not a separate re-fetch of server values.
+const exportSummaryToExcel = (rows, edits, month, year) => {
+  const daysInMonth = dayjs(`${year}-${String(month).padStart(2, '0')}-01`).daysInMonth();
+  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+
+  const cellValue = (row, day) => {
+    const edited = edits?.[row.rowKey]?.[day];
+    return edited !== undefined ? Number(edited || 0) : Number(row.hoursByDay?.[day] ?? 0);
+  };
+
+  const header = ['Service / Project', ...days.map((d) => String(d)), 'Total'];
+  const dataRows = rows.map((row) => {
+    const values = days.map((day) => cellValue(row, day));
+    const total = values.reduce((sum, v) => sum + v, 0);
+    return [`${'  '.repeat(row.depth ?? 0)}${row.label}`, ...values, total];
+  });
+  const totalsRow = ['Total', ...days.map((day) => rows.reduce((sum, row) => sum + cellValue(row, day), 0)), rows.reduce((sum, row) => sum + days.reduce((s, day) => s + cellValue(row, day), 0), 0)];
+
+  const ws = XLSX.utils.aoa_to_sheet([header, ...dataRows, totalsRow]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Monthly Summary');
+  XLSX.writeFile(wb, `Monthly_Summary_${dayjs(`${year}-${String(month).padStart(2, '0')}-01`).format('MMMM_YYYY')}.xlsx`);
+};
 
 // Beside My Work Log — a day-by-day view of the same pending+synced work log entries,
 // grouped by Service/Project instead of by date. Reuses the monthly-summary endpoint My
@@ -110,11 +136,22 @@ const MonthlySummaryPage = () => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-bold tracking-tight">Monthly Summary</h1>
-        <p className="text-sm text-muted-foreground">
-          Hours logged per Service/Project for each day of the month.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight">Monthly Summary</h1>
+          <p className="text-sm text-muted-foreground">
+            Hours logged per Service/Project for each day of the month.
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => exportSummaryToExcel(rows, edits, month, year)}
+          disabled={isLoading || rows.length === 0}
+        >
+          <Download className="mr-1.5 h-4 w-4" />
+          Export Excel
+        </Button>
       </div>
 
       {isError && (

@@ -66,7 +66,7 @@ const EmployeeForm = () => {
       date_of_joining: '',
       date_of_leaving: '',
       status: 'active',
-      password: 'Gtt@123',
+      password: 'Gtt@1234',
     },
   });
 

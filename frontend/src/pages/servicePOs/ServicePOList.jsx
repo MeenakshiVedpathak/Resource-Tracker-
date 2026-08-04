@@ -301,11 +301,6 @@ const ServicePOList = () => {
       size: 220,
       cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="200px" />,
     }),
-    columnHelper.accessor('account_manager', {
-      header: 'Account Manager',
-      size: 180,
-      cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="160px" />,
-    }),
     columnHelper.accessor('service_description', {
       header: 'Description',
       size: 300,
@@ -325,16 +320,6 @@ const ServicePOList = () => {
       header: 'Invoice Freq.',
       size: 160,
       cell: (info) => info.getValue() || <span className="text-muted-foreground">—</span>,
-    }),
-    columnHelper.accessor('invoice_amount', {
-      header: 'Invoice Amount',
-      size: 160,
-      cell: (info) =>
-        info.getValue() != null ? (
-          <span className="tabular-nums font-medium">{formatCurrency(info.getValue())}</span>
-        ) : (
-          <span className="text-muted-foreground">—</span>
-        ),
     }),
     columnHelper.accessor('start_date', {
       header: 'Start Date',

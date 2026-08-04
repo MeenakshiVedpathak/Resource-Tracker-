@@ -46,13 +46,8 @@ const poSchema = z
       (v) => (v === '' || v == null ? undefined : Number(v)),
       z.number().positive('Expected hours must be positive').optional()
     ),
-    account_manager: z.string().min(1, 'Account manager is required').max(100),
     service_description: z.string().min(1, 'Service description is required').max(1000),
     invoice_frequency: z.string().min(1, 'Invoice frequency is required'),
-    invoice_amount: z.preprocess(
-      (v) => (v === '' || v == null ? undefined : Number(v)),
-      z.number({ required_error: 'Invoice amount is required' }).min(0, 'Must be 0 or more')
-    ),
     status: z.enum(['in-progress', 'completed', 'on-hold', 'pending', 'cancelled', 'closed']).default('in-progress'),
   })
   .refine(
@@ -96,10 +91,8 @@ const ServicePOForm = () => {
       start_date: '',
       end_date: '',
       expected_man_hours: '',
-      account_manager: '',
       service_description: '',
       invoice_frequency: '',
-      invoice_amount: '',
       status: 'in-progress',
     },
   });
@@ -120,10 +113,8 @@ const ServicePOForm = () => {
         start_date: po.start_date ? po.start_date.slice(0, 10) : '',
         end_date: po.end_date ? po.end_date.slice(0, 10) : '',
         expected_man_hours: po.expected_man_hours ?? '',
-        account_manager: po.account_manager ?? '',
         service_description: po.service_description ?? '',
         invoice_frequency: po.invoice_frequency ?? '',
-        invoice_amount: po.invoice_amount ?? '',
         status: po.status ?? 'in-progress',
       });
     }
@@ -275,20 +266,6 @@ const ServicePOForm = () => {
 
               <FormField
                 control={form.control}
-                name="account_manager"
-                render={({ field }) => (
-                  <FormItem className="space-y-1">
-                    <FormLabel className="text-[13px]"><span className="text-destructive">*</span> Account Manager</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g. Rakesh Wagh" className="h-8 text-sm" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
                 name="status"
                 render={({ field }) => (
                   <FormItem className="space-y-1">
@@ -430,27 +407,6 @@ const ServicePOForm = () => {
                       searchPlaceholder="Search frequency..."
                       className="h-8 text-sm w-full"
                     />
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="invoice_amount"
-                render={({ field }) => (
-                  <FormItem className="space-y-1">
-                    <FormLabel className="text-[13px]"><span className="text-destructive">*</span> Invoice Amount (INR)</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        placeholder="e.g. 250000"
-                        className="h-8 text-sm"
-                        {...field}
-                      />
-                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
