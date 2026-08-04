@@ -12,7 +12,7 @@ const EmployeeLayout = () => (
     <div className="flex flex-1 flex-col overflow-hidden min-w-0">
       <Topbar />
       <main className="flex-1 overflow-y-auto flex flex-col">
-        <div className="mx-auto max-w-screen-2xl px-6 pt-6 pb-8 flex-1 w-full">
+        <div className="mx-auto max-w-screen-2xl px-6 pt-3 pb-8 flex-1 w-full">
           <Outlet />
         </div>
         <footer className="w-full border-t bg-slate-50/80 py-3 px-6">

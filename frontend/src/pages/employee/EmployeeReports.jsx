@@ -1,225 +1,205 @@
 import { useState } from 'react';
 import dayjs from 'dayjs';
-import { FileSpreadsheet, FileText, Download } from 'lucide-react';
+import { createColumnHelper } from '@tanstack/react-table';
+import { Filter, Download } from 'lucide-react';
 import { employeeReportsApi } from '@/api/employeeReports.api';
 import { useEmployeeDailyReport, useEmployeeMonthlyReport, useEmployeeRangeReport } from '@/hooks/useEmployeeReports';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import { downloadBlob } from '@/utils/download';
 import { formatDate } from '@/utils/formatters';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { cn } from '@/utils/cn';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
+import DataTable from '@/components/common/DataTable';
+import PageHeader from '@/components/common/PageHeader';
 import EmptyState from '@/components/common/EmptyState';
 
-const EXPORTS = [
-  { format: 'excel', label: 'Excel', icon: FileSpreadsheet },
-  { format: 'csv', label: 'CSV', icon: Download },
-  { format: 'pdf', label: 'PDF', icon: FileText },
+const REPORT_TYPES = [
+  { label: 'Daily', value: 'daily' },
+  { label: 'Monthly', value: 'monthly' },
+  { label: 'Range', value: 'range' },
 ];
 
-// Shared table for all three tabs — Date/Project/Service PO/Hours/Description/Status, per the
-// employee-reports row shape: { date, project, servicePO, hours, description, status }.
-const ReportTable = ({ data, isLoading, isError }) => {
-  if (isLoading) {
-    return (
-      <div className="space-y-2">
-        {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
-      </div>
-    );
-  }
+// Row shape is the same regardless of report type: { date, project, servicePO, hours, description, status }.
+const columnHelper = createColumnHelper();
+const REPORT_COLUMNS = [
+  columnHelper.accessor('date', {
+    header: 'Date',
+    size: 110,
+    cell: (info) => <span className="whitespace-nowrap text-sm">{formatDate(info.getValue())}</span>,
+  }),
+  columnHelper.accessor('project', {
+    header: 'Project',
+    size: 200,
+    cell: (info) => <span className="text-sm">{info.getValue() ?? '—'}</span>,
+  }),
+  columnHelper.accessor('servicePO', {
+    header: 'Service PO',
+    size: 200,
+    cell: (info) => <span className="text-sm">{info.getValue() ?? '—'}</span>,
+  }),
+  columnHelper.accessor('hours', {
+    header: 'Hours',
+    size: 90,
+    cell: (info) => <span className="text-sm font-medium tabular-nums">{info.getValue()}</span>,
+  }),
+];
 
-  if (isError) {
-    return (
-      <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
-        Unable to load report data. Please try again.
-      </div>
-    );
-  }
-
-  const rows = data?.rows ?? [];
-
-  if (rows.length === 0) {
-    return <EmptyState title="No work log entries for this period." />;
-  }
-
-  return (
-    <div className="space-y-3">
-      <Table containerClassName="bg-white border rounded-lg overflow-auto">
-        <TableHeader>
-          <TableRow>
-            <TableHead>Date</TableHead>
-            <TableHead>Project</TableHead>
-            <TableHead>Service PO</TableHead>
-            <TableHead>Hours</TableHead>
-            <TableHead>Description</TableHead>
-            <TableHead>Status</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((row, idx) => (
-            <TableRow key={idx}>
-              <TableCell className="whitespace-nowrap">{formatDate(row.date)}</TableCell>
-              <TableCell>{row.project}</TableCell>
-              <TableCell>{row.servicePO}</TableCell>
-              <TableCell>{row.hours}</TableCell>
-              <TableCell className="max-w-xs truncate">{row.description}</TableCell>
-              <TableCell>
-                <Badge variant={row.status === 'synced' ? 'success' : 'muted'}>
-                  {row.status === 'synced' ? 'Synced' : 'Pending'}
-                </Badge>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-      <p className="text-sm font-medium">Total Hours: {data?.totalHours ?? 0} hrs</p>
-    </div>
-  );
-};
-
-// Each tab fetches its own export Blob on click (not cached via React Query, since a file
-// download isn't reusable "data") and shows its own spinner while in flight, since these can
-// take longer than the JSON call per the spec.
-const DailyTab = () => {
-  const [date, setDate] = useState(dayjs().format('YYYY-MM-DD'));
-  const { data, isLoading, isError } = useEmployeeDailyReport(date);
-  const { error: showError } = useNotification();
-  const [exportingFormat, setExportingFormat] = useState(null);
-
-  const handleExport = async (format) => {
-    setExportingFormat(format);
-    try {
-      const { blob, filename } = await employeeReportsApi.getDaily({ date, format });
-      downloadBlob(blob, filename);
-    } catch (err) {
-      showError(extractApiError(err));
-    } finally {
-      setExportingFormat(null);
-    }
-  };
-
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <Input type="date" value={date} max={dayjs().format('YYYY-MM-DD')} onChange={(e) => setDate(e.target.value)} className="w-44" />
-        <div className="flex items-center gap-2">
-          {EXPORTS.map(({ format, label, icon: Icon }) => (
-            <Button key={format} variant="outline" size="sm" disabled={!date || !!exportingFormat} onClick={() => handleExport(format)}>
-              <Icon className="mr-1.5 h-4 w-4" />
-              {exportingFormat === format ? 'Exporting…' : label}
-            </Button>
-          ))}
-        </div>
-      </div>
-      <ReportTable data={data} isLoading={isLoading} isError={isError} />
-    </div>
-  );
-};
-
-const MonthlyTab = () => {
-  const now = dayjs();
-  const [monthYear, setMonthYear] = useState({ month: now.month() + 1, year: now.year() });
-  const { data, isLoading, isError } = useEmployeeMonthlyReport(monthYear?.month, monthYear?.year);
-  const { error: showError } = useNotification();
-  const [exportingFormat, setExportingFormat] = useState(null);
-
-  const handleExport = async (format) => {
-    setExportingFormat(format);
-    try {
-      const { blob, filename } = await employeeReportsApi.getMonthly({ month: monthYear.month, year: monthYear.year, format });
-      downloadBlob(blob, filename);
-    } catch (err) {
-      showError(extractApiError(err));
-    } finally {
-      setExportingFormat(null);
-    }
-  };
-
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <MonthYearPicker value={monthYear} onChange={setMonthYear} className="w-44" />
-        <div className="flex items-center gap-2">
-          {EXPORTS.map(({ format, label, icon: Icon }) => (
-            <Button key={format} variant="outline" size="sm" disabled={!monthYear || !!exportingFormat} onClick={() => handleExport(format)}>
-              <Icon className="mr-1.5 h-4 w-4" />
-              {exportingFormat === format ? 'Exporting…' : label}
-            </Button>
-          ))}
-        </div>
-      </div>
-      <ReportTable data={data} isLoading={isLoading} isError={isError} />
-    </div>
-  );
-};
-
-const RangeTab = () => {
-  const [range, setRange] = useState(null);
-  const { data, isLoading, isError } = useEmployeeRangeReport(range?.startDate, range?.endDate);
-  const { error: showError } = useNotification();
-  const [exportingFormat, setExportingFormat] = useState(null);
-
-  const handleExport = async (format) => {
-    if (!range) return;
-    setExportingFormat(format);
-    try {
-      const { blob, filename } = await employeeReportsApi.getRange({ startDate: range.startDate, endDate: range.endDate, format });
-      downloadBlob(blob, filename);
-    } catch (err) {
-      showError(extractApiError(err));
-    } finally {
-      setExportingFormat(null);
-    }
-  };
-
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <DateRangePicker value={range} onChange={setRange} placeholder="Select a date range" className="w-64" clearable />
-        <div className="flex items-center gap-2">
-          {EXPORTS.map(({ format, label, icon: Icon }) => (
-            <Button key={format} variant="outline" size="sm" disabled={!range || !!exportingFormat} onClick={() => handleExport(format)}>
-              <Icon className="mr-1.5 h-4 w-4" />
-              {exportingFormat === format ? 'Exporting…' : label}
-            </Button>
-          ))}
-        </div>
-      </div>
-      {!range ? (
-        <EmptyState title="Select a date range to view your work log report." />
-      ) : (
-        <ReportTable data={data} isLoading={isLoading} isError={isError} />
-      )}
-    </div>
-  );
-};
-
-const EmployeeReports = () => (
-  <div className="space-y-6">
-    <div>
-      <h1 className="text-xl font-bold tracking-tight">Reports</h1>
-      <p className="text-sm text-muted-foreground">
-        Your work log entries — each row shows whether it's still pending sync or has been added to the official Timesheet.
-      </p>
-    </div>
-
-    <Tabs defaultValue="daily">
-      <TabsList>
-        <TabsTrigger value="daily">Daily</TabsTrigger>
-        <TabsTrigger value="monthly">Monthly</TabsTrigger>
-        <TabsTrigger value="range">Date Range</TabsTrigger>
-      </TabsList>
-      <TabsContent value="daily"><DailyTab /></TabsContent>
-      <TabsContent value="monthly"><MonthlyTab /></TabsContent>
-      <TabsContent value="range"><RangeTab /></TabsContent>
-    </Tabs>
+const TotalHoursBar = ({ totalHours }) => (
+  <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-3 py-2">
+    <span className="text-sm font-medium">Total Hours</span>
+    <span className="text-sm font-semibold tabular-nums">{totalHours ?? 0} hrs</span>
   </div>
 );
+
+const EmployeeReports = () => {
+  const { error: showError } = useNotification();
+  const [filtersOpen, setFiltersOpen] = useState(true);
+  const [isExporting, setIsExporting] = useState(false);
+
+  const [reportType, setReportType] = useState('daily');
+  const [date, setDate] = useState(dayjs().format('YYYY-MM-DD'));
+  const now = dayjs();
+  const [monthYear, setMonthYear] = useState({ month: now.month() + 1, year: now.year() });
+  const [range, setRange] = useState(null);
+
+  // Only the active report type's params are passed for real — the other two hooks stay
+  // disabled (their `enabled` flags require truthy params), so only one query fetches at a time.
+  const daily = useEmployeeDailyReport(reportType === 'daily' ? date : undefined);
+  const monthly = useEmployeeMonthlyReport(
+    reportType === 'monthly' ? monthYear?.month : undefined,
+    reportType === 'monthly' ? monthYear?.year : undefined
+  );
+  const rangeQuery = useEmployeeRangeReport(
+    reportType === 'range' ? range?.startDate : undefined,
+    reportType === 'range' ? range?.endDate : undefined
+  );
+
+  const { data, isLoading, isError } =
+    reportType === 'daily' ? daily : reportType === 'monthly' ? monthly : rangeQuery;
+
+  const hasSelection = reportType !== 'range' || !!range;
+  const rows = hasSelection ? (data?.rows ?? []) : [];
+
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      let result;
+      if (reportType === 'daily') {
+        result = await employeeReportsApi.getDaily({ date, format: 'excel' });
+      } else if (reportType === 'monthly') {
+        result = await employeeReportsApi.getMonthly({ month: monthYear.month, year: monthYear.year, format: 'excel' });
+      } else {
+        if (!range) return;
+        result = await employeeReportsApi.getRange({ startDate: range.startDate, endDate: range.endDate, format: 'excel' });
+      }
+      downloadBlob(result.blob, result.filename);
+    } catch (err) {
+      showError(extractApiError(err));
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <PageHeader
+        title="PO Wise Report"
+        actions={
+          <div className="flex items-center gap-3">
+            <Button
+              size="sm"
+              className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+              onClick={() => setFiltersOpen((prev) => !prev)}
+            >
+              <Filter className="h-4 w-4" />
+              Filters
+            </Button>
+            {rows.length > 0 && (
+              <Button variant="outline" size="sm" className="h-9 gap-1.5" disabled={isExporting} onClick={handleExport}>
+                <Download className="h-4 w-4" />
+                {isExporting ? 'Exporting…' : 'Export Excel'}
+              </Button>
+            )}
+          </div>
+        }
+      />
+
+      {/* Collapsible filter panel */}
+      <div className={`overflow-hidden transition-all duration-500 ease-in-out ${filtersOpen ? 'max-h-[160px] opacity-100 mb-2' : 'max-h-0 opacity-0 mb-0'}`}>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full rounded-lg border bg-muted/30 p-4">
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Report Type</Label>
+            <div className="flex items-center rounded-md border overflow-hidden h-9 text-sm bg-white">
+              {REPORT_TYPES.map(({ label, value }) => (
+                <button
+                  key={value}
+                  onClick={() => setReportType(value)}
+                  className={cn(
+                    'flex-1 px-3 h-full font-medium text-center whitespace-nowrap transition-colors border-r last:border-r-0',
+                    reportType === value
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-background text-muted-foreground hover:bg-muted'
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {reportType === 'daily' && (
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs">Date</Label>
+              <Input
+                type="date"
+                value={date}
+                max={dayjs().format('YYYY-MM-DD')}
+                onChange={(e) => setDate(e.target.value)}
+                className="h-9 w-full text-sm bg-white"
+              />
+            </div>
+          )}
+
+          {reportType === 'monthly' && (
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs">Month</Label>
+              <MonthYearPicker value={monthYear} onChange={setMonthYear} className="h-9 w-full text-sm bg-white" />
+            </div>
+          )}
+
+          {reportType === 'range' && (
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs">Date Range</Label>
+              <DateRangePicker value={range} onChange={setRange} placeholder="Select a date range" className="h-9 w-full text-sm bg-white" clearable />
+            </div>
+          )}
+        </div>
+      </div>
+
+      {hasSelection && isError && (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+          Unable to load report data. Please try again.
+        </div>
+      )}
+      <DataTable
+        columns={REPORT_COLUMNS}
+        data={rows}
+        isLoading={hasSelection && isLoading}
+        toolbar={null}
+        emptyState={
+          <EmptyState
+            title={hasSelection ? 'No work log entries for this period.' : 'Select a date range to view your work log report.'}
+          />
+        }
+      />
+      {hasSelection && rows.length > 0 && <TotalHoursBar totalHours={data?.totalHours} />}
+    </div>
+  );
+};
 
 export default EmployeeReports;

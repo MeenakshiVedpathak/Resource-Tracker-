@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ChevronUp, ChevronDown, Folder, Minus, Plus } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -24,22 +24,50 @@ const flattenSubtree = (row, relDepth, childrenByParent) => {
   return [{ ...row, relDepth }, ...kids.flatMap((k) => flattenSubtree(k, relDepth + 1, childrenByParent))];
 };
 
+const clampHours = (n) => Math.min(DAILY_HOURS_CAP, Math.max(0, n));
+
 const HourStepper = ({ value, onChange, disabled }) => {
   const num = Number(value || 0);
+  const [inputValue, setInputValue] = useState(String(num));
+
+  useEffect(() => {
+    setInputValue(String(num));
+  }, [num]);
+
+  const commit = () => {
+    const parsed = Number(inputValue);
+    const next = Number.isFinite(parsed) ? clampHours(parsed) : num;
+    setInputValue(String(next));
+    if (next !== num) onChange(next);
+  };
+
   return (
     <div className="flex items-center gap-1">
       <button
         type="button"
-        onClick={() => onChange(Math.max(0, num - STEP))}
+        onClick={() => onChange(clampHours(num - STEP))}
         disabled={disabled}
         className="flex h-7 w-7 items-center justify-center rounded-md border text-muted-foreground transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-40"
       >
         <Minus className="h-3.5 w-3.5" />
       </button>
-      <span className="w-8 text-center text-sm font-medium tabular-nums">{num}</span>
+      <input
+        type="number"
+        step={STEP}
+        min="0"
+        max={DAILY_HOURS_CAP}
+        value={inputValue}
+        onChange={(e) => setInputValue(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') e.currentTarget.blur();
+        }}
+        disabled={disabled}
+        className="w-10 rounded-md border bg-transparent text-center text-sm font-medium tabular-nums [appearance:textfield] focus:outline-none focus:ring-1 focus:ring-primary [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+      />
       <button
         type="button"
-        onClick={() => onChange(Math.min(DAILY_HOURS_CAP, num + STEP))}
+        onClick={() => onChange(clampHours(num + STEP))}
         disabled={disabled}
         className="flex h-7 w-7 items-center justify-center rounded-md border text-muted-foreground transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-40"
       >

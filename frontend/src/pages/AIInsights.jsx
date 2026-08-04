@@ -364,6 +364,10 @@ const AIInsights = () => {
                 <p className="text-sm text-muted-foreground mt-0.5">
                   Reports and recommendations across utilization, cost, bench risk and compliance.
                 </p>
+                <p className="flex items-center gap-1 text-[11px] text-muted-foreground/80 mt-1.5">
+                  <AlertTriangle className="h-3 w-3 shrink-0" />
+                  AI can make mistakes. Please double-check important information.
+                </p>
               </div>
             </div>
           </div>

@@ -170,7 +170,7 @@ const EmployeeDashboard = () => {
                 <p className="text-xs text-muted-foreground">See hours by Service PO for the month.</p>
               </div>
             </div>
-            <Link to={ROUTES.EMPLOYEE_MONTHLY_SUMMARY} className={cn(buttonVariants({ size: 'sm', variant: 'outline' }), 'shrink-0')}>
+            <Link to={ROUTES.EMPLOYEE_MONTHLY_SUMMARY} className={cn(buttonVariants({ size: 'sm' }), 'shrink-0')}>
               View Summary <ArrowRight className="h-4 w-4" />
             </Link>
           </CardContent>

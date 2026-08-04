@@ -8,11 +8,23 @@ import { ROUTES } from '@/constants/routes';
 import { ChevronLeft, ChevronRight, LayoutDashboard, Clock, Table2, FileBarChart2 } from 'lucide-react';
 
 // Static (not RBAC-driven) — an Employee always sees exactly these, per spec.
-const NAV_ITEMS = [
-  { label: 'Dashboard', icon: LayoutDashboard, to: ROUTES.EMPLOYEE_DASHBOARD, exact: true },
-  { label: 'My Work Log', icon: Clock, to: ROUTES.EMPLOYEE_TIMESHEET, exact: false },
-  { label: 'Monthly Summary', icon: Table2, to: ROUTES.EMPLOYEE_MONTHLY_SUMMARY, exact: false },
-  { label: 'Reports', icon: FileBarChart2, to: ROUTES.EMPLOYEE_REPORTS, exact: false },
+// Grouped into module sections to match the admin Sidebar's layout.
+const NAV_GROUPS = [
+  {
+    label: 'Core',
+    items: [{ label: 'Dashboard', icon: LayoutDashboard, to: ROUTES.EMPLOYEE_DASHBOARD, exact: true }],
+  },
+  {
+    label: 'Work Log',
+    items: [
+      { label: 'My Work Log', icon: Clock, to: ROUTES.EMPLOYEE_TIMESHEET, exact: false },
+      { label: 'Monthly Summary', icon: Table2, to: ROUTES.EMPLOYEE_MONTHLY_SUMMARY, exact: false },
+    ],
+  },
+  {
+    label: 'Report',
+    items: [{ label: 'PO Wise Report', icon: FileBarChart2, to: ROUTES.EMPLOYEE_REPORTS, exact: false }],
+  },
 ];
 
 const isActive = (to, pathname, exact) =>
@@ -58,28 +70,37 @@ const EmployeeSidebar = () => {
           )}
         </div>
 
-        <nav className="flex-1 overflow-y-auto overflow-x-hidden py-3 px-2 space-y-0.5 scrollbar-thin">
-          {NAV_ITEMS.map((item) => {
-            const active = isActive(item.to, pathname, item.exact);
-            return (
-              <Link
-                key={item.to}
-                to={item.to}
-                className={cn(
-                  'nav-item group relative flex items-center gap-3 transition-all',
-                  active && 'active',
-                  collapsed && 'justify-center px-2'
-                )}
-                title={collapsed ? item.label : undefined}
-              >
-                {active && (
-                  <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.5 rounded-r-full bg-primary" />
-                )}
-                <item.icon className={cn('shrink-0', collapsed ? 'h-5 w-5' : 'h-4 w-4')} />
-                {!collapsed && <span className="overflow-hidden whitespace-nowrap">{item.label}</span>}
-              </Link>
-            );
-          })}
+        <nav className="flex-1 overflow-y-auto overflow-x-hidden py-3 px-2 space-y-4 scrollbar-thin">
+          {NAV_GROUPS.map((group) => (
+            <div key={group.label} className="space-y-0.5">
+              {!collapsed && (
+                <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/30 whitespace-nowrap">
+                  {group.label}
+                </p>
+              )}
+              {group.items.map((item) => {
+                const active = isActive(item.to, pathname, item.exact);
+                return (
+                  <Link
+                    key={item.to}
+                    to={item.to}
+                    className={cn(
+                      'nav-item group relative flex items-center gap-3 transition-all',
+                      active && 'active',
+                      collapsed && 'justify-center px-2'
+                    )}
+                    title={collapsed ? item.label : undefined}
+                  >
+                    {active && (
+                      <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.5 rounded-r-full bg-primary" />
+                    )}
+                    <item.icon className={cn('shrink-0', collapsed ? 'h-5 w-5' : 'h-4 w-4')} />
+                    {!collapsed && <span className="overflow-hidden whitespace-nowrap">{item.label}</span>}
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
         </nav>
 
         <div className="shrink-0 border-t border-sidebar-border p-2">

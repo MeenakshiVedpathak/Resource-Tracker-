@@ -127,15 +127,12 @@ const EmployeeTimesheet = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight">My Work Log</h1>
-          <p className="text-sm text-muted-foreground">
-            Log your hours for each working day. Entries stay pending until an Admin syncs them into the official Timesheet.
-          </p>
-        </div>
-        <MonthlyHoursCard month={month} year={year} calendarDays={calendarDays} />
+    <div className="space-y-3">
+      <div>
+        <h1 className="text-xl font-bold tracking-tight">My Work Log</h1>
+        <p className="text-sm text-muted-foreground">
+          Log your hours for each working day.
+        </p>
       </div>
 
       {(isCalendarError || isDailyError) && (
@@ -145,15 +142,18 @@ const EmployeeTimesheet = () => {
       )}
 
       <div className="grid gap-6 lg:grid-cols-[380px_1fr]">
-        <TimesheetCalendar
-          month={month}
-          year={year}
-          onMonthChange={handleMonthChange}
-          calendarByDate={calendarByDate}
-          selectedDate={selectedDate}
-          onSelectDate={handleSelectDate}
-          isLoading={isCalendarLoading}
-        />
+        <div className="space-y-4">
+          <TimesheetCalendar
+            month={month}
+            year={year}
+            onMonthChange={handleMonthChange}
+            calendarByDate={calendarByDate}
+            selectedDate={selectedDate}
+            onSelectDate={handleSelectDate}
+            isLoading={isCalendarLoading}
+          />
+          <MonthlyHoursCard month={month} year={year} calendarDays={calendarDays} />
+        </div>
 
         <div className="space-y-4 rounded-xl border bg-card p-4">
           <div className="flex items-center gap-2">

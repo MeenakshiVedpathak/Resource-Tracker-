@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import dayjs from 'dayjs';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/utils/cn';
@@ -67,9 +67,6 @@ const TimesheetCalendar = ({ month, year, onMonthChange, calendarByDate, selecte
     const next = monthDate.add(1, 'month');
     onMonthChange(next.month() + 1, next.year());
   };
-
-  const selectedKey = selectedDate?.format('YYYY-MM-DD');
-  const selectedHours = Number(calendarByDate?.[selectedKey]?.totalHours ?? 0);
 
   return (
     <div className="rounded-xl border bg-card p-4">
@@ -139,24 +136,6 @@ const TimesheetCalendar = ({ month, year, onMonthChange, calendarByDate, selecte
           </span>
         ))}
       </div>
-
-      {selectedDate && (
-        <div className="mt-4 flex items-center justify-between rounded-lg border bg-muted/20 px-3 py-2.5">
-          <span className="flex items-center gap-2 text-xs text-muted-foreground">
-            <CalendarIcon className="h-4 w-4" />
-            <span>
-              Selected Date
-              <br />
-              <span className="text-sm font-medium text-foreground">{selectedDate.format('dddd, DD MMMM YYYY')}</span>
-            </span>
-          </span>
-          <span className="text-right text-xs text-muted-foreground">
-            Total Logged
-            <br />
-            <span className="text-sm font-semibold text-foreground">{selectedHours} hrs</span>
-          </span>
-        </div>
-      )}
     </div>
   );
 };

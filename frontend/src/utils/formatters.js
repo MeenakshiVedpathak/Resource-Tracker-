@@ -94,6 +94,7 @@ export const getStatusColor = (status) => {
     closed: 'secondary',
     cancelled: 'destructive',
     completed: 'success',
+    synced: 'success',
     pending: 'warning',
     failed: 'destructive',
     'in-progress': 'info',

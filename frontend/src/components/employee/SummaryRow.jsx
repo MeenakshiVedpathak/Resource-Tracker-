@@ -78,6 +78,7 @@ const SummaryRow = ({
             onChange={(e) => onCellChange(day, e.target.value)}
             className={cn(
               'h-7 w-full rounded border bg-transparent text-center text-xs tabular-nums transition-colors',
+              '[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none',
               'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
               isDirty && 'border-amber-400 bg-amber-50 dark:bg-amber-950/30'
             )}
