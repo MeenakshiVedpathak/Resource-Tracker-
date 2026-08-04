@@ -6,6 +6,12 @@
 // plus one row per nested hierarchy node, each carrying its own `hoursByDay` (keyed by day
 // number), a `depth` for indentation (0 = Service PO, 1 = Parent node, 2 = Child node, ...),
 // and a `rowKey` + `ancestorKeys` pair the table uses to collapse/expand a subtree.
+//
+// A Service PO (or a Parent hierarchy node) can carry its own directly-logged hours *and* have
+// a breakdown underneath it at the same time (e.g. a PARENT node itself had 3 hours logged on
+// one day, on top of whatever its CHILD nodes logged) — `hours` is never just a placeholder
+// that becomes 0 once children exist. So every node is editable for its own hours regardless of
+// whether it `hasChildren`.
 const dayNumberOf = (dateStr) => Number(dateStr.slice(-2));
 
 const ensureNode = (map, key, name) => {
@@ -21,29 +27,15 @@ const walkChildren = (children = [], parentChildMap, day) => {
   });
 };
 
-// A hierarchy node's own `hours` plus every descendant's own hours, for one day — the backend
-// already rolls this up as `po_total_hrs` on the Service PO itself, but nested Parent/Child
-// nodes only carry their own hours, so an intermediate Parent needs it computed here.
-const rollupDay = (node, day) => {
-  let sum = node.hoursByDay[day] || 0;
-  node.childMap.forEach((child) => { sum += rollupDay(child, day); });
-  return sum;
-};
-
-// A node with no breakdown of its own is a real leaf — hours logged there map 1:1 to a work
-// log entry, so it's editable. A node with children is purely an aggregate (its cell is a
-// rollup of what's beneath it), so it stays read-only at every depth, not just depth 0.
 const flattenChildren = (childMap, depth, days, servicePOId, ancestorKeys) => {
   const rows = [];
   childMap.forEach((node, hierarchyId) => {
     const hasChildren = node.childMap.size > 0;
     const hoursByDay = {};
-    days.forEach((day) => {
-      hoursByDay[day] = hasChildren ? rollupDay(node, day) : (node.hoursByDay[day] || 0);
-    });
+    days.forEach((day) => { hoursByDay[day] = node.hoursByDay[day] || 0; });
     const rowKey = `h:${hierarchyId}`;
     rows.push({
-      servicePOId, hierarchyId, label: node.name, depth, hasChildren, editable: !hasChildren, hoursByDay, rowKey, ancestorKeys,
+      servicePOId, hierarchyId, label: node.name, depth, hasChildren, editable: true, hoursByDay, rowKey, ancestorKeys,
     });
     rows.push(...flattenChildren(node.childMap, depth + 1, days, servicePOId, [...ancestorKeys, rowKey]));
   });
@@ -60,8 +52,6 @@ export const buildMonthlySummaryRows = (dayEntries = []) => {
     service_pos.forEach((po) => {
       const poNode = ensureNode(poMap, po.service_po_id, po.service_po_name);
       poNode.hoursByDay[day] = Number(po.hours || 0);
-      poNode.poTotalByDay ??= {};
-      poNode.poTotalByDay[day] = Number(po.po_total_hrs || 0);
       walkChildren(po.children, poNode.childMap, day);
     });
   });
@@ -71,14 +61,24 @@ export const buildMonthlySummaryRows = (dayEntries = []) => {
   poMap.forEach((node, servicePOId) => {
     const hasChildren = node.childMap.size > 0;
     const hoursByDay = {};
-    dayList.forEach((day) => {
-      hoursByDay[day] = hasChildren ? (node.poTotalByDay[day] ?? 0) : (node.hoursByDay[day] || 0);
-    });
+    dayList.forEach((day) => { hoursByDay[day] = node.hoursByDay[day] || 0; });
     const rowKey = `po:${servicePOId}`;
     rows.push({
-      servicePOId, label: node.name, depth: 0, hasChildren, editable: !hasChildren, hoursByDay, rowKey, ancestorKeys: [],
+      servicePOId, label: node.name, depth: 0, hasChildren, editable: true, hoursByDay, rowKey, ancestorKeys: [],
     });
     rows.push(...flattenChildren(node.childMap, 1, dayList, servicePOId, [rowKey]));
   });
   return rows;
 };
+
+// `hierarchy_node_id` is the field name the existing Add/Edit Work Log entry form
+// (WorkLogEntryModal) already sends for a hierarchy node — matching it here so a leaf row's
+// edit lands on the same field the rest of the app uses, not a name invented for this table.
+export const buildEntryPayload = (row, hours, date) => ({
+  service_po_id: row.servicePOId,
+  sub_project_id: null,
+  ...(row.hierarchyId != null && { hierarchy_node_id: row.hierarchyId }),
+  hours,
+  description: row.label ?? 'Logged via Monthly Summary',
+  timesheet_date: date,
+});

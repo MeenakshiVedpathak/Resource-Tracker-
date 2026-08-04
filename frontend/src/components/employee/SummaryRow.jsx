@@ -10,17 +10,24 @@ import { FIRST_COL_WIDTH, DAY_COL_WIDTH, TOTAL_COL_WIDTH } from './summaryTableL
 // scrolling/resizing the 100+ row table doesn't re-render every row on every parent update —
 // only a row whose own label/hoursByDay/total/edits/expanded-state actually changed re-renders.
 //
-// A node with a hierarchy breakdown of its own (`hasChildren`) is a rollup — read-only, with a
-// chevron to reveal its Parent/Child nodes underneath. A leaf node (Service PO or hierarchy
-// node with no further breakdown) maps 1:1 to a work log entry and is editable. `editableDays`
-// caps editing at today, same as My Work Log's date picker.
+// Every row is editable for its own hours, even a node with a hierarchy breakdown underneath
+// it (`hasChildren`) — a Service PO or Parent node can carry directly-logged hours *and* have
+// children logging their own hours at the same time. `editableDays` caps editing at today,
+// same as My Work Log's date picker.
 const SummaryRow = ({
   label, depth = 0, hasChildren, isExpanded, onToggleExpand,
   days, hoursByDay, total, editable, cellEdits, editableDays, onCellChange,
 }) => (
-  <TableRow className="hover:bg-muted/30">
+  // A table row can't literally become a Card, but shading nested rows and accenting an
+  // expandable header's left edge gives the same "card accordion" grouping cue My Work Log
+  // uses, without giving up the day-column grid this view needs.
+  <TableRow className={cn('transition-colors hover:bg-muted/30', depth > 0 && 'bg-muted/10')}>
     <TableCell
-      className={cn('summary-col-pinned sticky left-0 truncate pr-2 text-xs', depth > 0 ? 'font-normal text-muted-foreground' : 'font-medium')}
+      className={cn(
+        'summary-col-pinned sticky left-0 truncate pr-2 text-xs',
+        depth > 0 ? 'font-normal text-muted-foreground' : 'font-medium',
+        hasChildren && depth === 0 && 'border-l-2 border-l-primary/40'
+      )}
       style={{
         width: FIRST_COL_WIDTH, minWidth: FIRST_COL_WIDTH, maxWidth: FIRST_COL_WIDTH,
         paddingLeft: 8 + depth * 14,
@@ -32,7 +39,7 @@ const SummaryRow = ({
         <button
           type="button"
           onClick={onToggleExpand}
-          className="mr-1 inline-flex align-middle text-muted-foreground hover:text-foreground"
+          className="mr-1 inline-flex align-middle text-muted-foreground transition-colors hover:text-foreground"
         >
           {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
         </button>
@@ -70,7 +77,7 @@ const SummaryRow = ({
             value={value}
             onChange={(e) => onCellChange(day, e.target.value)}
             className={cn(
-              'h-7 w-full rounded border bg-transparent text-center text-xs tabular-nums',
+              'h-7 w-full rounded border bg-transparent text-center text-xs tabular-nums transition-colors',
               'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
               isDirty && 'border-amber-400 bg-amber-50 dark:bg-amber-950/30'
             )}

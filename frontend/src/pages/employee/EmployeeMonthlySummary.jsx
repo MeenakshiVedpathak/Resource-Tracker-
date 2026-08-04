@@ -2,16 +2,10 @@ import { useMemo, useState } from 'react';
 import dayjs from 'dayjs';
 import { useQueryClient } from '@tanstack/react-query';
 import { Save } from 'lucide-react';
-import {
-  useEmployeeMonthlySummary,
-  useCreateWorkLogEntry,
-  useUpdateWorkLogEntry,
-  useDeleteWorkLogEntry,
-} from '@/hooks/useEmployeeWorkLog';
-import { employeeWorkLogApi } from '@/api/employeeWorkLog.api';
+import { useEmployeeMonthlySummary, useCreateWorkLogEntry } from '@/hooks/useEmployeeWorkLog';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
-import { buildMonthlySummaryRows } from '@/utils/employeeMonthlySummary';
+import { buildMonthlySummaryRows, buildEntryPayload } from '@/utils/employeeMonthlySummary';
 import MonthNavigator from '@/components/employee/MonthNavigator';
 import SummaryTable from '@/components/employee/SummaryTable';
 import { DAILY_HOURS_CAP } from '@/components/employee/WorkLogEntryModal';
@@ -28,6 +22,11 @@ import { Button } from '@/components/ui/button';
 // display only. A shared description covers the whole batch (the entries API requires one)
 // rather than asking for 100+ per-cell descriptions. Nothing is sent to the server until Save
 // is pressed.
+//
+// Neither /daily nor /monthly-summary exposes individual entry ids anymore (both return an
+// aggregated tree), so there's no way to look up "the existing entry" to decide create vs
+// update — every save just posts to the entries endpoint, which is assumed to upsert per
+// employee/Service PO(/hierarchy node)/date rather than requiring a separate update call.
 const MonthlySummaryPage = () => {
   const today = dayjs().startOf('day');
   const [month, setMonth] = useState(today.month() + 1);
@@ -46,8 +45,6 @@ const MonthlySummaryPage = () => {
   } = useEmployeeMonthlySummary(month, year);
 
   const createMutation = useCreateWorkLogEntry();
-  const updateMutation = useUpdateWorkLogEntry();
-  const deleteMutation = useDeleteWorkLogEntry();
 
   const rows = useMemo(() => buildMonthlySummaryRows(summary), [summary]);
   const editedCount = Object.values(edits).reduce((n, byDay) => n + Object.keys(byDay).length, 0);
@@ -69,8 +66,7 @@ const MonthlySummaryPage = () => {
   const handleDiscard = () => setEdits({});
 
   const handleSave = async () => {
-    // Group by date first so each day's existing entries are only fetched once, no matter
-    // how many rows changed on that date.
+    // Grouped by date purely to resolve each edit's rowKey/day pair into a real calendar date.
     const byDate = {};
     Object.entries(edits).forEach(([rowKey, byDay]) => {
       Object.entries(byDay).forEach(([day, rawHours]) => {
@@ -88,32 +84,10 @@ const MonthlySummaryPage = () => {
     setIsSaving(true);
     try {
       for (const [date, cellEdits] of Object.entries(byDate)) {
-        const existing = await employeeWorkLogApi.getDaily(date);
         for (const { rowKey, hours } of cellEdits) {
           const row = rows.find((r) => r.rowKey === rowKey);
           if (!row) continue;
-          // A hierarchy node's entry is matched by hierarchy_id; a plain Service PO entry is
-          // matched by service_po_id with no hierarchy_id, so the two never get conflated.
-          const match = row.hierarchyId
-            ? existing.find((e) => String(e.hierarchy_id) === String(row.hierarchyId))
-            : existing.find((e) => String(e.service_po_id) === String(row.servicePOId) && !e.hierarchy_id);
-          if (hours <= 0) {
-            if (match) await deleteMutation.mutateAsync(match.id);
-            continue;
-          }
-          const payload = {
-            service_po_id: row.servicePOId,
-            sub_project_id: null,
-            ...(row.hierarchyId && { hierarchy_id: row.hierarchyId }),
-            hours,
-            description: row.label ?? 'Logged via Monthly Summary',
-            timesheet_date: date,
-          };
-          if (match) {
-            await updateMutation.mutateAsync({ id: match.id, payload });
-          } else {
-            await createMutation.mutateAsync(payload);
-          }
+          await createMutation.mutateAsync(buildEntryPayload(row, hours, date));
         }
       }
       success('Monthly summary saved.');

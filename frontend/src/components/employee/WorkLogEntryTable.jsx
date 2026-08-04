@@ -1,147 +1,160 @@
-import { useState } from 'react';
-import dayjs from 'dayjs';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
+import { useMemo, useState } from 'react';
+import { ChevronUp, ChevronDown, Folder, Minus, Plus } from 'lucide-react';
+import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Badge } from '@/components/ui/badge';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import EmptyState from '@/components/common/EmptyState';
-import ConfirmDialog from '@/components/common/ConfirmDialog';
-import { useDeleteWorkLogEntry } from '@/hooks/useEmployeeWorkLog';
-import { useNotification } from '@/hooks/useNotification';
-import { extractApiError } from '@/services/apiClient';
+import { cn } from '@/utils/cn';
+import { DAILY_HOURS_CAP } from './WorkLogEntryModal';
 
-// Work Log entries for one selected date — "+ Add Entry" above the table, Edit/Delete per row,
-// a daily total. Entries with status === 'synced' have already been promoted to the official
-// Timesheet by an Admin's Sync step and are read-only here — Edit/Delete are disabled entirely
-// (not just caught as a 409) so the "can't edit a synced entry" rule is visible up front.
-const WorkLogEntryTable = ({ entries = [], isLoading, isPastOrToday, onAdd, onEdit }) => {
-  const [deleteTarget, setDeleteTarget] = useState(null);
-  const deleteMutation = useDeleteWorkLogEntry();
-  const { success, error: showError } = useNotification();
+const STEP = 0.5;
 
-  const totalHours = entries.reduce((sum, e) => sum + Number(e.hours || 0), 0);
+const buildChildrenByParent = (rows) => {
+  const map = new Map();
+  rows.forEach((row) => {
+    const parentKey = row.ancestorKeys?.[row.ancestorKeys.length - 1];
+    if (!parentKey) return;
+    if (!map.has(parentKey)) map.set(parentKey, []);
+    map.get(parentKey).push(row);
+  });
+  return map;
+};
 
-  const handleDelete = () => {
-    deleteMutation.mutate(deleteTarget.id, {
-      onSuccess: () => {
-        success('Entry deleted.');
-        setDeleteTarget(null);
-      },
-      onError: (err) => showError(extractApiError(err)),
-    });
+const flattenSubtree = (row, relDepth, childrenByParent) => {
+  const kids = childrenByParent.get(row.rowKey) ?? [];
+  return [{ ...row, relDepth }, ...kids.flatMap((k) => flattenSubtree(k, relDepth + 1, childrenByParent))];
+};
+
+const HourStepper = ({ value, onChange, disabled }) => {
+  const num = Number(value || 0);
+  return (
+    <div className="flex items-center gap-1">
+      <button
+        type="button"
+        onClick={() => onChange(Math.max(0, num - STEP))}
+        disabled={disabled}
+        className="flex h-7 w-7 items-center justify-center rounded-md border text-muted-foreground transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-40"
+      >
+        <Minus className="h-3.5 w-3.5" />
+      </button>
+      <span className="w-8 text-center text-sm font-medium tabular-nums">{num}</span>
+      <button
+        type="button"
+        onClick={() => onChange(Math.min(DAILY_HOURS_CAP, num + STEP))}
+        disabled={disabled}
+        className="flex h-7 w-7 items-center justify-center rounded-md border text-muted-foreground transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-40"
+      >
+        <Plus className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
+};
+
+// One Service PO folder — its own row plus every hierarchy node beneath it (Parent/Child,
+// indented, "Task / Feature" being the node's name since our data has no separate module
+// concept). Defaults open since a day's entries are usually few and are the primary thing to
+// see, unlike Monthly Summary's much bigger tree.
+const ProjectGroup = ({ poRow, childrenByParent, day, edits, onCellChange, isPastOrToday }) => {
+  const [isOpen, setIsOpen] = useState(true);
+
+  const nodeRows = useMemo(() => flattenSubtree(poRow, 0, childrenByParent), [poRow, childrenByParent]);
+
+  const cellValueOf = (r) => {
+    const edited = edits?.[r.rowKey]?.[day];
+    return edited !== undefined ? Number(edited || 0) : Number(r.hoursByDay?.[day] ?? 0);
   };
+  const groupTotal = nodeRows.reduce((sum, r) => sum + cellValueOf(r), 0);
+
+  return (
+    <Card className="overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setIsOpen((o) => !o)}
+        className="flex w-full items-center gap-2.5 px-4 py-3 text-left transition-colors hover:bg-muted/40"
+      >
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400">
+          <Folder className="h-4 w-4" />
+        </span>
+        <span className="flex-1 truncate text-sm font-semibold">{poRow.label}</span>
+        <span className="text-sm font-semibold text-primary">{groupTotal} {groupTotal === 1 ? 'hr' : 'hrs'}</span>
+        {isOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+      </button>
+
+      {isOpen && (
+        <div className="border-t">
+          <div className="grid grid-cols-[2.5rem_1fr_7.5rem] gap-2 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <span>#</span>
+            <span>Task / Feature</span>
+            <span className="text-right">Hours</span>
+          </div>
+          {nodeRows.map((row, i) => {
+            const value = cellValueOf(row);
+            const isDirty = edits?.[row.rowKey]?.[day] !== undefined;
+            return (
+              <div
+                key={row.rowKey}
+                className={cn('grid grid-cols-[2.5rem_1fr_7.5rem] items-center gap-2 px-4 py-2.5', i > 0 && 'border-t border-dashed')}
+              >
+                <span className="text-xs text-muted-foreground">{i + 1}</span>
+                <span className={cn('truncate text-sm', row.relDepth > 0 && 'text-muted-foreground')} style={{ paddingLeft: row.relDepth * 14 }}>
+                  {row.relDepth > 0 && <span className="mr-1 text-muted-foreground">{'└'}</span>}
+                  {row.label}
+                  {isDirty && <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-amber-400" title="Unsaved change" />}
+                </span>
+                <div className="flex justify-end">
+                  {row.editable && isPastOrToday ? (
+                    <HourStepper value={value} onChange={(v) => onCellChange(row.rowKey, day, String(v))} />
+                  ) : (
+                    <span className="text-sm font-medium tabular-nums text-muted-foreground">{value} hrs</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Card>
+  );
+};
+
+// The Service PO -> hierarchy tree for one date, folder-per-Service-PO with an inner task
+// table, since /employee-timesheets/daily returns that same aggregated tree Monthly Summary
+// gets (no individual entry ids anymore, so entries are edited by node rather than listed one
+// at a time). `rows` is pre-flattened by the caller (buildMonthlySummaryRows) so the day-level
+// totals used elsewhere on the page and this table stay in sync off one computation.
+const WorkLogEntryTable = ({ rows, day, isLoading, isPastOrToday, edits, onCellChange }) => {
+  const childrenByParent = useMemo(() => buildChildrenByParent(rows), [rows]);
+  const topLevelRows = useMemo(() => rows.filter((r) => (r.depth ?? 0) === 0), [rows]);
 
   if (isLoading) {
     return (
       <div className="space-y-2">
-        {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+        {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
       </div>
     );
   }
 
-  if (entries.length === 0) {
-    return (
-      <EmptyState
-        title="No work log entries for this date."
-        action={isPastOrToday ? { label: 'Add Entry', icon: Plus, onClick: onAdd } : undefined}
-      />
-    );
+  if (rows.length === 0) {
+    return <EmptyState title="No Service POs mapped for this date." />;
   }
 
   return (
-    <TooltipProvider>
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold">Work Log Entries</h3>
-          {isPastOrToday && (
-            <Button size="sm" onClick={onAdd}>
-              <Plus className="h-4 w-4" /> Add Entry
-            </Button>
-          )}
-        </div>
+    <div className="space-y-3">
+      <h3 className="text-sm font-semibold">Work Log Entries</h3>
 
-        <Table containerClassName="bg-white border rounded-lg overflow-auto">
-          <TableHeader>
-            <TableRow>
-              <TableHead>Project</TableHead>
-              <TableHead>Hours</TableHead>
-              <TableHead>Description</TableHead>
-              <TableHead>Created Time</TableHead>
-              <TableHead>Status</TableHead>
-              {isPastOrToday && <TableHead className="text-right">Actions</TableHead>}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {entries.map((entry) => {
-              const isSynced = entry.status === 'synced';
-              return (
-                <TableRow key={entry.id}>
-                  <TableCell>
-                    {entry.servicePO?.service_po_name ?? entry.servicePO?.service_po_code ?? `PO #${entry.service_po_id}`}
-                  </TableCell>
-                  <TableCell>{entry.hours}</TableCell>
-                  <TableCell className="max-w-xs truncate">{entry.description}</TableCell>
-                  <TableCell>{entry.created_at ? dayjs(entry.created_at).format('hh:mm A') : '—'}</TableCell>
-                  <TableCell>
-                    <Badge variant={isSynced ? 'success' : 'muted'}>{isSynced ? 'Synced' : 'Pending'}</Badge>
-                  </TableCell>
-                  {isPastOrToday && (
-                    <TableCell className="text-right">
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span tabIndex={isSynced ? 0 : -1}>
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              aria-label="Edit"
-                              disabled={isSynced}
-                              onClick={() => !isSynced && onEdit(entry)}
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                          </span>
-                        </TooltipTrigger>
-                        {isSynced && <TooltipContent>Synced to Timesheet — read-only</TooltipContent>}
-                      </Tooltip>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span tabIndex={isSynced ? 0 : -1}>
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              aria-label="Delete"
-                              disabled={isSynced}
-                              onClick={() => !isSynced && setDeleteTarget(entry)}
-                            >
-                              <Trash2 className={isSynced ? 'h-4 w-4' : 'h-4 w-4 text-destructive'} />
-                            </Button>
-                          </span>
-                        </TooltipTrigger>
-                        {isSynced && <TooltipContent>Synced to Timesheet — read-only</TooltipContent>}
-                      </Tooltip>
-                    </TableCell>
-                  )}
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-
-        <p className="text-sm font-medium">Total: {totalHours} hrs</p>
-
-        <ConfirmDialog
-          open={!!deleteTarget}
-          onOpenChange={(open) => !open && setDeleteTarget(null)}
-          title="Delete this entry?"
-          description="This work log entry will be permanently removed."
-          confirmLabel="Delete"
-          onConfirm={handleDelete}
-          isLoading={deleteMutation.isPending}
-        />
+      <div className="space-y-2">
+        {topLevelRows.map((row) => (
+          <ProjectGroup
+            key={row.rowKey}
+            poRow={row}
+            childrenByParent={childrenByParent}
+            day={day}
+            edits={edits}
+            onCellChange={onCellChange}
+            isPastOrToday={isPastOrToday}
+          />
+        ))}
       </div>
-    </TooltipProvider>
+    </div>
   );
 };
 

@@ -1,11 +1,40 @@
 import { useMemo } from 'react';
 import dayjs from 'dayjs';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/utils/cn';
+import { EXPECTED_DAILY_HOURS } from './WorkLogEntryModal';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+const LEGEND = [
+  { key: 'completed', dot: 'bg-emerald-500', label: `${EXPECTED_DAILY_HOURS}/${EXPECTED_DAILY_HOURS} hrs`, sub: 'Completed' },
+  { key: 'partial', dot: 'bg-amber-500', label: `1-${EXPECTED_DAILY_HOURS - 1} hrs`, sub: 'Partial' },
+  { key: 'none', dot: 'bg-rose-500', label: '0 hrs', sub: 'No Entry' },
+  { key: 'weekend', dot: 'bg-muted-foreground/30', label: 'Weekend', sub: 'Off' },
+  { key: 'today', dot: 'bg-primary', label: 'Today', sub: '' },
+];
+
+// A day's color is purely a client-side read of `totalHours` against a standard 8-hour
+// workday (EXPECTED_DAILY_HOURS) — the backend has no "target hours" or "completed" concept,
+// this is just a visual aid over the same { date, totalHours, hasEntries } the list view uses.
+const dayStatus = ({ dayInfo, isWeekend, isFuture }) => {
+  if (isFuture) return 'future';
+  const hours = Number(dayInfo?.totalHours ?? 0);
+  if (isWeekend && hours === 0) return 'weekend';
+  if (hours >= EXPECTED_DAILY_HOURS) return 'completed';
+  if (hours > 0) return 'partial';
+  return 'none';
+};
+
+const STATUS_STYLES = {
+  completed: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400',
+  partial: 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400',
+  none: 'bg-rose-50 text-rose-600 dark:bg-rose-950/30 dark:text-rose-400',
+  weekend: 'bg-muted/40 text-muted-foreground/60',
+  future: 'text-muted-foreground/30',
+};
 
 const buildMonthGrid = (monthDate) => {
   const startOfGrid = monthDate.startOf('month').startOf('week');
@@ -39,9 +68,12 @@ const TimesheetCalendar = ({ month, year, onMonthChange, calendarByDate, selecte
     onMonthChange(next.month() + 1, next.year());
   };
 
+  const selectedKey = selectedDate?.format('YYYY-MM-DD');
+  const selectedHours = Number(calendarByDate?.[selectedKey]?.totalHours ?? 0);
+
   return (
     <div className="rounded-xl border bg-card p-4">
-      <div className="flex items-center justify-between mb-4">
+      <div className="mb-4 flex items-center justify-between">
         <Button variant="outline" size="icon-sm" onClick={goPrev} aria-label="Previous month">
           <ChevronLeft className="h-4 w-4" />
         </Button>
@@ -51,7 +83,7 @@ const TimesheetCalendar = ({ month, year, onMonthChange, calendarByDate, selecte
         </Button>
       </div>
 
-      <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-semibold text-muted-foreground mb-1">
+      <div className="mb-1 grid grid-cols-7 gap-1 text-center text-[11px] font-semibold text-muted-foreground">
         {WEEKDAYS.map((d) => <div key={d}>{d}</div>)}
       </div>
 
@@ -63,38 +95,68 @@ const TimesheetCalendar = ({ month, year, onMonthChange, calendarByDate, selecte
           const isFuture = day.isAfter(today, 'day') || !!dayInfo?.futureDisabled;
           const isToday = day.isSame(today, 'day');
           const isSelected = selectedDate && day.isSame(selectedDate, 'day');
-
-          if (!inMonth) {
-            return <div key={dateKey} aria-hidden="true" />;
-          }
+          const isWeekend = day.day() === 0 || day.day() === 6;
+          const status = dayStatus({ dayInfo, isWeekend, isFuture });
 
           return (
             <button
               key={dateKey}
               type="button"
-              disabled={isFuture}
+              disabled={isFuture || !inMonth}
               onClick={() => onSelectDate(day)}
               className={cn(
-                'flex flex-col items-center justify-center rounded-lg border py-2 text-xs transition-colors min-h-[56px]',
-                isFuture
-                  ? 'text-muted-foreground/40 cursor-not-allowed bg-muted/30 border-transparent'
-                  : 'hover:bg-accent cursor-pointer border-transparent',
-                isToday && 'border-primary',
-                isSelected && 'bg-primary text-primary-foreground border-primary hover:bg-primary'
+                'relative flex min-h-[56px] flex-col items-center justify-center gap-0.5 rounded-lg text-xs transition-colors',
+                !inMonth ? 'cursor-default text-muted-foreground/25' : STATUS_STYLES[status],
+                inMonth && !isFuture && !isSelected && 'hover:brightness-95 cursor-pointer',
+                isFuture && inMonth && 'cursor-not-allowed',
+                isSelected && 'bg-primary text-primary-foreground hover:brightness-100'
               )}
             >
-              <span className="font-medium">{day.date()}</span>
+              <span className="font-semibold">{day.date()}</span>
               {isLoading ? (
-                <Skeleton className="h-3 w-8 mt-1" />
-              ) : dayInfo?.hasEntries ? (
-                <span className={cn('mt-0.5 text-[10px]', isSelected ? 'text-primary-foreground/80' : 'text-muted-foreground')}>
-                  {dayInfo.totalHours} hrs
+                <Skeleton className="mt-0.5 h-2.5 w-8" />
+              ) : inMonth && (status === 'completed' || status === 'partial' || status === 'none') ? (
+                <span className={cn('text-[10px] font-medium', isSelected && 'text-primary-foreground/85')}>
+                  {Number(dayInfo?.totalHours ?? 0)}/{EXPECTED_DAILY_HOURS}
                 </span>
+              ) : inMonth && status === 'weekend' ? (
+                <span className={cn('text-[9px]', isSelected && 'text-primary-foreground/85')}>—</span>
               ) : null}
+              {isToday && (
+                <span className={cn('absolute bottom-1 h-1 w-1 rounded-full', isSelected ? 'bg-primary-foreground' : 'bg-primary')} />
+              )}
             </button>
           );
         })}
       </div>
+
+      <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 border-t pt-3 text-[11px] text-muted-foreground">
+        {LEGEND.map((item) => (
+          <span key={item.key} className="flex items-center gap-1.5">
+            <span className={cn('h-2 w-2 rounded-full', item.dot)} />
+            {item.label}
+            {item.sub && <span className="text-muted-foreground/70">{item.sub}</span>}
+          </span>
+        ))}
+      </div>
+
+      {selectedDate && (
+        <div className="mt-4 flex items-center justify-between rounded-lg border bg-muted/20 px-3 py-2.5">
+          <span className="flex items-center gap-2 text-xs text-muted-foreground">
+            <CalendarIcon className="h-4 w-4" />
+            <span>
+              Selected Date
+              <br />
+              <span className="text-sm font-medium text-foreground">{selectedDate.format('dddd, DD MMMM YYYY')}</span>
+            </span>
+          </span>
+          <span className="text-right text-xs text-muted-foreground">
+            Total Logged
+            <br />
+            <span className="text-sm font-semibold text-foreground">{selectedHours} / {EXPECTED_DAILY_HOURS} hrs</span>
+          </span>
+        </div>
+      )}
     </div>
   );
 };

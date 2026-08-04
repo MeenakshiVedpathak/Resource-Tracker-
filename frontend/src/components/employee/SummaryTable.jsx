@@ -57,6 +57,9 @@ const SummaryTable = ({ month, year, rows, isLoading, edits, onCellChange }) => 
 
   // Row/column/grand totals are always derived from the per-day cells themselves, never taken
   // as separate backend fields — one source of truth, so totals can't drift from what's shown.
+  // Every row's `hoursByDay` is that row's own hours only (a Parent/PO can carry its own hours
+  // *and* have a breakdown underneath at the same time), so no row's total is a duplicate of
+  // another's — every row counts toward the column/grand totals, not just depth-0 ones.
   const rowsWithTotals = useMemo(
     () => rows.map((row) => ({
       ...row,
@@ -66,14 +69,10 @@ const SummaryTable = ({ month, year, rows, isLoading, edits, onCellChange }) => 
     [rows, days, edits]
   );
 
-  // Only depth-0 (Service PO) rows count toward column/grand totals — a Service PO with a
-  // hierarchy breakdown already reports its rolled-up total there, so summing its nested
-  // rows too would double-count the same hours.
   const columnTotals = useMemo(() => {
-    const topLevelRows = rows.filter((row) => (row.depth ?? 0) === 0);
     const totals = {};
     days.forEach((day) => {
-      totals[day] = topLevelRows.reduce((sum, row) => sum + cellValue(row, day), 0);
+      totals[day] = rows.reduce((sum, row) => sum + cellValue(row, day), 0);
     });
     return totals;
     // eslint-disable-next-line react-hooks/exhaustive-deps

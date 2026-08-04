@@ -19,6 +19,9 @@ import { extractApiError, extractFieldErrors } from '@/services/apiClient';
 import { flattenHierarchyTree } from '@/utils/servicePOHierarchy';
 
 export const DAILY_HOURS_CAP = 12;
+// A standard workday, used only client-side to color the calendar heatmap and the daily
+// progress bar (Completed / Partial / No Entry) — the backend has no such target field.
+export const EXPECTED_DAILY_HOURS = 8;
 
 // Client-side messages match the backend's Joi wording exactly, so an error looks the same
 // whether it's caught here or comes back from the server. The cross-entry daily-total cap
@@ -45,8 +48,13 @@ const buildDefaults = (task, date) => ({
 });
 
 // Create/edit modal for a single Work Log entry. Save & New only applies to create mode —
-// there's no "new" flow while editing an existing entry. A synced entry never reaches this
-// modal in edit mode — WorkLogEntryTable disables Edit for those rows entirely.
+// there's no "new" flow while editing an existing entry.
+//
+// Not currently rendered anywhere — My Work Log (EmployeeTimesheet.jsx) now edits hours
+// inline via WorkLogEntryTable's per-node steppers, since /employee-timesheets/daily no
+// longer returns individual entries with ids for this modal's edit mode to target. Kept
+// around for DAILY_HOURS_CAP/EXPECTED_DAILY_HOURS and in case a dedicated add-entry flow
+// is reintroduced later.
 const WorkLogEntryModal = ({ open, onOpenChange, date, task }) => {
   const { success, error: showError } = useNotification();
   const createMutation = useCreateWorkLogEntry();
