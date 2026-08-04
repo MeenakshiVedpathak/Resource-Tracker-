@@ -1,24 +1,42 @@
 import { memo } from 'react';
+import { ChevronRight, ChevronDown } from 'lucide-react';
 import { TableRow, TableCell } from '@/components/ui/table';
 import { formatHoursCell } from '@/utils/formatters';
 import { cn } from '@/utils/cn';
 import { DAILY_HOURS_CAP } from './WorkLogEntryModal';
 import { FIRST_COL_WIDTH, DAY_COL_WIDTH, TOTAL_COL_WIDTH } from './summaryTableLayout';
 
-// One Service/Project row in the Monthly Summary table. Memoized so scrolling/resizing the
-// 100+ row table doesn't re-render every row on every parent update — only a row whose own
-// label/hoursByDay/total/edits actually changed re-renders.
+// One Service/Project (or nested hierarchy node) row in the Monthly Summary table. Memoized so
+// scrolling/resizing the 100+ row table doesn't re-render every row on every parent update —
+// only a row whose own label/hoursByDay/total/edits/expanded-state actually changed re-renders.
 //
-// Only rows tied to a real service_po_id can be edited (a cell maps 1:1 to a work log entry
-// for that employee/PO/date) — label-only aggregate rows stay read-only. `editableDays` caps
-// editing at today, same as My Work Log's date picker.
-const SummaryRow = ({ label, days, hoursByDay, total, editable, cellEdits, editableDays, onCellChange }) => (
+// A node with a hierarchy breakdown of its own (`hasChildren`) is a rollup — read-only, with a
+// chevron to reveal its Parent/Child nodes underneath. A leaf node (Service PO or hierarchy
+// node with no further breakdown) maps 1:1 to a work log entry and is editable. `editableDays`
+// caps editing at today, same as My Work Log's date picker.
+const SummaryRow = ({
+  label, depth = 0, hasChildren, isExpanded, onToggleExpand,
+  days, hoursByDay, total, editable, cellEdits, editableDays, onCellChange,
+}) => (
   <TableRow className="hover:bg-muted/30">
     <TableCell
-      className="summary-col-pinned sticky left-0 truncate font-medium"
-      style={{ width: FIRST_COL_WIDTH, minWidth: FIRST_COL_WIDTH, maxWidth: FIRST_COL_WIDTH }}
+      className={cn('summary-col-pinned sticky left-0 truncate pr-2 text-xs', depth > 0 ? 'font-normal text-muted-foreground' : 'font-medium')}
+      style={{
+        width: FIRST_COL_WIDTH, minWidth: FIRST_COL_WIDTH, maxWidth: FIRST_COL_WIDTH,
+        paddingLeft: 8 + depth * 14,
+      }}
       title={label}
     >
+      {depth > 0 && <span className="mr-1 text-muted-foreground">{'└'}</span>}
+      {hasChildren ? (
+        <button
+          type="button"
+          onClick={onToggleExpand}
+          className="mr-1 inline-flex align-middle text-muted-foreground hover:text-foreground"
+        >
+          {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+        </button>
+      ) : null}
       {label}
     </TableCell>
 
@@ -30,7 +48,7 @@ const SummaryRow = ({ label, days, hoursByDay, total, editable, cellEdits, edita
         return (
           <TableCell
             key={day}
-            className="text-center tabular-nums"
+            className="px-1 text-center text-xs tabular-nums"
             style={{ width: DAY_COL_WIDTH, minWidth: DAY_COL_WIDTH, maxWidth: DAY_COL_WIDTH }}
           >
             {formatHoursCell(hoursByDay?.[day])}

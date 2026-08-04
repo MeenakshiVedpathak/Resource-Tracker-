@@ -54,7 +54,7 @@ const EmployeeSidebar = () => {
         >
           <img src="/logo.svg" alt="Logo" className={cn('object-contain', collapsed ? 'w-10' : 'h-12')} />
           {!collapsed && (
-            <span className="font-bold text-lg text-white whitespace-nowrap overflow-hidden">RUT Portal</span>
+            <span className="font-bold text-lg text-white whitespace-nowrap overflow-hidden">Trackio</span>
           )}
         </div>
 

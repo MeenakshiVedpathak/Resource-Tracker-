@@ -1,22 +1,15 @@
 import { useEffect, useState } from 'react';
-import { ChevronRight, X, Users, ListChecks, Search, Inbox } from 'lucide-react';
-import {
-  useServicePO,
-  useAllocateResources,
-  useDeallocateResource,
-} from '@/hooks/useServicePOs';
+import { ChevronRight, Search, Inbox } from 'lucide-react';
 import { useActiveEmployees } from '@/hooks/useEmployees';
 import {
   useServicePOEmployeeMappings,
   useCreateEmployeeServicePOMapping,
-  useDeleteEmployeeServicePOMapping,
   useSetEmployeeServicePOMappingStatus,
 } from '@/hooks/useEmployeeServicePOMapping';
 import { useCanWrite } from '@/hooks/usePermissions';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import { cn } from '@/utils/cn';
-import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -30,13 +23,23 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
-// Row shape used by both panels below: { key, name, sub, raw }. Normalizing employee
-// records and mapping records into this common shape up front means the picker UI
-// itself never has to know which one it's rendering — and always has a resolved
-// display name to show, even right after a row is moved across (see the dialog body).
+// Row shape used by both panels below: { key, name, sub, raw }. Normalizing mapping
+// records into this common shape up front means the picker UI itself never has to know
+// the raw API shape — it just needs a resolved display name.
 const toRow = (key, name, sub, raw) => ({ key, name: name ?? '—', sub, raw });
+
+// The mapping API's response shape for the employee on each row hasn't been consistent —
+// sometimes flat (employee_name/employee_code), sometimes nested (employee: {...} or
+// Employee: {...}). Check every variant so a shape change on the backend doesn't silently
+// blank out the name column again.
+const resolveMappingEmployee = (m) => {
+  const nested = m.employee ?? m.Employee ?? m.employeeDetails ?? m.Employee_Details ?? {};
+  return {
+    name: m.employee_name ?? m.full_name ?? m.employeeName ?? nested.full_name ?? nested.employee_name ?? nested.name ?? null,
+    code: m.employee_code ?? m.employeeCode ?? nested.employee_code ?? nested.code ?? null,
+  };
+};
 
 const filterRows = (rows, term) => {
   const q = term.trim().toLowerCase();
@@ -71,7 +74,7 @@ const PanelSearchBar = ({ count, search, onSearchChange, children }) => (
   </div>
 );
 
-// Left-hand panel: a searchable checklist of records not yet mapped/allocated.
+// Left-hand panel: a searchable checklist of employees not yet mapped.
 const SelectPanel = ({ rows, search, onSearchChange, selectedKeys, onToggle, onToggleAll }) => {
   const filtered = filterRows(rows, search);
   const allChecked = filtered.length > 0 && filtered.every((r) => selectedKeys.includes(r.key));
@@ -118,9 +121,8 @@ const SelectPanel = ({ rows, search, onSearchChange, selectedKeys, onToggle, onT
   );
 };
 
-// Right-hand panel: records already mapped/allocated, each with an "Is Mapped ?" toggle.
-// renderToggle(row) returns the toggle cell content — the two tabs wire different actions
-// (deactivate-vs-delete for timesheet mappings, remove-with-confirm for allocations).
+// Right-hand panel: employees already mapped, each with an "Is Mapped ?" toggle
+// (deactivate) and a remove (delete) action.
 const MappedPanel = ({ rows, search, onSearchChange, renderToggle, selectAll }) => {
   const filtered = filterRows(rows, search);
 
@@ -180,105 +182,43 @@ const MoveButton = ({ disabled, onClick, title }) => (
   </div>
 );
 
-// Employees can be attached to a Service PO in two independent ways: resource
-// allocation (planning) and timesheet mapping (feeds the employee's Project
-// dropdown in My Timesheet). Both are managed here, behind one button.
+// Maps employees to a Service PO for timesheet entry — this is what feeds the employee's
+// Project dropdown in My Timesheet. (Resource allocation/planning used to live in a second
+// tab here; removed since it wasn't backed by real data.)
 const ServicePOMappingDialog = ({ servicePO, open, onOpenChange }) => {
   const servicePoId = servicePO?.id;
   const { success, error: showError } = useNotification();
   const canManageResources = useCanWrite();
 
-  const [selectedEmployees, setSelectedEmployees] = useState([]);
-  const [removeTarget, setRemoveTarget] = useState(null);
   const [selectedForMapping, setSelectedForMapping] = useState([]);
-  const [deleteMappingTarget, setDeleteMappingTarget] = useState(null);
+  const [searchLeft, setSearchLeft] = useState('');
+  const [searchRight, setSearchRight] = useState('');
 
-  const [allocSearchLeft, setAllocSearchLeft] = useState('');
-  const [allocSearchRight, setAllocSearchRight] = useState('');
-  const [mapSearchLeft, setMapSearchLeft] = useState('');
-  const [mapSearchRight, setMapSearchRight] = useState('');
-
-  const { data: po } = useServicePO(servicePoId);
   const { data: activeEmployees = [] } = useActiveEmployees();
   const { data: mappings = [], isPending: isLoadingMappings } = useServicePOEmployeeMappings(servicePoId);
 
-  const allocateMutation = useAllocateResources(servicePoId);
-  const deallocateMutation = useDeallocateResource(servicePoId);
   const createMappingMutation = useCreateEmployeeServicePOMapping();
-  const deleteMappingMutation = useDeleteEmployeeServicePOMapping();
   const mappingStatusMutation = useSetEmployeeServicePOMappingStatus();
-
-  const isActive = po?.status === 'active';
-
-  const allocatedEmployees = po?.employees ?? po?.allocated_employees ?? [];
-  const allocatedIds = new Set(allocatedEmployees.map((e) => e.id ?? e.employee_id));
-  const availableEmployees = activeEmployees.filter((e) => !allocatedIds.has(e.id));
 
   const mappedEmployeeIds = new Set(mappings.map((m) => m.employee_id));
   const availableForMapping = activeEmployees.filter((e) => !mappedEmployeeIds.has(e.id));
 
-  // Normalized rows — always resolved from the freshly-fetched server data, so a
-  // row moved to the right panel shows its real name immediately, never a blank one.
   const employeeSub = (e) => [e.employee_code ?? e.code, e.designation].filter(Boolean).join(' · ');
-  const allocLeftRows = availableEmployees.map((e) =>
+  const leftRows = availableForMapping.map((e) =>
     toRow(e.id, e.full_name ?? e.employee_name ?? e.name, employeeSub(e), e)
   );
-  const allocRightRows = allocatedEmployees.map((emp) => {
-    const empId = emp.id ?? emp.employee_id;
-    return toRow(empId, emp.employee_name ?? emp.name, employeeSub({ ...emp, code: emp.employee_code ?? emp.code }), emp);
+  const rightRows = mappings.map((m) => {
+    const { name, code } = resolveMappingEmployee(m);
+    return toRow(m.id, name, code, m);
   });
-  const mapLeftRows = availableForMapping.map((e) =>
-    toRow(e.id, e.full_name ?? e.employee_name ?? e.name, employeeSub(e), e)
-  );
-  const mapRightRows = mappings.map((m) => toRow(m.id, m.employee_name ?? m.full_name, m.employee_code, m));
 
   useEffect(() => {
     if (!open) {
-      setSelectedEmployees([]);
       setSelectedForMapping([]);
-      setAllocSearchLeft('');
-      setAllocSearchRight('');
-      setMapSearchLeft('');
-      setMapSearchRight('');
+      setSearchLeft('');
+      setSearchRight('');
     }
   }, [open]);
-
-  const toggleEmployee = (empId) => {
-    setSelectedEmployees((prev) =>
-      prev.includes(empId) ? prev.filter((x) => x !== empId) : [...prev, empId]
-    );
-  };
-
-  const toggleAllEmployees = (keys, checked) => {
-    setSelectedEmployees((prev) =>
-      checked ? Array.from(new Set([...prev, ...keys])) : prev.filter((k) => !keys.includes(k))
-    );
-  };
-
-  const handleAllocate = () => {
-    if (selectedEmployees.length === 0) return;
-    allocateMutation.mutate(selectedEmployees, {
-      onSuccess: () => {
-        success('Resources allocated successfully.');
-        setSelectedEmployees([]);
-      },
-      onError: (err) => showError(extractApiError(err)),
-    });
-  };
-
-  const handleDeallocate = () => {
-    if (!removeTarget) return;
-    deallocateMutation.mutate(removeTarget.key, {
-      onSuccess: () => {
-        success(`${removeTarget.name} removed from PO.`);
-        setRemoveTarget(null);
-      },
-      onError: (err) => {
-        showError(extractApiError(err));
-        setRemoveTarget(null);
-      },
-    });
-  };
 
   const toggleMappingSelection = (empId) => {
     setSelectedForMapping((prev) =>
@@ -307,25 +247,11 @@ const ServicePOMappingDialog = ({ servicePO, open, onOpenChange }) => {
     }
   };
 
-  const handleDeleteMapping = () => {
-    if (!deleteMappingTarget) return;
-    deleteMappingMutation.mutate(deleteMappingTarget.id, {
-      onSuccess: () => {
-        success('Mapping removed.');
-        setDeleteMappingTarget(null);
-      },
-      onError: (err) => {
-        showError(extractApiError(err));
-        setDeleteMappingTarget(null);
-      },
-    });
-  };
-
   // Bulk-flip every currently-visible mapping's active status in one go (the
   // "Select All" switch above the mapped list).
-  const allMappingsActive = mapRightRows.length > 0 && mapRightRows.every((r) => (r.raw.status ?? 'active') === 'active');
+  const allMappingsActive = rightRows.length > 0 && rightRows.every((r) => (r.raw.status ?? 'active') === 'active');
   const handleToggleAllMappings = async (checked) => {
-    const toChange = mapRightRows.filter((r) => ((r.raw.status ?? 'active') === 'active') !== checked);
+    const toChange = rightRows.filter((r) => ((r.raw.status ?? 'active') === 'active') !== checked);
     if (toChange.length === 0) return;
     try {
       await Promise.all(
@@ -336,173 +262,78 @@ const ServicePOMappingDialog = ({ servicePO, open, onOpenChange }) => {
     }
   };
 
-  const canAllocate = isActive && canManageResources;
-
   return (
-    <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Map Employees</DialogTitle>
-            <DialogDescription>
-              {servicePO?.service_po_name ?? servicePO?.service_po_code}
-              {servicePO?.service_po_code && servicePO?.service_po_name && (
-                <span className="font-mono text-xs"> · {servicePO.service_po_code}</span>
-              )}
-            </DialogDescription>
-          </DialogHeader>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Map Employees</DialogTitle>
+          <DialogDescription>
+            {servicePO?.service_po_name ?? servicePO?.service_po_code}
+            {servicePO?.service_po_code && servicePO?.service_po_name && (
+              <span className="font-mono text-xs"> · {servicePO.service_po_code}</span>
+            )}
+          </DialogDescription>
+        </DialogHeader>
 
-          <Tabs defaultValue="allocation" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="allocation" className="gap-1.5">
-                <Users className="h-3.5 w-3.5" />
-                Resource Allocation
-                {allocRightRows.length > 0 && (
-                  <Badge variant="secondary" className="text-xs">{allocRightRows.length}</Badge>
-                )}
-              </TabsTrigger>
-              <TabsTrigger value="timesheet" className="gap-1.5">
-                <ListChecks className="h-3.5 w-3.5" />
-                Timesheet Mapping
-                {mapRightRows.length > 0 && (
-                  <Badge variant="secondary" className="text-xs">{mapRightRows.length}</Badge>
-                )}
-              </TabsTrigger>
-            </TabsList>
+        <p className="text-xs text-muted-foreground">
+          Employees mapped here see this Service PO in their Timesheet's Project dropdown.
+          {rightRows.length > 0 && (
+            <Badge variant="secondary" className="ml-2 text-xs">{rightRows.length} mapped</Badge>
+          )}
+        </p>
 
-            {/* Resource Allocation */}
-            <TabsContent value="allocation" className="space-y-2">
-              <div className={cn('grid gap-2 items-start', canAllocate ? 'grid-cols-[1fr_auto_1fr]' : 'grid-cols-1')}>
-                {canAllocate && (
-                  <>
-                    <SelectPanel
-                      rows={allocLeftRows}
-                      search={allocSearchLeft}
-                      onSearchChange={setAllocSearchLeft}
-                      selectedKeys={selectedEmployees}
-                      onToggle={toggleEmployee}
-                      onToggleAll={toggleAllEmployees}
-                    />
-                    <MoveButton
-                      title={allocateMutation.isPending ? 'Allocating…' : 'Allocate selected'}
-                      disabled={selectedEmployees.length === 0 || allocateMutation.isPending}
-                      onClick={handleAllocate}
-                    />
-                  </>
-                )}
-                <MappedPanel
-                  rows={allocRightRows}
-                  search={allocSearchRight}
-                  onSearchChange={setAllocSearchRight}
-                  renderToggle={(row) => (
-                    <div className="flex items-center gap-2">
-                      <Switch
-                        checked
-                        disabled={!canManageResources || deallocateMutation.isPending}
-                        onCheckedChange={(checked) => !checked && setRemoveTarget(row)}
-                      />
-                      <span className="text-[11px] font-medium text-green-600">Yes</span>
-                    </div>
-                  )}
+        {isLoadingMappings ? (
+          <Skeleton className="h-72 w-full" />
+        ) : (
+          <div className={cn('grid gap-2 items-start', canManageResources ? 'grid-cols-[1fr_auto_1fr]' : 'grid-cols-1')}>
+            {canManageResources && (
+              <>
+                <SelectPanel
+                  rows={leftRows}
+                  search={searchLeft}
+                  onSearchChange={setSearchLeft}
+                  selectedKeys={selectedForMapping}
+                  onToggle={toggleMappingSelection}
+                  onToggleAll={toggleAllMappingSelection}
                 />
-              </div>
-              {!isActive && (
-                <p className="text-xs text-muted-foreground">
-                  This PO is closed — resource allocation is read-only.
-                </p>
-              )}
-            </TabsContent>
-
-            {/* Timesheet Mapping */}
-            <TabsContent value="timesheet" className="space-y-2">
-              <p className="text-xs text-muted-foreground">
-                Employees mapped here see this Service PO in their Timesheet's Project dropdown.
-              </p>
-              {isLoadingMappings ? (
-                <Skeleton className="h-72 w-full" />
-              ) : (
-                <div className={cn('grid gap-2 items-start', canManageResources ? 'grid-cols-[1fr_auto_1fr]' : 'grid-cols-1')}>
-                  {canManageResources && (
-                    <>
-                      <SelectPanel
-                        rows={mapLeftRows}
-                        search={mapSearchLeft}
-                        onSearchChange={setMapSearchLeft}
-                        selectedKeys={selectedForMapping}
-                        onToggle={toggleMappingSelection}
-                        onToggleAll={toggleAllMappingSelection}
-                      />
-                      <MoveButton
-                        title={createMappingMutation.isPending ? 'Mapping…' : 'Map selected'}
-                        disabled={selectedForMapping.length === 0 || createMappingMutation.isPending}
-                        onClick={handleMapSelected}
-                      />
-                    </>
-                  )}
-                  <MappedPanel
-                    rows={mapRightRows}
-                    search={mapSearchRight}
-                    onSearchChange={setMapSearchRight}
-                    selectAll={canManageResources ? {
-                      checked: allMappingsActive,
-                      disabled: mappingStatusMutation.isPending,
-                      onCheckedChange: handleToggleAllMappings,
-                    } : undefined}
-                    renderToggle={(row) => {
-                      const isMappingActive = (row.raw.status ?? 'active') === 'active';
-                      return (
-                        <div className="flex items-center gap-2">
-                          <Switch
-                            checked={isMappingActive}
-                            disabled={mappingStatusMutation.isPending}
-                            onCheckedChange={(checked) =>
-                              mappingStatusMutation.mutate({ id: row.key, active: checked })
-                            }
-                          />
-                          <span className={cn('text-[11px] font-medium', isMappingActive ? 'text-green-600' : 'text-slate-400')}>
-                            {isMappingActive ? 'Yes' : 'No'}
-                          </span>
-                          {canManageResources && (
-                            <button
-                              type="button"
-                              className="ml-0.5 text-muted-foreground hover:text-destructive"
-                              title="Remove mapping"
-                              onClick={() => setDeleteMappingTarget(row.raw)}
-                            >
-                              <X className="h-3.5 w-3.5" />
-                            </button>
-                          )}
-                        </div>
-                      );
-                    }}
-                  />
-                </div>
-              )}
-            </TabsContent>
-          </Tabs>
-        </DialogContent>
-      </Dialog>
-
-      <ConfirmDialog
-        open={!!removeTarget}
-        onOpenChange={(o) => !o && setRemoveTarget(null)}
-        title="Remove resource?"
-        description={`${removeTarget?.name ?? 'This employee'} will be removed from this service PO.`}
-        confirmLabel="Remove"
-        onConfirm={handleDeallocate}
-        isLoading={deallocateMutation.isPending}
-      />
-
-      <ConfirmDialog
-        open={!!deleteMappingTarget}
-        onOpenChange={(o) => !o && setDeleteMappingTarget(null)}
-        title="Remove timesheet mapping?"
-        description={`${deleteMappingTarget?.employee_name ?? 'This employee'} will no longer see this Service PO in their Timesheet's Project dropdown.`}
-        confirmLabel="Remove"
-        onConfirm={handleDeleteMapping}
-        isLoading={deleteMappingMutation.isPending}
-      />
-    </>
+                <MoveButton
+                  title={createMappingMutation.isPending ? 'Mapping…' : 'Map selected'}
+                  disabled={selectedForMapping.length === 0 || createMappingMutation.isPending}
+                  onClick={handleMapSelected}
+                />
+              </>
+            )}
+            <MappedPanel
+              rows={rightRows}
+              search={searchRight}
+              onSearchChange={setSearchRight}
+              selectAll={canManageResources ? {
+                checked: allMappingsActive,
+                disabled: mappingStatusMutation.isPending,
+                onCheckedChange: handleToggleAllMappings,
+              } : undefined}
+              renderToggle={(row) => {
+                const isMappingActive = (row.raw.status ?? 'active') === 'active';
+                return (
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={isMappingActive}
+                      disabled={mappingStatusMutation.isPending}
+                      onCheckedChange={(checked) =>
+                        mappingStatusMutation.mutate({ id: row.key, active: checked })
+                      }
+                    />
+                    <span className={cn('text-[11px] font-medium', isMappingActive ? 'text-green-600' : 'text-slate-400')}>
+                      {isMappingActive ? 'Yes' : 'No'}
+                    </span>
+                  </div>
+                );
+              }}
+            />
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 };
 

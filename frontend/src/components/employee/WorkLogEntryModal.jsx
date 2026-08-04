@@ -10,10 +10,13 @@ import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import ProjectSelect from './ProjectSelect';
 import { useCreateWorkLogEntry, useUpdateWorkLogEntry } from '@/hooks/useEmployeeWorkLog';
+import { useEmployeeMappedProjects } from '@/hooks/useEmployeeProjects';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError, extractFieldErrors } from '@/services/apiClient';
+import { flattenHierarchyTree } from '@/utils/servicePOHierarchy';
 
 export const DAILY_HOURS_CAP = 12;
 
@@ -24,6 +27,7 @@ export const DAILY_HOURS_CAP = 12;
 // message) surfaced as a toast via extractApiError instead of approximated client-side.
 const taskSchema = z.object({
   service_po_id: z.string().min(1, 'Service PO is required.'),
+  hierarchy_node_id: z.string().optional(),
   hours: z.coerce
     .number({ invalid_type_error: 'Hours is required.' })
     .gt(0, 'Hours must be greater than 0.')
@@ -34,6 +38,7 @@ const taskSchema = z.object({
 
 const buildDefaults = (task, date) => ({
   service_po_id: task ? String(task.service_po_id) : '',
+  hierarchy_node_id: task?.hierarchy_node_id != null ? String(task.hierarchy_node_id) : '',
   hours: task?.hours ?? '',
   description: task?.description ?? '',
   timesheet_date: task ? dayjs(task.timesheet_date ?? task.work_date).format('YYYY-MM-DD') : dayjs(date).format('YYYY-MM-DD'),
@@ -50,6 +55,7 @@ const WorkLogEntryModal = ({ open, onOpenChange, date, task }) => {
   const isSaving = createMutation.isPending || updateMutation.isPending;
 
   const today = dayjs().format('YYYY-MM-DD');
+  const { data: projects = [] } = useEmployeeMappedProjects();
 
   const form = useForm({
     resolver: zodResolver(taskSchema),
@@ -62,9 +68,14 @@ const WorkLogEntryModal = ({ open, onOpenChange, date, task }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, task]);
 
+  const selectedServicePOId = form.watch('service_po_id');
+  const selectedProject = projects.find((p) => String(p.id) === String(selectedServicePOId));
+  const hierarchyOptions = flattenHierarchyTree(selectedProject?.hierarchy ?? []);
+
   const submit = async (values, { keepOpen }) => {
     const payload = {
       service_po_id: values.service_po_id,
+      hierarchy_node_id: values.hierarchy_node_id || null,
       sub_project_id: null, // no sub-project selector in this UI
       hours: values.hours,
       description: values.description,
@@ -123,12 +134,54 @@ const WorkLogEntryModal = ({ open, onOpenChange, date, task }) => {
                 <FormItem>
                   <FormLabel>Project</FormLabel>
                   <FormControl>
-                    <ProjectSelect value={field.value} onChange={field.onChange} disabled={isSaving} />
+                    <ProjectSelect
+                      value={field.value}
+                      onChange={(v) => {
+                        if (v !== field.value) form.setValue('hierarchy_node_id', '');
+                        field.onChange(v);
+                      }}
+                      disabled={isSaving}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
+
+            {hierarchyOptions.length > 0 && (
+              <FormField
+                control={form.control}
+                name="hierarchy_node_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Hierarchy Node (optional)</FormLabel>
+                    <FormControl>
+                      <SearchableSelect
+                        options={[
+                          { label: 'None — log against the Service PO itself', value: '' },
+                          ...hierarchyOptions.map((n) => ({
+                            value: String(n.id),
+                            searchValue: [n.parentName, n.name].filter(Boolean).join(' '),
+                            label: (
+                              <span className="flex items-baseline gap-1.5" style={{ paddingLeft: `${n.depth * 16}px` }}>
+                                {n.depth > 0 && <span className="text-muted-foreground">{'└'}</span>}
+                                <span>{n.name}</span>
+                              </span>
+                            ),
+                          })),
+                        ]}
+                        value={field.value || ''}
+                        onValueChange={(v) => field.onChange(v)}
+                        disabled={isSaving}
+                        placeholder="None — log against the Service PO itself"
+                        searchPlaceholder="Search hierarchy…"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             <FormField
               control={form.control}

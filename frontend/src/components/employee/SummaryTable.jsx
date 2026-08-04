@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import dayjs from 'dayjs';
 import {
   Table, TableHeader, TableBody, TableFooter, TableRow, TableHead, TableCell,
@@ -14,10 +14,21 @@ import { FIRST_COL_WIDTH, DAY_COL_WIDTH, TOTAL_COL_WIDTH } from './summaryTableL
 // scrolling container drives both axes, so `sticky` on each edge resolves against the same
 // scroll ancestor.
 //
-// `edits` is `{ [servicePOId]: { [day]: hoursString } }` — unsaved cell overrides from the
-// parent page. Totals are computed from these overlaid on the server values, never taken as
-// separate fields, so a total updates live as you type and always matches what's on screen.
+// `edits` is `{ [rowKey]: { [day]: hoursString } }` — unsaved cell overrides from the parent
+// page, keyed by each row's own `rowKey` (`po:<id>` or `h:<id>`) rather than a bare Service PO
+// id, since a hierarchy node and a Service PO don't share an id space. Totals are computed from
+// these overlaid on the server values, never taken as separate fields, so a total updates live
+// as you type and always matches what's on screen.
 const SummaryTable = ({ month, year, rows, isLoading, edits, onCellChange }) => {
+  // Collapsed by default — a Service PO's hierarchy breakdown only shows once its row (or an
+  // ancestor Parent node) is expanded, so the table opens as a flat list and drills down on click.
+  const [expandedKeys, setExpandedKeys] = useState(() => new Set());
+  const toggleExpanded = (rowKey) => setExpandedKeys((prev) => {
+    const next = new Set(prev);
+    next.has(rowKey) ? next.delete(rowKey) : next.add(rowKey);
+    return next;
+  });
+
   const daysInMonth = useMemo(
     () => dayjs(`${year}-${String(month).padStart(2, '0')}-01`).daysInMonth(),
     [month, year]
@@ -40,7 +51,7 @@ const SummaryTable = ({ month, year, rows, isLoading, edits, onCellChange }) => 
     dayjs(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`).format('ddd');
 
   const cellValue = (row, day) => {
-    const edited = edits?.[row.servicePOId]?.[day];
+    const edited = edits?.[row.rowKey]?.[day];
     return edited !== undefined ? Number(edited || 0) : Number(row.hoursByDay?.[day] ?? 0);
   };
 
@@ -55,10 +66,14 @@ const SummaryTable = ({ month, year, rows, isLoading, edits, onCellChange }) => 
     [rows, days, edits]
   );
 
+  // Only depth-0 (Service PO) rows count toward column/grand totals — a Service PO with a
+  // hierarchy breakdown already reports its rolled-up total there, so summing its nested
+  // rows too would double-count the same hours.
   const columnTotals = useMemo(() => {
+    const topLevelRows = rows.filter((row) => (row.depth ?? 0) === 0);
     const totals = {};
     days.forEach((day) => {
-      totals[day] = rows.reduce((sum, row) => sum + cellValue(row, day), 0);
+      totals[day] = topLevelRows.reduce((sum, row) => sum + cellValue(row, day), 0);
     });
     return totals;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -69,6 +84,13 @@ const SummaryTable = ({ month, year, rows, isLoading, edits, onCellChange }) => 
     [columnTotals]
   );
 
+  // A row shows only once every ancestor in its chain is expanded — collapsing a Parent hides
+  // its whole subtree in one step, not just its direct children.
+  const visibleRows = useMemo(
+    () => rowsWithTotals.filter((row) => (row.ancestorKeys ?? []).every((key) => expandedKeys.has(key))),
+    [rowsWithTotals, expandedKeys]
+  );
+
   return (
     <Table
       className="table-fixed border-collapse"
@@ -77,7 +99,7 @@ const SummaryTable = ({ month, year, rows, isLoading, edits, onCellChange }) => 
       <TableHeader>
         <TableRow className="hover:bg-transparent">
           <TableHead
-            className="summary-table-head summary-col-pinned sticky left-0 top-0"
+            className="summary-table-head summary-col-pinned sticky left-0 top-0 px-2 text-xs"
             style={{ width: FIRST_COL_WIDTH, minWidth: FIRST_COL_WIDTH, maxWidth: FIRST_COL_WIDTH }}
           >
             Service / Project
@@ -86,12 +108,12 @@ const SummaryTable = ({ month, year, rows, isLoading, edits, onCellChange }) => 
           {days.map((day) => (
             <TableHead
               key={day}
-              className="summary-table-head text-center"
+              className="summary-table-head px-1 text-center"
               style={{ width: DAY_COL_WIDTH, minWidth: DAY_COL_WIDTH, maxWidth: DAY_COL_WIDTH }}
             >
               <div className="flex flex-col items-center leading-tight">
-                <span className="font-bold text-foreground">{day}</span>
-                <span className="text-[10px] font-normal text-muted-foreground">{weekdayShort(day)}</span>
+                <span className="text-xs font-bold text-foreground">{day}</span>
+                <span className="text-[9px] font-normal text-muted-foreground">{weekdayShort(day)}</span>
               </div>
             </TableHead>
           ))}
@@ -109,12 +131,12 @@ const SummaryTable = ({ month, year, rows, isLoading, edits, onCellChange }) => 
         {isLoading ? (
           Array.from({ length: 6 }).map((_, i) => (
             <TableRow key={i} className="hover:bg-transparent">
-              <TableCell className="sticky left-0 bg-card" style={{ width: FIRST_COL_WIDTH }}>
-                <Skeleton className="h-4 w-32" />
+              <TableCell className="sticky left-0 bg-card px-2" style={{ width: FIRST_COL_WIDTH }}>
+                <Skeleton className="h-4 w-20" />
               </TableCell>
               {days.map((day) => (
-                <TableCell key={day} style={{ width: DAY_COL_WIDTH }}>
-                  <Skeleton className="mx-auto h-4 w-6" />
+                <TableCell key={day} className="px-1" style={{ width: DAY_COL_WIDTH }}>
+                  <Skeleton className="mx-auto h-4 w-4" />
                 </TableCell>
               ))}
               <TableCell className="sticky right-0 bg-card" style={{ width: TOTAL_COL_WIDTH }}>
@@ -129,17 +151,21 @@ const SummaryTable = ({ month, year, rows, isLoading, edits, onCellChange }) => 
             </TableCell>
           </TableRow>
         ) : (
-          rowsWithTotals.map((row) => (
+          visibleRows.map((row) => (
             <SummaryRow
-              key={row.servicePOId ?? row.label}
+              key={row.rowKey}
               label={row.label}
+              depth={row.depth}
+              hasChildren={row.hasChildren}
+              isExpanded={expandedKeys.has(row.rowKey)}
+              onToggleExpand={() => toggleExpanded(row.rowKey)}
               days={days}
               hoursByDay={row.hoursByDay}
               total={row.total}
-              editable={!!row.servicePOId}
+              editable={!!row.editable}
               editableDays={editableDays}
-              cellEdits={edits?.[row.servicePOId]}
-              onCellChange={(day, value) => onCellChange(row.servicePOId, day, value)}
+              cellEdits={edits?.[row.rowKey]}
+              onCellChange={(day, value) => onCellChange(row.rowKey, day, value)}
             />
           ))
         )}

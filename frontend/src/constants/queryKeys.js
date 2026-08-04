@@ -44,6 +44,7 @@ export const QUERY_KEYS = {
   SERVICE_POS_ACTIVE: ['service-pos', 'active'],
   SERVICE_PO: (id) => ['service-pos', id],
   SERVICE_PO_UTILISATION: (id) => ['service-pos', id, 'utilisation'],
+  SERVICE_PO_HIERARCHY: (id) => ['service-pos', id, 'hierarchy'],
 
   // Sub-Projects
   SUB_PROJECTS: (params) => ['sub-projects', params],

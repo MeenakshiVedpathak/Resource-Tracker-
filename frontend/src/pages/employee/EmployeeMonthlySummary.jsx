@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import dayjs from 'dayjs';
 import { useQueryClient } from '@tanstack/react-query';
 import { Save } from 'lucide-react';
@@ -11,6 +11,7 @@ import {
 import { employeeWorkLogApi } from '@/api/employeeWorkLog.api';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
+import { buildMonthlySummaryRows } from '@/utils/employeeMonthlySummary';
 import MonthNavigator from '@/components/employee/MonthNavigator';
 import SummaryTable from '@/components/employee/SummaryTable';
 import { DAILY_HOURS_CAP } from '@/components/employee/WorkLogEntryModal';
@@ -18,18 +19,22 @@ import { Button } from '@/components/ui/button';
 
 // Beside My Work Log — a day-by-day view of the same pending+synced work log entries,
 // grouped by Service/Project instead of by date. Reuses the monthly-summary endpoint My
-// Work Log's dashboard card already calls; once the backend adds the per-day breakdown
-// (`data.rows[].hoursByDay`) alongside its existing per-PO totals, this table lights up.
+// Work Log's dashboard card already calls; `buildMonthlySummaryRows` flattens its per-day
+// Service PO + hierarchy breakdown into one row per node.
 //
-// Cells are editable: typing a value here writes/updates the same underlying work log
-// entry My Work Log's modal creates, just without opening a modal per cell. A shared
-// description covers the whole batch (the entries API requires one) rather than asking
-// for 100+ per-cell descriptions. Nothing is sent to the server until Save is pressed.
+// Only a leaf node is editable — either a Service PO with no breakdown, or a hierarchy
+// Parent/Child node with no further breakdown of its own. A cell maps 1:1 to a work log entry
+// for that employee/PO(/hierarchy node)/date; any row with children underneath it is a rollup
+// display only. A shared description covers the whole batch (the entries API requires one)
+// rather than asking for 100+ per-cell descriptions. Nothing is sent to the server until Save
+// is pressed.
 const MonthlySummaryPage = () => {
   const today = dayjs().startOf('day');
   const [month, setMonth] = useState(today.month() + 1);
   const [year, setYear] = useState(today.year());
-  // { [servicePOId]: { [day]: hoursString } } — unsaved cell overrides, cleared on save/month change.
+  // { [rowKey]: { [day]: hoursString } } — unsaved cell overrides, cleared on save/month change.
+  // rowKey is `po:<servicePOId>` or `h:<hierarchyId>` (see buildMonthlySummaryRows) since a
+  // hierarchy node and a Service PO don't share an id space.
   const [edits, setEdits] = useState({});
   const [isSaving, setIsSaving] = useState(false);
 
@@ -44,7 +49,7 @@ const MonthlySummaryPage = () => {
   const updateMutation = useUpdateWorkLogEntry();
   const deleteMutation = useDeleteWorkLogEntry();
 
-  const rows = summary?.rows ?? [];
+  const rows = useMemo(() => buildMonthlySummaryRows(summary), [summary]);
   const editedCount = Object.values(edits).reduce((n, byDay) => n + Object.keys(byDay).length, 0);
 
   const handleMonthChange = (m, y) => {
@@ -53,11 +58,11 @@ const MonthlySummaryPage = () => {
     setEdits({});
   };
 
-  const handleCellChange = (servicePOId, day, value) => {
-    if (!servicePOId) return;
+  const handleCellChange = (rowKey, day, value) => {
+    if (!rowKey) return;
     setEdits((prev) => ({
       ...prev,
-      [servicePOId]: { ...prev[servicePOId], [day]: value },
+      [rowKey]: { ...prev[rowKey], [day]: value },
     }));
   };
 
@@ -65,12 +70,12 @@ const MonthlySummaryPage = () => {
 
   const handleSave = async () => {
     // Group by date first so each day's existing entries are only fetched once, no matter
-    // how many Service/Project rows changed on that date.
+    // how many rows changed on that date.
     const byDate = {};
-    Object.entries(edits).forEach(([servicePOId, byDay]) => {
+    Object.entries(edits).forEach(([rowKey, byDay]) => {
       Object.entries(byDay).forEach(([day, rawHours]) => {
         const date = dayjs(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`).format('YYYY-MM-DD');
-        (byDate[date] ??= []).push({ servicePOId, hours: Number(rawHours || 0) });
+        (byDate[date] ??= []).push({ rowKey, hours: Number(rawHours || 0) });
       });
     });
 
@@ -84,18 +89,24 @@ const MonthlySummaryPage = () => {
     try {
       for (const [date, cellEdits] of Object.entries(byDate)) {
         const existing = await employeeWorkLogApi.getDaily(date);
-        for (const { servicePOId, hours } of cellEdits) {
-          const match = existing.find((e) => String(e.service_po_id) === String(servicePOId));
+        for (const { rowKey, hours } of cellEdits) {
+          const row = rows.find((r) => r.rowKey === rowKey);
+          if (!row) continue;
+          // A hierarchy node's entry is matched by hierarchy_id; a plain Service PO entry is
+          // matched by service_po_id with no hierarchy_id, so the two never get conflated.
+          const match = row.hierarchyId
+            ? existing.find((e) => String(e.hierarchy_id) === String(row.hierarchyId))
+            : existing.find((e) => String(e.service_po_id) === String(row.servicePOId) && !e.hierarchy_id);
           if (hours <= 0) {
             if (match) await deleteMutation.mutateAsync(match.id);
             continue;
           }
-          const row = rows.find((r) => String(r.servicePOId) === String(servicePOId));
           const payload = {
-            service_po_id: servicePOId,
+            service_po_id: row.servicePOId,
             sub_project_id: null,
+            ...(row.hierarchyId && { hierarchy_id: row.hierarchyId }),
             hours,
-            description: row?.label ?? 'Logged via Monthly Summary',
+            description: row.label ?? 'Logged via Monthly Summary',
             timesheet_date: date,
           };
           if (match) {

@@ -8,7 +8,7 @@ import { FIRST_COL_WIDTH, DAY_COL_WIDTH, TOTAL_COL_WIDTH } from './summaryTableL
 const SummaryFooter = ({ days, columnTotals, grandTotal }) => (
   <TableRow className="hover:bg-transparent">
     <TableCell
-      className="summary-table-foot summary-col-pinned sticky left-0 bottom-0"
+      className="summary-table-foot summary-col-pinned sticky left-0 bottom-0 px-2 text-xs"
       style={{ width: FIRST_COL_WIDTH, minWidth: FIRST_COL_WIDTH, maxWidth: FIRST_COL_WIDTH }}
     >
       TOTAL
@@ -17,7 +17,7 @@ const SummaryFooter = ({ days, columnTotals, grandTotal }) => (
     {days.map((day) => (
       <TableCell
         key={day}
-        className="summary-table-foot text-center tabular-nums"
+        className="summary-table-foot px-1 text-center text-xs tabular-nums"
         style={{ width: DAY_COL_WIDTH, minWidth: DAY_COL_WIDTH, maxWidth: DAY_COL_WIDTH }}
       >
         {formatHoursCell(columnTotals?.[day])}

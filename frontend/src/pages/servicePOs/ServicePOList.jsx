@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import { useNavigate, useSearchParams, Outlet } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Plus, Pencil, Eye, Trash2, Search, Filter, Download, Upload, Users } from 'lucide-react';
+import { Plus, Pencil, Eye, Trash2, Search, Filter, Download, Upload, Users, GitBranch } from 'lucide-react';
 import { useServicePOs, useDeleteServicePO } from '@/hooks/useServicePOs';
 import { servicePOsApi } from '@/api/servicePOs.api';
 import { useActiveClients } from '@/hooks/useClients';
@@ -20,11 +20,13 @@ import PageHeader from '@/components/common/PageHeader';
 import StatusBadge from '@/components/common/StatusBadge';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import ServicePOMappingDialog from './ServicePOMappingDialog';
+import ServicePOHierarchyDrawer from './ServicePOHierarchyDrawer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { cn } from '@/utils/cn';
+import { getAncestors, servicePOSearchValue, sortServicePOsHierarchically } from '@/utils/servicePOHierarchy';
 
 const columnHelper = createColumnHelper();
 
@@ -83,8 +85,15 @@ const downloadSampleExcel = () => {
   XLSX.writeFile(wb, 'ServicePO_Sample.xlsx');
 };
 
-const TruncatedCell = ({ value, maxWidth = '150px', className }) => {
+const TruncatedCell = ({ value, maxWidth = '150px', className, wrap = false }) => {
   if (!value) return <span className="text-sm text-muted-foreground">—</span>;
+  if (wrap) {
+    return (
+      <div className={cn("text-sm whitespace-normal break-words leading-snug py-1", className)} style={{ maxWidth }}>
+        {value}
+      </div>
+    );
+  }
   return (
     <div className={cn("text-sm truncate", className)} style={{ maxWidth }} title={value}>
       {value}
@@ -108,6 +117,7 @@ const ServicePOList = () => {
   const [poFilter, setPoFilter] = useState(servicePoIdParam || 'all');
   const [filtersOpen, setFiltersOpen] = useState(!!categoryIdParam || !!servicePoIdParam);
   const [exporting, setExporting] = useState(false);
+  const [hierarchyTarget, setHierarchyTarget] = useState(null);
 
   const debouncedSearch = useDebounce(search, 400);
 
@@ -160,12 +170,14 @@ const ServicePOList = () => {
     return map;
   }, [serviceTypes, serviceCategories]);
 
-  const filteredPOs = activePOs.filter((po) => {
-    const poTypeId = po.serviceType?.id != null ? String(po.serviceType.id) : null;
-    if (typeFilter !== 'all') return poTypeId === typeFilter;
-    if (categoryFilter !== 'all') return poTypeId != null && typeCategoryMap.get(poTypeId) === categoryFilter;
-    return true;
-  });
+  const filteredPOs = sortServicePOsHierarchically(
+    activePOs.filter((po) => {
+      const poTypeId = po.serviceType?.id != null ? String(po.serviceType.id) : null;
+      if (typeFilter !== 'all') return poTypeId === typeFilter;
+      if (categoryFilter !== 'all') return poTypeId != null && typeCategoryMap.get(poTypeId) === categoryFilter;
+      return true;
+    })
+  );
 
   const handleCategoryChange = (v) => {
     setCategoryFilter(v);
@@ -260,8 +272,24 @@ const ServicePOList = () => {
     }),
     columnHelper.accessor('service_po_name', {
       header: 'PO Name',
-      size: 300,
-      cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="280px" className="font-medium" />,
+      size: 200,
+      cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="180px" className="font-medium" wrap />,
+    }),
+    columnHelper.display({
+      id: 'hierarchy',
+      header: 'Hierarchy',
+      size: 160,
+      cell: ({ row }) => (
+        <Button
+          size="sm"
+          variant="outline"
+          title="Manage Hierarchy"
+          className="h-7 gap-1.5 text-xs"
+          onClick={(e) => { e.stopPropagation(); setHierarchyTarget(row.original); }}
+        >
+          <GitBranch className="h-3.5 w-3.5" /> Manage
+        </Button>
+      ),
     }),
     columnHelper.accessor('client.client_name', {
       header: 'Client',
@@ -449,10 +477,28 @@ const ServicePOList = () => {
             <SearchableSelect
               options={[
                 { label: "All POs", value: "all" },
-                ...filteredPOs.map((po) => ({
-                  label: po.service_po_name || po.service_po_code || String(po.id),
-                  value: String(po.id)
-                }))
+                ...filteredPOs.map((po) => {
+                  const name = po.service_po_name || po.service_po_code || String(po.id);
+                  const ancestors = getAncestors(po);
+                  const depth = ancestors.length; // 0 = root, 1 = parent, 2 = child
+                  return {
+                    value: String(po.id),
+                    searchValue: servicePOSearchValue(po, po.service_po_name, po.service_po_code),
+                    label: (
+                      <span className="flex flex-col" style={{ paddingLeft: `${depth * 18}px` }}>
+                        {depth > 0 && (
+                          <span className="text-[10px] leading-tight text-muted-foreground">
+                            {ancestors.map((a) => a.name).join(' › ')}
+                          </span>
+                        )}
+                        <span className="flex items-baseline gap-1.5">
+                          {depth > 0 && <span className="text-muted-foreground">{'└'}</span>}
+                          <span>{name}</span>
+                        </span>
+                      </span>
+                    ),
+                  };
+                })
               ]}
               value={poFilter}
               onValueChange={(v) => { setPoFilter(v); setPage(1); }}
@@ -518,6 +564,12 @@ const ServicePOList = () => {
         servicePO={mappingTarget}
         open={!!mappingTarget}
         onOpenChange={(open) => !open && setMappingTarget(null)}
+      />
+
+      <ServicePOHierarchyDrawer
+        servicePO={hierarchyTarget}
+        open={!!hierarchyTarget}
+        onOpenChange={(open) => !open && setHierarchyTarget(null)}
       />
 
       <Outlet />

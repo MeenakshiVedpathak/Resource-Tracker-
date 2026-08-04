@@ -17,6 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
+import { getAncestors, getLevel } from '@/utils/servicePOHierarchy';
 
 const DetailSkeleton = () => (
   <div className="space-y-4">
@@ -53,6 +54,9 @@ const ServicePODetail = () => {
   const serviceTypeMap = Object.fromEntries(serviceCategories.map((c) => [c.id, c.name]));
 
   const closeMutation = useCloseServicePO();
+
+  const ancestors = getAncestors(po);
+  const level = getLevel(po);
 
   const canWrite = useCanWrite();
   const canManageResources = canWrite;
@@ -147,7 +151,13 @@ const ServicePODetail = () => {
                 Billable
               </Badge>
             )}
+            <Badge variant="outline" className="text-xs">Level {level}</Badge>
           </div>
+          {ancestors.length > 0 && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              {ancestors.map((a) => a.name).join(' › ')} › <span className="font-medium">{po.service_po_name}</span>
+            </p>
+          )}
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3 lg:grid-cols-4">
