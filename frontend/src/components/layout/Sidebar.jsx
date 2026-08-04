@@ -8,16 +8,20 @@ import { cn } from '@/utils/cn';
 import { useAuth } from '@/hooks/useAuth';
 import { resolveFormRoute } from '@/constants/rbacForms';
 import { ROUTES } from '@/constants/routes';
-import { ChevronLeft, ChevronRight, Landmark } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Landmark, Shield, ClipboardList } from 'lucide-react';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 
 // Multi-tenancy retrofit: a Platform Admin (backend's `is_platform_admin` user flag, distinct
-// from the Company Admin role bypass below) sees ONLY this single nav item —
+// from the Company Admin role bypass below) sees ONLY these nav items —
 // everything else the RBAC-driven buildNavGroups() would otherwise show is skipped for them.
 const SUPER_ADMIN_NAV_GROUPS = [
   {
     label: 'Administration',
-    items: [{ label: 'BU Management', icon: Landmark, to: ROUTES.COMPANIES, exact: false }],
+    items: [
+      { label: 'BU Management', icon: Landmark, to: ROUTES.COMPANIES, exact: false },
+      { label: 'Role Master', icon: Shield, to: ROUTES.ROLES, exact: false },
+      { label: 'Forms Master', icon: ClipboardList, to: ROUTES.FORMS, exact: false },
+    ],
   },
 ];
 

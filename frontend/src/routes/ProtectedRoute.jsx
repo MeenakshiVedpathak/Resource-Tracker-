@@ -31,7 +31,12 @@ const ProtectedRoute = ({ children, allowedRoles, formName, platformAdminOnly, e
     return <Navigate to={ROUTES.NOT_AUTHORIZED} replace />;
   }
 
-  if (formName) {
+  // A Platform Admin has no roles/accessible-forms at all (it sits above the per-company RBAC
+  // system entirely), so it can never satisfy a formName check — bypass it here rather than
+  // maintaining fake Role-Form-Mapping rows for an account that has no company. MainLayout
+  // already restricts which formName routes a Platform Admin can reach (Role/Forms Master),
+  // so this doesn't widen access beyond what's rendered.
+  if (formName && !isPlatformAdmin) {
     // Right after a fresh login, accessibleForms is deliberately cleared until the
     // authoritative POST /roles/forms fetch resolves (see authSlice's setCredentials) — an
     // empty map at that point means "not loaded yet", not "not authorized". Without this

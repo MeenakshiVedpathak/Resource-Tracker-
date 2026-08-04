@@ -1,5 +1,4 @@
 import { Clock, Timer, FolderKanban } from 'lucide-react';
-import { Progress } from '@/components/ui/progress';
 import { cn } from '@/utils/cn';
 import { EXPECTED_DAILY_HOURS } from './WorkLogEntryModal';
 
@@ -21,7 +20,6 @@ const StatTile = ({ icon: Icon, iconClassName, label, value, sub }) => (
 // hours logged today (own or via a hierarchy node beneath them), not every mapped PO.
 const WorkLogDaySummary = ({ totalHours, activeProjectsCount }) => {
   const remaining = Math.max(EXPECTED_DAILY_HOURS - totalHours, 0);
-  const progressPct = Math.min(100, Math.round((totalHours / EXPECTED_DAILY_HOURS) * 100));
 
   return (
     <div className="space-y-4">
@@ -47,14 +45,6 @@ const WorkLogDaySummary = ({ totalHours, activeProjectsCount }) => {
           value={activeProjectsCount}
           sub="active"
         />
-      </div>
-
-      <div>
-        <div className="mb-1.5 flex items-center justify-between text-xs">
-          <span className="font-medium text-muted-foreground">Daily Progress</span>
-          <span className="font-medium tabular-nums">{totalHours} / {EXPECTED_DAILY_HOURS} hrs</span>
-        </div>
-        <Progress value={progressPct} indicatorClassName="bg-emerald-500" />
       </div>
     </div>
   );

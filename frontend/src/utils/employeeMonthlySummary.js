@@ -71,14 +71,43 @@ export const buildMonthlySummaryRows = (dayEntries = []) => {
   return rows;
 };
 
-// `hierarchy_node_id` is the field name the existing Add/Edit Work Log entry form
-// (WorkLogEntryModal) already sends for a hierarchy node — matching it here so a leaf row's
-// edit lands on the same field the rest of the app uses, not a name invented for this table.
-export const buildEntryPayload = (row, hours, date) => ({
-  service_po_id: row.servicePOId,
-  sub_project_id: null,
-  ...(row.hierarchyId != null && { hierarchy_node_id: row.hierarchyId }),
-  hours,
-  description: row.label ?? 'Logged via Monthly Summary',
-  timesheet_date: date,
-});
+// POST /employee-timesheets/entries is a whole-day replace: any existing row for the date not
+// present in `entries` gets deleted server-side. So the payload for one date must carry every
+// row that should survive — edited cells overlaid on top of each row's already-loaded
+// `hoursByDay[day]` — not just the cells the user touched this session. Rows at 0 hours are
+// left out entirely; omitting a row has the same clearing effect as sending it with hours: 0.
+export const buildDayEntries = (rows, day, edits) =>
+  rows
+    .map((row) => {
+      const edited = edits?.[row.rowKey]?.[day];
+      const hours = edited !== undefined ? Number(edited || 0) : Number(row.hoursByDay?.[day] ?? 0);
+      return { row, hours };
+    })
+    .filter(({ hours }) => hours > 0)
+    .map(({ row, hours }) => ({
+      service_po_id: row.servicePOId,
+      hierarchy_node_id: row.hierarchyId ?? null,
+      hours,
+      description: row.label ?? 'Logged via Monthly Summary',
+    }));
+
+// Mirrors the two 400s the server enforces on a whole-day save, so the user sees the same
+// wording without a round trip. Returns the error string, or null if the day is valid.
+export const validateDayEntries = (entries, dateLabel, dailyHoursCap) => {
+  const seen = new Set();
+  for (const entry of entries) {
+    const key = `${entry.service_po_id}:${entry.hierarchy_node_id ?? 'null'}`;
+    if (seen.has(key)) {
+      const nodePart = entry.hierarchy_node_id != null ? ` / hierarchy node #${entry.hierarchy_node_id}` : '';
+      return `Duplicate entry for Service PO #${entry.service_po_id}${nodePart} in the same request.`;
+    }
+    seen.add(key);
+  }
+
+  const total = entries.reduce((sum, entry) => sum + Number(entry.hours || 0), 0);
+  if (total > dailyHoursCap) {
+    return `Total hours for ${dateLabel} cannot exceed ${dailyHoursCap}. This request totals ${total} hours.`;
+  }
+
+  return null;
+};

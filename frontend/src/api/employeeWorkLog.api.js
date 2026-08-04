@@ -11,7 +11,13 @@ import apiClient from '@/services/apiClient';
 //     ids are exposed anymore, so entries can't be listed/edited/deleted one at a time)
 //   GET  /employee-timesheets/monthly-summary?month=&year=
 //     -> [{ date, service_pos: [{ service_po_id, service_po_name, hours, po_total_hrs, children }] }]
-//   POST/PUT/DELETE /employee-timesheets/entries[/:id]
+//   POST /employee-timesheets/entries — whole-day replace, not per-row create. Body is
+//     { timesheet_date, entries: [{ service_po_id, sub_project_id?, hierarchy_node_id?, hours,
+//     description }] }; any existing entry for that date not present in `entries` is deleted
+//     server-side, so callers must send every row that should survive, not just edited ones.
+//     `entries: []` clears the whole day. Always 200, never 409/201 — there's no create-vs-update
+//     branch anymore.
+//   PUT/DELETE /employee-timesheets/entries/:id — still available for single-row edits.
 export const employeeWorkLogApi = {
   getCalendar: ({ month, year }) =>
     apiClient.get('/employee-timesheets/calendar', { params: { month, year } }).then((r) => r.data?.data ?? []),
@@ -19,7 +25,8 @@ export const employeeWorkLogApi = {
     apiClient.get('/employee-timesheets/daily', { params: { date } }).then((r) => r.data?.data ?? null),
   getMonthlySummary: ({ month, year }) =>
     apiClient.get('/employee-timesheets/monthly-summary', { params: { month, year } }).then((r) => r.data?.data ?? []),
-  create: (payload) => apiClient.post('/employee-timesheets/entries', payload).then((r) => r.data),
+  saveDay: ({ timesheet_date, entries }) =>
+    apiClient.post('/employee-timesheets/entries', { timesheet_date, entries }).then((r) => r.data),
   update: (id, payload) => apiClient.put(`/employee-timesheets/entries/${id}`, payload).then((r) => r.data),
   delete: (id) => apiClient.delete(`/employee-timesheets/entries/${id}`).then((r) => r.data),
 };

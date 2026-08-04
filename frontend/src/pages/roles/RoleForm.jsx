@@ -14,8 +14,6 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter,
 } from '@/components/ui/sheet';
@@ -52,7 +50,7 @@ const RoleForm = () => {
     resolver: zodResolver(roleSchema),
     defaultValues: {
       role_name: '',
-      permission: 'Read',
+      permission: 'Read & Write',
       status: 'active',
       is_original_data_visible: false,
     },
@@ -64,7 +62,7 @@ const RoleForm = () => {
     if (role && isEdit) {
       form.reset({
         role_name: role.role_name ?? '',
-        permission: role.permission ?? 'Read',
+        permission: role.permission ?? 'Read & Write',
         status: role.status ?? 'active',
         is_original_data_visible: role.is_original_data_visible ?? false,
       });
@@ -123,36 +121,6 @@ const RoleForm = () => {
 
                 <FormField
                   control={form.control}
-                  name="permission"
-                  render={({ field }) => (
-                    <FormItem className="space-y-1">
-                      <FormLabel className="text-[11px] text-muted-foreground font-medium"><span className="text-destructive mr-0.5">*</span> Permission</FormLabel>
-                      <Select
-                        value={field.value}
-                        onValueChange={(v) => {
-                          // Radix's hidden native <select> (used for browser autofill) fires a
-                          // spurious change to "" shortly after mount — ignore it so it can't
-                          // clobber a value just set via form.reset() on load.
-                          if (v) field.onChange(v);
-                        }}
-                      >
-                        <FormControl>
-                          <SelectTrigger className="h-8 text-sm border-gray-200">
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="Read">Read</SelectItem>
-                          <SelectItem value="Read & Write">Read & Write</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage className="text-[10px]" />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
                   name="status"
                   render={({ field }) => (
                     <FormItem className="space-y-1 flex flex-col justify-center pt-2">
@@ -169,26 +137,6 @@ const RoleForm = () => {
                           <span className="text-[11px] font-medium leading-none px-0.5">{formStatus === 'active' ? 'Active' : 'Inactive'}</span>
                           <div className="h-3 w-3 shrink-0 rounded-full bg-white shadow-sm" />
                         </button>
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="is_original_data_visible"
-                  render={({ field }) => (
-                    <FormItem className="space-y-1 flex flex-row items-center justify-between rounded-md border border-gray-200 px-3 py-2">
-                      <div className="space-y-0.5">
-                        <FormLabel className="text-[11px] text-muted-foreground font-medium">
-                          Show Original Data
-                        </FormLabel>
-                        <p className="text-[10px] text-muted-foreground">
-                          Lets this role toggle between Modified and Original hours in Reports &amp; Dashboard.
-                        </p>
-                      </div>
-                      <FormControl>
-                        <Switch checked={field.value} onCheckedChange={field.onChange} />
                       </FormControl>
                     </FormItem>
                   )}

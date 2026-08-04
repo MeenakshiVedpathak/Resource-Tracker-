@@ -2,10 +2,10 @@ import { useMemo, useState } from 'react';
 import dayjs from 'dayjs';
 import { useQueryClient } from '@tanstack/react-query';
 import { Save, Calendar as CalendarIcon } from 'lucide-react';
-import { useEmployeeCalendar, useEmployeeDailyWorkLog, useCreateWorkLogEntry } from '@/hooks/useEmployeeWorkLog';
+import { useEmployeeCalendar, useEmployeeDailyWorkLog, useSaveWorkLogDay } from '@/hooks/useEmployeeWorkLog';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
-import { buildMonthlySummaryRows, buildEntryPayload } from '@/utils/employeeMonthlySummary';
+import { buildMonthlySummaryRows, buildDayEntries, validateDayEntries } from '@/utils/employeeMonthlySummary';
 import TimesheetCalendar from '@/components/employee/TimesheetCalendar';
 import MonthlyHoursCard from '@/components/employee/MonthlyHoursCard';
 import WorkLogDaySummary from '@/components/employee/WorkLogDaySummary';
@@ -30,7 +30,7 @@ const EmployeeTimesheet = () => {
 
   const { success, error: showError } = useNotification();
   const qc = useQueryClient();
-  const createMutation = useCreateWorkLogEntry();
+  const saveDayMutation = useSaveWorkLogDay();
 
   const {
     data: calendarDays = [], isLoading: isCalendarLoading, isError: isCalendarError,
@@ -104,13 +104,18 @@ const EmployeeTimesheet = () => {
       return;
     }
 
+    // Whole-day replace: send every row that should survive for this date, not just the ones
+    // edited this session — anything left out is deleted server-side.
+    const entries = buildDayEntries(rows, day, edits);
+    const validationError = validateDayEntries(entries, selectedKey, DAILY_HOURS_CAP);
+    if (validationError) {
+      showError(validationError);
+      return;
+    }
+
     setIsSaving(true);
     try {
-      for (const { rowKey, hours } of flatEdits) {
-        const row = rows.find((r) => r.rowKey === rowKey);
-        if (!row) continue;
-        await createMutation.mutateAsync(buildEntryPayload(row, hours, selectedKey));
-      }
+      await saveDayMutation.mutateAsync({ timesheet_date: selectedKey, entries });
       success('Work log saved.');
       setEdits({});
       qc.invalidateQueries({ queryKey: ['employee-worklog'] });

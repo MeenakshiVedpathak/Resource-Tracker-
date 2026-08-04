@@ -117,7 +117,7 @@ const TimesheetCalendar = ({ month, year, onMonthChange, calendarByDate, selecte
                 <Skeleton className="mt-0.5 h-2.5 w-8" />
               ) : inMonth && (status === 'completed' || status === 'partial' || status === 'none') ? (
                 <span className={cn('text-[10px] font-medium', isSelected && 'text-primary-foreground/85')}>
-                  {Number(dayInfo?.totalHours ?? 0)}/{EXPECTED_DAILY_HOURS}
+                  {Number(dayInfo?.totalHours ?? 0)}
                 </span>
               ) : inMonth && status === 'weekend' ? (
                 <span className={cn('text-[9px]', isSelected && 'text-primary-foreground/85')}>—</span>
@@ -153,7 +153,7 @@ const TimesheetCalendar = ({ month, year, onMonthChange, calendarByDate, selecte
           <span className="text-right text-xs text-muted-foreground">
             Total Logged
             <br />
-            <span className="text-sm font-semibold text-foreground">{selectedHours} / {EXPECTED_DAILY_HOURS} hrs</span>
+            <span className="text-sm font-semibold text-foreground">{selectedHours} hrs</span>
           </span>
         </div>
       )}

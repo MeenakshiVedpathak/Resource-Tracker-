@@ -2,10 +2,10 @@ import { useMemo, useState } from 'react';
 import dayjs from 'dayjs';
 import { useQueryClient } from '@tanstack/react-query';
 import { Save } from 'lucide-react';
-import { useEmployeeMonthlySummary, useCreateWorkLogEntry } from '@/hooks/useEmployeeWorkLog';
+import { useEmployeeMonthlySummary, useSaveWorkLogDay } from '@/hooks/useEmployeeWorkLog';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
-import { buildMonthlySummaryRows, buildEntryPayload } from '@/utils/employeeMonthlySummary';
+import { buildMonthlySummaryRows, buildDayEntries, validateDayEntries } from '@/utils/employeeMonthlySummary';
 import MonthNavigator from '@/components/employee/MonthNavigator';
 import SummaryTable from '@/components/employee/SummaryTable';
 import { DAILY_HOURS_CAP } from '@/components/employee/WorkLogEntryModal';
@@ -24,9 +24,10 @@ import { Button } from '@/components/ui/button';
 // is pressed.
 //
 // Neither /daily nor /monthly-summary exposes individual entry ids anymore (both return an
-// aggregated tree), so there's no way to look up "the existing entry" to decide create vs
-// update — every save just posts to the entries endpoint, which is assumed to upsert per
-// employee/Service PO(/hierarchy node)/date rather than requiring a separate update call.
+// aggregated tree), which is moot for saving now anyway: POST /entries is a whole-day replace,
+// not a per-row create/update. One call per edited date, each carrying every row that should
+// survive that date (edited cells overlaid on the already-loaded hours) — any row left out of
+// the array is deleted server-side, so a save must never send just the touched cells.
 const MonthlySummaryPage = () => {
   const today = dayjs().startOf('day');
   const [month, setMonth] = useState(today.month() + 1);
@@ -44,7 +45,7 @@ const MonthlySummaryPage = () => {
     data: summary, isLoading, isError,
   } = useEmployeeMonthlySummary(month, year);
 
-  const createMutation = useCreateWorkLogEntry();
+  const saveDayMutation = useSaveWorkLogDay();
 
   const rows = useMemo(() => buildMonthlySummaryRows(summary), [summary]);
   const editedCount = Object.values(edits).reduce((n, byDay) => n + Object.keys(byDay).length, 0);
@@ -66,29 +67,36 @@ const MonthlySummaryPage = () => {
   const handleDiscard = () => setEdits({});
 
   const handleSave = async () => {
-    // Grouped by date purely to resolve each edit's rowKey/day pair into a real calendar date.
-    const byDate = {};
-    Object.entries(edits).forEach(([rowKey, byDay]) => {
-      Object.entries(byDay).forEach(([day, rawHours]) => {
-        const date = dayjs(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`).format('YYYY-MM-DD');
-        (byDate[date] ??= []).push({ rowKey, hours: Number(rawHours || 0) });
-      });
-    });
+    // Edits can span multiple days in the grid, but a whole-day save is per-date — one POST per
+    // edited date, each carrying every row (edited + carried-over) that should survive that date.
+    const editedDays = new Set();
+    Object.values(edits).forEach((byDay) => Object.keys(byDay).forEach((day) => editedDays.add(Number(day))));
 
-    const overCap = Object.values(byDate).flat().find((e) => e.hours < 0 || e.hours > DAILY_HOURS_CAP);
-    if (overCap) {
+    const overCap = Object.values(edits)
+      .flatMap((byDay) => Object.values(byDay).map((rawHours) => Number(rawHours || 0)))
+      .find((hours) => hours < 0 || hours > DAILY_HOURS_CAP);
+    if (overCap !== undefined) {
       showError(`Hours must be between 0 and ${DAILY_HOURS_CAP}.`);
       return;
     }
 
+    const dayPayloads = [...editedDays].map((day) => {
+      const date = dayjs(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`).format('YYYY-MM-DD');
+      return { date, entries: buildDayEntries(rows, day, edits) };
+    });
+
+    for (const { date, entries } of dayPayloads) {
+      const validationError = validateDayEntries(entries, date, DAILY_HOURS_CAP);
+      if (validationError) {
+        showError(validationError);
+        return;
+      }
+    }
+
     setIsSaving(true);
     try {
-      for (const [date, cellEdits] of Object.entries(byDate)) {
-        for (const { rowKey, hours } of cellEdits) {
-          const row = rows.find((r) => r.rowKey === rowKey);
-          if (!row) continue;
-          await createMutation.mutateAsync(buildEntryPayload(row, hours, date));
-        }
+      for (const { date, entries } of dayPayloads) {
+        await saveDayMutation.mutateAsync({ timesheet_date: date, entries });
       }
       success('Monthly summary saved.');
       setEdits({});

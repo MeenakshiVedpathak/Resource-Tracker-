@@ -27,10 +27,12 @@ export const useEmployeeMonthlySummary = (month, year) =>
     queryFn: () => employeeWorkLogApi.getMonthlySummary({ month, year }),
   });
 
-export const useCreateWorkLogEntry = () => {
+// Whole-day replace — one call saves every row for a single date at once. See
+// employeeWorkLog.api.js for the "omitted row = deleted server-side" contract.
+export const useSaveWorkLogDay = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: employeeWorkLogApi.create,
+    mutationFn: employeeWorkLogApi.saveDay,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['employee-worklog'] }),
   });
 };

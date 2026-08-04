@@ -1,27 +1,21 @@
 import { useMemo } from 'react';
-import dayjs from 'dayjs';
-import { EXPECTED_DAILY_HOURS } from './WorkLogEntryModal';
 
 const RADIUS = 22;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
+// Fixed standard monthly hours target (22 working days x 8 hrs) — not derived from the actual
+// number of weekdays in the given month, since the backend has no monthly-target concept.
+const STANDARD_MONTHLY_HOURS = 176;
+
 // Sums the same per-day `totalHours` the calendar heatmap reads (GET /employee-timesheets/
-// calendar), against a target of (weekdays in the month) x EXPECTED_DAILY_HOURS — both purely
-// client-side derivations, since the backend has no monthly-target concept.
-const MonthlyHoursCard = ({ month, year, calendarDays }) => {
+// calendar) against the fixed standard monthly target above.
+const MonthlyHoursCard = ({ calendarDays }) => {
   const workedHours = useMemo(
     () => calendarDays.reduce((sum, d) => sum + Number(d.totalHours || 0), 0),
     [calendarDays]
   );
 
-  const targetHours = useMemo(() => {
-    const daysInMonth = dayjs(`${year}-${String(month).padStart(2, '0')}-01`).daysInMonth();
-    const weekdayCount = Array.from({ length: daysInMonth }, (_, i) => {
-      const weekday = dayjs(`${year}-${String(month).padStart(2, '0')}-${i + 1}`).day();
-      return weekday !== 0 && weekday !== 6;
-    }).filter(Boolean).length;
-    return weekdayCount * EXPECTED_DAILY_HOURS;
-  }, [month, year]);
+  const targetHours = STANDARD_MONTHLY_HOURS;
 
   const pct = targetHours ? Math.min(100, Math.round((workedHours / targetHours) * 100)) : 0;
   const dashOffset = CIRCUMFERENCE * (1 - pct / 100);

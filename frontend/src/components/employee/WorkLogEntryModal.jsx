@@ -12,7 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import ProjectSelect from './ProjectSelect';
-import { useCreateWorkLogEntry, useUpdateWorkLogEntry } from '@/hooks/useEmployeeWorkLog';
+import { useSaveWorkLogDay, useUpdateWorkLogEntry } from '@/hooks/useEmployeeWorkLog';
 import { useEmployeeMappedProjects } from '@/hooks/useEmployeeProjects';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError, extractFieldErrors } from '@/services/apiClient';
@@ -55,12 +55,17 @@ const buildDefaults = (task, date) => ({
 // longer returns individual entries with ids for this modal's edit mode to target. Kept
 // around for DAILY_HOURS_CAP/EXPECTED_DAILY_HOURS and in case a dedicated add-entry flow
 // is reintroduced later.
+//
+// NOTE: create mode below sends only this one row to the whole-day-replace POST — correct
+// only when the date has no other entries yet. If this modal is reintroduced for a date that
+// may already have other rows, create must fetch that day's existing entries first and include
+// them alongside this one, or they'll be deleted (see employeeWorkLog.api.js).
 const WorkLogEntryModal = ({ open, onOpenChange, date, task }) => {
   const { success, error: showError } = useNotification();
-  const createMutation = useCreateWorkLogEntry();
+  const saveDayMutation = useSaveWorkLogDay();
   const updateMutation = useUpdateWorkLogEntry();
   const isEdit = !!task;
-  const isSaving = createMutation.isPending || updateMutation.isPending;
+  const isSaving = saveDayMutation.isPending || updateMutation.isPending;
 
   const today = dayjs().format('YYYY-MM-DD');
   const { data: projects = [] } = useEmployeeMappedProjects();
@@ -81,20 +86,28 @@ const WorkLogEntryModal = ({ open, onOpenChange, date, task }) => {
   const hierarchyOptions = flattenHierarchyTree(selectedProject?.hierarchy ?? []);
 
   const submit = async (values, { keepOpen }) => {
-    const payload = {
-      service_po_id: values.service_po_id,
-      hierarchy_node_id: values.hierarchy_node_id || null,
-      sub_project_id: null, // no sub-project selector in this UI
-      hours: values.hours,
-      description: values.description,
-      timesheet_date: values.timesheet_date,
-    };
     try {
       if (isEdit) {
+        const payload = {
+          service_po_id: values.service_po_id,
+          hierarchy_node_id: values.hierarchy_node_id || null,
+          sub_project_id: null, // no sub-project selector in this UI
+          hours: values.hours,
+          description: values.description,
+          timesheet_date: values.timesheet_date,
+        };
         await updateMutation.mutateAsync({ id: task.id, payload });
         success('Entry updated.');
       } else {
-        await createMutation.mutateAsync(payload);
+        await saveDayMutation.mutateAsync({
+          timesheet_date: values.timesheet_date,
+          entries: [{
+            service_po_id: values.service_po_id,
+            hierarchy_node_id: values.hierarchy_node_id || null,
+            hours: values.hours,
+            description: values.description,
+          }],
+        });
         success('Entry saved.');
       }
       if (keepOpen) {
