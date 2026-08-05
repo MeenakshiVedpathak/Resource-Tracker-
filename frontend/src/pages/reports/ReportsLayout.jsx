@@ -8,6 +8,7 @@ const NAV = [
   { label: 'Monthly Utilization', to: ROUTES.REPORT_MONTHLY_RESOURCE_UTILIZATION },
   { label: 'Resource Allocation', to: ROUTES.REPORT_RESOURCE_ALLOCATION },
   { label: 'Resource Project Utilization', to: ROUTES.REPORT_RESOURCE_PROJECT_UTILIZATION },
+  { label: 'Client Service PO Hours', to: ROUTES.REPORT_CLIENT_SERVICE_PO_HOURS },
 ];
 
 const ReportsLayout = () => (

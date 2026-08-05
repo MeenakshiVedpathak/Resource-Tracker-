@@ -1,7 +1,8 @@
 import { useState, useMemo, useCallback, useRef, useEffect, memo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
-import { ArrowLeft, FileSpreadsheet, Plus, Filter } from 'lucide-react';
+import { ArrowLeft, FileSpreadsheet, Plus, Filter, Download, ChevronDown } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import {
   useTimesheetImportRows,
   useTimesheetHistory,
@@ -31,10 +32,40 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 
 const columnHelper = createColumnHelper();
+
+// Shared by both the "sort the full filtered dataset" pass (done manually,
+// since rows are paginated client-side) and each column's own sortingFn — so
+// re-sorting the already-sorted page slice inside DataTable is idempotent.
+const getSortValue = (row, columnId) => {
+  switch (columnId) {
+    case 'employee':
+      return row.employee?.full_name ?? '';
+    case 'servicePO':
+      return row.servicePO?.service_po_name ?? '';
+    case 'client':
+      return row.servicePO?.client?.client_name ?? '';
+    case 'hours_logged':
+      return Number(row.hours_logged) || 0;
+    case 'modified_hours':
+      return row.modified_hours != null ? Number(row.modified_hours) : (Number(row.hours_logged) || 0);
+    case 'category':
+      return row.servicePO?.serviceType?.serviceCategory?.name ?? '';
+    default:
+      return '';
+  }
+};
+
+const compareSortValues = (va, vb) => {
+  if (typeof va === 'string' || typeof vb === 'string') {
+    return String(va).localeCompare(String(vb));
+  }
+  return va - vb;
+};
 
 const cellInputClass = 'h-8 text-xs bg-transparent border-transparent hover:border-input focus:border-input focus:bg-background transition-colors rounded-md px-2';
 
@@ -260,6 +291,40 @@ const TimesheetImportDetail = () => {
   // client-side so only one page's worth of rows ever mounts at a time.
   const [detailPage, setDetailPage] = useState(1);
   const [detailPageSize, setDetailPageSize] = useState(50);
+  const [sorting, setSorting] = useState([]);
+
+  // Download: the Export Excel dropdown asks whether to export Hours
+  // (original hours_logged), Modified Hours (falling back to hours_logged for
+  // rows never modified), or Both — then downloads immediately on choice.
+  // Always exports the full filtered dataset, not just the current page.
+  // Uses the same DropdownMenu + XLSX.writeFile pattern as every other
+  // "Export Excel" button in the app (Dialog-based choosers were triggering a
+  // native Save As prompt here that the other export buttons don't hit).
+  const handleDownloadSheet = (mode) => {
+    if (filteredRows.length === 0) {
+      notify.error('No data to export.');
+      return;
+    }
+    const exportData = sortedRows.map((row) => {
+      const base = {
+        'Employee Name': row.employee?.full_name ?? '',
+        'Employee Code': row.employee?.employee_code ?? '',
+        'Service PO': row.servicePO?.service_po_name ?? '',
+        'Client': row.servicePO?.client?.client_name ?? '',
+        'Category': row.servicePO?.serviceType?.serviceCategory?.name ?? '',
+        'Date': formatDate(row.timesheet_date),
+      };
+      if (mode !== 'modified') base['Hours'] = row.hours_logged;
+      if (mode !== 'hours') base['Modified Hours'] = row.modified_hours != null ? row.modified_hours : row.hours_logged;
+      return base;
+    });
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Timesheet');
+    const baseName = (importRecord?.file_name ?? `import_${id}`).replace(/\.[^/.]+$/, '');
+    const suffixMap = { hours: 'hours', modified: 'modified_hours', both: 'hours_and_modified' };
+    XLSX.writeFile(wb, `${baseName}_${suffixMap[mode]}.xlsx`);
+  };
 
   const { data: activeServiceCategories = [] } = useActiveServiceCategories();
   const { data: activeServiceTypes = [] } = useActiveServiceTypes();
@@ -329,6 +394,11 @@ const TimesheetImportDetail = () => {
     [filteredRows]
   );
 
+  const filteredModifiedHours = useMemo(
+    () => filteredRows.reduce((sum, r) => sum + (Number(r.modified_hours != null ? r.modified_hours : r.hours_logged) || 0), 0),
+    [filteredRows]
+  );
+
   const isFiltered = employeeFilter !== 'all' || poFilter !== 'all' || clientFilter !== 'all'
     || serviceCategoryFilter !== 'all' || serviceTypeFilter !== 'all';
 
@@ -340,13 +410,25 @@ const TimesheetImportDetail = () => {
     poFilter !== 'all' ? 1 : 0,
   ].reduce((a, b) => a + b, 0);
 
-  const pagedRows = filteredRows.slice((detailPage - 1) * detailPageSize, detailPage * detailPageSize);
+  // Sort the full filtered set (not just the current page) so paging through
+  // sorted results is coherent — this table has no server-side sort/paginate.
+  const sortedRows = useMemo(() => {
+    const [sort] = sorting;
+    if (!sort) return filteredRows;
+    const sortedCopy = [...filteredRows].sort((a, b) => {
+      const cmp = compareSortValues(getSortValue(a, sort.id), getSortValue(b, sort.id));
+      return sort.desc ? -cmp : cmp;
+    });
+    return sortedCopy;
+  }, [filteredRows, sorting]);
+
+  const pagedRows = sortedRows.slice((detailPage - 1) * detailPageSize, detailPage * detailPageSize);
 
   const columns = useMemo(() => [
     columnHelper.accessor('employee', {
       header: 'Employee',
       size: 200,
-      enableSorting: false,
+      sortingFn: (rowA, rowB, columnId) => compareSortValues(getSortValue(rowA.original, columnId), getSortValue(rowB.original, columnId)),
       cell: (info) => (
         <EmployeeCell row={info.row.original} />
       ),
@@ -354,7 +436,7 @@ const TimesheetImportDetail = () => {
     columnHelper.accessor('servicePO', {
       header: 'Service PO',
       size: 220,
-      enableSorting: false,
+      sortingFn: (rowA, rowB, columnId) => compareSortValues(getSortValue(rowA.original, columnId), getSortValue(rowB.original, columnId)),
       cell: (info) => {
         const po = info.getValue();
         return po ? (
@@ -368,7 +450,7 @@ const TimesheetImportDetail = () => {
       id: 'client',
       header: 'Client',
       size: 160,
-      enableSorting: false,
+      sortingFn: (rowA, rowB, columnId) => compareSortValues(getSortValue(rowA.original, columnId), getSortValue(rowB.original, columnId)),
       cell: (info) => {
         const client = info.getValue();
         return client ? (
@@ -381,7 +463,7 @@ const TimesheetImportDetail = () => {
     columnHelper.accessor('hours_logged', {
       header: () => <span className="block text-right">Hours</span>,
       size: 100,
-      enableSorting: false,
+      sortingFn: (rowA, rowB, columnId) => compareSortValues(getSortValue(rowA.original, columnId), getSortValue(rowB.original, columnId)),
       cell: (info) => {
         const value = info.getValue();
         return (
@@ -394,7 +476,7 @@ const TimesheetImportDetail = () => {
     ...(canViewOriginal ? [columnHelper.accessor('modified_hours', {
       header: () => <span className="block text-right">Modified Hours</span>,
       size: 130,
-      enableSorting: false,
+      sortingFn: (rowA, rowB, columnId) => compareSortValues(getSortValue(rowA.original, columnId), getSortValue(rowB.original, columnId)),
       cell: (info) => {
         const row = info.row.original;
         const edited = editsRef.current[row.id];
@@ -416,7 +498,7 @@ const TimesheetImportDetail = () => {
       id: 'category',
       header: 'Category',
       size: 200,
-      enableSorting: false,
+      sortingFn: (rowA, rowB, columnId) => compareSortValues(getSortValue(rowA.original, columnId), getSortValue(rowB.original, columnId)),
       cell: (info) => {
         const cat = info.getValue();
         if (!cat) return <span className="text-muted-foreground">—</span>;
@@ -454,6 +536,28 @@ const TimesheetImportDetail = () => {
                 </span>
               )}
             </Button>
+            {canViewOriginal && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-1.5">
+                    <Download className="h-4 w-4" />
+                    Export Excel
+                    <ChevronDown className="ml-1 h-3 w-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => handleDownloadSheet('hours')} className="cursor-pointer">
+                    Hours
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleDownloadSheet('modified')} className="cursor-pointer">
+                    Modified Hours
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleDownloadSheet('both')} className="cursor-pointer">
+                    Both
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
             {canViewOriginal && editedCount > 0 && (
               <>
                 <span className="text-xs text-muted-foreground">
@@ -640,11 +744,16 @@ const TimesheetImportDetail = () => {
         </div>
       ) : (
         <>
-        <div className="flex justify-end mb-2">
+        <div className="flex justify-end mb-2 gap-4">
           <p className="text-sm text-muted-foreground">
             {isFiltered ? 'Filtered total' : 'Total'}: <span className="font-semibold text-foreground tabular-nums">{filteredHours.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })} hrs</span>
             {isFiltered && <span> across {filteredRows.length} rows</span>}
           </p>
+          {canViewOriginal && (
+            <p className="text-sm text-muted-foreground">
+              Modified {isFiltered ? 'filtered total' : 'total'}: <span className="font-semibold text-foreground tabular-nums">{filteredModifiedHours.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })} hrs</span>
+            </p>
+          )}
         </div>
         <DataTable
           columns={columns}
@@ -658,6 +767,8 @@ const TimesheetImportDetail = () => {
           }}
           onPageChange={setDetailPage}
           onPageSizeChange={(s) => { setDetailPageSize(s); setDetailPage(1); }}
+          sorting={sorting}
+          onSortingChange={(s) => { setSorting(s); setDetailPage(1); }}
           toolbar={null}
         />
         </>

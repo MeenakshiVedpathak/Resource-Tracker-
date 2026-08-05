@@ -74,6 +74,7 @@ const ServicePOResource = lazy(() => import('@/pages/reports/ServicePOResource')
 const ServicePOSummary = lazy(() => import('@/pages/reports/ServicePOSummary'));
 const MonthlyResourceUtilization = lazy(() => import('@/pages/reports/MonthlyResourceUtilization'));
 const ResourceProjectUtilization = lazy(() => import('@/pages/reports/ResourceProjectUtilization'));
+const ClientServicePOHoursReport = lazy(() => import('@/pages/reports/ClientServicePOHoursReport'));
 
 // ── AI Copilot (new pages, launched from the floating AI Copilot widget) ──
 const RootCauseView = lazy(() => import('@/pages/ai/RootCauseView'));
@@ -230,6 +231,7 @@ const AppRoutes = () => (
           <Route path={ROUTES.REPORT_SERVICE_PO_SUMMARY} element={<ProtectedRoute formName={FORM_NAMES.REPORT_SERVICE_PO_SUMMARY}><ServicePOSummary /></ProtectedRoute>} />
           <Route path={ROUTES.REPORT_MONTHLY_RESOURCE_UTILIZATION} element={<ProtectedRoute formName={FORM_NAMES.REPORT_MONTHLY_UTILIZATION}><MonthlyResourceUtilization /></ProtectedRoute>} />
           <Route path={ROUTES.REPORT_RESOURCE_PROJECT_UTILIZATION} element={<ProtectedRoute formName={FORM_NAMES.REPORT_RESOURCE_PROJECT_UTILIZATION}><ResourceProjectUtilization /></ProtectedRoute>} />
+          <Route path={ROUTES.REPORT_CLIENT_SERVICE_PO_HOURS} element={<ProtectedRoute formName={FORM_NAMES.REPORT_CLIENT_SERVICE_PO_HOURS}><ClientServicePOHoursReport /></ProtectedRoute>} />
         </Route>
 
         {/* AI Copilot — new, additive pages. No RBAC form rows exist for these yet (they're

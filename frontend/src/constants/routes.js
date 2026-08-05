@@ -97,6 +97,7 @@ export const ROUTES = {
   REPORT_SERVICE_PO_SUMMARY: '/reports/service-po-summary',
   REPORT_MONTHLY_RESOURCE_UTILIZATION: '/reports/monthly-resource-utilization',
   REPORT_RESOURCE_PROJECT_UTILIZATION: '/reports/resource-project-utilization',
+  REPORT_CLIENT_SERVICE_PO_HOURS: '/reports/client-service-po-hours',
 
   // Settings
   NOTIFICATIONS: '/notifications',

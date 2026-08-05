@@ -15,7 +15,7 @@ import {
   LayoutDashboard, Users, UserCog, Shield, Building2,
   FileText, FolderOpen, Clock, DollarSign,
   Tag, Layers, Sparkles, ClipboardList,
-  FileBarChart2, PieChart, CalendarRange, UserCheck, Network,
+  FileBarChart2, PieChart, CalendarRange, UserCheck, Network, Receipt,
 } from 'lucide-react';
 import { ROUTES } from '@/constants/routes';
 
@@ -42,6 +42,9 @@ export const FORM_NAMES = {
   REPORT_MONTHLY_UTILIZATION: 'Monthly Utilization',
   REPORT_RESOURCE_ALLOCATION: 'Resource Allocation',
   REPORT_RESOURCE_PROJECT_UTILIZATION: 'Resource Project Utilization',
+  // Matches the backend's actual Form Master row name (confirmed via GET /roles/forms), not
+  // the report's own page title.
+  REPORT_CLIENT_SERVICE_PO_HOURS: 'Client × Service PO',
 };
 
 // form_name (lowercased/trimmed) -> { to, icon, exact }. Icons are used by the dynamic Sidebar.
@@ -65,6 +68,7 @@ export const FORM_ROUTE_CONFIG = {
   [FORM_NAMES.REPORT_MONTHLY_UTILIZATION]: { to: ROUTES.REPORT_MONTHLY_RESOURCE_UTILIZATION, icon: CalendarRange },
   [FORM_NAMES.REPORT_RESOURCE_ALLOCATION]: { to: ROUTES.REPORT_RESOURCE_ALLOCATION, icon: PieChart },
   [FORM_NAMES.REPORT_RESOURCE_PROJECT_UTILIZATION]: { to: ROUTES.REPORT_RESOURCE_PROJECT_UTILIZATION, icon: UserCheck },
+  [FORM_NAMES.REPORT_CLIENT_SERVICE_PO_HOURS]: { to: ROUTES.REPORT_CLIENT_SERVICE_PO_HOURS, icon: Receipt },
 };
 
 const NORMALIZED_CONFIG = Object.fromEntries(

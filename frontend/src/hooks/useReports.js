@@ -89,3 +89,18 @@ export const useResourceProjectUtilization = (params) =>
     staleTime: 0,
     placeholderData: (prev) => prev,
   });
+
+// Backend requires exactly one date mode: {month, year} XOR {startDate, endDate} — the query
+// only fires once one full mode is selected, mirroring the other period-gated report hooks above.
+export const useClientServicePOHours = (params) => {
+  const hasMonthYear = !!(params?.month && params?.year);
+  const hasDateRange = !!(params?.startDate && params?.endDate);
+  return useQuery({
+    queryKey: QUERY_KEYS.REPORT_CLIENT_SERVICE_PO_HOURS(params),
+    queryFn: () => reportsApi.getClientServicePOHours(params),
+    enabled: hasMonthYear !== hasDateRange,
+    staleTime: 0,
+    placeholderData: (prev) => prev,
+    retry: false,
+  });
+};
