@@ -18,6 +18,16 @@ import apiClient from '@/services/apiClient';
 //     `entries: []` clears the whole day. Always 200, never 409/201 — there's no create-vs-update
 //     branch anymore.
 //   PUT/DELETE /employee-timesheets/entries/:id — still available for single-row edits.
+//
+//   GET /employee-timesheets/monthly?month=&year=
+//     -> { eligible, service_pos: [{ service_po_id, service_po_name, hours, po_total_hrs, children }] }
+//     Same Service PO -> hierarchy tree shape as Daily, but `hours` is the month's total per
+//     node rather than one day's. `eligible` (backend-computed, never derived client-side) gates
+//     whether the month can be edited/saved.
+//   POST /employee-timesheets/monthly — whole-month replace, same semantics as the Daily
+//     whole-day replace: body { month, year, entries: [{ service_po_id, hierarchy_node_id?,
+//     hours, description }] }, entries omitted are deleted server-side.
+//   DELETE /employee-timesheets/monthly?month=&year= — clears the Monthly Work Log for that month.
 export const employeeWorkLogApi = {
   getCalendar: ({ month, year }) =>
     apiClient.get('/employee-timesheets/calendar', { params: { month, year } }).then((r) => r.data?.data ?? []),
@@ -29,4 +39,10 @@ export const employeeWorkLogApi = {
     apiClient.post('/employee-timesheets/entries', { timesheet_date, entries }).then((r) => r.data),
   update: (id, payload) => apiClient.put(`/employee-timesheets/entries/${id}`, payload).then((r) => r.data),
   delete: (id) => apiClient.delete(`/employee-timesheets/entries/${id}`).then((r) => r.data),
+  getMonthly: ({ month, year }) =>
+    apiClient.get('/employee-timesheets/monthly', { params: { month, year } }).then((r) => r.data?.data ?? null),
+  saveMonthly: ({ month, year, entries }) =>
+    apiClient.post('/employee-timesheets/monthly', { month, year, entries }).then((r) => r.data),
+  deleteMonthly: ({ month, year }) =>
+    apiClient.delete('/employee-timesheets/monthly', { params: { month, year } }).then((r) => r.data),
 };

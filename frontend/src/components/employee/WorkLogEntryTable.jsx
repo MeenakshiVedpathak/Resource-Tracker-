@@ -24,9 +24,12 @@ const flattenSubtree = (row, relDepth, childrenByParent) => {
   return [{ ...row, relDepth }, ...kids.flatMap((k) => flattenSubtree(k, relDepth + 1, childrenByParent))];
 };
 
-const clampHours = (n) => Math.min(DAILY_HOURS_CAP, Math.max(0, n));
+const clampHours = (n, cap) => Math.min(cap, Math.max(0, n));
 
-const HourStepper = ({ value, onChange, disabled }) => {
+// `hoursCap` defaults to the Daily 12-hr cap so existing Daily callers (which don't pass it)
+// are unaffected; Monthly mode passes a much larger cap since a node's hours there is a
+// whole month's total, not one day's.
+const HourStepper = ({ value, onChange, disabled, hoursCap = DAILY_HOURS_CAP }) => {
   const num = Number(value || 0);
   const [inputValue, setInputValue] = useState(String(num));
 
@@ -36,7 +39,7 @@ const HourStepper = ({ value, onChange, disabled }) => {
 
   const commit = () => {
     const parsed = Number(inputValue);
-    const next = Number.isFinite(parsed) ? clampHours(parsed) : num;
+    const next = Number.isFinite(parsed) ? clampHours(parsed, hoursCap) : num;
     setInputValue(String(next));
     if (next !== num) onChange(next);
   };
@@ -45,7 +48,7 @@ const HourStepper = ({ value, onChange, disabled }) => {
     <div className="flex items-center gap-1">
       <button
         type="button"
-        onClick={() => onChange(clampHours(num - STEP))}
+        onClick={() => onChange(clampHours(num - STEP, hoursCap))}
         disabled={disabled}
         className="flex h-7 w-7 items-center justify-center rounded-md border text-muted-foreground transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-40"
       >
@@ -55,7 +58,7 @@ const HourStepper = ({ value, onChange, disabled }) => {
         type="number"
         step={STEP}
         min="0"
-        max={DAILY_HOURS_CAP}
+        max={hoursCap}
         value={inputValue}
         onChange={(e) => setInputValue(e.target.value)}
         onBlur={commit}
@@ -67,7 +70,7 @@ const HourStepper = ({ value, onChange, disabled }) => {
       />
       <button
         type="button"
-        onClick={() => onChange(clampHours(num + STEP))}
+        onClick={() => onChange(clampHours(num + STEP, hoursCap))}
         disabled={disabled}
         className="flex h-7 w-7 items-center justify-center rounded-md border text-muted-foreground transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-40"
       >
@@ -81,7 +84,7 @@ const HourStepper = ({ value, onChange, disabled }) => {
 // indented, "Task / Feature" being the node's name since our data has no separate module
 // concept). Defaults open since a day's entries are usually few and are the primary thing to
 // see, unlike Monthly Summary's much bigger tree.
-const ProjectGroup = ({ poRow, childrenByParent, day, edits, onCellChange, isPastOrToday }) => {
+const ProjectGroup = ({ poRow, childrenByParent, day, edits, onCellChange, isPastOrToday, hoursCap }) => {
   const [isOpen, setIsOpen] = useState(true);
 
   const nodeRows = useMemo(() => flattenSubtree(poRow, 0, childrenByParent), [poRow, childrenByParent]);
@@ -125,7 +128,7 @@ const ProjectGroup = ({ poRow, childrenByParent, day, edits, onCellChange, isPas
                 </span>
                 <div className="flex justify-end">
                   {row.editable && isPastOrToday ? (
-                    <HourStepper value={value} onChange={(v) => onCellChange(row.rowKey, day, String(v))} />
+                    <HourStepper value={value} onChange={(v) => onCellChange(row.rowKey, day, String(v))} hoursCap={hoursCap} />
                   ) : (
                     <span className="text-sm font-medium tabular-nums text-muted-foreground">{value} hrs</span>
                   )}
@@ -144,7 +147,10 @@ const ProjectGroup = ({ poRow, childrenByParent, day, edits, onCellChange, isPas
 // gets (no individual entry ids anymore, so entries are edited by node rather than listed one
 // at a time). `rows` is pre-flattened by the caller (buildMonthlySummaryRows) so the day-level
 // totals used elsewhere on the page and this table stay in sync off one computation.
-const WorkLogEntryTable = ({ rows, day, isLoading, isPastOrToday, edits, onCellChange }) => {
+const WorkLogEntryTable = ({
+  rows, day, isLoading, isPastOrToday, edits, onCellChange, hoursCap = DAILY_HOURS_CAP,
+  emptyMessage = 'No Service POs mapped for this date.',
+}) => {
   const childrenByParent = useMemo(() => buildChildrenByParent(rows), [rows]);
   const topLevelRows = useMemo(() => rows.filter((r) => (r.depth ?? 0) === 0), [rows]);
 
@@ -157,7 +163,7 @@ const WorkLogEntryTable = ({ rows, day, isLoading, isPastOrToday, edits, onCellC
   }
 
   if (rows.length === 0) {
-    return <EmptyState title="No Service POs mapped for this date." />;
+    return <EmptyState title={emptyMessage} />;
   }
 
   return (
@@ -174,6 +180,7 @@ const WorkLogEntryTable = ({ rows, day, isLoading, isPastOrToday, edits, onCellC
             edits={edits}
             onCellChange={onCellChange}
             isPastOrToday={isPastOrToday}
+            hoursCap={hoursCap}
           />
         ))}
       </div>

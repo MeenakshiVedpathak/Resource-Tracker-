@@ -22,6 +22,9 @@ export const DAILY_HOURS_CAP = 12;
 // A standard workday, used only client-side to color the calendar heatmap and the daily
 // progress bar (Completed / Partial / No Entry) — the backend has no such target field.
 export const EXPECTED_DAILY_HOURS = 8;
+// Client-side input sanity bound for Monthly mode's per-node hour field (max hours in a
+// 31-day month) — not a business rule, the backend owns actual monthly validation.
+export const MONTHLY_HOURS_CAP = 31 * 24;
 
 // Client-side messages match the backend's Joi wording exactly, so an error looks the same
 // whether it's caught here or comes back from the server. The cross-entry daily-total cap

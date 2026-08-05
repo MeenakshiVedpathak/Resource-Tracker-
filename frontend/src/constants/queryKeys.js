@@ -86,6 +86,7 @@ export const QUERY_KEYS = {
   EMPLOYEE_WORKLOG_CALENDAR: (month, year) => ['employee-worklog', 'calendar', month, year],
   EMPLOYEE_WORKLOG_DAILY: (date) => ['employee-worklog', 'daily', date],
   EMPLOYEE_WORKLOG_MONTHLY_SUMMARY: (month, year) => ['employee-worklog', 'monthly-summary', month, year],
+  EMPLOYEE_WORKLOG_MONTHLY: (month, year) => ['employee-worklog', 'monthly', month, year],
   EMPLOYEE_PROJECTS: ['employee-worklog', 'projects'],
 
   // Employee <-> Service PO mapping (Admin-side, backs the Project dropdown above)

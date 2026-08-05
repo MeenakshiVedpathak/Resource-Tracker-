@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueries, useMutation, useQueryClient } from '@tanstack/react-query';
 import { employeeWorkLogApi } from '@/api/employeeWorkLog.api';
 import { QUERY_KEYS } from '@/constants/queryKeys';
 
@@ -49,6 +49,51 @@ export const useDeleteWorkLogEntry = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: employeeWorkLogApi.delete,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['employee-worklog'] }),
+  });
+};
+
+// Monthly mode — one month's Service PO -> hierarchy tree, total hours per node instead of
+// per-day. `eligible` comes straight from the backend and is never recomputed here.
+export const useEmployeeMonthlyWorkLog = (month, year) =>
+  useQuery({
+    queryKey: QUERY_KEYS.EMPLOYEE_WORKLOG_MONTHLY(month, year),
+    queryFn: () => employeeWorkLogApi.getMonthly({ month, year }),
+    enabled: !!month && !!year,
+    placeholderData: (prev) => prev,
+  });
+
+// Fetches all 12 months of a year in parallel so the Month Selector strip can show every
+// month's total hours at once. Individual months already cached here are reused (not
+// refetched) when useEmployeeMonthlyWorkLog is later called for the same month/year.
+// `enabled` gates the actual network fetch (not the hook call itself, which always runs per
+// Rules of Hooks) — the caller passes `mode === 'monthly'` so these 12 requests only fire once
+// Monthly mode is actually opened, not on every Daily-mode page load.
+export const useEmployeeMonthlyYearOverview = (year, enabled = true) =>
+  useQueries({
+    queries: Array.from({ length: 12 }, (_, i) => {
+      const month = i + 1;
+      return {
+        queryKey: QUERY_KEYS.EMPLOYEE_WORKLOG_MONTHLY(month, year),
+        queryFn: () => employeeWorkLogApi.getMonthly({ month, year }),
+        enabled: enabled && !!year,
+        placeholderData: (prev) => prev,
+      };
+    }),
+  });
+
+export const useSaveWorkLogMonth = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: employeeWorkLogApi.saveMonthly,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['employee-worklog'] }),
+  });
+};
+
+export const useDeleteWorkLogMonth = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: employeeWorkLogApi.deleteMonthly,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['employee-worklog'] }),
   });
 };
