@@ -116,14 +116,7 @@ const ServicePOHierarchyDrawer = ({ servicePO, open, onOpenChange }) => {
           ) : isError ? (
             <p className="text-sm text-destructive">Failed to load hierarchy.</p>
           ) : (
-            <>
-              <p className="mb-3 text-xs text-muted-foreground">
-                Use <span className="font-medium">Move to…</span> to reparent a Sub PO or Child. This
-                recreates the node under its new parent, so any hours already logged against it won't
-                carry over once you Save.
-              </p>
-              <ServicePOHierarchyEditor parents={parents} onChange={setParents} />
-            </>
+            <ServicePOHierarchyEditor parents={parents} onChange={setParents} />
           )}
         </div>
 

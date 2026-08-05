@@ -173,6 +173,7 @@ const MonthlyCostList = () => {
     columnHelper.accessor((row) => formatMonthYear(row.month, row.year), {
       id: 'month_year',
       header: 'Period',
+      size: 140,
       cell: (info) => <span className="font-medium text-sm">{info.getValue()}</span>,
     }),
     columnHelper.accessor('employee_count', {

@@ -303,12 +303,12 @@ const ServicePOList = () => {
     }),
     columnHelper.accessor('service_description', {
       header: 'Description',
-      size: 300,
-      cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="280px" className="text-muted-foreground" />,
+      size: 200,
+      cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="180px" className="text-muted-foreground" />,
     }),
     columnHelper.accessor('po_value', {
       header: 'PO Value',
-      size: 160,
+      size: 130,
       cell: (info) =>
         info.getValue() != null ? (
           formatCurrency(info.getValue())
@@ -318,7 +318,7 @@ const ServicePOList = () => {
     }),
     columnHelper.accessor('invoice_frequency', {
       header: 'Invoice Freq.',
-      size: 160,
+      size: 120,
       cell: (info) => info.getValue() || <span className="text-muted-foreground">—</span>,
     }),
     columnHelper.accessor('start_date', {

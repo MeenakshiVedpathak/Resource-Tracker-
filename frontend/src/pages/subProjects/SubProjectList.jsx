@@ -110,8 +110,8 @@ const SubProjectList = () => {
     }),
     columnHelper.accessor('description', {
       header: 'Description',
-      size: 250,
-      cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="230px" className="text-muted-foreground" />,
+      size: 200,
+      cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="180px" className="text-muted-foreground" />,
     }),
     columnHelper.accessor('status', {
       header: 'Status',

@@ -106,9 +106,9 @@ const ServiceCategoryList = () => {
     }),
     columnHelper.accessor('name', {
       header: 'Category Name',
-      size: 300,
+      size: 220,
       meta: { sticky: true, left: 96 },
-      cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="280px" className="font-medium" />,
+      cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="200px" className="font-medium" />,
     }),
     columnHelper.accessor('status', {
       header: 'Status',

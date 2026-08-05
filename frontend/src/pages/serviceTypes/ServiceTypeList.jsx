@@ -126,16 +126,16 @@ const ServiceTypeList = () => {
     }),
     columnHelper.accessor('service_type_name', {
       header: 'Service Type Name',
-      size: 300,
+      size: 220,
       meta: { sticky: true, left: 96 },
-      cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="280px" className="font-medium" />,
+      cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="200px" className="font-medium" />,
     }),
     columnHelper.accessor('service_category_id', {
       header: 'Service Category',
-      size: 250,
+      size: 220,
       cell: (info) =>
         categoryMap[info.getValue()] ? (
-          <TruncatedCell value={categoryMap[info.getValue()]} maxWidth="230px" />
+          <TruncatedCell value={categoryMap[info.getValue()]} maxWidth="200px" />
         ) : (
           <span className="text-muted-foreground">—</span>
         ),
