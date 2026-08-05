@@ -129,7 +129,7 @@ const MonthlyCostDetail = () => {
     columnHelper.accessor((row) => row.employee_name ?? row.employee?.full_name, {
       id: 'employee',
       header: 'Employee',
-      size: 200,
+      size: 240,
       cell: (info) => (
         <div>
           <p className="font-medium text-sm truncate">{info.getValue() ?? '—'}</p>

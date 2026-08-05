@@ -149,7 +149,7 @@ const UserList = () => {
     }),
     columnHelper.accessor('roles', {
       header: 'Roles',
-      size: 300,
+      size: 180,
       cell: (info) => {
         // backend may return roles (array) or role (single object)
         const raw = info.getValue();
@@ -171,7 +171,7 @@ const UserList = () => {
     }),
     columnHelper.accessor('employee', {
       header: 'Employee',
-      size: 250,
+      size: 200,
       cell: (info) => {
         const emp = info.getValue();
         if (!emp) return <span className="text-muted-foreground">—</span>;
@@ -179,7 +179,7 @@ const UserList = () => {
         return (
           <button
             className="text-sm text-primary underline-offset-2 hover:underline truncate"
-            style={{ maxWidth: '230px' }}
+            style={{ maxWidth: '180px' }}
             onClick={(e) => {
               e.stopPropagation();
               if (emp.id) navigate(buildPath(ROUTES.EMPLOYEE_EDIT, { id: emp.id }));

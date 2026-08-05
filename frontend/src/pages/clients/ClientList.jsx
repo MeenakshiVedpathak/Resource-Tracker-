@@ -119,14 +119,16 @@ const ClientList = () => {
       cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="230px" className="font-medium" />,
     }),
     columnHelper.accessor('client_code', {
+      // Fixed format CLT-YYYYMMDD-XXXX (17 chars) — sized to always show it in full rather
+      // than truncating an identifier that's meant to be read/copied as-is.
       header: 'Client Code',
-      size: 150,
-      cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="130px" />,
+      size: 190,
+      cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="170px" />,
     }),
     columnHelper.accessor('industry', {
       header: 'Industry',
-      size: 250,
-      cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="230px" />,
+      size: 160,
+      cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="140px" />,
     }),
     columnHelper.accessor('status', {
       header: 'Status',

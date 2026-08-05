@@ -153,9 +153,9 @@ const TimesheetList = () => {
     }),
     columnHelper.accessor('file_name', {
       header: 'File Name',
-      size: 220,
+      size: 150,
       cell: (info) => (
-        <div className="flex items-center gap-2 max-w-[220px]">
+        <div className="flex items-center gap-2 max-w-[150px]">
           <span className="font-medium text-sm truncate" title={info.getValue()}>
             {info.getValue() ?? '—'}
           </span>
