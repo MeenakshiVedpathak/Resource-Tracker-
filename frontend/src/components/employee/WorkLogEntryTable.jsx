@@ -50,9 +50,9 @@ const HourStepper = ({ value, onChange, disabled, hoursCap = DAILY_HOURS_CAP }) 
         type="button"
         onClick={() => onChange(clampHours(num - STEP, hoursCap))}
         disabled={disabled}
-        className="flex h-7 w-7 items-center justify-center rounded-md border text-muted-foreground transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-40"
+        className="flex h-6 w-6 items-center justify-center rounded border text-muted-foreground transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-40"
       >
-        <Minus className="h-3.5 w-3.5" />
+        <Minus className="h-3 w-3" />
       </button>
       <input
         type="number"
@@ -66,15 +66,15 @@ const HourStepper = ({ value, onChange, disabled, hoursCap = DAILY_HOURS_CAP }) 
           if (e.key === 'Enter') e.currentTarget.blur();
         }}
         disabled={disabled}
-        className="w-10 rounded-md border bg-transparent text-center text-sm font-medium tabular-nums [appearance:textfield] focus:outline-none focus:ring-1 focus:ring-primary [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+        className="w-9 rounded border bg-transparent text-center text-xs font-medium tabular-nums [appearance:textfield] focus:outline-none focus:ring-1 focus:ring-primary [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
       />
       <button
         type="button"
         onClick={() => onChange(clampHours(num + STEP, hoursCap))}
         disabled={disabled}
-        className="flex h-7 w-7 items-center justify-center rounded-md border text-muted-foreground transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-40"
+        className="flex h-6 w-6 items-center justify-center rounded border text-muted-foreground transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-40"
       >
-        <Plus className="h-3.5 w-3.5" />
+        <Plus className="h-3 w-3" />
       </button>
     </div>
   );
@@ -82,10 +82,10 @@ const HourStepper = ({ value, onChange, disabled, hoursCap = DAILY_HOURS_CAP }) 
 
 // One Service PO folder — its own row plus every hierarchy node beneath it (Parent/Child,
 // indented, "Task / Feature" being the node's name since our data has no separate module
-// concept). Defaults open since a day's entries are usually few and are the primary thing to
-// see, unlike Monthly Summary's much bigger tree.
-const ProjectGroup = ({ poRow, childrenByParent, day, edits, onCellChange, isPastOrToday, hoursCap }) => {
-  const [isOpen, setIsOpen] = useState(true);
+// concept). Defaults collapsed so every mapped project's total hrs is visible in one glance
+// as a single line; expand only the one(s) you want to edit.
+const ProjectGroup = ({ poRow, childrenByParent, day, edits, onCellChange, isPastOrToday, hoursCap, defaultOpen }) => {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
 
   const nodeRows = useMemo(() => flattenSubtree(poRow, 0, childrenByParent), [poRow, childrenByParent]);
 
@@ -100,10 +100,10 @@ const ProjectGroup = ({ poRow, childrenByParent, day, edits, onCellChange, isPas
       <button
         type="button"
         onClick={() => setIsOpen((o) => !o)}
-        className="flex w-full items-center gap-2 px-4 py-2 text-left transition-colors hover:bg-muted/40"
+        className="flex w-full items-center gap-1.5 px-3 py-1.5 text-left transition-colors hover:bg-muted/40"
       >
-        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400">
-          <Folder className="h-3.5 w-3.5" />
+        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400">
+          <Folder className="h-3 w-3" />
         </span>
         <span className="flex-1 truncate text-xs font-semibold">{poRow.label}</span>
         <span className="text-xs font-semibold text-primary">{groupTotal} {groupTotal === 1 ? 'hr' : 'hrs'}</span>
@@ -118,10 +118,10 @@ const ProjectGroup = ({ poRow, childrenByParent, day, edits, onCellChange, isPas
             return (
               <div
                 key={row.rowKey}
-                className={cn('grid grid-cols-[2.5rem_1fr_7.5rem] items-center gap-2 px-4 py-0.5', i > 0 && 'border-t border-dashed')}
+                className={cn('grid grid-cols-[1.5rem_1fr_6.5rem] items-center gap-1.5 px-3 py-0.5 leading-tight', i > 0 && 'border-t border-dashed')}
               >
-                <span className="text-xs text-muted-foreground">{i + 1}</span>
-                <span className={cn('truncate text-sm', row.relDepth > 0 && 'text-muted-foreground')} style={{ paddingLeft: row.relDepth * 14 }}>
+                <span className="text-[11px] text-muted-foreground">{i + 1}</span>
+                <span className={cn('truncate text-xs', row.relDepth > 0 && 'text-muted-foreground')} style={{ paddingLeft: row.relDepth * 12 }}>
                   {row.relDepth > 0 && <span className="mr-1 text-muted-foreground">{'└'}</span>}
                   {row.label}
                   {isDirty && <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-amber-400" title="Unsaved change" />}
@@ -130,7 +130,7 @@ const ProjectGroup = ({ poRow, childrenByParent, day, edits, onCellChange, isPas
                   {row.editable && isPastOrToday ? (
                     <HourStepper value={value} onChange={(v) => onCellChange(row.rowKey, day, String(v))} hoursCap={hoursCap} />
                   ) : (
-                    <span className="text-sm font-medium tabular-nums text-muted-foreground">{value} hrs</span>
+                    <span className="text-xs font-medium tabular-nums text-muted-foreground">{value} hrs</span>
                   )}
                 </div>
               </div>
@@ -167,10 +167,10 @@ const WorkLogEntryTable = ({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       <h3 className="text-xs font-semibold">Work Log Entries</h3>
 
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         {topLevelRows.map((row) => (
           <ProjectGroup
             key={row.rowKey}
@@ -181,6 +181,7 @@ const WorkLogEntryTable = ({
             onCellChange={onCellChange}
             isPastOrToday={isPastOrToday}
             hoursCap={hoursCap}
+            defaultOpen={topLevelRows.length === 1}
           />
         ))}
       </div>
