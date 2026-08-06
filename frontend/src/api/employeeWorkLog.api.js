@@ -9,8 +9,12 @@ import apiClient from '@/services/apiClient';
 //     -> { date, service_pos: [{ service_po_id, service_po_name, hours, po_total_hrs, children }] }
 //     (same shape as monthly-summary's per-day entry, just for one date — no individual entry
 //     ids are exposed anymore, so entries can't be listed/edited/deleted one at a time)
-//   GET  /employee-timesheets/monthly-summary?month=&year=
-//     -> [{ date, service_pos: [{ service_po_id, service_po_name, hours, po_total_hrs, children }] }]
+//   GET  /employee-timesheets/monthly-summary?month=&year=&viewType={day|month}
+//     viewType is optional (defaults server-side to 'day') and only changes the response shape:
+//     day   -> [{ date, service_pos: [{ service_po_id, service_po_name, hours, po_total_hrs, children }] }]
+//     month -> { service_pos: [{ service_po_id, service_po_name, hours }], total_hours }
+//     (no dates, no hierarchy children — see MonthlySummaryMonthView below)
+//     422 if month/year/viewType is missing or invalid; message is shown via toast as-is.
 //   POST /employee-timesheets/entries — whole-day replace, not per-row create. Body is
 //     { timesheet_date, entries: [{ service_po_id, sub_project_id?, hierarchy_node_id?, hours,
 //     description }] }; any existing entry for that date not present in `entries` is deleted
@@ -33,8 +37,10 @@ export const employeeWorkLogApi = {
     apiClient.get('/employee-timesheets/calendar', { params: { month, year } }).then((r) => r.data?.data ?? []),
   getDaily: (date) =>
     apiClient.get('/employee-timesheets/daily', { params: { date } }).then((r) => r.data?.data ?? null),
-  getMonthlySummary: ({ month, year }) =>
-    apiClient.get('/employee-timesheets/monthly-summary', { params: { month, year } }).then((r) => r.data?.data ?? []),
+  getMonthlySummary: ({ month, year, viewType }) =>
+    apiClient
+      .get('/employee-timesheets/monthly-summary', { params: { month, year, ...(viewType ? { viewType } : {}) } })
+      .then((r) => r.data?.data ?? (viewType === 'month' ? { service_pos: [], total_hours: 0 } : [])),
   saveDay: ({ timesheet_date, entries }) =>
     apiClient.post('/employee-timesheets/entries', { timesheet_date, entries }).then((r) => r.data),
   update: (id, payload) => apiClient.put(`/employee-timesheets/entries/${id}`, payload).then((r) => r.data),

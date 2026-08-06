@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import dayjs from 'dayjs';
 import * as XLSX from 'xlsx';
 import { useQueryClient } from '@tanstack/react-query';
@@ -9,8 +9,10 @@ import { extractApiError } from '@/services/apiClient';
 import { buildMonthlySummaryRows, buildDayEntries, validateDayEntries } from '@/utils/employeeMonthlySummary';
 import MonthNavigator from '@/components/employee/MonthNavigator';
 import SummaryTable from '@/components/employee/SummaryTable';
+import MonthlySummaryMonthTable from '@/components/employee/MonthlySummaryMonthTable';
 import { DAILY_HOURS_CAP } from '@/components/employee/WorkLogEntryModal';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 // Mirrors SummaryTable's own cell/total computation so the export matches exactly what's on
 // screen, including any unsaved edits — not a separate re-fetch of server values.
@@ -58,9 +60,14 @@ const MonthlySummaryPage = () => {
   const today = dayjs().startOf('day');
   const [month, setMonth] = useState(today.month() + 1);
   const [year, setYear] = useState(today.year());
+  // 'day' (default) keeps today's calendar/day rendering untouched; 'month' swaps in the flat
+  // Service PO totals table. Toggling only changes viewType on the same month/year — the
+  // underlying useQuery key includes viewType, so it refetches fresh instead of reusing stale data.
+  const [viewMode, setViewMode] = useState('day');
   // { [rowKey]: { [day]: hoursString } } — unsaved cell overrides, cleared on save/month change.
   // rowKey is `po:<servicePOId>` or `h:<hierarchyId>` (see buildMonthlySummaryRows) since a
-  // hierarchy node and a Service PO don't share an id space.
+  // hierarchy node and a Service PO don't share an id space. Day View only — Month View has no
+  // per-day cells to edit.
   const [edits, setEdits] = useState({});
   const [isSaving, setIsSaving] = useState(false);
 
@@ -68,13 +75,25 @@ const MonthlySummaryPage = () => {
   const qc = useQueryClient();
 
   const {
-    data: summary, isLoading, isError,
-  } = useEmployeeMonthlySummary(month, year);
+    data: summary, isLoading, isError, error: summaryError,
+  } = useEmployeeMonthlySummary(month, year, viewMode);
 
   const saveDayMutation = useSaveWorkLogDay();
 
-  const rows = useMemo(() => buildMonthlySummaryRows(summary), [summary]);
+  // Day View's own tree-flattening; a no-op call in Month View since `summary` is then the flat
+  // { service_pos, total_hours } shape, not the day-entries array this expects.
+  const rows = useMemo(() => (viewMode === 'day' ? buildMonthlySummaryRows(summary) : []), [summary, viewMode]);
   const editedCount = Object.values(edits).reduce((n, byDay) => n + Object.keys(byDay).length, 0);
+
+  // Month View has no inline error banner of its own (unlike Day View below), so its fetch
+  // errors — this endpoint only 422s on a missing/invalid month, year, or viewType — surface via
+  // the same toast used for save errors, showing the server's message as-is.
+  useEffect(() => {
+    if (viewMode === 'month' && isError) {
+      showError(extractApiError(summaryError));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewMode, isError, summaryError]);
 
   const handleMonthChange = (m, y) => {
     setMonth(m);
@@ -140,21 +159,33 @@ const MonthlySummaryPage = () => {
         <div>
           <h1 className="text-xl font-bold tracking-tight">Monthly Summary</h1>
           <p className="text-sm text-muted-foreground">
-            Hours logged per Service/Project for each day of the month.
+            {viewMode === 'day'
+              ? 'Hours logged per Service/Project for each day of the month.'
+              : 'Total hours logged per Service/Project for the whole month.'}
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => exportSummaryToExcel(rows, edits, month, year)}
-          disabled={isLoading || rows.length === 0}
-        >
-          <Download className="mr-1.5 h-4 w-4" />
-          Export Excel
-        </Button>
+        <div className="flex items-center gap-3">
+          <Tabs value={viewMode} onValueChange={setViewMode}>
+            <TabsList>
+              <TabsTrigger value="day">Day View</TabsTrigger>
+              <TabsTrigger value="month">Month View</TabsTrigger>
+            </TabsList>
+          </Tabs>
+          {viewMode === 'day' && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => exportSummaryToExcel(rows, edits, month, year)}
+              disabled={isLoading || rows.length === 0}
+            >
+              <Download className="mr-1.5 h-4 w-4" />
+              Export Excel
+            </Button>
+          )}
+        </div>
       </div>
 
-      {isError && (
+      {viewMode === 'day' && isError && (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
           Unable to load your monthly summary. Please try again.
         </div>
@@ -162,28 +193,35 @@ const MonthlySummaryPage = () => {
 
       <MonthNavigator month={month} year={year} onChange={handleMonthChange} />
 
-      <SummaryTable
-        month={month}
-        year={year}
-        rows={rows}
-        isLoading={isLoading}
-        edits={edits}
-        onCellChange={handleCellChange}
-      />
+      {viewMode === 'day' ? (
+        <SummaryTable
+          month={month}
+          year={year}
+          rows={rows}
+          isLoading={isLoading}
+          edits={edits}
+          onCellChange={handleCellChange}
+        />
+      ) : (
+        <MonthlySummaryMonthTable data={summary} isLoading={isLoading} />
+      )}
 
-      {/* Save sits last — after the table, only relevant once something's actually changed. */}
-      <div className="flex items-center justify-end gap-3 rounded-xl border bg-card px-4 py-3">
-        <span className="mr-auto text-xs text-muted-foreground">
-          {editedCount > 0 ? `${editedCount} unsaved change${editedCount === 1 ? '' : 's'}` : 'No changes to save'}
-        </span>
-        <Button variant="outline" size="sm" onClick={handleDiscard} disabled={editedCount === 0 || isSaving}>
-          Discard
-        </Button>
-        <Button size="sm" onClick={handleSave} disabled={editedCount === 0 || isSaving}>
-          <Save className="mr-1.5 h-4 w-4" />
-          {isSaving ? 'Saving…' : 'Save'}
-        </Button>
-      </div>
+      {/* Save sits last — after the table, only relevant once something's actually changed.
+          Month View has no per-day cells, so there's nothing here to save/discard. */}
+      {viewMode === 'day' && (
+        <div className="flex items-center justify-end gap-3 rounded-xl border bg-card px-4 py-3">
+          <span className="mr-auto text-xs text-muted-foreground">
+            {editedCount > 0 ? `${editedCount} unsaved change${editedCount === 1 ? '' : 's'}` : 'No changes to save'}
+          </span>
+          <Button variant="outline" size="sm" onClick={handleDiscard} disabled={editedCount === 0 || isSaving}>
+            Discard
+          </Button>
+          <Button size="sm" onClick={handleSave} disabled={editedCount === 0 || isSaving}>
+            <Save className="mr-1.5 h-4 w-4" />
+            {isSaving ? 'Saving…' : 'Save'}
+          </Button>
+        </div>
+      )}
     </div>
   );
 };

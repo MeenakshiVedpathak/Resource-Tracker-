@@ -21,10 +21,13 @@ export const useEmployeeDailyWorkLog = (date) =>
     placeholderData: (prev) => prev,
   });
 
-export const useEmployeeMonthlySummary = (month, year) =>
+// viewType 'day' (default) keeps the untouched per-day/hierarchy shape; 'month' returns a flat
+// { service_pos, total_hours } object instead. Each viewType gets its own query key so toggling
+// re-fetches fresh (no placeholderData carryover) and never renders the other view's stale data.
+export const useEmployeeMonthlySummary = (month, year, viewType = 'day') =>
   useQuery({
-    queryKey: QUERY_KEYS.EMPLOYEE_WORKLOG_MONTHLY_SUMMARY(month, year),
-    queryFn: () => employeeWorkLogApi.getMonthlySummary({ month, year }),
+    queryKey: QUERY_KEYS.EMPLOYEE_WORKLOG_MONTHLY_SUMMARY(month, year, viewType),
+    queryFn: () => employeeWorkLogApi.getMonthlySummary({ month, year, viewType }),
   });
 
 // Whole-day replace — one call saves every row for a single date at once. See
