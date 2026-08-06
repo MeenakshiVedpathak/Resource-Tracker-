@@ -60,9 +60,10 @@ const MonthlySummaryPage = () => {
   const today = dayjs().startOf('day');
   const [month, setMonth] = useState(today.month() + 1);
   const [year, setYear] = useState(today.year());
-  // 'day' (default) keeps today's calendar/day rendering untouched; 'month' swaps in the flat
-  // Service PO totals table. Toggling only changes viewType on the same month/year — the
-  // underlying useQuery key includes viewType, so it refetches fresh instead of reusing stale data.
+  // 'day' (default) keeps today's calendar/day rendering untouched; 'month' swaps in the
+  // expandable Service PO hierarchy table, aggregated for the whole month. Toggling only changes
+  // viewType on the same month/year — the underlying useQuery key includes viewType, so it
+  // refetches fresh instead of reusing stale data.
   const [viewMode, setViewMode] = useState('day');
   // { [rowKey]: { [day]: hoursString } } — unsaved cell overrides, cleared on save/month change.
   // rowKey is `po:<servicePOId>` or `h:<hierarchyId>` (see buildMonthlySummaryRows) since a
@@ -80,8 +81,9 @@ const MonthlySummaryPage = () => {
 
   const saveDayMutation = useSaveWorkLogDay();
 
-  // Day View's own tree-flattening; a no-op call in Month View since `summary` is then the flat
-  // { service_pos, total_hours } shape, not the day-entries array this expects.
+  // Day View's own tree-flattening; a no-op call in Month View since `summary` is then the
+  // { service_pos, total_hours } hierarchy shape, not the day-entries array this expects —
+  // MonthlySummaryMonthTable does its own flattening of that shape internally.
   const rows = useMemo(() => (viewMode === 'day' ? buildMonthlySummaryRows(summary) : []), [summary, viewMode]);
   const editedCount = Object.values(edits).reduce((n, byDay) => n + Object.keys(byDay).length, 0);
 

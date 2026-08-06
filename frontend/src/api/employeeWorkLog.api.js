@@ -12,8 +12,9 @@ import apiClient from '@/services/apiClient';
 //   GET  /employee-timesheets/monthly-summary?month=&year=&viewType={day|month}
 //     viewType is optional (defaults server-side to 'day') and only changes the response shape:
 //     day   -> [{ date, service_pos: [{ service_po_id, service_po_name, hours, po_total_hrs, children }] }]
-//     month -> { service_pos: [{ service_po_id, service_po_name, hours }], total_hours }
-//     (no dates, no hierarchy children — see MonthlySummaryMonthView below)
+//     month -> { service_pos: [{ service_po_id, service_po_name, hours, children }], total_hours }
+//     (no dates, but the same Parent/Child hierarchy as Day View — a node's `hours` is already
+//     rolled up server-side, never re-summed client-side; see MonthlySummaryMonthView below)
 //     422 if month/year/viewType is missing or invalid; message is shown via toast as-is.
 //   POST /employee-timesheets/entries — whole-day replace, not per-row create. Body is
 //     { timesheet_date, entries: [{ service_po_id, sub_project_id?, hierarchy_node_id?, hours,
@@ -37,9 +38,12 @@ export const employeeWorkLogApi = {
     apiClient.get('/employee-timesheets/calendar', { params: { month, year } }).then((r) => r.data?.data ?? []),
   getDaily: (date) =>
     apiClient.get('/employee-timesheets/daily', { params: { date } }).then((r) => r.data?.data ?? null),
-  getMonthlySummary: ({ month, year, viewType }) =>
+  getMonthlySummary: ({ month, year, viewType, signal }) =>
     apiClient
-      .get('/employee-timesheets/monthly-summary', { params: { month, year, ...(viewType ? { viewType } : {}) } })
+      .get('/employee-timesheets/monthly-summary', {
+        params: { month, year, ...(viewType ? { viewType } : {}) },
+        signal,
+      })
       .then((r) => r.data?.data ?? (viewType === 'month' ? { service_pos: [], total_hours: 0 } : [])),
   saveDay: ({ timesheet_date, entries }) =>
     apiClient.post('/employee-timesheets/entries', { timesheet_date, entries }).then((r) => r.data),

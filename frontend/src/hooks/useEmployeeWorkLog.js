@@ -21,13 +21,15 @@ export const useEmployeeDailyWorkLog = (date) =>
     placeholderData: (prev) => prev,
   });
 
-// viewType 'day' (default) keeps the untouched per-day/hierarchy shape; 'month' returns a flat
-// { service_pos, total_hours } object instead. Each viewType gets its own query key so toggling
-// re-fetches fresh (no placeholderData carryover) and never renders the other view's stale data.
+// viewType 'day' (default) keeps the untouched per-day/hierarchy shape; 'month' returns the same
+// Service PO -> Parent -> Child hierarchy aggregated for the whole month instead. Each viewType
+// gets its own query key so toggling re-fetches fresh (no placeholderData carryover) and never
+// renders the other view's stale data. The `signal` React Query hands `queryFn` is forwarded to
+// axios so a fast double-toggle aborts the superseded request instead of letting it race.
 export const useEmployeeMonthlySummary = (month, year, viewType = 'day') =>
   useQuery({
     queryKey: QUERY_KEYS.EMPLOYEE_WORKLOG_MONTHLY_SUMMARY(month, year, viewType),
-    queryFn: () => employeeWorkLogApi.getMonthlySummary({ month, year, viewType }),
+    queryFn: ({ signal }) => employeeWorkLogApi.getMonthlySummary({ month, year, viewType, signal }),
   });
 
 // Whole-day replace — one call saves every row for a single date at once. See

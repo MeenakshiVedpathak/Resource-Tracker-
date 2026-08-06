@@ -71,6 +71,38 @@ export const buildMonthlySummaryRows = (dayEntries = []) => {
   return rows;
 };
 
+// Month View — { service_pos: [{ service_po_id, service_po_name, hours, children }], total_hours }.
+// Same Parent/Child hierarchy shape as Day View's per-day nodes, just one aggregate for the whole
+// month instead of per-day. Every node's `hours` is already rolled up server-side (a PARENT's
+// hours already include its Children's), so this only flattens the tree into row-per-node for
+// the expandable table — it never re-sums or re-derives a total.
+const flattenMonthHierarchy = (nodes = [], depth, ancestorKeys) => {
+  const rows = [];
+  nodes.forEach((node) => {
+    const hasChildren = (node.children?.length ?? 0) > 0;
+    const rowKey = `h:${node.hierarchy_id}`;
+    rows.push({
+      rowKey, label: node.name, depth, hasChildren, hours: Number(node.hours || 0), ancestorKeys,
+    });
+    rows.push(...flattenMonthHierarchy(node.children, depth + 1, [...ancestorKeys, rowKey]));
+  });
+  return rows;
+};
+
+export const buildMonthlySummaryMonthRows = (data) => {
+  const servicePos = data?.service_pos ?? [];
+  const rows = [];
+  servicePos.forEach((po) => {
+    const hasChildren = (po.children?.length ?? 0) > 0;
+    const rowKey = `po:${po.service_po_id}`;
+    rows.push({
+      rowKey, label: po.service_po_name, depth: 0, hasChildren, hours: Number(po.hours || 0), ancestorKeys: [],
+    });
+    rows.push(...flattenMonthHierarchy(po.children, 1, [rowKey]));
+  });
+  return rows;
+};
+
 // POST /employee-timesheets/entries is a whole-day replace: any existing row for the date not
 // present in `entries` gets deleted server-side. So the payload for one date must carry every
 // row that should survive — edited cells overlaid on top of each row's already-loaded
