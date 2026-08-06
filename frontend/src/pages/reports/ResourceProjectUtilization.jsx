@@ -129,11 +129,12 @@ const exportToExcel = (rows, monthLabel) => {
 };
 
 const now = new Date();
+const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
 
 const ResourceProjectUtilization = () => {
   const [monthYear, setMonthYear] = useState({
-    month: now.getMonth() + 1,
-    year: now.getFullYear(),
+    month: prevMonth.getMonth() + 1,
+    year: prevMonth.getFullYear(),
   });
   const [employeeIds, setEmployeeIds] = useState([]);
   const [clientIds, setClientIds] = useState([]);

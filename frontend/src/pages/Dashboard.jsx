@@ -754,6 +754,7 @@ import { formatCurrency, formatHours, formatDate } from '@/utils/formatters';
 
 /* ─── constants ──────────────────────────────────────────────────────────── */
 const now = new Date();
+const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
 const currentFY = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
 const FY_OPTIONS = Array.from({ length: 5 }, (_, i) => currentFY - 2 + i).map((fy) => ({
   value: fy,
@@ -1029,7 +1030,7 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const { user, accessibleForms, accessibleFormsLoaded, isPlatformAdmin } = useAuth();
   const [fiscalYear, setFiscalYear]           = useState(currentFY);
-  const [bottomMonthYear, setBottomMonthYear] = useState({ month: now.getMonth() + 1, year: now.getFullYear() });
+  const [bottomMonthYear, setBottomMonthYear] = useState({ month: prevMonth.getMonth() + 1, year: prevMonth.getFullYear() });
   const [quarter, setQuarter]                 = useState(null);
   const [employeeId, setEmployeeId]           = useState('');
   const [clientId, setClientId]               = useState('');

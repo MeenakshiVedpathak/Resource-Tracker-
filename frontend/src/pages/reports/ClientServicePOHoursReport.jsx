@@ -17,10 +17,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
-import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { cn } from '@/utils/cn';
 
 const now = new Date();
+const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
 
 const STATUS_OPTIONS = [
   { label: 'All', value: 'all' },
@@ -96,12 +96,10 @@ const SortableHeader = ({ label, column, sortBy, sortOrder, onSort, align }) => 
 };
 
 const ClientServicePOHoursReport = () => {
-  const [filterMode, setFilterMode] = useState('monthYear'); // 'monthYear' | 'dateRange'
   const [monthYear, setMonthYear] = useState({
-    month: now.getMonth() + 1,
-    year: now.getFullYear(),
+    month: prevMonth.getMonth() + 1,
+    year: prevMonth.getFullYear(),
   });
-  const [dateRange, setDateRange] = useState(null);
 
   const [clientId, setClientId] = useState('all');
   const [poId, setPoId] = useState('all');
@@ -141,9 +139,7 @@ const ClientServicePOHoursReport = () => {
   };
 
   const params = {
-    ...(filterMode === 'monthYear'
-      ? monthYear && { month: monthYear.month, year: monthYear.year }
-      : dateRange?.startDate && dateRange?.endDate && { startDate: dateRange.startDate, endDate: dateRange.endDate }),
+    ...(monthYear && { month: monthYear.month, year: monthYear.year }),
     hoursSource,
     ...(clientId !== 'all' && { clientId }),
     ...(poId !== 'all' && { poId }),
@@ -152,13 +148,9 @@ const ClientServicePOHoursReport = () => {
     ...(status !== 'all' && { status }),
   };
 
-  const periodReady = filterMode === 'monthYear'
-    ? !!(monthYear?.month && monthYear?.year)
-    : !!(dateRange?.startDate && dateRange?.endDate);
+  const periodReady = !!(monthYear?.month && monthYear?.year);
 
-  const periodLabel = filterMode === 'monthYear'
-    ? (monthYear ? formatDate(`${monthYear.year}-${String(monthYear.month).padStart(2, '0')}-01`, 'MMMM YYYY') : '')
-    : (periodReady ? `${formatDate(dateRange.startDate)} to ${formatDate(dateRange.endDate)}` : '');
+  const periodLabel = monthYear ? formatDate(`${monthYear.year}-${String(monthYear.month).padStart(2, '0')}-01`, 'MMMM YYYY') : '';
 
   const { data, isPending, isError, error } = useClientServicePOHours(params);
   const clientGroups = Array.isArray(data?.data) ? data.data : [];
@@ -204,7 +196,6 @@ const ClientServicePOHoursReport = () => {
   }, [sortedClientGroups, debouncedSearch]);
 
   const grandTotal = visibleClientGroups.reduce((sum, g) => sum + (Number(g.total_hrs_of_client) || 0), 0);
-  const periodIncomplete = filterMode === 'dateRange' && !periodReady;
   const errorMessage = isError ? extractApiError(error) : null;
   const showLoading = periodReady && isPending;
 
@@ -294,49 +285,18 @@ const ClientServicePOHoursReport = () => {
       {/* Collapsible filter panel */}
       <div className={`overflow-hidden transition-all duration-500 ease-in-out ${filtersOpen ? 'max-h-[480px] opacity-100 mb-5' : 'max-h-0 opacity-0 mb-0'}`}>
         <div className="rounded-lg border bg-muted/30 p-4">
-          {/* Period mode toggle */}
-          <div className="flex flex-col gap-1.5 mb-4">
-            <Label className="text-xs">Period <span className="text-destructive">*</span></Label>
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-0.5 p-0.5 rounded-xl bg-muted border shrink-0">
-                {[
-                  { value: 'monthYear', label: 'Month & Year' },
-                  { value: 'dateRange', label: 'Date Range' },
-                ].map(({ value, label }) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setFilterMode(value)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 whitespace-nowrap ${
-                      filterMode === value ? 'bg-card shadow-sm text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-
-              {filterMode === 'monthYear' ? (
-                <MonthYearPicker
-                  value={monthYear}
-                  onChange={setMonthYear}
-                  placeholder="Select month"
-                  clearable={false}
-                />
-              ) : (
-                <DateRangePicker
-                  value={dateRange}
-                  onChange={setDateRange}
-                  placeholder="Select date range"
-                />
-              )}
-            </div>
-            {periodIncomplete && (
-              <p className="text-xs text-destructive">Select both a start and end date.</p>
-            )}
-          </div>
-
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full">
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs">Month &amp; Year <span className="text-destructive">*</span></Label>
+              <MonthYearPicker
+                value={monthYear}
+                onChange={setMonthYear}
+                placeholder="Select month"
+                clearable={false}
+                className="w-full"
+              />
+            </div>
+
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs">Client</Label>
               <SearchableSelect
@@ -430,7 +390,7 @@ const ClientServicePOHoursReport = () => {
         </div>
 
         {!periodReady && (
-          <div className="px-4 py-8 text-center text-sm text-muted-foreground">Select both a start and end date to load the report.</div>
+          <div className="px-4 py-8 text-center text-sm text-muted-foreground">Select a month to load the report.</div>
         )}
 
         {showLoading && (

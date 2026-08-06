@@ -51,9 +51,10 @@ const MonthlyCostList = () => {
   const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
 
   const [calcOpen, setCalcOpen] = useState(false);
-  const [calcMonthYear, setCalcMonthYear] = useState({
-    month: new Date().getMonth() + 1,
-    year: new Date().getFullYear(),
+  const [calcMonthYear, setCalcMonthYear] = useState(() => {
+    const now = new Date();
+    const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    return { month: prevMonth.getMonth() + 1, year: prevMonth.getFullYear() };
   });
   const [sorting, setSorting] = useState([]);
 

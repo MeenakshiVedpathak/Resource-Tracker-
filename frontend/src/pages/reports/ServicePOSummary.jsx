@@ -59,6 +59,7 @@ const exportToExcel = (rows) => {
 };
 
 const now = new Date();
+const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
 
 const ValueCell = ({ value, format = 'currency' }) => {
   if (value == null || value === '') return <span className="text-muted-foreground">—</span>;
@@ -165,8 +166,8 @@ const SummaryItem = ({ label, value, highlight = false, negative = false }) => (
 
 const ServicePOSummary = () => {
   const [monthYear, setMonthYear] = useState({
-    month: now.getMonth() + 1,
-    year: now.getFullYear(),
+    month: prevMonth.getMonth() + 1,
+    year: prevMonth.getFullYear(),
   });
   const [clientId, setClientId] = useState('all');
   const [serviceTypeId, setServiceTypeId] = useState('all');

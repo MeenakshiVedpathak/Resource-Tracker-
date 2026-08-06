@@ -149,7 +149,7 @@ const ProjectGroup = ({ poRow, childrenByParent, day, edits, onCellChange, isPas
 // totals used elsewhere on the page and this table stay in sync off one computation.
 const WorkLogEntryTable = ({
   rows, day, isLoading, isPastOrToday, edits, onCellChange, hoursCap = DAILY_HOURS_CAP,
-  emptyMessage = 'No Service POs mapped for this date.',
+  emptyMessage = 'No Service POs mapped.',
 }) => {
   const childrenByParent = useMemo(() => buildChildrenByParent(rows), [rows]);
   const topLevelRows = useMemo(() => rows.filter((r) => (r.depth ?? 0) === 0), [rows]);

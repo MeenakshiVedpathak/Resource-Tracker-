@@ -19,7 +19,7 @@ import ChangePasswordDialog from '@/components/profile/ChangePasswordDialog';
 import { cn } from '@/utils/cn';
 
 const UserMenu = () => {
-  const { user, logout } = useAuth();
+  const { user, company, logout } = useAuth();
   const navigate = useNavigate();
   const { error } = useNotification();
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
@@ -53,6 +53,9 @@ const UserMenu = () => {
           </Avatar>
           <div className="hidden sm:block text-left">
             <p className="text-xs font-semibold leading-none text-foreground">{displayName}</p>
+            {company?.company_name && (
+              <p className="text-[10px] text-muted-foreground mt-0.5 font-medium">{company.company_name}</p>
+            )}
             {roleName && <p className="text-[10px] text-muted-foreground mt-0.5 font-medium">{roleName}</p>}
           </div>
           <ChevronDown className="h-3 w-3 text-muted-foreground hidden sm:block ml-0.5" />
@@ -62,6 +65,9 @@ const UserMenu = () => {
         <DropdownMenuLabel className="font-normal">
           <p className="text-sm font-medium">{displayName}</p>
           <p className="text-xs text-muted-foreground">{email}</p>
+          {company?.company_name && (
+            <p className="text-xs text-muted-foreground mt-0.5">{company.company_name}</p>
+          )}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => setIsChangePasswordOpen(true)}>

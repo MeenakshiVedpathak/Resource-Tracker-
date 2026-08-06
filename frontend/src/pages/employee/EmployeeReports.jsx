@@ -63,8 +63,8 @@ const EmployeeReports = () => {
 
   const [reportType, setReportType] = useState('daily');
   const [date, setDate] = useState(dayjs().format('YYYY-MM-DD'));
-  const now = dayjs();
-  const [monthYear, setMonthYear] = useState({ month: now.month() + 1, year: now.year() });
+  const prevMonth = dayjs().subtract(1, 'month');
+  const [monthYear, setMonthYear] = useState({ month: prevMonth.month() + 1, year: prevMonth.year() });
   const [range, setRange] = useState(null);
 
   // Only the active report type's params are passed for real — the other two hooks stay

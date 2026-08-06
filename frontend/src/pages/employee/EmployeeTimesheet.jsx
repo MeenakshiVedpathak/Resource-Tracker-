@@ -387,7 +387,7 @@ const EmployeeTimesheet = () => {
                 edits={monthlyEdits}
                 onCellChange={handleMonthlyCellChange}
                 hoursCap={MONTHLY_HOURS_CAP}
-                emptyMessage="No Service POs mapped for this month."
+                emptyMessage="No Service POs mapped."
               />
             </div>
           </div>

@@ -184,11 +184,12 @@ const columns = [
 ];
 
 const now = new Date();
+const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
 
 const ResourceAllocation = () => {
   const [monthYear, setMonthYear] = useState({
-    month: now.getMonth() + 1,
-    year: now.getFullYear(),
+    month: prevMonth.getMonth() + 1,
+    year: prevMonth.getFullYear(),
   });
   const [employeeId, setEmployeeId] = useState('all');
   const [poId, setPoId] = useState('all');
