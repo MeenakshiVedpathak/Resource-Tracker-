@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
-import * as XLSX from 'xlsx';
 import { Trash2, Calculator, Download, Upload } from 'lucide-react';
 import { useMonthlyCostSummary } from '@/hooks/useReports';
 import { useDeleteMonthlyCostPeriods, useCalculateMonthlyCosts } from '@/hooks/useMonthlyCosts';
@@ -10,6 +9,7 @@ import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import { buildPath, ROUTES } from '@/constants/routes';
 import { formatCurrency, formatMonthYear } from '@/utils/formatters';
+import { downloadMonthlyCostSample } from '@/utils/monthlyCostSample';
 import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
@@ -80,18 +80,6 @@ const MonthlyCostList = () => {
     setSelectedKeys((prev) => (prev.includes(key) ? prev.filter((x) => x !== key) : [...prev, key]));
 
   const clearSelection = () => setSelectedKeys([]);
-
-  const handleDownloadSample = () => {
-    const wsData = [
-      ['Employee Code', 'Name', 'Month Year', 'Salary Cost', 'Ops Cost', 'Total Cost', 'Billable Cost'],
-      ['EMP-0201', 'Rajdoot Herlekar', 'Jul 2026', 284.09, 0, 422.88, 0],
-    ];
-    const ws = XLSX.utils.aoa_to_sheet(wsData);
-    ws['!cols'] = [{ wch: 16 }, { wch: 25 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 14 }, { wch: 14 }];
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'MonthlyCosts');
-    XLSX.writeFile(wb, 'MonthlyCost_Sample.xlsx');
-  };
 
   const handleCalculate = () => {
     calculateMutation.mutate(
@@ -216,7 +204,7 @@ const MonthlyCostList = () => {
         description="Uploaded and calculated cost periods, grouped by month"
         actions={
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={handleDownloadSample}>
+            <Button variant="outline" size="sm" onClick={downloadMonthlyCostSample}>
               <Download className="mr-1.5 h-4 w-4" />
               Download Sample
             </Button>

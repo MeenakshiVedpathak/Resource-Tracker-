@@ -2,14 +2,17 @@ import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDropzone } from 'react-dropzone';
 import * as XLSX from 'xlsx';
+import dayjs from 'dayjs';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Download, Upload, FileSpreadsheet, CheckCircle2, XCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { ArrowLeft, Download, Upload, FileSpreadsheet, CheckCircle2, XCircle, AlertCircle, Loader2, RefreshCw } from 'lucide-react';
 import { useImportMonthlyCosts } from '@/hooks/useMonthlyCosts';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import { ROUTES } from '@/constants/routes';
-import { formatCurrency } from '@/utils/formatters';
+import { formatCurrency, formatMonthYear } from '@/utils/formatters';
+import { downloadMonthlyCostSample, fetchAllRecordsForPeriod } from '@/utils/monthlyCostSample';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import PageHeader from '@/components/common/PageHeader';
@@ -18,6 +21,8 @@ import PageHeader from '@/components/common/PageHeader';
 // Column name aliases — maps header spellings to canonical field names
 // ---------------------------------------------------------------------------
 const COLUMN_MAP = {
+  'employee code':         'employee_code',
+  'employee_code':         'employee_code',
   'name':                  'employee_name',
   'employee name':         'employee_name',
   'employee_name':         'employee_name',
@@ -101,11 +106,16 @@ const toNum = (v) => {
   return isNaN(n) ? null : n;
 };
 
-const validateRow = (row, index) => {
+const computeRowErrors = (row) => {
   const errors = [];
   if (!row.employee_name?.trim()) errors.push('Missing Name');
   if (!row.month_year)            errors.push('Missing / unreadable Month Year');
   if (row.monthly_salary == null) errors.push('Missing Salary Cost');
+  return errors;
+};
+
+const validateRow = (row, index) => {
+  const errors = computeRowErrors(row);
   return { ...row, _rowIndex: index + 1, _errors: errors, _valid: errors.length === 0 };
 };
 
@@ -122,26 +132,11 @@ const MonthlyCostImport = () => {
   const [importDone, setImportDone] = useState(false);
   const [importResult, setImportResult] = useState(null);
   const [removedDuplicates, setRemovedDuplicates] = useState(0);
-
-  const handleDownloadSample = () => {
-    const wsData = [
-      ['Employee Code', 'Name', 'Month Year', 'Salary Cost', 'Ops Cost', 'Total Cost', 'Billable Cost'],
-      ['EMP-0201', 'Rajdoot Herlekar', 'Jul 2026', 284.09, 0, 422.88, 0],
-    ];
-    const ws = XLSX.utils.aoa_to_sheet(wsData);
-    ws['!cols'] = [
-      { wch: 16 },
-      { wch: 25 },
-      { wch: 12 },
-      { wch: 14 },
-      { wch: 12 },
-      { wch: 14 },
-      { wch: 14 },
-    ];
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'MonthlyCosts');
-    XLSX.writeFile(wb, 'MonthlyCost_Sample.xlsx');
-  };
+  // Rows built from Sync (not an uploaded file) are edited in place, so the file sent to
+  // /monthly-costs/import has to be regenerated from `rows` at import time instead of
+  // re-sending whatever came off disk — see handleImport below.
+  const [isSynced, setIsSynced] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const parseFile = useCallback((file) => {
     const reader = new FileReader();
@@ -167,6 +162,7 @@ const MonthlyCostImport = () => {
           const my = parseMonthYear(obj.month_year);
           return validateRow(
             {
+              employee_code:         String(obj.employee_code ?? '').trim(),
               employee_name:         String(obj.employee_name ?? '').trim(),
               month:                 my?.month ?? null,
               year:                  my?.year ?? null,
@@ -200,6 +196,7 @@ const MonthlyCostImport = () => {
         setRows(deduped);
         setFile(file);
         setFileName(file.name);
+        setIsSynced(false);
         setImportDone(false);
         setImportResult(null);
       } catch {
@@ -226,8 +223,93 @@ const MonthlyCostImport = () => {
   const validRows   = rows.filter((r) => r._valid);
   const invalidRows = rows.filter((r) => !r._valid);
 
+  // Pulls last month's actual records in as editable preview rows, relabeled to the current
+  // month — lets the user reuse costs that mostly carry over instead of retyping everything
+  // into a spreadsheet first.
+  const handleSync = async () => {
+    setIsSyncing(true);
+    try {
+      const now = dayjs();
+      const prev = now.subtract(1, 'month');
+      const prevMonth = prev.month() + 1;
+      const prevYear = prev.year();
+      const records = await fetchAllRecordsForPeriod(prevMonth, prevYear);
+
+      if (records.length === 0) {
+        showError(`No monthly cost records found for ${formatMonthYear(prevMonth, prevYear)} to sync from.`);
+        return;
+      }
+
+      const currentMonth = now.month() + 1;
+      const currentYear = now.year();
+      const currentLabel = formatMonthYear(currentMonth, currentYear);
+
+      const synced = records.map((r, i) => validateRow(
+        {
+          employee_code:         r.employee_code ?? r.employee?.employee_code ?? '',
+          employee_name:         r.employee_name ?? r.employee?.full_name ?? '',
+          month:                 currentMonth,
+          year:                  currentYear,
+          month_year:            currentLabel,
+          monthly_salary:        r.salary_cost ?? null,
+          ops_cost_per_employee: r.ops_cost ?? null,
+          total_cost:            r.total_cost ?? null,
+          billable_cost:         r.billable_cost ?? null,
+        },
+        i
+      ));
+
+      setRemovedDuplicates(0);
+      setRows(synced);
+      setFile(null);
+      setFileName(`Synced from ${formatMonthYear(prevMonth, prevYear)}`);
+      setIsSynced(true);
+      setImportDone(false);
+      setImportResult(null);
+    } catch (err) {
+      showError(extractApiError(err) || "Could not sync last month's data.");
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // Edits apply to the in-memory rows; the outgoing file for synced rows is rebuilt from
+  // `rows` at import time (below) so the edit actually reaches the backend.
+  const handleEditRow = (rowIndex, field, rawValue) => {
+    setRows((prev) => prev.map((r) => {
+      if (r._rowIndex !== rowIndex) return r;
+      const numeric = rawValue === '' ? null : Number(rawValue);
+      const updated = { ...r, [field]: Number.isNaN(numeric) ? r[field] : numeric };
+      const errors = computeRowErrors(updated);
+      return { ...updated, _errors: errors, _valid: errors.length === 0 };
+    }));
+  };
+
+  const buildSyncedFile = () => {
+    const wsData = [
+      ['Employee Code', 'Name', 'Month Year', 'Salary Cost', 'Ops Cost', 'Total Cost', 'Billable Cost'],
+      ...rows.map((r) => [
+        r.employee_code ?? '',
+        r.employee_name ?? '',
+        r.month_year ?? '',
+        r.monthly_salary ?? 0,
+        r.ops_cost_per_employee ?? 0,
+        r.total_cost ?? 0,
+        r.billable_cost ?? 0,
+      ]),
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'MonthlyCosts');
+    const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    return new File([buffer], 'MonthlyCost_Synced.xlsx', {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+  };
+
   const handleImport = () => {
-    importMutation.mutate(file, {
+    const fileToImport = isSynced ? buildSyncedFile() : file;
+    importMutation.mutate(fileToImport, {
       onSuccess: (res) => {
         const data     = res?.data ?? res ?? {};
         const imported = data.imported ?? 0;
@@ -262,7 +344,15 @@ const MonthlyCostImport = () => {
         description="Upload an Excel or CSV file to bulk-import monthly cost records"
         actions={
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={handleDownloadSample}>
+            <Button variant="outline" size="sm" onClick={handleSync} disabled={isSyncing}>
+              {isSyncing ? (
+                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-1.5 h-4 w-4" />
+              )}
+              Sync from Previous Month
+            </Button>
+            <Button variant="outline" size="sm" onClick={downloadMonthlyCostSample}>
               <Download className="mr-1.5 h-4 w-4" />
               Download Sample
             </Button>
@@ -380,12 +470,15 @@ const MonthlyCostImport = () => {
                 {invalidRows.length > 0 && (
                   <span className="ml-2 text-destructive font-medium">{invalidRows.length} with errors</span>
                 )}
+                {isSynced && (
+                  <span className="ml-2 text-muted-foreground">— edit the cost columns below, then import</span>
+                )}
               </CardDescription>
             </div>
             <Button
               size="sm"
               onClick={handleImport}
-              disabled={importMutation.isPending || !file || validRows.length === 0 || invalidRows.length > 0}
+              disabled={importMutation.isPending || (!file && !isSynced) || validRows.length === 0 || invalidRows.length > 0}
             >
               {importMutation.isPending ? (
                 <>
@@ -407,6 +500,7 @@ const MonthlyCostImport = () => {
                   <tr className="border-b bg-muted/50">
                     <th className="px-4 py-2.5 text-left font-medium text-muted-foreground w-10">#</th>
                     <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Status</th>
+                    <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Code</th>
                     <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Name</th>
                     <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Month Year</th>
                     <th className="px-4 py-2.5 text-right font-medium text-muted-foreground">Salary Cost</th>
@@ -432,22 +526,35 @@ const MonthlyCostImport = () => {
                           </span>
                         )}
                       </td>
+                      <td className="px-4 py-2 font-mono text-xs text-muted-foreground">{row.employee_code || '—'}</td>
                       <td className="px-4 py-2">
                         {row.employee_name || <span className="text-destructive">—</span>}
                       </td>
                       <td className="px-4 py-2">{row.month_year || <span className="text-destructive">—</span>}</td>
-                      <td className="px-4 py-2 text-right tabular-nums">
-                        {row.monthly_salary != null ? formatCurrency(row.monthly_salary) : <span className="text-destructive">—</span>}
-                      </td>
-                      <td className="px-4 py-2 text-right tabular-nums text-muted-foreground">
-                        {row.ops_cost_per_employee != null ? formatCurrency(row.ops_cost_per_employee) : '—'}
-                      </td>
-                      <td className="px-4 py-2 text-right tabular-nums">
-                        {row.total_cost != null ? formatCurrency(row.total_cost) : '—'}
-                      </td>
-                      <td className="px-4 py-2 text-right tabular-nums">
-                        {row.billable_cost != null ? formatCurrency(row.billable_cost) : '—'}
-                      </td>
+                      {[
+                        ['monthly_salary', row.monthly_salary, true],
+                        ['ops_cost_per_employee', row.ops_cost_per_employee, false],
+                        ['total_cost', row.total_cost, false],
+                        ['billable_cost', row.billable_cost, false],
+                      ].map(([field, value, required]) => (
+                        <td key={field} className="px-4 py-2 text-right tabular-nums">
+                          {isSynced ? (
+                            <Input
+                              type="number"
+                              step="0.01"
+                              value={value ?? ''}
+                              onChange={(e) => handleEditRow(row._rowIndex, field, e.target.value)}
+                              className="h-7 w-28 text-right tabular-nums"
+                            />
+                          ) : value != null ? (
+                            formatCurrency(value)
+                          ) : required ? (
+                            <span className="text-destructive">—</span>
+                          ) : (
+                            '—'
+                          )}
+                        </td>
+                      ))}
                     </tr>
                   ))}
                 </tbody>
