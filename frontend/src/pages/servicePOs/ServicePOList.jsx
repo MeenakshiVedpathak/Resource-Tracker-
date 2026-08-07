@@ -32,7 +32,7 @@ const columnHelper = createColumnHelper();
 
 const exportToExcel = (rows, categoryByTypeId) => {
   const header = [
-    'PO Code', 'PO Name', 'Client', 'Service Category', 'Service Type', 'Account Manager',
+    'PO Code', 'PO Name', 'Client', 'Project', 'Service Category', 'Service Type', 'Account Manager',
     'Description', 'PO Value', 'Invoice Frequency', 'Invoice Amount',
     'Start Date', 'End Date', 'Status',
   ];
@@ -40,6 +40,7 @@ const exportToExcel = (rows, categoryByTypeId) => {
     r.service_po_code ?? '',
     r.service_po_name ?? '',
     r.client?.client_name ?? '',
+    r.project?.project_name ?? '',
     categoryByTypeId.get(String(r.serviceType?.id)) ?? '',
     r.serviceType?.service_type_name ?? '',
     r.account_manager ?? '',
@@ -293,6 +294,11 @@ const ServicePOList = () => {
     }),
     columnHelper.accessor('client.client_name', {
       header: 'Client',
+      size: 220,
+      cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="200px" />,
+    }),
+    columnHelper.accessor('project.project_name', {
+      header: 'Project',
       size: 220,
       cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="200px" />,
     }),

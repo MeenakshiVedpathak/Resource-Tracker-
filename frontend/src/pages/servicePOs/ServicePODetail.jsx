@@ -161,7 +161,8 @@ const ServicePODetail = () => {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3 lg:grid-cols-4">
-            <InfoRow label="Client" value={po.client_name} />
+            <InfoRow label="Client" value={po.client_name ?? po.client?.client_name} />
+            <InfoRow label="Project" value={po.project_name ?? po.project?.project_name} />
             <InfoRow label="Service Type" value={serviceTypeMap[po.service_type_id] ?? '—'} />
             <InfoRow label="PO Value" value={po.po_value != null ? formatCurrency(po.po_value) : '—'} />
             <InfoRow label="Expected Hours" value={po.expected_man_hours != null ? formatHours(po.expected_man_hours) : '—'} />

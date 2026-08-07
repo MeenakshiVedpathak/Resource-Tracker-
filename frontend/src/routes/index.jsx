@@ -47,6 +47,8 @@ const CompanyForm = lazy(() => import('@/pages/companies/CompanyForm'));
 // ── Business ──
 const ClientList = lazy(() => import('@/pages/clients/ClientList'));
 const ClientForm = lazy(() => import('@/pages/clients/ClientForm'));
+const ProjectList = lazy(() => import('@/pages/projects/ProjectList'));
+const ProjectForm = lazy(() => import('@/pages/projects/ProjectForm'));
 const ServicePOList = lazy(() => import('@/pages/servicePOs/ServicePOList'));
 const ServicePOForm = lazy(() => import('@/pages/servicePOs/ServicePOForm'));
 const ServicePODetail = lazy(() => import('@/pages/servicePOs/ServicePODetail'));
@@ -84,6 +86,10 @@ const ResourceRecommendations = lazy(() => import('@/pages/ai/ResourceRecommenda
 const WhatIfSimulator = lazy(() => import('@/pages/ai/WhatIfSimulator'));
 const ProjectHealthCard = lazy(() => import('@/pages/ai/ProjectHealthCard'));
 const EmployeeAIProfile = lazy(() => import('@/pages/ai/EmployeeAIProfile'));
+
+// ── Manager Mapping (Head Manager / BU Admin only — no Form Master row exists for this yet,
+// so it's gated by allowedRoles, same mechanism as Company Admin's sidebar bypass) ──
+const ManagerMappingList = lazy(() => import('@/pages/managerMapping/ManagerMappingList'));
 
 // ── Settings ──
 const Notifications = lazy(() => import('@/pages/Notifications'));
@@ -187,6 +193,12 @@ const AppRoutes = () => (
           <Route path=":id/edit" element={<ClientForm />} />
         </Route>
 
+        {/* Projects */}
+        <Route path={ROUTES.PROJECTS} element={<ProtectedRoute formName={FORM_NAMES.PROJECTS}><ProjectList /></ProtectedRoute>}>
+          <Route path="new" element={<ProjectForm />} />
+          <Route path=":id/edit" element={<ProjectForm />} />
+        </Route>
+
         {/* Service POs */}
         <Route path={ROUTES.SERVICE_POS} element={<ProtectedRoute formName={FORM_NAMES.SERVICE_POS}><ServicePOList /></ProtectedRoute>}>
           <Route path="new" element={<ServicePOForm />} />
@@ -245,6 +257,11 @@ const AppRoutes = () => (
         <Route path={ROUTES.AI_WHAT_IF} element={<WhatIfSimulator />} />
         <Route path={ROUTES.AI_PROJECT_HEALTH} element={<ProjectHealthCard />} />
         <Route path={ROUTES.EMPLOYEE_AI_PROFILE} element={<EmployeeAIProfile />} />
+
+        {/* Manager Mapping — visible/usable only for Head Manager or BU Admin (backend returns
+            403 for anyone else). Gated by allowedRoles rather than formName since there's no
+            Form Master row for this feature. */}
+        <Route path={ROUTES.MY_MANAGERS} element={<ProtectedRoute allowedRoles={['Head Manager', 'BU Admin']}><ManagerMappingList /></ProtectedRoute>} />
 
         {/* Settings — personal-account pages, always available to any authenticated user.
             Change Password used to live at ROUTES.PROFILE as a full page — it's now a modal

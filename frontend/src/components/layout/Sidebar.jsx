@@ -8,7 +8,7 @@ import { cn } from '@/utils/cn';
 import { useAuth } from '@/hooks/useAuth';
 import { resolveFormRoute } from '@/constants/rbacForms';
 import { ROUTES } from '@/constants/routes';
-import { ChevronLeft, ChevronRight, Landmark, Shield, ClipboardList } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Landmark, Shield, ClipboardList, UserCog } from 'lucide-react';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 
 // Multi-tenancy retrofit: a Platform Admin (backend's `is_platform_admin` user flag, distinct
@@ -29,6 +29,11 @@ const SUPER_ADMIN_NAV_GROUPS = [
 // regardless of what any role's own form mappings say — a hardcoded UI restriction on top
 // of the RBAC data, not derived from it.
 const RESTRICTED_MODULES = ['administration'];
+
+// Manager Mapping has no Form Master row (it's gated by role name directly, same as the
+// route's allowedRoles), so its nav item is injected on top of the RBAC-driven groups below
+// rather than resolved from accessibleForms — same pattern as the Company Admin bypass above.
+const MANAGER_MAPPING_ROLES = ['Head Manager', 'BU Admin'];
 
 // Fixed display order for module sections, overriding whatever order the API happens to
 // return them in (it's alphabetical server-side). Any module not listed here keeps its
@@ -173,13 +178,23 @@ const Sidebar = () => {
   const { pathname } = useLocation();
   const { accessibleForms, hasRole, isPlatformAdmin } = useAuth();
   const isSuperAdmin = hasRole('Company Admin');
+  const canViewManagerMapping = hasRole(...MANAGER_MAPPING_ROLES);
   // isPlatformAdmin comes from the backend's `is_platform_admin` user flag (multi-tenancy
   // retrofit) — separate from the Company Admin role bypass above. Overrides the normal
   // accessible-forms-driven nav entirely.
-  const navGroups = useMemo(
-    () => (isPlatformAdmin ? SUPER_ADMIN_NAV_GROUPS : buildNavGroups(accessibleForms, { isSuperAdmin })),
-    [accessibleForms, isSuperAdmin, isPlatformAdmin]
-  );
+  const navGroups = useMemo(() => {
+    if (isPlatformAdmin) return SUPER_ADMIN_NAV_GROUPS;
+    const base = buildNavGroups(accessibleForms, { isSuperAdmin });
+    if (!canViewManagerMapping) return base;
+
+    const myManagersItem = { label: 'My Managers', icon: UserCog, to: ROUTES.MY_MANAGERS, exact: true };
+    const peopleGroupIndex = base.findIndex((g) => g.label.trim().toLowerCase() === 'people');
+    if (peopleGroupIndex === -1) return [...base, { label: 'People', items: [myManagersItem] }];
+
+    return base.map((group, i) =>
+      i === peopleGroupIndex ? { ...group, items: [...group.items, myManagersItem] } : group
+    );
+  }, [accessibleForms, isSuperAdmin, isPlatformAdmin, canViewManagerMapping]);
 
   // Guards navigation away from a page with unsaved changes (e.g. Timesheet
   // Import Detail's Modified Hours edits) — any page can opt in via the

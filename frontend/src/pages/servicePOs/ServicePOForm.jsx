@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { Save } from 'lucide-react';
 import { useServicePO, useCreateServicePO, useUpdateServicePO } from '@/hooks/useServicePOs';
 import { useActiveClients } from '@/hooks/useClients';
+import { useActiveProjects } from '@/hooks/useProjects';
 import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
 import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
 import { useNotification } from '@/hooks/useNotification';
@@ -33,6 +34,7 @@ const poSchema = z
       .min(3, 'PO name must be at least 3 characters')
       .max(200, 'PO name cannot exceed 200 characters'),
     client_id: z.coerce.number({ required_error: 'Client is required' }).positive('Client is required'),
+    project_id: z.coerce.number({ required_error: 'Project is required' }).positive('Project is required'),
     service_type_id: z.coerce
       .number({ required_error: 'Service type is required' })
       .positive('Service type is required'),
@@ -74,6 +76,7 @@ const ServicePOForm = () => {
 
   const { data: po, isPending: isLoadingPO } = useServicePO(id);
   const { data: activeClients = [], isPending: isLoadingClients } = useActiveClients();
+  const { data: activeProjects = [], isPending: isLoadingProjects } = useActiveProjects();
   const { data: serviceTypes = [], isPending: isLoadingTypes } = useActiveServiceTypes();
   const { data: activeCategories = [], isPending: isLoadingCategories } = useActiveServiceCategories();
   const createMutation = useCreateServicePO();
@@ -86,6 +89,7 @@ const ServicePOForm = () => {
     defaultValues: {
       service_po_name: '',
       client_id: '',
+      project_id: '',
       service_type_id: '',
       po_value: '',
       start_date: '',
@@ -108,6 +112,7 @@ const ServicePOForm = () => {
       form.reset({
         service_po_name: po.service_po_name ?? '',
         client_id: po.client_id ?? '',
+        project_id: po.project_id ?? po.project?.id ?? '',
         service_type_id: po.service_type_id ?? '',
         po_value: po.po_value ?? '',
         start_date: po.start_date ? po.start_date.slice(0, 10) : '',
@@ -209,6 +214,31 @@ const ServicePOForm = () => {
                       disabled={isLoadingClients}
                       placeholder="Select client"
                       searchPlaceholder="Search client..."
+                      className="h-8 text-sm"
+                    />
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="project_id"
+                render={({ field }) => (
+                  <FormItem className="space-y-1">
+                    <FormLabel className="text-[13px]">
+                      <span className="text-destructive">*</span> Project
+                    </FormLabel>
+                    <SearchableSelect
+                      options={activeProjects.map(p => ({
+                        value: String(p.id),
+                        label: p.project_name
+                      }))}
+                      value={field.value}
+                      onValueChange={(val) => field.onChange(val ? parseInt(val, 10) : undefined)}
+                      disabled={isLoadingProjects}
+                      placeholder="Select project"
+                      searchPlaceholder="Search project..."
                       className="h-8 text-sm"
                     />
                     <FormMessage />

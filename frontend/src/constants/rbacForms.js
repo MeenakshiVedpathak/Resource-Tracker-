@@ -13,7 +13,7 @@
 // wrong.
 import {
   LayoutDashboard, Users, UserCog, Shield, Building2,
-  FileText, FolderOpen, Clock, DollarSign,
+  FileText, FolderOpen, FolderKanban, Clock, DollarSign,
   Tag, Layers, Sparkles, ClipboardList,
   FileBarChart2, PieChart, CalendarRange, UserCheck, Network, Receipt,
 } from 'lucide-react';
@@ -31,6 +31,8 @@ export const FORM_NAMES = {
   // page, not its own sidebar item. Kept here only so useHasForm() can gate that action.
   ROLE_FORM_MAPPING: 'Role Form Mapping',
   CLIENTS: 'Clients',
+  // Matches the actual Form Master row name ("Project Master"), not the page's own title.
+  PROJECTS: 'Project Master',
   SERVICE_POS: 'Service POs',
   SUB_PROJECTS: 'Sub-Projects',
   SERVICE_TYPES: 'Service Types',
@@ -57,6 +59,7 @@ export const FORM_ROUTE_CONFIG = {
   [FORM_NAMES.FORMS]: { to: ROUTES.FORMS, icon: ClipboardList },
   [FORM_NAMES.USER_ROLE_MAPPING]: { to: ROUTES.USER_ROLE_MAPPING, icon: UserCog },
   [FORM_NAMES.CLIENTS]: { to: ROUTES.CLIENTS, icon: Building2 },
+  [FORM_NAMES.PROJECTS]: { to: ROUTES.PROJECTS, icon: FolderKanban },
   [FORM_NAMES.SERVICE_POS]: { to: ROUTES.SERVICE_POS, icon: FileText },
   [FORM_NAMES.SUB_PROJECTS]: { to: ROUTES.SUB_PROJECTS, icon: FolderOpen },
   [FORM_NAMES.SERVICE_TYPES]: { to: ROUTES.SERVICE_TYPES, icon: Layers },

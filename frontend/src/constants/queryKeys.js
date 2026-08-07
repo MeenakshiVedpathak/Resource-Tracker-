@@ -35,6 +35,14 @@ export const QUERY_KEYS = {
   CLIENTS_ACTIVE: ['clients', 'active'],
   CLIENT: (id) => ['clients', id],
 
+  // Projects
+  PROJECTS: (params) => ['projects', params],
+  PROJECTS_ACTIVE: ['projects', 'active'],
+  PROJECT: (id) => ['projects', id],
+
+  // Manager Mapping
+  MANAGER_MAPPINGS: ['manager-mappings'],
+
   // Companies (Platform Admin — multi-tenancy retrofit)
   COMPANIES: (params) => ['companies', params],
   COMPANY: (id) => ['companies', id],

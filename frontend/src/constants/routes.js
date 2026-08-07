@@ -61,6 +61,10 @@ export const ROUTES = {
   CLIENT_NEW: '/clients/new',
   CLIENT_EDIT: '/clients/:id/edit',
 
+  PROJECTS: '/projects',
+  PROJECT_NEW: '/projects/new',
+  PROJECT_EDIT: '/projects/:id/edit',
+
   SERVICE_POS: '/service-pos',
   SERVICE_PO_NEW: '/service-pos/new',
   SERVICE_PO_DETAIL: '/service-pos/:id',
@@ -98,6 +102,9 @@ export const ROUTES = {
   REPORT_MONTHLY_RESOURCE_UTILIZATION: '/reports/monthly-resource-utilization',
   REPORT_RESOURCE_PROJECT_UTILIZATION: '/reports/resource-project-utilization',
   REPORT_CLIENT_SERVICE_PO_HOURS: '/reports/client-service-po-hours',
+
+  // Manager Mapping — Head Manager / BU Admin only
+  MY_MANAGERS: '/my-managers',
 
   // Settings
   NOTIFICATIONS: '/notifications',

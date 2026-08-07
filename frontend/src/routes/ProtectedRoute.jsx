@@ -46,8 +46,13 @@ const ProtectedRoute = ({ children, allowedRoles, formName, platformAdminOnly, e
       return <LoadingScreen />;
     }
 
+    // Case-insensitive/trimmed, matching resolveFormRoute's own normalization (rbacForms.js) —
+    // otherwise a form whose sidebar item resolves fine (case-insensitive) can still 404 on
+    // direct navigation/click-through here if the Form Master row's exact casing/whitespace
+    // differs from the FORM_NAMES constant.
+    const normalize = (s) => (s ?? '').trim().toLowerCase();
     const allForms = Object.values(accessibleForms ?? {}).flat();
-    const allowed = allForms.some((f) => f.name === formName);
+    const allowed = allForms.some((f) => normalize(f.name) === normalize(formName));
     if (!allowed) {
       return <Navigate to={ROUTES.NOT_AUTHORIZED} replace />;
     }
