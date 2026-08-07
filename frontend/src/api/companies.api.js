@@ -1,8 +1,10 @@
 import apiClient from '@/services/apiClient';
 
-// Company Management — Platform Admin only. Unlike every other resource in api/, these calls never
-// carry an X-Company-Id header (apiClient's interceptor only attaches one when the logged-in user
-// has a company, and a Platform Admin never does — they manage all companies, not one).
+// Company Management — Entity Admin only (Entity Admin tier). Unlike every other resource in
+// api/, these calls never carry an X-Company-Id header (apiClient's interceptor only attaches
+// one when the logged-in user has a company, and an Entity Admin never does — they own Entities,
+// not a single company). Create now requires entity_id; GET is scoped server-side to Companies
+// under the caller's own Entities.
 export const companiesApi = {
   getAll: (params) => apiClient.get('/companies', { params }).then((r) => r.data),
   getById: (id) => apiClient.get(`/companies/${id}`).then((r) => r.data?.data),

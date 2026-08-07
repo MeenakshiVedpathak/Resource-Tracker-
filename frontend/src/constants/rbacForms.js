@@ -14,7 +14,7 @@
 import {
   LayoutDashboard, Users, UserCog, Shield, Building2,
   FileText, FolderOpen, FolderKanban, Clock, DollarSign,
-  Tag, Layers, Sparkles, ClipboardList,
+  Tag, Layers, Sparkles, ClipboardList, Landmark, ShieldCheck,
   FileBarChart2, PieChart, CalendarRange, UserCheck, Network, Receipt,
 } from 'lucide-react';
 import { ROUTES } from '@/constants/routes';
@@ -30,6 +30,11 @@ export const FORM_NAMES = {
   // Not in FORM_ROUTE_CONFIG on purpose — it's a per-row "Manage Forms" action on the Roles
   // page, not its own sidebar item. Kept here only so useHasForm() can gate that action.
   ROLE_FORM_MAPPING: 'Role Form Mapping',
+  // Entity Admin tier — these two are the ONLY forms an Entity Admin's login ever returns
+  // (module "Entity Management"). Company Management has no form of its own on purpose — it's
+  // reached via buttons on these two screens, not a sidebar item (see CompanyList/BuAdminList).
+  ENTITY_MASTER: 'Entity Master',
+  BU_ADMIN_MASTER: 'BU Admin Master',
   CLIENTS: 'Clients',
   // Matches the actual Form Master row name ("Project Master"), not the page's own title.
   PROJECTS: 'Project Master',
@@ -58,6 +63,8 @@ export const FORM_ROUTE_CONFIG = {
   [FORM_NAMES.ROLES]: { to: ROUTES.ROLES, icon: Shield },
   [FORM_NAMES.FORMS]: { to: ROUTES.FORMS, icon: ClipboardList },
   [FORM_NAMES.USER_ROLE_MAPPING]: { to: ROUTES.USER_ROLE_MAPPING, icon: UserCog },
+  [FORM_NAMES.ENTITY_MASTER]: { to: ROUTES.ENTITIES, icon: Landmark },
+  [FORM_NAMES.BU_ADMIN_MASTER]: { to: ROUTES.BU_ADMINS, icon: ShieldCheck },
   [FORM_NAMES.CLIENTS]: { to: ROUTES.CLIENTS, icon: Building2 },
   [FORM_NAMES.PROJECTS]: { to: ROUTES.PROJECTS, icon: FolderKanban },
   [FORM_NAMES.SERVICE_POS]: { to: ROUTES.SERVICE_POS, icon: FileText },

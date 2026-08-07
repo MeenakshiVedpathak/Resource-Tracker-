@@ -43,9 +43,18 @@ export const QUERY_KEYS = {
   // Manager Mapping
   MANAGER_MAPPINGS: ['manager-mappings'],
 
-  // Companies (Platform Admin — multi-tenancy retrofit)
+  // Companies — now Entity Admin scoped
   COMPANIES: (params) => ['companies', params],
   COMPANY: (id) => ['companies', id],
+
+  // Entities (Entity Admin tier)
+  ENTITIES: (params) => ['entities', params],
+  ENTITIES_ACTIVE: ['entities', 'active'],
+  ENTITY: (id) => ['entities', id],
+
+  // BU Admins (Entity Admin tier)
+  BU_ADMINS: (params) => ['bu-admins', params],
+  BU_ADMIN: (id) => ['bu-admins', id],
 
   // Service POs
   SERVICE_POS: (params) => ['service-pos', params],

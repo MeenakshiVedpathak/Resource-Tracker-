@@ -85,11 +85,12 @@ const Login = () => {
     // Dynamic login: an Employee account always lands on the Employee dashboard, regardless
     // of `from` — mirrors the Platform Admin redirect below (MainLayout/AuthLayout also
     // enforce this on every navigation, but this avoids an unnecessary bounce right after login).
-    // Multi-tenancy retrofit: a Platform Admin's only screen is Company Management, so send
-    // them straight there rather than `from`/Dashboard.
+    // Multi-tenancy retrofit: a Platform Admin's only screen is now Entity Admin creation
+    // (Company Management moved to the Entity Admin tier), so send them straight there rather
+    // than `from`/Dashboard.
     const destination = loginType === 'employee'
       ? ROUTES.EMPLOYEE_DASHBOARD
-      : (user?.is_platform_admin ? ROUTES.COMPANIES : from);
+      : (user?.is_platform_admin ? ROUTES.ENTITY_ADMIN_NEW : from);
     navigate(destination, { replace: true });
   };
 

@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Save, Eye, EyeOff } from 'lucide-react';
 import { useCompany, useCreateCompany, useUpdateCompany } from '@/hooks/useCompanies';
+import { useActiveEntities } from '@/hooks/useEntities';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import { ROUTES } from '@/constants/routes';
@@ -13,6 +14,7 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { cn } from '@/utils/cn';
 import {
   Sheet,
@@ -22,10 +24,12 @@ import {
   SheetFooter,
 } from '@/components/ui/sheet';
 
-// Create bootstraps the company's first admin account, so it needs admin_email/admin_password.
-// Edit only accepts company_name/status per the backend's PATCH contract — company_code and the
-// admin account are immutable after creation.
+// Create bootstraps the company's first admin account, so it needs admin_email/admin_password,
+// plus entity_id — a Company must now belong to one of the Entity Admin's own Entities. Edit
+// only accepts company_name/status per the backend's PATCH contract — company_code, entity_id,
+// and the admin account are immutable after creation.
 const createSchema = z.object({
+  entity_id: z.coerce.number({ required_error: 'Entity is required' }).positive('Entity is required'),
   company_code: z.string().min(1, 'BU code is required').max(50),
   company_name: z.string().min(1, 'BU name is required').max(100),
   admin_email: z.string().min(1, 'Admin email is required').email('Enter a valid email'),
@@ -48,11 +52,14 @@ const FormSkeleton = () => (
 const CompanyForm = () => {
   const navigate = useNavigate();
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
+  const entityIdParam = searchParams.get('entity_id');
   const isEdit = !!id;
   const { success, error: showError } = useNotification();
   const [showPassword, setShowPassword] = useState(false);
 
   const { data: company, isPending: isLoadingCompany } = useCompany(id);
+  const { data: activeEntities = [], isPending: isLoadingEntities } = useActiveEntities();
   const createMutation = useCreateCompany();
   const updateMutation = useUpdateCompany(id);
 
@@ -60,7 +67,7 @@ const CompanyForm = () => {
     resolver: zodResolver(isEdit ? editSchema : createSchema),
     defaultValues: isEdit
       ? { company_name: '', status: 'active' }
-      : { company_code: '', company_name: '', admin_email: '', admin_password: '' },
+      : { entity_id: entityIdParam ?? '', company_code: '', company_name: '', admin_email: '', admin_password: '' },
   });
 
   useEffect(() => {
@@ -114,6 +121,33 @@ const CompanyForm = () => {
                         <span className="text-[11px] text-muted-foreground font-medium">BU Code</span>
                         <Input value={company?.company_code ?? ''} disabled className="h-8 text-sm border-gray-200 bg-muted/40" />
                       </div>
+                    )}
+
+                    {!isEdit && (
+                      <FormField
+                        control={form.control}
+                        name="entity_id"
+                        render={({ field }) => (
+                          <FormItem className="space-y-1">
+                            <FormLabel className="text-[11px] text-muted-foreground font-medium">
+                              <span className="text-destructive mr-0.5">*</span> Entity
+                            </FormLabel>
+                            <SearchableSelect
+                              options={activeEntities.map((e) => ({
+                                value: String(e.id),
+                                label: e.entity_name,
+                              }))}
+                              value={field.value ? String(field.value) : ''}
+                              onValueChange={(val) => field.onChange(val ? parseInt(val, 10) : undefined)}
+                              disabled={isLoadingEntities}
+                              placeholder="Select entity"
+                              searchPlaceholder="Search entity..."
+                              className="h-8 text-sm"
+                            />
+                            <FormMessage className="text-[10px]" />
+                          </FormItem>
+                        )}
+                      />
                     )}
 
                     {!isEdit && (

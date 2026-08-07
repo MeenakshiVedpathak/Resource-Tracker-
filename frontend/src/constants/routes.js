@@ -51,7 +51,18 @@ export const ROUTES = {
   // Role-Form Mapping is a per-row action on the Roles page, not its own menu item
   ROLE_FORM_MAPPING_EDIT: '/roles/:roleId/forms',
 
-  // Company Management (Platform Admin only — multi-tenancy retrofit)
+  // Entity Admin creation (Platform Admin only — Entity Admin tier)
+  ENTITY_ADMIN_NEW: '/entity-admins/new',
+
+  // Entity Master (Entity Admin only)
+  ENTITIES: '/entities',
+  ENTITY_NEW: '/entities/new',
+  ENTITY_EDIT: '/entities/:id/edit',
+
+  // BU Admin Master (Entity Admin only)
+  BU_ADMINS: '/bu-admins',
+
+  // Company Management — now Entity Admin scoped (not Platform Admin) per the Entity Admin tier
   COMPANIES: '/companies',
   COMPANY_NEW: '/companies/new',
   COMPANY_EDIT: '/companies/:id/edit',

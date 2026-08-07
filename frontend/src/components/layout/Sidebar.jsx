@@ -8,17 +8,20 @@ import { cn } from '@/utils/cn';
 import { useAuth } from '@/hooks/useAuth';
 import { resolveFormRoute } from '@/constants/rbacForms';
 import { ROUTES } from '@/constants/routes';
-import { ChevronLeft, ChevronRight, Landmark, Shield, ClipboardList, UserCog } from 'lucide-react';
+import { ChevronLeft, ChevronRight, UserPlus, Shield, ClipboardList, UserCog } from 'lucide-react';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 
 // Multi-tenancy retrofit: a Platform Admin (backend's `is_platform_admin` user flag, distinct
 // from the Company Admin role bypass below) sees ONLY these nav items —
 // everything else the RBAC-driven buildNavGroups() would otherwise show is skipped for them.
+// Entity Admin tier: Platform Admin no longer creates Companies/BU Admins directly — that moved
+// to the Entity Admin tier (see Entity Master / BU Admin Master) — so "BU Management" is gone,
+// replaced by the one-shot Entity Admin provisioning screen.
 const SUPER_ADMIN_NAV_GROUPS = [
   {
     label: 'Administration',
     items: [
-      { label: 'BU Management', icon: Landmark, to: ROUTES.COMPANIES, exact: false },
+      { label: 'Create Entity Admin', icon: UserPlus, to: ROUTES.ENTITY_ADMIN_NEW, exact: true },
       { label: 'Role Master', icon: Shield, to: ROUTES.ROLES, exact: false },
       { label: 'Forms Master', icon: ClipboardList, to: ROUTES.FORMS, exact: false },
     ],
@@ -47,7 +50,7 @@ const moduleRank = (moduleName) => {
 // Fixed display order for individual nav items within a module, overriding the API's own
 // (alphabetical) order — e.g. Resources comes back as "Monthly Costs" then "Timesheets".
 // Any form not listed here keeps its original relative position, appended after these.
-const FORM_ORDER = ['timesheets', 'monthly costs'];
+const FORM_ORDER = ['timesheets', 'monthly costs', 'entity master', 'bu admin master'];
 const formRank = (formName) => {
   const i = FORM_ORDER.indexOf(formName.trim().toLowerCase());
   return i === -1 ? FORM_ORDER.length : i;

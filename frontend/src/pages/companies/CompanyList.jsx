@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, Outlet } from 'react-router-dom';
+import { useNavigate, useSearchParams, Outlet } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
 import { Plus, Pencil, Power, PowerOff, Search } from 'lucide-react';
 import { useCompanies, useUpdateCompany } from '@/hooks/useCompanies';
@@ -28,6 +28,8 @@ const TruncatedCell = ({ value, maxWidth = '150px', className }) => {
 
 const CompanyList = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const entityIdParam = searchParams.get('entity_id');
   const { success, error: showError } = useNotification();
 
   const [page, setPage] = useState(1);
@@ -41,6 +43,7 @@ const CompanyList = () => {
   const params = {
     page,
     limit,
+    ...(entityIdParam && { entity_id: entityIdParam }),
     ...(debouncedSearch && { search: debouncedSearch }),
     ...(sorting[0] && { sortBy: sorting[0].id, sortOrder: sorting[0].desc ? 'desc' : 'asc' }),
   };
@@ -125,7 +128,7 @@ const CompanyList = () => {
     <div className="space-y-4">
       <PageHeader
         title="BU Management"
-        description="Create and manage BUs on the platform"
+        description={entityIdParam ? 'BUs under this Entity' : 'Manage BUs across your Entities'}
         actions={
           <div className="flex items-center gap-3">
             <div className="relative">
@@ -137,7 +140,11 @@ const CompanyList = () => {
                 onChange={(e) => { setSearch(e.target.value); setPage(1); }}
               />
             </div>
-            <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => navigate(ROUTES.COMPANY_NEW)}>
+            <Button
+              size="sm"
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+              onClick={() => navigate(entityIdParam ? `${ROUTES.COMPANY_NEW}?entity_id=${entityIdParam}` : ROUTES.COMPANY_NEW)}
+            >
               <Plus className="mr-1.5 h-4 w-4" /> Add BU
             </Button>
           </div>

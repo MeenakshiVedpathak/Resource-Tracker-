@@ -40,7 +40,14 @@ const UserRoleMappingList = lazy(() => import('@/pages/userRoleMapping/UserRoleM
 const UserRoleMappingForm = lazy(() => import('@/pages/userRoleMapping/UserRoleMappingForm'));
 const RoleFormMappingForm = lazy(() => import('@/pages/roleFormMapping/RoleFormMappingForm'));
 
-// ── Company Management (Platform Admin only — multi-tenancy retrofit) ──
+// ── Entity Admin tier ──
+const EntityAdminCreate = lazy(() => import('@/pages/entityAdmins/EntityAdminCreate'));
+const EntityList = lazy(() => import('@/pages/entities/EntityList'));
+const EntityForm = lazy(() => import('@/pages/entities/EntityForm'));
+const BuAdminList = lazy(() => import('@/pages/buAdmins/BuAdminList'));
+
+// ── Company Management — Entity Admin scoped (no Form Master row of its own; reached via
+// buttons on Entity Master / BU Admin Master, see those pages) ──
 const CompanyList = lazy(() => import('@/pages/companies/CompanyList'));
 const CompanyForm = lazy(() => import('@/pages/companies/CompanyForm'));
 
@@ -179,10 +186,23 @@ const AppRoutes = () => (
           <Route path=":userId/edit" element={<UserRoleMappingForm />} />
         </Route>
 
-        {/* Company Management — Platform Admin only, gated by the backend's `is_platform_admin`
-            user flag (not the Form Master model, since a Platform Admin sits above the
-            per-company RBAC system entirely and has no roles at all). */}
-        <Route path={ROUTES.COMPANIES} element={<ProtectedRoute platformAdminOnly><CompanyList /></ProtectedRoute>}>
+        {/* Platform Admin — provisions Entity Admins; no longer touches Companies directly. */}
+        <Route path={ROUTES.ENTITY_ADMIN_NEW} element={<ProtectedRoute platformAdminOnly><EntityAdminCreate /></ProtectedRoute>} />
+
+        {/* Entity Master */}
+        <Route path={ROUTES.ENTITIES} element={<ProtectedRoute formName={FORM_NAMES.ENTITY_MASTER}><EntityList /></ProtectedRoute>}>
+          <Route path="new" element={<EntityForm />} />
+          <Route path=":id/edit" element={<EntityForm />} />
+        </Route>
+
+        {/* BU Admin Master */}
+        <Route path={ROUTES.BU_ADMINS} element={<ProtectedRoute formName={FORM_NAMES.BU_ADMIN_MASTER}><BuAdminList /></ProtectedRoute>} />
+
+        {/* Company Management — now Entity Admin scoped, not Platform Admin. No Form Master row
+            of its own (Entity Admin's login only ever returns Entity Master + BU Admin Master),
+            so it's gated by role name directly rather than formName — reached via a button on
+            either of those two screens. */}
+        <Route path={ROUTES.COMPANIES} element={<ProtectedRoute allowedRoles={['Entity Admin']}><CompanyList /></ProtectedRoute>}>
           <Route path="new" element={<CompanyForm />} />
           <Route path=":id/edit" element={<CompanyForm />} />
         </Route>
