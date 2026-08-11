@@ -38,8 +38,9 @@ const baseFields = {
   is_timesheet_approval_required: z.boolean(),
 };
 
-// Create allows an optional Primary Manager and an optional password (omit -> backend/mock
-// falls back to the default password and returns it once as temporaryPassword, §3.1).
+// Create allows an optional Primary Manager and an optional password — the field is pre-filled
+// with the default password (editable, or clearable) and omitting it falls back to the same
+// default on the backend/mock, returned once as temporaryPassword, §3.1.
 const createSchema = z.object({
   ...baseFields,
   primary_manager_user_id: z.coerce.number().positive().optional().nullable(),
@@ -86,7 +87,7 @@ const EmployeeForm = () => {
       date_of_joining: '',
       date_of_leaving: '',
       status: 'active',
-      password: '',
+      password: 'Gtt@1234',
       primary_manager_user_id: null,
       secondary_manager_user_id: null,
       // No backend value exists yet for a brand-new employee, so this just seeds the toggle in
@@ -271,7 +272,7 @@ const EmployeeForm = () => {
                             <FormControl>
                               <Input
                                 type="text"
-                                placeholder="Leave blank to use default (Gtt@1234)"
+                                placeholder="Password"
                                 autoComplete="new-password"
                                 {...field}
                                 className="h-8 text-sm border-gray-200"
