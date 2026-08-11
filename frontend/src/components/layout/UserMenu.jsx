@@ -5,7 +5,7 @@ import { useNotification } from '@/hooks/useNotification';
 import { authApi } from '@/api/auth.api';
 import { getInitials } from '@/utils/formatters';
 import { ROUTES } from '@/constants/routes';
-import { KeyRound, LogOut, ChevronDown } from 'lucide-react';
+import { KeyRound, LogOut, ChevronDown, Loader2 } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,8 +23,10 @@ const UserMenu = () => {
   const navigate = useNavigate();
   const { error } = useNotification();
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const handleLogout = async () => {
+    setIsLoggingOut(true);
     try {
       await authApi.logout();
     } catch {
@@ -75,9 +77,18 @@ const UserMenu = () => {
           Change Password
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">
-          <LogOut className="mr-2 h-4 w-4" />
-          Sign out
+        <DropdownMenuItem
+          onClick={handleLogout}
+          disabled={isLoggingOut}
+          onSelect={(e) => e.preventDefault()}
+          className="text-destructive focus:text-destructive"
+        >
+          {isLoggingOut ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <LogOut className="mr-2 h-4 w-4" />
+          )}
+          {isLoggingOut ? 'Signing out…' : 'Sign out'}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

@@ -39,6 +39,19 @@ export const useUser = (id) =>
     enabled: !!id,
   });
 
+// The Employee List's "Reset password" action needs the Employee's linked User id, but
+// GET /employees doesn't return one (confirmed against the real backend response — no
+// user_id/linked_user_id field). Users do carry `employee_id` back to their Employee, so —
+// same client-side-filter workaround as useAssignableManagers, since the real backend only
+// honors role_id as a /users filter — fetch and match locally.
+export const useUserByEmployeeId = (employeeId) =>
+  useQuery({
+    queryKey: QUERY_KEYS.USERS({ limit: 200 }),
+    queryFn: () => usersApi.getAll({ limit: 200 }),
+    select: (res) => (res?.data ?? []).find((u) => u.employee_id === employeeId),
+    enabled: !!employeeId,
+  });
+
 export const useCreateUser = () => {
   const qc = useQueryClient();
   return useMutation({

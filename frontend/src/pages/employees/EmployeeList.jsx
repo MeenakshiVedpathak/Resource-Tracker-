@@ -10,7 +10,7 @@ import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { useEmployees, useDeleteEmployee, useImportEmployees, useToggleEmployeeStatus } from '@/hooks/useEmployees';
-import { useResetUserPassword } from '@/hooks/useUsers';
+import { useResetUserPassword, useUserByEmployeeId } from '@/hooks/useUsers';
 import { employeesApi } from '@/api/employees.api';
 import { useCanWrite } from '@/hooks/usePermissions';
 import { useNotification } from '@/hooks/useNotification';
@@ -73,10 +73,12 @@ const resetPasswordSchema = z
   });
 
 // PUT /users/:id/reset-password (§2.6), targeting the Employee's LINKED USER id — an Employee's
-// login lives on their linked User now, not on the Employee record itself.
+// login lives on their linked User now, not on the Employee record itself. GET /employees
+// doesn't return that user id, so it's looked up from the Users list via useUserByEmployeeId.
 const ResetPasswordDialog = ({ employee, onOpenChange }) => {
   const { success, error: showError } = useNotification();
   const resetMutation = useResetUserPassword();
+  const { data: linkedUser, isPending: isLoadingUser } = useUserByEmployeeId(employee?.id);
 
   const form = useForm({
     resolver: zodResolver(resetPasswordSchema),
@@ -89,8 +91,12 @@ const ResetPasswordDialog = ({ employee, onOpenChange }) => {
   }, [employee]);
 
   const onSubmit = (values) => {
+    if (!linkedUser?.id) {
+      showError('No login account found for this employee.');
+      return;
+    }
     resetMutation.mutate(
-      { id: employee.linked_user_id, newPassword: values.password, confirmPassword: values.confirmPassword },
+      { id: linkedUser.id, newPassword: values.password, confirmPassword: values.confirmPassword },
       {
         onSuccess: () => {
           success(`Password reset for ${employee.full_name}.`);
@@ -142,7 +148,7 @@ const ResetPasswordDialog = ({ employee, onOpenChange }) => {
           <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={resetMutation.isPending}>
             Cancel
           </Button>
-          <Button size="sm" type="submit" form="reset-password-form" disabled={resetMutation.isPending}>
+          <Button size="sm" type="submit" form="reset-password-form" disabled={resetMutation.isPending || isLoadingUser || !linkedUser?.id}>
             {resetMutation.isPending ? 'Saving…' : 'Reset Password'}
           </Button>
         </DialogFooter>

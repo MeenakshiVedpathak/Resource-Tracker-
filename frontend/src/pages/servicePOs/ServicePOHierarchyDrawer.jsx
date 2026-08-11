@@ -100,7 +100,7 @@ const ServicePOHierarchyDrawer = ({ servicePO, open, onOpenChange }) => {
     <Sheet open={open} onOpenChange={(next) => !isSaving && onOpenChange(next)}>
       <SheetContent side="right" className="w-full sm:max-w-lg p-0 flex flex-col bg-white overflow-hidden">
         <SheetHeader className="px-5 py-3 border-b">
-          <SheetTitle className="text-base font-medium text-left">Hierarchy</SheetTitle>
+          <SheetTitle className="text-base font-medium text-left">Activity/task</SheetTitle>
           {servicePO?.service_po_name && (
             <p className="text-sm text-muted-foreground">{servicePO.service_po_name}</p>
           )}

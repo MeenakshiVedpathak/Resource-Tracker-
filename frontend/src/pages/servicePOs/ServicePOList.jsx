@@ -276,7 +276,7 @@ const ServicePOList = () => {
     }),
     columnHelper.display({
       id: 'hierarchy',
-      header: 'Hierarchy',
+      header: 'Activity/task',
       size: 160,
       cell: ({ row }) => (
         <Button
