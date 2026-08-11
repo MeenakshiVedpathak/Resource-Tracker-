@@ -19,7 +19,6 @@ import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
 import StatusBadge from '@/components/common/StatusBadge';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
-import ServicePOMappingDialog from './ServicePOMappingDialog';
 import ServicePOHierarchyDrawer from './ServicePOHierarchyDrawer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -126,7 +125,6 @@ const ServicePOList = () => {
   const { success, error: showError } = useNotification();
   const [deleteTarget, setDeleteTarget] = useState(null);
   const deleteMutation = useDeleteServicePO();
-  const [mappingTarget, setMappingTarget] = useState(null);
 
   const [sorting, setSorting] = useState([]);
 
@@ -235,7 +233,7 @@ const ServicePOList = () => {
               <Button
                 size="sm"
                 title="Map Employees"
-                onClick={() => setMappingTarget(row.original)}
+                onClick={() => navigate(buildPath(ROUTES.SERVICE_PO_MAP_EMPLOYEES, { id: row.original.id }))}
                 className="h-6 w-6 p-0 bg-emerald-500 hover:bg-emerald-600 text-white rounded transition-colors"
               >
                 <Users className="h-3 w-3" />
@@ -549,12 +547,6 @@ const ServicePOList = () => {
         confirmLabel="Delete"
         onConfirm={handleDelete}
         isLoading={deleteMutation.isPending}
-      />
-
-      <ServicePOMappingDialog
-        servicePO={mappingTarget}
-        open={!!mappingTarget}
-        onOpenChange={(open) => !open && setMappingTarget(null)}
       />
 
       <ServicePOHierarchyDrawer

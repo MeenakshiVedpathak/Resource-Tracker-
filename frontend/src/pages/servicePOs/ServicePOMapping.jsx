@@ -1,5 +1,7 @@
-import { useEffect, useState } from 'react';
-import { ChevronRight, Search, Inbox } from 'lucide-react';
+import { useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { ArrowLeft, ChevronRight, Search, Inbox } from 'lucide-react';
+import { useServicePO } from '@/hooks/useServicePOs';
 import { useActiveEmployees } from '@/hooks/useEmployees';
 import {
   useServicePOEmployeeMappings,
@@ -9,20 +11,15 @@ import {
 import { useCanWrite } from '@/hooks/usePermissions';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
+import { buildPath, ROUTES } from '@/constants/routes';
 import { cn } from '@/utils/cn';
+import PageHeader from '@/components/common/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from '@/components/ui/dialog';
 
 // Row shape used by both panels below: { key, name, sub, raw }. Normalizing mapping
 // records into this common shape up front means the picker UI itself never has to know
@@ -82,7 +79,7 @@ const SelectPanel = ({ rows, search, onSearchChange, selectedKeys, onToggle, onT
   return (
     <div className="flex flex-col overflow-hidden rounded-lg border bg-background">
       <PanelSearchBar count={filtered.length} search={search} onSearchChange={onSearchChange} />
-      <div className="h-72 overflow-y-auto">
+      <div className="h-[28rem] overflow-y-auto">
         {filtered.length === 0 ? (
           <EmptyState />
         ) : (
@@ -136,7 +133,7 @@ const MappedPanel = ({ rows, search, onSearchChange, renderToggle, selectAll }) 
           </label>
         )}
       </PanelSearchBar>
-      <div className="h-72 overflow-y-auto">
+      <div className="h-[28rem] overflow-y-auto">
         {filtered.length === 0 ? (
           <EmptyState />
         ) : (
@@ -168,7 +165,7 @@ const MappedPanel = ({ rows, search, onSearchChange, renderToggle, selectAll }) 
 };
 
 const MoveButton = ({ disabled, onClick, title }) => (
-  <div className="flex h-72 items-center justify-center">
+  <div className="flex h-[28rem] items-center justify-center">
     <Button
       type="button"
       size="icon"
@@ -182,11 +179,22 @@ const MoveButton = ({ disabled, onClick, title }) => (
   </div>
 );
 
+const MappingSkeleton = () => (
+  <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-2">
+    <Skeleton className="h-[28rem] w-full" />
+    <div className="flex h-[28rem] items-center justify-center px-2">
+      <Skeleton className="h-9 w-9 rounded-full" />
+    </div>
+    <Skeleton className="h-[28rem] w-full" />
+  </div>
+);
+
 // Maps employees to a Service PO for timesheet entry — this is what feeds the employee's
 // Project dropdown in My Timesheet. (Resource allocation/planning used to live in a second
 // tab here; removed since it wasn't backed by real data.)
-const ServicePOMappingDialog = ({ servicePO, open, onOpenChange }) => {
-  const servicePoId = servicePO?.id;
+const ServicePOMapping = () => {
+  const { id } = useParams();
+  const navigate = useNavigate();
   const { success, error: showError } = useNotification();
   const canManageResources = useCanWrite();
 
@@ -194,8 +202,9 @@ const ServicePOMappingDialog = ({ servicePO, open, onOpenChange }) => {
   const [searchLeft, setSearchLeft] = useState('');
   const [searchRight, setSearchRight] = useState('');
 
+  const { data: servicePO, isPending: isLoadingPO } = useServicePO(id);
   const { data: activeEmployees = [] } = useActiveEmployees();
-  const { data: mappings = [], isPending: isLoadingMappings } = useServicePOEmployeeMappings(servicePoId);
+  const { data: mappings = [], isPending: isLoadingMappings } = useServicePOEmployeeMappings(id);
 
   const createMappingMutation = useCreateEmployeeServicePOMapping();
   const mappingStatusMutation = useSetEmployeeServicePOMappingStatus();
@@ -211,14 +220,6 @@ const ServicePOMappingDialog = ({ servicePO, open, onOpenChange }) => {
     const { name, code } = resolveMappingEmployee(m);
     return toRow(m.id, name, code, m);
   });
-
-  useEffect(() => {
-    if (!open) {
-      setSelectedForMapping([]);
-      setSearchLeft('');
-      setSearchRight('');
-    }
-  }, [open]);
 
   const toggleMappingSelection = (empId) => {
     setSelectedForMapping((prev) =>
@@ -237,7 +238,7 @@ const ServicePOMappingDialog = ({ servicePO, open, onOpenChange }) => {
     try {
       await Promise.all(
         selectedForMapping.map((empId) =>
-          createMappingMutation.mutateAsync({ employeeId: empId, servicePOId: servicePoId })
+          createMappingMutation.mutateAsync({ employeeId: empId, servicePOId: id })
         )
       );
       success('Employees mapped for timesheet entry.');
@@ -262,79 +263,98 @@ const ServicePOMappingDialog = ({ servicePO, open, onOpenChange }) => {
     }
   };
 
+  if (!isLoadingPO && !servicePO) {
+    return (
+      <div className="py-12 text-center">
+        <p className="text-muted-foreground">Service PO not found.</p>
+        <Button variant="outline" className="mt-4" onClick={() => navigate(ROUTES.SERVICE_POS)}>
+          Back to Service POs
+        </Button>
+      </div>
+    );
+  }
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Map Employees</DialogTitle>
-          <DialogDescription>
-            {servicePO?.service_po_name ?? servicePO?.service_po_code}
-            {servicePO?.service_po_code && servicePO?.service_po_name && (
-              <span className="font-mono text-xs"> · {servicePO.service_po_code}</span>
-            )}
-          </DialogDescription>
-        </DialogHeader>
+    <div className="space-y-4">
+      <PageHeader
+        title="Map Employees"
+        description={
+          isLoadingPO ? undefined : (
+            <>
+              {servicePO?.service_po_name ?? servicePO?.service_po_code}
+              {servicePO?.service_po_code && servicePO?.service_po_name && (
+                <span className="font-mono text-xs"> · {servicePO.service_po_code}</span>
+              )}
+            </>
+          )
+        }
+        actions={
+          <Button variant="outline" size="sm" onClick={() => navigate(buildPath(ROUTES.SERVICE_PO_DETAIL, { id }))}>
+            <ArrowLeft className="mr-1.5 h-4 w-4" />
+            Back
+          </Button>
+        }
+      />
 
-        <p className="text-xs text-muted-foreground">
-          Employees mapped here see this Service PO in their Timesheet's Project dropdown.
-          {rightRows.length > 0 && (
-            <Badge variant="secondary" className="ml-2 text-xs">{rightRows.length} mapped</Badge>
-          )}
-        </p>
-
-        {isLoadingMappings ? (
-          <Skeleton className="h-72 w-full" />
-        ) : (
-          <div className={cn('grid gap-2 items-start', canManageResources ? 'grid-cols-[1fr_auto_1fr]' : 'grid-cols-1')}>
-            {canManageResources && (
-              <>
-                <SelectPanel
-                  rows={leftRows}
-                  search={searchLeft}
-                  onSearchChange={setSearchLeft}
-                  selectedKeys={selectedForMapping}
-                  onToggle={toggleMappingSelection}
-                  onToggleAll={toggleAllMappingSelection}
-                />
-                <MoveButton
-                  title={createMappingMutation.isPending ? 'Mapping…' : 'Map selected'}
-                  disabled={selectedForMapping.length === 0 || createMappingMutation.isPending}
-                  onClick={handleMapSelected}
-                />
-              </>
-            )}
-            <MappedPanel
-              rows={rightRows}
-              search={searchRight}
-              onSearchChange={setSearchRight}
-              selectAll={canManageResources ? {
-                checked: allMappingsActive,
-                disabled: mappingStatusMutation.isPending,
-                onCheckedChange: handleToggleAllMappings,
-              } : undefined}
-              renderToggle={(row) => {
-                const isMappingActive = (row.raw.status ?? 'active') === 'active';
-                return (
-                  <div className="flex items-center gap-2">
-                    <Switch
-                      checked={isMappingActive}
-                      disabled={mappingStatusMutation.isPending}
-                      onCheckedChange={(checked) =>
-                        mappingStatusMutation.mutate({ id: row.key, active: checked })
-                      }
-                    />
-                    <span className={cn('text-[11px] font-medium', isMappingActive ? 'text-green-600' : 'text-slate-400')}>
-                      {isMappingActive ? 'Yes' : 'No'}
-                    </span>
-                  </div>
-                );
-              }}
-            />
-          </div>
+      <p className="text-xs text-muted-foreground">
+        Employees mapped here see this Service PO in their Timesheet's Project dropdown.
+        {rightRows.length > 0 && (
+          <Badge variant="secondary" className="ml-2 text-xs">{rightRows.length} mapped</Badge>
         )}
-      </DialogContent>
-    </Dialog>
+      </p>
+
+      {isLoadingPO || isLoadingMappings ? (
+        <MappingSkeleton />
+      ) : (
+        <div className={cn('grid gap-2 items-start', canManageResources ? 'grid-cols-[1fr_auto_1fr]' : 'grid-cols-1')}>
+          {canManageResources && (
+            <>
+              <SelectPanel
+                rows={leftRows}
+                search={searchLeft}
+                onSearchChange={setSearchLeft}
+                selectedKeys={selectedForMapping}
+                onToggle={toggleMappingSelection}
+                onToggleAll={toggleAllMappingSelection}
+              />
+              <MoveButton
+                title={createMappingMutation.isPending ? 'Mapping…' : 'Map selected'}
+                disabled={selectedForMapping.length === 0 || createMappingMutation.isPending}
+                onClick={handleMapSelected}
+              />
+            </>
+          )}
+          <MappedPanel
+            rows={rightRows}
+            search={searchRight}
+            onSearchChange={setSearchRight}
+            selectAll={canManageResources ? {
+              checked: allMappingsActive,
+              disabled: mappingStatusMutation.isPending,
+              onCheckedChange: handleToggleAllMappings,
+            } : undefined}
+            renderToggle={(row) => {
+              const isMappingActive = (row.raw.status ?? 'active') === 'active';
+              return (
+                <div className="flex items-center gap-2">
+                  <Switch
+                    checked={isMappingActive}
+                    disabled={mappingStatusMutation.isPending}
+                    onCheckedChange={(checked) =>
+                      mappingStatusMutation.mutate({ id: row.key, active: checked })
+                    }
+                  />
+                  <span className={cn('text-[11px] font-medium', isMappingActive ? 'text-green-600' : 'text-slate-400')}>
+                    {isMappingActive ? 'Yes' : 'No'}
+                  </span>
+                </div>
+              );
+            }}
+          />
+        </div>
+      )}
+    </div>
   );
 };
 
-export default ServicePOMappingDialog;
+export default ServicePOMapping;

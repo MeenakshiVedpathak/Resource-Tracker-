@@ -1,7 +1,7 @@
 // Service POs form a tree up to 3 levels deep (root -> parent -> child). These helpers are
 // deliberately defensive about field casing (parentId vs parent_id, code/name vs
 // service_po_code/service_po_name) — the same defensive pattern already used for mapping-employee
-// shapes in ServicePOMappingDialog.jsx, since different endpoints project the same PO differently.
+// shapes in ServicePOMapping.jsx, since different endpoints project the same PO differently.
 export const getAncestors = (po) =>
   (po?.ancestors ?? []).map((a) => ({
     id: a.id,

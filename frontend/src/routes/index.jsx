@@ -63,6 +63,7 @@ const ServicePOList = lazy(() => import('@/pages/servicePOs/ServicePOList'));
 const ServicePOForm = lazy(() => import('@/pages/servicePOs/ServicePOForm'));
 const ServicePODetail = lazy(() => import('@/pages/servicePOs/ServicePODetail'));
 const ServicePOImport = lazy(() => import('@/pages/servicePOs/ServicePOImport'));
+const ServicePOMapping = lazy(() => import('@/pages/servicePOs/ServicePOMapping'));
 const SubProjectList = lazy(() => import('@/pages/subProjects/SubProjectList'));
 const SubProjectForm = lazy(() => import('@/pages/subProjects/SubProjectForm'));
 const ServiceTypeList = lazy(() => import('@/pages/serviceTypes/ServiceTypeList'));
@@ -235,6 +236,7 @@ const AppRoutes = () => (
           <Route path=":id/edit" element={<ServicePOForm />} />
         </Route>
         <Route path={ROUTES.SERVICE_PO_IMPORT} element={<ProtectedRoute formName={FORM_NAMES.SERVICE_POS}><ServicePOImport /></ProtectedRoute>} />
+        <Route path={ROUTES.SERVICE_PO_MAP_EMPLOYEES} element={<ProtectedRoute formName={FORM_NAMES.SERVICE_POS}><ServicePOMapping /></ProtectedRoute>} />
         <Route path={ROUTES.SERVICE_PO_DETAIL} element={<ProtectedRoute formName={FORM_NAMES.SERVICE_POS}><ServicePODetail /></ProtectedRoute>} />
 
         {/* Sub-projects */}
@@ -295,10 +297,11 @@ const AppRoutes = () => (
         {/* My Team — Manager's own team self-service (§8), net-new. */}
         <Route path={ROUTES.MY_TEAM} element={<ProtectedRoute allowedRoles={['Manager']}><MyTeamList /></ProtectedRoute>} />
 
-        {/* Service PO Monthly Budget — Manager self-service, plus Service PO Admin (Business
-            module Form Master row, confirmed via GET /roles/forms). Still gated by allowedRoles
-            rather than formName since Manager's own access has no Form Master row of its own. */}
-        <Route path={ROUTES.SERVICE_PO_MONTHLY_BUDGET} element={<ProtectedRoute allowedRoles={['Manager', 'Service PO Admin']}><ServicePoMonthlyBudgetPage /></ProtectedRoute>} />
+        {/* Service PO Monthly Budget — Business module Form Master row (confirmed via
+            GET /roles/forms), now gated dynamically by formName like every other RBAC-driven
+            screen instead of a hardcoded allowedRoles whitelist, so any role the admin maps
+            this form to (Manager, Service PO Admin, BU Admin, etc.) gets access automatically. */}
+        <Route path={ROUTES.SERVICE_PO_MONTHLY_BUDGET} element={<ProtectedRoute formName={FORM_NAMES.SERVICE_PO_MONTHLY_BUDGET}><ServicePoMonthlyBudgetPage /></ProtectedRoute>} />
 
         {/* Settings — personal-account pages, always available to any authenticated user.
             Change Password used to live at ROUTES.PROFILE as a full page — it's now a modal

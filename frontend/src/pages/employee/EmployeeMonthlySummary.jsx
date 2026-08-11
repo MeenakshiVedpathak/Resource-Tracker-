@@ -6,7 +6,9 @@ import { Save, Download } from 'lucide-react';
 import { useEmployeeMonthlySummary, useSaveWorkLogDay } from '@/hooks/useEmployeeWorkLog';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
-import { buildMonthlySummaryRows, buildDayEntries, validateDayEntries } from '@/utils/employeeMonthlySummary';
+import {
+  buildMonthlySummaryRows, buildMonthlySummaryMonthRows, buildDayEntries, validateDayEntries,
+} from '@/utils/employeeMonthlySummary';
 import MonthNavigator from '@/components/employee/MonthNavigator';
 import SummaryTable from '@/components/employee/SummaryTable';
 import MonthlySummaryMonthTable from '@/components/employee/MonthlySummaryMonthTable';
@@ -32,6 +34,20 @@ const exportSummaryToExcel = (rows, edits, month, year) => {
     return [`${'  '.repeat(row.depth ?? 0)}${row.label}`, ...values, total];
   });
   const totalsRow = ['Total', ...days.map((day) => rows.reduce((sum, row) => sum + cellValue(row, day), 0)), rows.reduce((sum, row) => sum + days.reduce((s, day) => s + cellValue(row, day), 0), 0)];
+
+  const ws = XLSX.utils.aoa_to_sheet([header, ...dataRows, totalsRow]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Monthly Summary');
+  XLSX.writeFile(wb, `Monthly_Summary_${dayjs(`${year}-${String(month).padStart(2, '0')}-01`).format('MMMM_YYYY')}.xlsx`);
+};
+
+// Month View's export — its rows are already server-rolled-up totals (no per-day cells, no
+// unsaved edits to overlay), so this is just label/hours straight off buildMonthlySummaryMonthRows.
+const exportMonthSummaryToExcel = (summary, month, year) => {
+  const rows = buildMonthlySummaryMonthRows(summary);
+  const header = ['Service / Project', 'Total Hours'];
+  const dataRows = rows.map((row) => [`${'  '.repeat(row.depth ?? 0)}${row.label}`, row.hours]);
+  const totalsRow = ['Total', Number(summary?.total_hours ?? 0)];
 
   const ws = XLSX.utils.aoa_to_sheet([header, ...dataRows, totalsRow]);
   const wb = XLSX.utils.book_new();
@@ -173,17 +189,17 @@ const MonthlySummaryPage = () => {
               <TabsTrigger value="month">Month View</TabsTrigger>
             </TabsList>
           </Tabs>
-          {viewMode === 'day' && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => exportSummaryToExcel(rows, edits, month, year)}
-              disabled={isLoading || rows.length === 0}
-            >
-              <Download className="mr-1.5 h-4 w-4" />
-              Export Excel
-            </Button>
-          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => (viewMode === 'day'
+              ? exportSummaryToExcel(rows, edits, month, year)
+              : exportMonthSummaryToExcel(summary, month, year))}
+            disabled={isLoading || (viewMode === 'day' ? rows.length === 0 : !summary?.service_pos?.length)}
+          >
+            <Download className="mr-1.5 h-4 w-4" />
+            Export Excel
+          </Button>
         </div>
       </div>
 

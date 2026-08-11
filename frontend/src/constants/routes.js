@@ -83,6 +83,7 @@ export const ROUTES = {
   SERVICE_PO_DETAIL: '/service-pos/:id',
   SERVICE_PO_EDIT: '/service-pos/:id/edit',
   SERVICE_PO_IMPORT: '/service-pos/import',
+  SERVICE_PO_MAP_EMPLOYEES: '/service-pos/:id/map-employees',
 
   SUB_PROJECTS: '/sub-projects',
   SUB_PROJECT_NEW: '/sub-projects/new',

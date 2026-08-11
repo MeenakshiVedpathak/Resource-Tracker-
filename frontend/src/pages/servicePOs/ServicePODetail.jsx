@@ -11,7 +11,6 @@ import { formatCurrency, formatDate, formatHours, formatPercentage } from '@/uti
 import PageHeader from '@/components/common/PageHeader';
 import StatusBadge from '@/components/common/StatusBadge';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
-import ServicePOMappingDialog from './ServicePOMappingDialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -46,7 +45,6 @@ const ServicePODetail = () => {
   const { success, error: showError } = useNotification();
 
   const [confirmClose, setConfirmClose] = useState(false);
-  const [mappingOpen, setMappingOpen] = useState(false);
 
   const { data: po, isPending: isLoadingPO } = useServicePO(id);
   const { data: utilisation } = useServicePOUtilisation(id);
@@ -107,7 +105,11 @@ const ServicePODetail = () => {
               Back
             </Button>
             {canManageResources && (
-              <Button variant="outline" size="sm" onClick={() => setMappingOpen(true)}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate(buildPath(ROUTES.SERVICE_PO_MAP_EMPLOYEES, { id }))}
+              >
                 <Users className="mr-1.5 h-4 w-4" />
                 Map Employees
               </Button>
@@ -194,13 +196,6 @@ const ServicePODetail = () => {
           </CardContent>
         </Card>
       )}
-
-      {/* Employee allocation & timesheet mapping now live behind the "Map Employees" button above */}
-      <ServicePOMappingDialog
-        servicePO={po}
-        open={mappingOpen}
-        onOpenChange={setMappingOpen}
-      />
 
       {/* Confirm close PO */}
       <ConfirmDialog
