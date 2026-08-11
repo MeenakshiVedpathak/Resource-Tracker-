@@ -86,15 +86,18 @@ const RoleList = () => {
       header: 'Actions',
       size: 160,
       meta: { sticky: true, left: 0 },
-      cell: ({ row }) =>
-        canWrite || canManageFormMapping ? (
+      cell: ({ row }) => {
+        const isSystem = row.original.is_system;
+        if (!canWrite && !canManageFormMapping) return null;
+        return (
           <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
             {canWrite && (
               <Button
                 size="sm"
-                title="Edit"
+                title={isSystem ? 'System role — cannot be modified' : 'Edit'}
+                disabled={isSystem}
                 onClick={() => navigate(buildPath(ROUTES.ROLES + '/' + row.original.id + '/edit'))}
-                className="h-6 w-6 p-0 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
+                className="h-6 w-6 p-0 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors disabled:opacity-40"
               >
                 <Pencil className="h-3 w-3" />
               </Button>
@@ -112,21 +115,33 @@ const RoleList = () => {
             {canWrite && (
               <Button
                 size="sm"
-                title="Delete"
+                title={isSystem ? 'System role — cannot be deleted' : 'Delete'}
+                disabled={isSystem}
                 onClick={() => setDeleteTarget(row.original)}
-                className="h-6 w-6 p-0 bg-red-500 hover:bg-red-600 text-white rounded transition-colors"
+                className="h-6 w-6 p-0 bg-red-500 hover:bg-red-600 text-white rounded transition-colors disabled:opacity-40"
               >
                 <Trash2 className="h-3 w-3" />
               </Button>
             )}
           </div>
-        ) : null,
+        );
+      },
     }),
     columnHelper.accessor('role_name', {
       header: 'Role Name',
       size: 250,
       meta: { sticky: true, left: 160 },
       cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="230px" className="font-medium" />,
+    }),
+    columnHelper.accessor('hierarchy_rank', {
+      header: 'Hierarchy Rank',
+      size: 120,
+      cell: (info) => {
+        const val = info.getValue();
+        return val != null
+          ? <span className="text-sm tabular-nums">{val}</span>
+          : <span className="text-sm text-muted-foreground">—</span>;
+      },
     }),
     columnHelper.accessor('permission', {
       header: 'Permission',

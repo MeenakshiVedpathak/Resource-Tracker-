@@ -151,17 +151,18 @@ const UserList = () => {
       header: 'Roles',
       size: 180,
       cell: (info) => {
-        // backend may return roles (array) or role (single object)
-        const raw = info.getValue();
         const row = info.row.original;
-        const list = Array.isArray(raw) && raw.length > 0 ? raw
-          : row.role ? [row.role]
-            : [];
+        // Primary role (`role`) + additional operational roles (`additionalRoles`, §4) is the
+        // current shape — fall back to a legacy `roles` array for any older cached data.
+        const raw = info.getValue();
+        const list = row.role
+          ? [row.role, ...(Array.isArray(row.additionalRoles) ? row.additionalRoles : [])]
+          : (Array.isArray(raw) ? raw : []);
         if (!list.length) return <span className="text-muted-foreground">—</span>;
         return (
           <div className="flex flex-wrap gap-1">
-            {list.map((r) => (
-              <Badge key={r.id ?? r} variant="secondary" className="text-xs">
+            {list.map((r, i) => (
+              <Badge key={r.id ?? i} variant={i === 0 ? 'secondary' : 'outline'} className="text-xs">
                 {r.role_name ?? r.name ?? '—'}
               </Badge>
             ))}

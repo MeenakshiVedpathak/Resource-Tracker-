@@ -1,27 +1,29 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useForm, Controller, useWatch } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { ArrowLeft, Save, Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
 import { useUser, useCreateUser, useUpdateUser } from '@/hooks/useUsers';
 import { useRoles } from '@/hooks/useRoles';
 import { useActiveEmployees } from '@/hooks/useEmployees';
+import { useAuth } from '@/hooks/useAuth';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import { ROUTES } from '@/constants/routes';
 import { isProtectedAccount } from '@/constants/protectedAccounts';
+import { getAssignableRoleNames, ADDITIONAL_ROLE_NAMES, SENIOR_ROLE_NAMES } from '@/constants/roleHierarchy';
 import {
   Form, FormField, FormItem, FormLabel, FormControl, FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SearchableSelect } from '@/components/ui/searchable-select';
-import { Badge } from '@/components/ui/badge';
+import { MultiSelect } from '@/components/ui/multi-select';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from '@/components/ui/sheet';
 import { cn } from '@/utils/cn';
+
+const roleIdsField = z.array(z.coerce.number()).min(1, 'Select at least one role');
 
 const createSchema = z
   .object({
@@ -34,7 +36,7 @@ const createSchema = z
       .regex(/[0-9]/, 'Must contain at least one digit')
       .regex(/[^A-Za-z0-9]/, 'Must contain at least one special character'),
     confirmPassword: z.string(),
-    role_ids: z.array(z.number()).min(1, 'Select at least one role'),
+    role_ids: roleIdsField,
     employee_id: z.coerce.number().positive().optional().nullable(),
     status: z.enum(['active', 'inactive']).default('active'),
   })
@@ -45,10 +47,24 @@ const createSchema = z
 
 const editSchema = z.object({
   email: z.string().email('Enter a valid email address'),
-  role_ids: z.array(z.number()).min(1, 'Select at least one role'),
+  role_ids: roleIdsField,
   employee_id: z.coerce.number().positive().optional().nullable(),
   status: z.enum(['active', 'inactive']).default('active'),
 });
+
+// The backend still wants role_ids ordered as [primary, ...additional] (§4/§9) even though the
+// UI is just one flat "Roles" picker — this reconstructs that order without asking the user to
+// think about "primary" at all. A senior tier (if selected) always leads; otherwise the most
+// senior selected role the actor is actually permitted to assign becomes the leader. Returns
+// null if no selected role is one the actor's Role Creation Matrix allows as a leader at all.
+const orderRoleIds = (selectedRoles, assignableNames) => {
+  const senior = selectedRoles.find((r) => SENIOR_ROLE_NAMES.includes(r.role_name));
+  const leader = senior ?? [...selectedRoles]
+    .sort((a, b) => (a.hierarchy_rank ?? 99) - (b.hierarchy_rank ?? 99))
+    .find((r) => assignableNames.includes(r.role_name));
+  if (!leader) return null;
+  return [leader.id, ...selectedRoles.filter((r) => r.id !== leader.id).map((r) => r.id)];
+};
 
 const FormSkeleton = () => (
   <div className="space-y-4 p-4">
@@ -63,6 +79,7 @@ const UserForm = () => {
   const { id } = useParams();
   const isEdit = !!id;
   const { success, error: showError } = useNotification();
+  const { role: actorRoleName } = useAuth();
 
   const { data: user, isPending: isLoadingUser } = useUser(id);
   const createMutation = useCreateUser();
@@ -83,8 +100,17 @@ const UserForm = () => {
   const { data: rolesData } = useRoles({ status: 'active', limit: 100 });
   const { data: activeEmployees, isSuccess: employeesReady } = useActiveEmployees();
 
-  const roles = rolesData?.data ?? [];
+  const allRoles = rolesData?.data ?? [];
   const employees = activeEmployees ?? [];
+
+  // The Role Creation Matrix (§0, expanded for BU Admin) plus every operational role that's
+  // always eligible as an additional role (§4) — the union of everything the actor could
+  // validly use in some combination. What actually becomes the "leader" of role_ids is worked
+  // out on submit (orderRoleIds), never surfaced as a separate field in this UI.
+  const assignableNames = getAssignableRoleNames(actorRoleName);
+  const roleOptions = allRoles
+    .filter((r) => assignableNames.includes(r.role_name) || ADDITIONAL_ROLE_NAMES.includes(r.role_name))
+    .map((r) => ({ label: r.role_name, value: String(r.id) }));
 
   const form = useForm({
     resolver: zodResolver(isEdit ? editSchema : createSchema),
@@ -93,7 +119,7 @@ const UserForm = () => {
       password: '',
       confirmPassword: '',
       role_ids: [],
-      employee_id: '',
+      employee_id: null,
       status: 'active',
     },
   });
@@ -109,20 +135,10 @@ const UserForm = () => {
     if (user && isEdit && employeesReady && !didResetRef.current) {
       didResetRef.current = true;
 
-      let ids = [];
-      if (Array.isArray(user.roles) && user.roles.length > 0) {
-        ids = user.roles.map((r) => r.id ?? r);
-      } else if (Array.isArray(user.role_ids)) {
-        ids = user.role_ids;
-      } else if (user.role?.id) {
-        ids = [user.role.id];
-      } else if (user.role_id) {
-        ids = [user.role_id];
-      }
-
+      const primaryId = user.role_id ?? user.role?.id;
       form.reset({
         email: user.email ?? '',
-        role_ids: ids,
+        role_ids: [primaryId, ...(user.additionalRoles ?? []).map((r) => r.id)].filter(Boolean),
         employee_id: user.employee_id ?? user.employee?.id ?? null,
         status: user.status ?? 'active',
       });
@@ -130,8 +146,18 @@ const UserForm = () => {
   }, [user, isEdit, form, employeesReady]);
 
   const onSubmit = (values) => {
-    const { confirmPassword, ...rest } = values;
-    const payload = { ...rest };
+    const { confirmPassword, role_ids, ...rest } = values;
+    const selectedRoles = role_ids.map((rid) => allRoles.find((r) => r.id === Number(rid))).filter(Boolean);
+    const ordered = orderRoleIds(selectedRoles, assignableNames);
+    if (!ordered) {
+      showError(
+        assignableNames.length
+          ? `Select at least one role you're permitted to assign: ${assignableNames.join(', ')}.`
+          : `Your role (${actorRoleName ?? '—'}) is not permitted to assign any role here.`
+      );
+      return;
+    }
+    const payload = { ...rest, role_ids: ordered };
 
     if (isEdit) {
       delete payload.password;
@@ -172,7 +198,7 @@ const UserForm = () => {
           ) : (
             <Form {...form}>
               <form id="user-form" onSubmit={form.handleSubmit(onSubmit)} className="p-5 flex flex-col gap-5">
-                
+
                 {/* Account Details */}
                 <div className="space-y-2">
                   <h3 className="text-xs font-semibold text-foreground border-b pb-1">Account Details</h3>
@@ -218,55 +244,50 @@ const UserForm = () => {
                   </div>
                 </div>
 
-                {/* Roles */}
+                {/* Role — a user can hold multiple roles at once (§4/§9). Which one ends up
+                    "primary" for hierarchy/scoping purposes is worked out automatically on
+                    save (a senior tier always leads; otherwise no such concept is exposed
+                    here — just pick every role this account should have). */}
                 <div className="space-y-2">
-                  <h3 className="text-xs font-semibold text-foreground border-b pb-1">
-                    Roles <span className="text-destructive mr-0.5">*</span>
-                  </h3>
-                  <Controller
+                  <h3 className="text-xs font-semibold text-foreground border-b pb-1">Role</h3>
+                  <FormField
                     control={form.control}
                     name="role_ids"
-                    render={({ field, fieldState }) => (
-                      <div className="space-y-2">
-                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                          {roles.map((role) => {
-                            const checked = field.value.includes(role.id);
-                            return (
-                              <label
-                                key={role.id}
-                                className="flex cursor-pointer items-center gap-3 rounded border px-3 py-2 transition-colors hover:bg-accent has-[[data-state=checked]]:border-primary has-[[data-state=checked]]:bg-primary/5"
-                              >
-                                <Checkbox
-                                  checked={checked}
-                                  onCheckedChange={(val) => {
-                                    if (val) {
-                                      field.onChange([...field.value, role.id]);
-                                    } else {
-                                      field.onChange(field.value.filter((id) => id !== role.id));
-                                    }
-                                  }}
-                                />
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium leading-none">{role.role_name}</p>
-                                </div>
-                                {checked && (
-                                  <Badge variant="secondary" className="text-[10px] shrink-0">Selected</Badge>
-                                )}
-                              </label>
-                            );
-                          })}
-                        </div>
-                        {fieldState.error && (
-                          <p className="text-[10px] text-destructive">{fieldState.error.message}</p>
-                        )}
-                        {field.value.length > 0 && (
-                          <p className="text-[10px] text-muted-foreground mt-1">
-                            {field.value.length} role{field.value.length > 1 ? 's' : ''} selected
-                          </p>
-                        )}
-                      </div>
+                    render={({ field }) => (
+                      <FormItem className="space-y-1">
+                        <FormLabel className="text-[11px] text-muted-foreground font-medium"><span className="text-destructive mr-0.5">*</span> Roles</FormLabel>
+                        <MultiSelect
+                          options={roleOptions}
+                          value={(field.value ?? []).map(String)}
+                          onValueChange={(vals) => {
+                            const numeric = vals.map(Number);
+                            const seniorSelected = numeric.filter((rid) => {
+                              const r = allRoles.find((x) => x.id === rid);
+                              return r && SENIOR_ROLE_NAMES.includes(r.role_name);
+                            });
+                            if (seniorSelected.length > 1) {
+                              // At most one senior tier (Platform Admin/Admin/Entity
+                              // Admin/BU Admin) at a time — keep only the one just picked.
+                              const prevIds = new Set((field.value ?? []).map(Number));
+                              const newest = seniorSelected.find((rid) => !prevIds.has(rid)) ?? seniorSelected.at(-1);
+                              field.onChange(numeric.filter((rid) => !seniorSelected.includes(rid) || rid === newest));
+                            } else {
+                              field.onChange(numeric);
+                            }
+                          }}
+                          placeholder="Select roles…"
+                          searchPlaceholder="Search roles…"
+                          className="h-8 text-sm border-gray-200"
+                        />
+                        <FormMessage className="text-[10px]" />
+                      </FormItem>
                     )}
                   />
+                  {roleOptions.length === 0 && (
+                    <p className="text-[11px] text-muted-foreground">
+                      Your role ({actorRoleName ?? '—'}) is not permitted to assign any role here.
+                    </p>
+                  )}
                 </div>
 
                 {/* Password — create mode only */}

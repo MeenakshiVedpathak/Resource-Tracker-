@@ -8,35 +8,35 @@ import { cn } from '@/utils/cn';
 import { useAuth } from '@/hooks/useAuth';
 import { resolveFormRoute } from '@/constants/rbacForms';
 import { ROUTES } from '@/constants/routes';
-import { ChevronLeft, ChevronRight, UserPlus, Shield, ClipboardList, UserCog } from 'lucide-react';
+import { ChevronLeft, ChevronRight, UserPlus, Shield, ClipboardList, UserCog, Landmark, Network, Wallet } from 'lucide-react';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 
-// Multi-tenancy retrofit: a Platform Admin (backend's `is_platform_admin` user flag, distinct
-// from the Company Admin role bypass below) sees ONLY these nav items —
-// everything else the RBAC-driven buildNavGroups() would otherwise show is skipped for them.
-// Entity Admin tier: Platform Admin no longer creates Companies/BU Admins directly — that moved
-// to the Entity Admin tier (see Entity Master / BU Admin Master) — so "BU Management" is gone,
-// replaced by the one-shot Entity Admin provisioning screen.
+// A Platform Admin (top of the RBAC hierarchy, §0) sees ONLY these nav items — everything else
+// the RBAC-driven buildNavGroups() would otherwise show is skipped for them. Platform Admin
+// only provisions Admins now (§6.1) — Entity Admin/Company management moved down a tier.
 const SUPER_ADMIN_NAV_GROUPS = [
   {
     label: 'Administration',
     items: [
-      { label: 'Create Entity Admin', icon: UserPlus, to: ROUTES.ENTITY_ADMIN_NEW, exact: true },
+      { label: 'Admins', icon: UserPlus, to: ROUTES.ADMINS, exact: false },
       { label: 'Role Master', icon: Shield, to: ROUTES.ROLES, exact: false },
       { label: 'Forms Master', icon: ClipboardList, to: ROUTES.FORMS, exact: false },
     ],
   },
 ];
 
-// Modules hidden from the sidebar for everyone except users with the Company Admin role,
-// regardless of what any role's own form mappings say — a hardcoded UI restriction on top
-// of the RBAC data, not derived from it.
+// Modules hidden from the sidebar for everyone except users with the BU Admin role (the RBAC
+// redesign's per-company "first admin", renamed from the old "Company Admin"), regardless of
+// what any role's own form mappings say — a hardcoded UI restriction on top of the RBAC data.
 const RESTRICTED_MODULES = ['administration'];
 
-// Manager Mapping has no Form Master row (it's gated by role name directly, same as the
-// route's allowedRoles), so its nav item is injected on top of the RBAC-driven groups below
-// rather than resolved from accessibleForms — same pattern as the Company Admin bypass above.
-const MANAGER_MAPPING_ROLES = ['Head Manager', 'BU Admin'];
+// Screens gated by role name directly (allowedRoles on the route) rather than a Form Master
+// row — their nav items are injected on top of the RBAC-driven groups below rather than
+// resolved from accessibleForms, same pattern as the BU Admin bypass above.
+const ENTITY_ADMIN_MANAGEMENT_ROLES = ['Admin'];
+const TEAM_MAPPING_ROLES = ['Service PO Admin'];
+const MY_TEAM_ROLES = ['Manager'];
+const SERVICE_PO_MONTHLY_BUDGET_ROLES = ['Manager'];
 
 // Fixed display order for module sections, overriding whatever order the API happens to
 // return them in (it's alphabetical server-side). Any module not listed here keeps its
@@ -180,24 +180,43 @@ const Sidebar = () => {
   const collapsed = useSelector(selectSidebarCollapsed);
   const { pathname } = useLocation();
   const { accessibleForms, hasRole, isPlatformAdmin } = useAuth();
-  const isSuperAdmin = hasRole('Company Admin');
-  const canViewManagerMapping = hasRole(...MANAGER_MAPPING_ROLES);
-  // isPlatformAdmin comes from the backend's `is_platform_admin` user flag (multi-tenancy
-  // retrofit) — separate from the Company Admin role bypass above. Overrides the normal
-  // accessible-forms-driven nav entirely.
+  const isSuperAdmin = hasRole('BU Admin');
+  const canViewEntityAdmins = hasRole(...ENTITY_ADMIN_MANAGEMENT_ROLES);
+  const canViewTeamMapping = hasRole(...TEAM_MAPPING_ROLES);
+  const canViewMyTeam = hasRole(...MY_TEAM_ROLES);
+  const canViewServicePoMonthlyBudget = hasRole(...SERVICE_PO_MONTHLY_BUDGET_ROLES);
+  // isPlatformAdmin is derived from the single role every login returns (§0) — overrides the
+  // normal accessible-forms-driven nav entirely.
   const navGroups = useMemo(() => {
     if (isPlatformAdmin) return SUPER_ADMIN_NAV_GROUPS;
     const base = buildNavGroups(accessibleForms, { isSuperAdmin });
-    if (!canViewManagerMapping) return base;
 
-    const myManagersItem = { label: 'My Managers', icon: UserCog, to: ROUTES.MY_MANAGERS, exact: true };
-    const peopleGroupIndex = base.findIndex((g) => g.label.trim().toLowerCase() === 'people');
-    if (peopleGroupIndex === -1) return [...base, { label: 'People', items: [myManagersItem] }];
+    const injected = [];
+    if (canViewEntityAdmins) {
+      injected.push({ group: 'Entity Management', item: { label: 'Entity Admins', icon: Landmark, to: ROUTES.ENTITY_ADMINS, exact: false } });
+    }
+    if (canViewTeamMapping) {
+      injected.push({ group: 'People', item: { label: 'Team Mapping', icon: UserCog, to: ROUTES.TEAM_MAPPINGS, exact: true } });
+    }
+    if (canViewMyTeam) {
+      injected.push({ group: 'People', item: { label: 'My Team', icon: Network, to: ROUTES.MY_TEAM, exact: true } });
+    }
+    if (canViewServicePoMonthlyBudget) {
+      injected.push({
+        group: 'Resources',
+        item: { label: 'Service PO Monthly Budget', icon: Wallet, to: ROUTES.SERVICE_PO_MONTHLY_BUDGET, exact: true },
+      });
+    }
+    if (injected.length === 0) return base;
 
-    return base.map((group, i) =>
-      i === peopleGroupIndex ? { ...group, items: [...group.items, myManagersItem] } : group
-    );
-  }, [accessibleForms, isSuperAdmin, isPlatformAdmin, canViewManagerMapping]);
+    return injected.reduce((groups, { group: groupLabel, item }) => {
+      const idx = groups.findIndex((g) => g.label.trim().toLowerCase() === groupLabel.toLowerCase());
+      if (idx === -1) return [...groups, { label: groupLabel, items: [item] }];
+      // Entity Admins should lead its group, ahead of the RBAC-driven BU Admin Master item.
+      const prepend = groupLabel === 'Entity Management';
+      return groups.map((g, i) => (i === idx ? { ...g, items: prepend ? [item, ...g.items] : [...g.items, item] } : g));
+    }, base);
+  }, [accessibleForms, isSuperAdmin, isPlatformAdmin, canViewEntityAdmins, canViewTeamMapping, canViewMyTeam, canViewServicePoMonthlyBudget]);
 
   // Guards navigation away from a page with unsaved changes (e.g. Timesheet
   // Import Detail's Modified Hours edits) — any page can opt in via the

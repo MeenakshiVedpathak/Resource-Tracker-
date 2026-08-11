@@ -30,7 +30,7 @@ const exportToExcel = (rows) => {
     'PO Code', 'PO Name', 'Client Name', 'Service Type', 'Category', 'Start Date', 'End Date',
     'Status', 'Billable', 'Invoice Freq.', 'Account Manager', 'PO Value', 
     'Expected Hours', 'Hours Delivered Before Month', 'Available Hours', 
-    'Billable Amount', 'Invoiced Amount', 'Unbilled Amount'
+    'Billable Amount', 'Invoiced Amount', 'Billed Amount', 'Unbilled Amount'
   ];
   const dataRows = rows.map((r) => [
     r.service_po_code ?? '',
@@ -50,6 +50,7 @@ const exportToExcel = (rows) => {
     r.available_hours != null ? Number(r.available_hours) : '',
     r.monthly_billable_amount != null ? Number(r.monthly_billable_amount) : '',
     r.invoiced_amount != null ? Number(r.invoiced_amount) : '',
+    r.billed_amount != null ? Number(r.billed_amount) : '',
     r.unbilled_amount != null ? Number(r.unbilled_amount) : '',
   ]);
   const ws = XLSX.utils.aoa_to_sheet([header, ...dataRows]);
@@ -145,6 +146,11 @@ const columns = [
   }),
   columnHelper.accessor('invoiced_amount', {
     header: 'Invoiced Amount',
+    size: 160,
+    cell: (info) => <ValueCell value={info.getValue()} />,
+  }),
+  columnHelper.accessor('billed_amount', {
+    header: 'Billed Amount',
     size: 160,
     cell: (info) => <ValueCell value={info.getValue()} />,
   }),
@@ -471,6 +477,7 @@ const ServicePOSummary = () => {
             <SummaryItem label="Available Hours" value={formatHours(summary.total_available_hours)} />
             <SummaryItem label="Billable Amount" value={formatCurrency(summary.total_monthly_billable_amount)} highlight />
             <SummaryItem label="Invoiced Amount" value={formatCurrency(summary.total_invoiced_amount)} highlight />
+            <SummaryItem label="Billed Amount" value={formatCurrency(summary.total_billed_amount)} highlight />
             <SummaryItem
               label="Unbilled Amount"
               value={formatCurrency(summary.total_unbilled_amount)}

@@ -1,25 +1,103 @@
 import apiClient from '@/services/apiClient';
+import { RBAC_MOCK_ENABLED } from '@/mocks/rbacMockConfig';
+import {
+  delay, getDb, persist, nextId, paginate, findRoleById, serializeRole, formsForRoleName, mockError,
+} from '@/mocks/rbacMockDb';
+
+const mockGetAll = async (params) => {
+  await delay();
+  const result = paginate(getDb().roles, { ...params, searchFields: ['role_name'] });
+  return { success: true, message: 'OK', data: result.data.map(serializeRole), meta: result.meta };
+};
+
+const mockGetById = async (id) => {
+  await delay();
+  return serializeRole(findRoleById(Number(id)));
+};
+
+const mockCreate = async (payload) => {
+  await delay();
+  const role = {
+    id: nextId('roles'),
+    role_name: payload.role_name,
+    permission: payload.permission,
+    status: payload.status ?? 'active',
+    hierarchy_rank: null,
+    inherits_role_id: null,
+    is_original_data_visible: !!payload.is_original_data_visible,
+    is_system: false,
+    created_at: new Date().toISOString(),
+  };
+  getDb().roles.push(role);
+  persist();
+  return { success: true, message: 'Role created successfully.', data: serializeRole(role) };
+};
+
+const mockUpdate = async (id, payload) => {
+  await delay();
+  const role = findRoleById(Number(id));
+  if (!role) throw mockError(404, 'Role not found.');
+  if (role.is_system) throw mockError(403, `"${role.role_name}" is a system role and cannot be modified.`);
+  Object.assign(role, payload);
+  persist();
+  return { success: true, message: 'Role updated successfully.', data: serializeRole(role) };
+};
+
+const mockDelete = async (id) => {
+  await delay();
+  const role = findRoleById(Number(id));
+  if (!role) throw mockError(404, 'Role not found.');
+  if (role.is_system) throw mockError(403, `"${role.role_name}" is a system role and cannot be deleted.`);
+  const inUse = getDb().users.some((u) => u.role_id === role.id);
+  if (inUse) throw mockError(409, 'This role is still assigned to at least one user.');
+  getDb().roles = getDb().roles.filter((r) => r.id !== role.id);
+  persist();
+  return { success: true, message: 'Role deleted successfully.' };
+};
+
+const mockGetAccessibleForms = async (roleIds) => {
+  await delay();
+  const merged = {};
+  (roleIds ?? []).forEach((id) => {
+    const role = findRoleById(Number(id));
+    if (!role) return;
+    const forms = formsForRoleName(role.role_name);
+    Object.entries(forms).forEach(([moduleName, list]) => {
+      merged[moduleName] = [...(merged[moduleName] ?? []), ...list];
+    });
+  });
+  return merged;
+};
 
 export const rolesApi = {
-  getAll: (params) => apiClient.get('/roles', { params }).then((r) => r.data),
-  getById: (id) => apiClient.get(`/roles/${id}`).then((r) => r.data?.data),
-  create: (payload) => apiClient.post('/roles', payload).then((r) => r.data),
-  update: (id, payload) => apiClient.put(`/roles/${id}`, payload).then((r) => r.data),
-  // Hard delete — no request body. Backend blocks it (409) if the role is assigned to any
-  // user, so no soft-delete `is_delete` flag here unlike other masters' delete calls.
-  delete: (id) => apiClient.delete(`/roles/${id}`).then((r) => r.data),
+  getAll: (params) => {
+    if (RBAC_MOCK_ENABLED) return mockGetAll(params);
+    return apiClient.get('/roles', { params }).then((r) => r.data);
+  },
+  getById: (id) => {
+    if (RBAC_MOCK_ENABLED) return mockGetById(id);
+    return apiClient.get(`/roles/${id}`).then((r) => r.data?.data);
+  },
+  create: (payload) => {
+    if (RBAC_MOCK_ENABLED) return mockCreate(payload);
+    return apiClient.post('/roles', payload).then((r) => r.data);
+  },
+  update: (id, payload) => {
+    if (RBAC_MOCK_ENABLED) return mockUpdate(id, payload);
+    return apiClient.put(`/roles/${id}`, payload).then((r) => r.data);
+  },
+  // Hard delete — no request body. Blocked (409) if the role is assigned to any user, and
+  // (403) if it's one of the 9 fixed system roles.
+  delete: (id) => {
+    if (RBAC_MOCK_ENABLED) return mockDelete(id);
+    return apiClient.delete(`/roles/${id}`).then((r) => r.data);
+  },
 
   // RBAC: menu/navigation source of truth — always pass the roleIds from the logged-in
   // user's own stored roles, never a client-tampered list.
-  //
-  // ⚠️ The endpoint returns ALL active forms grouped by module, each with a `status`
-  // boolean (true = mapped to one of the given roleIds, false = not) — it does NOT
-  // pre-filter to only what's granted (confirmed against a real payload where unmapped
-  // forms like "User Role Mapping"/"Sub-Projects" came back with status:false). Filter
-  // to status===true and strip the flag here so every consumer (Sidebar, ProtectedRoute)
-  // keeps getting the clean { id, name } "menu" shape it expects.
-  getAccessibleForms: (roleIds) =>
-    apiClient.post('/roles/forms', { roleIds }).then((r) => {
+  getAccessibleForms: (roleIds) => {
+    if (RBAC_MOCK_ENABLED) return mockGetAccessibleForms(roleIds);
+    return apiClient.post('/roles/forms', { roleIds }).then((r) => {
       const raw = r.data?.data ?? {};
       return Object.fromEntries(
         Object.entries(raw)
@@ -31,23 +109,16 @@ export const rolesApi = {
           ])
           .filter(([, forms]) => forms.length > 0)
       );
-    }),
+    });
+  },
 
   // Same endpoint, raw — used by the Role Form Mapping admin checklist, which needs the
   // status flag intact (to know which checkboxes start checked) rather than a pre-filtered
   // "only what's granted" list.
-  getFormsChecklist: (roleIds) =>
-    apiClient.post('/roles/forms', { roleIds }).then((r) => r.data?.data ?? {}),
-
-  // RBAC: User <-> Role mapping
-  getUserMappings: (userId) =>
-    apiClient.get(`/roles/user-mappings/${userId}`).then((r) => r.data?.data ?? []),
-  addUserMapping: (payload) =>
-    apiClient.post('/roles/user-mappings', payload).then((r) => r.data),
-  replaceUserMappings: (userId, roleIds) =>
-    apiClient.put(`/roles/user-mappings/${userId}`, { role_ids: roleIds }).then((r) => r.data),
-  removeUserMapping: (userId, roleId) =>
-    apiClient.delete(`/roles/user-mappings/${userId}/${roleId}`).then((r) => r.data),
+  getFormsChecklist: (roleIds) => {
+    if (RBAC_MOCK_ENABLED) return mockGetAccessibleForms(roleIds);
+    return apiClient.post('/roles/forms', { roleIds }).then((r) => r.data?.data ?? {});
+  },
 
   // RBAC: Role <-> Form mapping
   getRoleFormMappings: (roleId) =>

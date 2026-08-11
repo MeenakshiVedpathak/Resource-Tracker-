@@ -1,8 +1,10 @@
-// Company Admin accounts are the tenant's designated admin and are protected from deletion,
-// edits, status changes, and role reassignment everywhere in the UI, regardless of the acting
-// user's own role/permission — this is a client-side safety net on top of whatever the backend
-// itself enforces.
-export const PROTECTED_ROLE_NAME = 'Company Admin';
+// BU Admin accounts are a Company's designated first admin (created alongside the Company
+// itself, §6.3) and are protected from deletion, edits, status changes, and role reassignment
+// everywhere in the UI, regardless of the acting user's own role/permission — a client-side
+// safety net on top of whatever the backend itself enforces. (Renamed from the old "Company
+// Admin" role, which no longer exists under the RBAC redesign's 9-role hierarchy — BU Admin is
+// the closest equivalent.)
+export const PROTECTED_ROLE_NAME = 'BU Admin';
 
 // User records come back from the API with either a single `role` object or a `roles` array
 // (see UserForm/UserList role-resolution) — check both shapes.

@@ -12,6 +12,7 @@ import { extractApiError } from '@/services/apiClient';
 import { ROUTES } from '@/constants/routes';
 import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
+import EmptyState from '@/components/common/EmptyState';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -120,7 +121,7 @@ const BuAdminList = () => {
     }),
     columnHelper.display({
       id: 'company',
-      header: 'Company',
+      header: 'BU Name',
       size: 220,
       cell: ({ row }) => (
         <TruncatedCell value={row.original.company_name ?? row.original.company?.company_name} maxWidth="200px" />
@@ -147,7 +148,7 @@ const BuAdminList = () => {
     <div className="space-y-4">
       <PageHeader
         title="BU Admin Master"
-        description="BU Admins across every Company under your Entities"
+        description="BU Admins across every BU under your Entities"
         actions={
           <div className="flex items-center gap-3">
             <div className="relative">
@@ -160,7 +161,7 @@ const BuAdminList = () => {
               />
             </div>
             <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => navigate(ROUTES.COMPANY_NEW)}>
-              <Plus className="mr-1.5 h-4 w-4" /> Add Company
+              <Plus className="mr-1.5 h-4 w-4" /> Add BU
             </Button>
           </div>
         }
@@ -180,6 +181,17 @@ const BuAdminList = () => {
         onSortingChange={(s) => { setSorting(s); setPage(1); }}
         onPageChange={setPage}
         onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
+        emptyState={
+          // A freshly-created Admin/Entity Admin legitimately has zero BU Admins until they
+          // add a BU (which bundles one) — not an error state (§1 gotcha).
+          !search ? (
+            <EmptyState
+              title="No BU Admins yet"
+              description="BU Admins are created automatically when you add a BU — create one to get started."
+              action={{ label: 'Add BU', icon: Plus, onClick: () => navigate(ROUTES.COMPANY_NEW) }}
+            />
+          ) : undefined
+        }
       />
 
       <Dialog open={!!editTarget} onOpenChange={(open) => !open && setEditTarget(null)}>

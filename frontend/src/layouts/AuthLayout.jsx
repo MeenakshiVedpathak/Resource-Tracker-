@@ -1,13 +1,12 @@
 import { Navigate, Outlet } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/hooks/useAuth';
-import { ROUTES } from '@/constants/routes';
 
 const AuthLayout = () => {
-  const { isAuthenticated, isEmployee } = useAuth();
+  const { isAuthenticated, homeRoute } = useAuth();
 
   if (isAuthenticated) {
-    return <Navigate to={isEmployee ? ROUTES.EMPLOYEE_DASHBOARD : ROUTES.DASHBOARD} replace />;
+    return <Navigate to={homeRoute} replace />;
   }
 
   return (

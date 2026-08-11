@@ -36,11 +36,14 @@ const RoleForm = lazy(() => import('@/pages/roles/RoleForm'));
 // ── RBAC admin (access gated by Role-Form Mapping, not a hard-coded role) ──
 const FormList = lazy(() => import('@/pages/forms/FormList'));
 const FormForm = lazy(() => import('@/pages/forms/FormForm'));
-const UserRoleMappingList = lazy(() => import('@/pages/userRoleMapping/UserRoleMappingList'));
-const UserRoleMappingForm = lazy(() => import('@/pages/userRoleMapping/UserRoleMappingForm'));
 const RoleFormMappingForm = lazy(() => import('@/pages/roleFormMapping/RoleFormMappingForm'));
 
-// ── Entity Admin tier ──
+// ── Platform Admin / Admin tier ──
+const AdminList = lazy(() => import('@/pages/admins/AdminList'));
+const AdminCreate = lazy(() => import('@/pages/admins/AdminCreate'));
+
+// ── Entity Admin tier (also reachable by Admin, platform-wide) ──
+const EntityAdminList = lazy(() => import('@/pages/entityAdmins/EntityAdminList'));
 const EntityAdminCreate = lazy(() => import('@/pages/entityAdmins/EntityAdminCreate'));
 const EntityList = lazy(() => import('@/pages/entities/EntityList'));
 const EntityForm = lazy(() => import('@/pages/entities/EntityForm'));
@@ -94,9 +97,15 @@ const WhatIfSimulator = lazy(() => import('@/pages/ai/WhatIfSimulator'));
 const ProjectHealthCard = lazy(() => import('@/pages/ai/ProjectHealthCard'));
 const EmployeeAIProfile = lazy(() => import('@/pages/ai/EmployeeAIProfile'));
 
-// ── Manager Mapping (Head Manager / BU Admin only — no Form Master row exists for this yet,
-// so it's gated by allowedRoles, same mechanism as Company Admin's sidebar bypass) ──
-const ManagerMappingList = lazy(() => import('@/pages/managerMapping/ManagerMappingList'));
+// ── Team Mapping (Service PO Admin self-service — no Form Master row exists for this yet, so
+// it's gated by allowedRoles) ──
+const TeamMappingList = lazy(() => import('@/pages/teamMappings/TeamMappingList'));
+
+// ── My Team (Manager self-service — same allowedRoles gating as Team Mapping above) ──
+const MyTeamList = lazy(() => import('@/pages/myTeam/MyTeamList'));
+
+// ── Service PO Monthly Budget (Manager self-service, net-new — same allowedRoles gating) ──
+const ServicePoMonthlyBudgetPage = lazy(() => import('@/pages/servicePoMonthlyBudget/ServicePoMonthlyBudgetPage'));
 
 // ── Settings ──
 const Notifications = lazy(() => import('@/pages/Notifications'));
@@ -129,10 +138,13 @@ const AppRoutes = () => (
           </ProtectedRoute>
         }
       >
-        {/* Dashboard — always available to any authenticated user, even with zero forms
-            mapped, so there's always a landing page to fall back to (see NotFound's
-            "Back to Dashboard" button, and the post-login redirect). */}
-        <Route path={ROUTES.DASHBOARD} element={<Dashboard />} />
+        {/* Dashboard — gated like every other screen by whether it's actually mapped to the
+            caller's roles; `allowIfNoFormsMapped` only kicks in for an account with literally
+            nothing else mapped, so there's still a landing page to fall back to (see
+            NotFound's "Back to Dashboard" button, and the post-login redirect) instead of an
+            immediate dead end. An Entity Admin with real screens mapped (Entity Master, etc.)
+            no longer sees Dashboard just because the route used to have zero gate at all. */}
+        <Route path={ROUTES.DASHBOARD} element={<ProtectedRoute formName={FORM_NAMES.DASHBOARD} allowIfNoFormsMapped><Dashboard /></ProtectedRoute>} />
         <Route path={ROUTES.AI_INSIGHTS} element={<ProtectedRoute formName={FORM_NAMES.AI_INSIGHTS}><AIInsights /></ProtectedRoute>} />
 
         {/* Employees */}
@@ -174,35 +186,33 @@ const AppRoutes = () => (
           <Route path=":id/edit" element={<FormForm />} />
         </Route>
 
-        {/* User <-> Role mapping — access controlled by Role-Form Mapping */}
-        <Route
-          path={ROUTES.USER_ROLE_MAPPING}
-          element={
-            <ProtectedRoute formName={FORM_NAMES.USER_ROLE_MAPPING}>
-              <UserRoleMappingList />
-            </ProtectedRoute>
-          }
-        >
-          <Route path=":userId/edit" element={<UserRoleMappingForm />} />
+        {/* Platform Admin — manages Admins only; no longer touches Entity Admins/Companies.
+            "Add Admin" is a nested route rendered as a Sheet over this list (Outlet), same
+            drawer pattern as every other master — it used to be its own full page. */}
+        <Route path={ROUTES.ADMINS} element={<ProtectedRoute platformAdminOnly><AdminList /></ProtectedRoute>}>
+          <Route path="new" element={<AdminCreate />} />
         </Route>
 
-        {/* Platform Admin — provisions Entity Admins; no longer touches Companies directly. */}
-        <Route path={ROUTES.ENTITY_ADMIN_NEW} element={<ProtectedRoute platformAdminOnly><EntityAdminCreate /></ProtectedRoute>} />
+        {/* Admin tier — manages Entity Admins platform-wide. Same drawer-over-list pattern as
+            Admins above. */}
+        <Route path={ROUTES.ENTITY_ADMINS} element={<ProtectedRoute allowedRoles={['Admin']}><EntityAdminList /></ProtectedRoute>}>
+          <Route path="new" element={<EntityAdminCreate />} />
+        </Route>
 
-        {/* Entity Master */}
+        {/* Entity Master — Admin and Entity Admin both manage Entities here (reverts the earlier
+            "ownership flip (§1)" that made Entity Admin read-only). */}
         <Route path={ROUTES.ENTITIES} element={<ProtectedRoute formName={FORM_NAMES.ENTITY_MASTER}><EntityList /></ProtectedRoute>}>
-          <Route path="new" element={<EntityForm />} />
-          <Route path=":id/edit" element={<EntityForm />} />
+          <Route path="new" element={<ProtectedRoute allowedRoles={['Admin', 'Entity Admin']}><EntityForm /></ProtectedRoute>} />
+          <Route path=":id/edit" element={<ProtectedRoute allowedRoles={['Admin', 'Entity Admin']}><EntityForm /></ProtectedRoute>} />
         </Route>
 
         {/* BU Admin Master */}
         <Route path={ROUTES.BU_ADMINS} element={<ProtectedRoute formName={FORM_NAMES.BU_ADMIN_MASTER}><BuAdminList /></ProtectedRoute>} />
 
-        {/* Company Management — now Entity Admin scoped, not Platform Admin. No Form Master row
-            of its own (Entity Admin's login only ever returns Entity Master + BU Admin Master),
-            so it's gated by role name directly rather than formName — reached via a button on
-            either of those two screens. */}
-        <Route path={ROUTES.COMPANIES} element={<ProtectedRoute allowedRoles={['Entity Admin']}><CompanyList /></ProtectedRoute>}>
+        {/* Company Management — Admin (platform-wide) and Entity Admin (own Entities) both reach
+            this, per §6.3. No Form Master row of its own, so it's gated by role name directly
+            rather than formName — reached via a button on Entity Master / BU Admin Master. */}
+        <Route path={ROUTES.COMPANIES} element={<ProtectedRoute allowedRoles={['Admin', 'Entity Admin']}><CompanyList /></ProtectedRoute>}>
           <Route path="new" element={<CompanyForm />} />
           <Route path=":id/edit" element={<CompanyForm />} />
         </Route>
@@ -278,10 +288,17 @@ const AppRoutes = () => (
         <Route path={ROUTES.AI_PROJECT_HEALTH} element={<ProjectHealthCard />} />
         <Route path={ROUTES.EMPLOYEE_AI_PROFILE} element={<EmployeeAIProfile />} />
 
-        {/* Manager Mapping — visible/usable only for Head Manager or BU Admin (backend returns
-            403 for anyone else). Gated by allowedRoles rather than formName since there's no
-            Form Master row for this feature. */}
-        <Route path={ROUTES.MY_MANAGERS} element={<ProtectedRoute allowedRoles={['Head Manager', 'BU Admin']}><ManagerMappingList /></ProtectedRoute>} />
+        {/* Team Mapping — Service PO Admin's own team self-service (§7). Gated by allowedRoles
+            rather than formName since there's no Form Master row for this feature. */}
+        <Route path={ROUTES.TEAM_MAPPINGS} element={<ProtectedRoute allowedRoles={['Service PO Admin']}><TeamMappingList /></ProtectedRoute>} />
+
+        {/* My Team — Manager's own team self-service (§8), net-new. */}
+        <Route path={ROUTES.MY_TEAM} element={<ProtectedRoute allowedRoles={['Manager']}><MyTeamList /></ProtectedRoute>} />
+
+        {/* Service PO Monthly Budget — Manager self-service, plus Service PO Admin (Business
+            module Form Master row, confirmed via GET /roles/forms). Still gated by allowedRoles
+            rather than formName since Manager's own access has no Form Master row of its own. */}
+        <Route path={ROUTES.SERVICE_PO_MONTHLY_BUDGET} element={<ProtectedRoute allowedRoles={['Manager', 'Service PO Admin']}><ServicePoMonthlyBudgetPage /></ProtectedRoute>} />
 
         {/* Settings — personal-account pages, always available to any authenticated user.
             Change Password used to live at ROUTES.PROFILE as a full page — it's now a modal
@@ -292,15 +309,19 @@ const AppRoutes = () => (
         <Route path={ROUTES.NOT_AUTHORIZED} element={<NotFound />} />
       </Route>
 
-      {/* Employee self-service — dynamic login's 'employee' loginType (Phases 1-3). Separate
-          from MainLayout entirely: an Employee has no roles/accessible-forms, so this can't be
-          gated by formName like the RBAC routes above — `employeeOnly` checks the login-type
-          flag directly (see ProtectedRoute.jsx). */}
+      {/* Employee self-service — every account authenticates identically now (§2), so an
+          Employee is just the account whose single role is "Employee". Still its own layout
+          tree (separate from MainLayout — no AICopilotWidget, reduced EmployeeSidebar), but
+          each screen is now formName-gated by Form Master + Role-Form Mapping like everywhere
+          else, layered on top of the `employeeOnly` tier check — it used to be static/always-on
+          regardless of any mapping. Dashboard alone carries `allowIfNoFormsMapped` so a
+          brand-new Employee with nothing mapped yet still has a landing page instead of an
+          infinite Not-Authorized <-> MainLayout-redirect loop (see ProtectedRoute.jsx). */}
       <Route element={<ProtectedRoute employeeOnly><EmployeeLayout /></ProtectedRoute>}>
-        <Route path={ROUTES.EMPLOYEE_DASHBOARD} element={<EmployeeDashboard />} />
-        <Route path={ROUTES.EMPLOYEE_TIMESHEET} element={<EmployeeTimesheet />} />
-        <Route path={ROUTES.EMPLOYEE_MONTHLY_SUMMARY} element={<EmployeeMonthlySummary />} />
-        <Route path={ROUTES.EMPLOYEE_REPORTS} element={<EmployeeReports />} />
+        <Route path={ROUTES.EMPLOYEE_DASHBOARD} element={<ProtectedRoute formName={FORM_NAMES.EMPLOYEE_DASHBOARD} allowIfNoFormsMapped><EmployeeDashboard /></ProtectedRoute>} />
+        <Route path={ROUTES.EMPLOYEE_TIMESHEET} element={<ProtectedRoute formName={FORM_NAMES.EMPLOYEE_WORK_LOG}><EmployeeTimesheet /></ProtectedRoute>} />
+        <Route path={ROUTES.EMPLOYEE_MONTHLY_SUMMARY} element={<ProtectedRoute formName={FORM_NAMES.EMPLOYEE_MONTHLY_SUMMARY}><EmployeeMonthlySummary /></ProtectedRoute>} />
+        <Route path={ROUTES.EMPLOYEE_REPORTS} element={<ProtectedRoute formName={FORM_NAMES.EMPLOYEE_REPORTS}><EmployeeReports /></ProtectedRoute>} />
       </Route>
 
       <Route path={ROUTES.NOT_FOUND} element={<NotFound />} />

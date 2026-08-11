@@ -15,7 +15,7 @@ import {
   LayoutDashboard, Users, UserCog, Shield, Building2,
   FileText, FolderOpen, FolderKanban, Clock, DollarSign,
   Tag, Layers, Sparkles, ClipboardList, Landmark, ShieldCheck,
-  FileBarChart2, PieChart, CalendarRange, UserCheck, Network, Receipt,
+  FileBarChart2, PieChart, CalendarRange, UserCheck, Network, Receipt, Table2, Wallet,
 } from 'lucide-react';
 import { ROUTES } from '@/constants/routes';
 
@@ -26,7 +26,6 @@ export const FORM_NAMES = {
   USERS: 'Users',
   ROLES: 'Roles',
   FORMS: 'Forms',
-  USER_ROLE_MAPPING: 'User Role Mapping',
   // Not in FORM_ROUTE_CONFIG on purpose — it's a per-row "Manage Forms" action on the Roles
   // page, not its own sidebar item. Kept here only so useHasForm() can gate that action.
   ROLE_FORM_MAPPING: 'Role Form Mapping',
@@ -52,6 +51,26 @@ export const FORM_NAMES = {
   // Matches the backend's actual Form Master row name (confirmed via GET /roles/forms), not
   // the report's own page title.
   REPORT_CLIENT_SERVICE_PO_HOURS: 'Client × Service PO',
+  // Employee self-service (§ RBAC mapping migration) — previously static/hardcoded
+  // (EmployeeSidebar + `employeeOnly`), now driven by Form Master + Role-Form Mapping like
+  // every other screen. "Employee Dashboard" (not "Dashboard") on purpose — that name is
+  // already taken by the admin-side Dashboard form and this lookup is a flat, name-keyed map;
+  // reusing "Dashboard" here would collide and resolve to the wrong route.
+  EMPLOYEE_DASHBOARD: 'Employee Dashboard',
+  EMPLOYEE_WORK_LOG: 'My Work Log',
+  EMPLOYEE_MONTHLY_SUMMARY: 'Monthly Summary',
+  EMPLOYEE_REPORTS: 'PO Wise Report',
+  // Manager Timesheet Access & Approval — the backend's Form Master grants Managers these two
+  // Resources-module rows (distinct from the Employee Self-Service "My Work Log" row an Employee
+  // gets). Both point at the same EmployeeTimesheet page/route as "My Work Log" — that page
+  // already renders the Manager-only selector + approval view on top of the self-service UI, and
+  // the spec forbids a separate screen for this.
+  MANAGER_TIMESHEET: 'Timesheet',
+  MANAGER_TIMESHEET_APPROVAL: 'Timesheet Approval',
+  // Business module, Service PO Admin login (confirmed via GET /roles/forms) — the Form Master
+  // row now exists on the backend, so this is picked up automatically by Sidebar's RBAC-driven
+  // buildNavGroups() instead of the Manager-only hardcoded injection below.
+  SERVICE_PO_MONTHLY_BUDGET: 'Service PO Monthly Budget',
 };
 
 // form_name (lowercased/trimmed) -> { to, icon, exact }. Icons are used by the dynamic Sidebar.
@@ -62,7 +81,6 @@ export const FORM_ROUTE_CONFIG = {
   [FORM_NAMES.USERS]: { to: ROUTES.USERS, icon: UserCog },
   [FORM_NAMES.ROLES]: { to: ROUTES.ROLES, icon: Shield },
   [FORM_NAMES.FORMS]: { to: ROUTES.FORMS, icon: ClipboardList },
-  [FORM_NAMES.USER_ROLE_MAPPING]: { to: ROUTES.USER_ROLE_MAPPING, icon: UserCog },
   [FORM_NAMES.ENTITY_MASTER]: { to: ROUTES.ENTITIES, icon: Landmark },
   [FORM_NAMES.BU_ADMIN_MASTER]: { to: ROUTES.BU_ADMINS, icon: ShieldCheck },
   [FORM_NAMES.CLIENTS]: { to: ROUTES.CLIENTS, icon: Building2 },
@@ -79,6 +97,13 @@ export const FORM_ROUTE_CONFIG = {
   [FORM_NAMES.REPORT_RESOURCE_ALLOCATION]: { to: ROUTES.REPORT_RESOURCE_ALLOCATION, icon: PieChart },
   [FORM_NAMES.REPORT_RESOURCE_PROJECT_UTILIZATION]: { to: ROUTES.REPORT_RESOURCE_PROJECT_UTILIZATION, icon: UserCheck },
   [FORM_NAMES.REPORT_CLIENT_SERVICE_PO_HOURS]: { to: ROUTES.REPORT_CLIENT_SERVICE_PO_HOURS, icon: Receipt },
+  [FORM_NAMES.EMPLOYEE_DASHBOARD]: { to: ROUTES.EMPLOYEE_DASHBOARD, icon: LayoutDashboard, exact: true },
+  [FORM_NAMES.EMPLOYEE_WORK_LOG]: { to: ROUTES.EMPLOYEE_TIMESHEET, icon: Clock },
+  [FORM_NAMES.EMPLOYEE_MONTHLY_SUMMARY]: { to: ROUTES.EMPLOYEE_MONTHLY_SUMMARY, icon: Table2 },
+  [FORM_NAMES.EMPLOYEE_REPORTS]: { to: ROUTES.EMPLOYEE_REPORTS, icon: FileBarChart2 },
+  [FORM_NAMES.MANAGER_TIMESHEET]: { to: ROUTES.EMPLOYEE_TIMESHEET, icon: Clock },
+  [FORM_NAMES.MANAGER_TIMESHEET_APPROVAL]: { to: ROUTES.EMPLOYEE_TIMESHEET, icon: Clock },
+  [FORM_NAMES.SERVICE_PO_MONTHLY_BUDGET]: { to: ROUTES.SERVICE_PO_MONTHLY_BUDGET, icon: Wallet, exact: true },
 };
 
 const NORMALIZED_CONFIG = Object.fromEntries(
@@ -88,3 +113,28 @@ const NORMALIZED_CONFIG = Object.fromEntries(
 // Case-insensitive/trimmed lookup so minor casing differences from the Form Master
 // don't silently drop a nav item.
 export const resolveFormRoute = (formName) => NORMALIZED_CONFIG[(formName ?? '').trim().toLowerCase()];
+
+// First route the accessible-forms map actually resolves to, module order be damned — used as
+// a landing page when Dashboard itself isn't one of the caller's mapped forms.
+export const getFirstAccessibleRoute = (accessibleForms) => {
+  const allForms = Object.values(accessibleForms ?? {}).flat();
+  for (const f of allForms) {
+    const cfg = resolveFormRoute(f?.name);
+    if (cfg) return cfg.to;
+  }
+  return null;
+};
+
+// Pure — takes a plain accessible-forms map (module -> [{ name }]), not a hook, so it works
+// equally from Redux-derived state (useAuth's homeRoute) and from a login response's own
+// `forms` object before that's even landed in the store yet (Login.jsx's post-auth redirect,
+// where waiting for a re-render to read it back out of Redux would be too late). Dashboard is
+// the destination whenever it's actually mapped, or when NOTHING is mapped (the zero-forms
+// safety net ProtectedRoute's `allowIfNoFormsMapped` also honors) — otherwise the first form
+// that resolves to a real route.
+export const computeHomeRoute = (accessibleForms) => {
+  const allForms = Object.values(accessibleForms ?? {}).flat();
+  const hasDashboard = allForms.some((f) => (f?.name ?? '').trim().toLowerCase() === 'dashboard');
+  if (hasDashboard || allForms.length === 0) return ROUTES.DASHBOARD;
+  return getFirstAccessibleRoute(accessibleForms) ?? ROUTES.DASHBOARD;
+};

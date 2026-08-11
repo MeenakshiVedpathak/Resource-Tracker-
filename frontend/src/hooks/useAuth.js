@@ -13,8 +13,11 @@ import {
   selectHasWriteAccess,
   selectCurrentCompany,
   selectCompanyId,
+  selectCurrentEmployee,
+  selectHierarchyRank,
   selectIsPlatformAdmin,
   selectIsEmployee,
+  selectIsEmployeeOnly,
   logout,
   setCredentials,
   setUser,
@@ -22,6 +25,8 @@ import {
   setIsOriginalDataVisible,
   setCompany,
 } from '@/store/slices/authSlice';
+import { ROUTES } from '@/constants/routes';
+import { computeHomeRoute } from '@/constants/rbacForms';
 
 export const useAuth = () => {
   const dispatch = useDispatch();
@@ -38,11 +43,24 @@ export const useAuth = () => {
   const hasWriteAccess = useSelector(selectHasWriteAccess);   // any role carries "Read & Write"
   const company = useSelector(selectCurrentCompany); // multi-tenancy retrofit — null until backend sends one
   const companyId = useSelector(selectCompanyId);
-  const isPlatformAdmin = useSelector(selectIsPlatformAdmin); // authoritative backend flag, not a role
-  const isEmployee = useSelector(selectIsEmployee); // dynamic login: 'employee' loginType
+  const employee = useSelector(selectCurrentEmployee); // login's sibling `employee` object, or null
+  const hierarchyRank = useSelector(selectHierarchyRank); // the held role's position in the RBAC hierarchy
+  const isPlatformAdmin = useSelector(selectIsPlatformAdmin); // derived from the single held role
+  const isEmployee = useSelector(selectIsEmployee); // true if Employee is ANY held role
+  const isEmployeeOnly = useSelector(selectIsEmployeeOnly); // true only if Employee is the SOLE held role
 
   // true if the user has ANY of the specified roles
   const hasRole = (...requiredRoles) => roles.some((r) => requiredRoles.includes(r));
+
+  // Where "back to home" should actually land — Dashboard is no longer guaranteed to be
+  // accessible to everyone (see ProtectedRoute's `allowIfNoFormsMapped`), so anything that used
+  // to hardcode ROUTES.DASHBOARD as a safe fallback (NotFound's button) should use this instead
+  // to avoid bouncing an Entity-Admin-like account straight back into Not Authorized.
+  const homeRoute = isEmployeeOnly
+    ? ROUTES.EMPLOYEE_DASHBOARD
+    : isPlatformAdmin
+      ? ROUTES.ADMINS
+      : computeHomeRoute(accessibleForms);
 
   const hasPermission = (permission) => permissions.includes(permission);
 
@@ -72,8 +90,12 @@ export const useAuth = () => {
     hasWriteAccess,
     company,
     companyId,
+    employee,
+    hierarchyRank,
     isPlatformAdmin,
     isEmployee,
+    isEmployeeOnly,
+    homeRoute,
     hasRole,
     hasPermission,
     logout: handleLogout,

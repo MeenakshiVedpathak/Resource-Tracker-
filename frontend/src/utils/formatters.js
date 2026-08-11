@@ -99,6 +99,8 @@ export const getStatusColor = (status) => {
     failed: 'destructive',
     'in-progress': 'info',
     'on-hold': 'warning',
+    pending_approval: 'warning',
+    approved: 'success',
   };
   return map[status?.toLowerCase()] ?? 'secondary';
 };

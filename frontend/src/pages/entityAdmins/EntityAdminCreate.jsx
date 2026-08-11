@@ -1,18 +1,25 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { CheckCircle2, Eye, EyeOff, UserPlus } from 'lucide-react';
+import { Eye, EyeOff, UserPlus } from 'lucide-react';
 import { useCreateEntityAdmin } from '@/hooks/useEntityAdmins';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
+import { ROUTES } from '@/constants/routes';
 import {
   Form, FormField, FormItem, FormLabel, FormControl, FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import PageHeader from '@/components/common/PageHeader';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetFooter,
+} from '@/components/ui/sheet';
 
 const entityAdminSchema = z.object({
   email: z.string().min(1, 'Email is required').email('Enter a valid email'),
@@ -20,9 +27,9 @@ const entityAdminSchema = z.object({
 });
 
 const EntityAdminCreate = () => {
-  const { error: showError } = useNotification();
+  const navigate = useNavigate();
+  const { success, error: showError } = useNotification();
   const [showPassword, setShowPassword] = useState(false);
-  const [created, setCreated] = useState(null);
 
   const createMutation = useCreateEntityAdmin();
 
@@ -33,38 +40,26 @@ const EntityAdminCreate = () => {
 
   const onSubmit = (values) => {
     createMutation.mutate(values, {
-      onSuccess: (res) => {
-        setCreated(res?.data ?? null);
-        form.reset({ email: '', password: '' });
+      onSuccess: () => {
+        success('Entity Admin created successfully.');
+        navigate(ROUTES.ENTITY_ADMINS);
       },
       onError: (err) => showError(extractApiError(err)),
     });
   };
 
+  const handleClose = () => {
+    navigate(ROUTES.ENTITY_ADMINS);
+  };
+
   return (
-    <div className="space-y-4">
-      <PageHeader
-        title="Create Entity Admin"
-        description="Provision a new Entity Admin — they'll create their own Entities after logging in"
-      />
+    <Sheet open={true} onOpenChange={(open) => !open && handleClose()}>
+      <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col bg-white overflow-hidden">
+        <SheetHeader className="px-5 py-4 border-b">
+          <SheetTitle className="text-base font-medium text-left">New Entity Admin</SheetTitle>
+        </SheetHeader>
 
-      <Card className="max-w-md">
-        <CardHeader>
-          <CardTitle className="text-base">New Entity Admin</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {created && (
-            <div className="mb-5 flex items-start gap-2.5 rounded-md border border-green-200 bg-green-50 px-3 py-2.5">
-              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-green-600" />
-              <div className="text-sm text-green-800">
-                <p className="font-medium">Entity Admin created successfully.</p>
-                <p className="mt-0.5 text-xs text-green-700">
-                  {created.email} (ID: {created.id})
-                </p>
-              </div>
-            </div>
-          )}
-
+        <div className="flex-1 overflow-y-auto bg-slate-50/50 p-5">
           <Form {...form}>
             <form id="entity-admin-form" onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4">
               <FormField
@@ -114,16 +109,21 @@ const EntityAdminCreate = () => {
                   </FormItem>
                 )}
               />
-
-              <Button type="submit" form="entity-admin-form" disabled={createMutation.isPending} size="sm" className="mt-1 h-8 text-xs bg-blue-600 hover:bg-blue-700 text-white">
-                <UserPlus className="mr-2 h-3.5 w-3.5" />
-                {createMutation.isPending ? 'Creating...' : 'Create Entity Admin'}
-              </Button>
             </form>
           </Form>
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+
+        <SheetFooter className="px-5 py-4 border-t bg-gray-50/80 mt-auto flex justify-end gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={handleClose} className="h-8 text-xs">
+            Close
+          </Button>
+          <Button type="submit" form="entity-admin-form" disabled={createMutation.isPending} size="sm" className="h-8 text-xs bg-blue-600 hover:bg-blue-700 text-white">
+            <UserPlus className="mr-2 h-3.5 w-3.5" />
+            {createMutation.isPending ? 'Creating...' : 'Create Entity Admin'}
+          </Button>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   );
 };
 

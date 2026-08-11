@@ -13,6 +13,7 @@ export const QUERY_KEYS = {
   // Employees
   EMPLOYEES: (params) => ['employees', params],
   EMPLOYEES_ACTIVE: ['employees', 'active'],
+  ELIGIBLE_DELIVERY_HEADS: ['employees', 'eligible-delivery-heads'],
   EMPLOYEE: (id) => ['employees', id],
 
   // Users
@@ -23,7 +24,6 @@ export const QUERY_KEYS = {
   ROLES: (params) => ['roles', params],
   ROLE: (id) => ['roles', id],
   ACCESSIBLE_FORMS: (roleIds) => ['roles', 'forms', [...roleIds].sort()],
-  USER_ROLE_MAPPINGS: (userId) => ['roles', 'user-mappings', userId],
   ROLE_FORM_MAPPINGS: (roleId) => ['roles', 'form-mappings', roleId],
 
   // Forms (Form Master)
@@ -38,10 +38,25 @@ export const QUERY_KEYS = {
   // Projects
   PROJECTS: (params) => ['projects', params],
   PROJECTS_ACTIVE: ['projects', 'active'],
+  PROJECTS_BY_CLIENT: (clientId) => ['projects', 'by-client', clientId],
   PROJECT: (id) => ['projects', id],
 
-  // Manager Mapping
-  MANAGER_MAPPINGS: ['manager-mappings'],
+  // Team Mapping (Service PO Admin self-service)
+  TEAM_MAPPINGS: ['team-mappings'],
+  TEAM_MAPPING_AVAILABLE_MANAGERS: ['team-mappings', 'available-managers'],
+  TEAM_MAPPING_SERVICE_PO_GRANTS: ['team-mappings', 'service-po-grants'],
+
+  // My Team (Manager self-service)
+  MY_TEAM_EMPLOYEES: ['my-team', 'employees'],
+  MY_TEAM_SERVICE_POS: ['my-team', 'service-pos'],
+  MY_TEAM_APPROVAL_SUMMARY: (params) => ['my-team', 'approval-summary', params],
+
+  // Admins (Platform Admin -> Admin)
+  ADMINS: (params) => ['admins', params],
+
+  // Entity Admins (Admin tier)
+  ENTITY_ADMINS: (params) => ['entity-admins', params],
+  ENTITY_ADMIN: (id) => ['entity-admins', id],
 
   // Companies — now Entity Admin scoped
   COMPANIES: (params) => ['companies', params],
@@ -79,6 +94,9 @@ export const QUERY_KEYS = {
   // Monthly Costs
   MONTHLY_COSTS: (params) => ['monthly-costs', params],
   MONTHLY_COST: (id) => ['monthly-costs', id],
+
+  // Service PO Monthly Budget (Manager self-service)
+  SERVICE_PO_MONTHLY_BUDGET_CURRENT: ['service-po-monthly-budget', 'current'],
 
   // Timesheets
   TIMESHEETS: (params) => ['timesheets', params],

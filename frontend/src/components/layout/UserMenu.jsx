@@ -19,7 +19,7 @@ import ChangePasswordDialog from '@/components/profile/ChangePasswordDialog';
 import { cn } from '@/utils/cn';
 
 const UserMenu = () => {
-  const { user, company, logout } = useAuth();
+  const { user, employee, company, logout } = useAuth();
   const navigate = useNavigate();
   const { error } = useNotification();
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
@@ -35,10 +35,10 @@ const UserMenu = () => {
     }
   };
 
-  // full_name/email_id are the actual fields on both the User and Employee login response
-  // shapes — name/username/email were never populated, which is why this was blank before.
-  const displayName = user?.full_name ?? user?.name ?? user?.username ?? user?.email_id ?? user?.email ?? '';
-  const email = user?.email_id ?? user?.email;
+  // An Employee's name lives on the login response's sibling `employee` object, not `user` —
+  // fall back to it first since every other account has no linked Employee at all.
+  const displayName = employee?.full_name ?? user?.full_name ?? user?.email ?? '';
+  const email = user?.email;
   const roleName = user?.role?.role_name ?? null;
 
   return (

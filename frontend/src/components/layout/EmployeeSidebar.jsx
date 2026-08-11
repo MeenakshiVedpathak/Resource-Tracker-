@@ -1,31 +1,35 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useDispatch, useSelector } from 'react-redux';
 import { selectSidebarCollapsed, toggleSidebar, setSidebarCollapsed } from '@/store/slices/uiSlice';
 import { cn } from '@/utils/cn';
-import { ROUTES } from '@/constants/routes';
-import { ChevronLeft, ChevronRight, LayoutDashboard, Clock, Table2, FileBarChart2 } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+import { resolveFormRoute } from '@/constants/rbacForms';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
-// Static (not RBAC-driven) — an Employee always sees exactly these, per spec.
-// Grouped into module sections to match the admin Sidebar's layout.
-const NAV_GROUPS = [
-  {
-    label: 'Core',
-    items: [{ label: 'Dashboard', icon: LayoutDashboard, to: ROUTES.EMPLOYEE_DASHBOARD, exact: true }],
-  },
-  {
-    label: 'Work Log',
-    items: [
-      { label: 'My Work Log', icon: Clock, to: ROUTES.EMPLOYEE_TIMESHEET, exact: false },
-      { label: 'Monthly Summary', icon: Table2, to: ROUTES.EMPLOYEE_MONTHLY_SUMMARY, exact: false },
-    ],
-  },
-  {
-    label: 'Report',
-    items: [{ label: 'PO Wise Report', icon: FileBarChart2, to: ROUTES.EMPLOYEE_REPORTS, exact: false }],
-  },
-];
+// RBAC-driven, same as the admin Sidebar's buildNavGroups — one group per module, one item per
+// mapped form. Used to be a hardcoded NAV_GROUPS array shown to every Employee regardless of
+// any Form Master mapping; now an Employee only sees what's actually mapped to them.
+const buildNavGroups = (accessibleForms) =>
+  Object.entries(accessibleForms ?? {})
+    .map(([moduleName, forms]) => ({
+      label: moduleName,
+      items: (forms ?? [])
+        .map((form) => {
+          const cfg = resolveFormRoute(form.name);
+          if (!cfg) {
+            console.warn(
+              `[RBAC] EmployeeSidebar: no route mapping for form "${form.name}" (module "${moduleName}"). ` +
+              `Add it to src/constants/rbacForms.js.`
+            );
+            return null;
+          }
+          return { label: form.name, icon: cfg.icon, to: cfg.to, exact: cfg.exact };
+        })
+        .filter(Boolean),
+    }))
+    .filter((group) => group.items.length > 0);
 
 const isActive = (to, pathname, exact) =>
   exact ? pathname === to : pathname === to || pathname.startsWith(to + '/');
@@ -34,6 +38,8 @@ const EmployeeSidebar = () => {
   const dispatch = useDispatch();
   const collapsed = useSelector(selectSidebarCollapsed);
   const { pathname } = useLocation();
+  const { accessibleForms } = useAuth();
+  const navGroups = useMemo(() => buildNavGroups(accessibleForms), [accessibleForms]);
 
   useEffect(() => {
     if (window.innerWidth < 768) dispatch(setSidebarCollapsed(true));
@@ -71,7 +77,7 @@ const EmployeeSidebar = () => {
         </div>
 
         <nav className="flex-1 overflow-y-auto overflow-x-hidden py-3 px-2 space-y-4 scrollbar-thin">
-          {NAV_GROUPS.map((group) => (
+          {navGroups.map((group) => (
             <div key={group.label} className="space-y-0.5">
               {!collapsed && (
                 <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/30 whitespace-nowrap">

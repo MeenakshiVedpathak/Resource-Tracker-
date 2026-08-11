@@ -1,7 +1,7 @@
 export const ROUTES = {
   // Auth — a real route per screen (not just steps in one page): the Forgot Password flow's
-  // state (email/loginType/otp/timers) needs "refresh/back-button/direct-URL -> Email screen"
-  // semantics, which only make sense with separate URLs to refresh/navigate/back into.
+  // state (email/otp/timers) needs "refresh/back-button/direct-URL -> Email screen" semantics,
+  // which only make sense with separate URLs to refresh/navigate/back into.
   LOGIN: '/login',
   FORGOT_PASSWORD: '/forgot-password',
   FORGOT_PASSWORD_OTP: '/forgot-password/verify-otp',
@@ -45,24 +45,26 @@ export const ROUTES = {
   FORM_NEW: '/forms/new',
   FORM_EDIT: '/forms/:id/edit',
 
-  USER_ROLE_MAPPING: '/user-role-mapping',
-  USER_ROLE_MAPPING_EDIT: '/user-role-mapping/:userId/edit',
-
   // Role-Form Mapping is a per-row action on the Roles page, not its own menu item
   ROLE_FORM_MAPPING_EDIT: '/roles/:roleId/forms',
 
-  // Entity Admin creation (Platform Admin only — Entity Admin tier)
+  // Admin management (Platform Admin only, §6.1)
+  ADMINS: '/admins',
+  ADMIN_NEW: '/admins/new',
+
+  // Entity Admin management (Admin tier, platform-wide, §6.2)
+  ENTITY_ADMINS: '/entity-admins',
   ENTITY_ADMIN_NEW: '/entity-admins/new',
 
-  // Entity Master (Entity Admin only)
+  // Entity Master (Admin / Entity Admin)
   ENTITIES: '/entities',
   ENTITY_NEW: '/entities/new',
   ENTITY_EDIT: '/entities/:id/edit',
 
-  // BU Admin Master (Entity Admin only)
+  // BU Admin Master (Admin / Entity Admin)
   BU_ADMINS: '/bu-admins',
 
-  // Company Management — now Entity Admin scoped (not Platform Admin) per the Entity Admin tier
+  // Company Management — Admin (platform-wide) or Entity Admin (own Entities), §6.3
   COMPANIES: '/companies',
   COMPANY_NEW: '/companies/new',
   COMPANY_EDIT: '/companies/:id/edit',
@@ -114,8 +116,14 @@ export const ROUTES = {
   REPORT_RESOURCE_PROJECT_UTILIZATION: '/reports/resource-project-utilization',
   REPORT_CLIENT_SERVICE_PO_HOURS: '/reports/client-service-po-hours',
 
-  // Manager Mapping — Head Manager / BU Admin only
-  MY_MANAGERS: '/my-managers',
+  // Team Mapping — Service PO Admin self-service (§7)
+  TEAM_MAPPINGS: '/team-mappings',
+
+  // My Team — Manager self-service (§8)
+  MY_TEAM: '/my-team',
+
+  // Service PO Monthly Budget — Manager self-service, net-new (Service PO Manager screen)
+  SERVICE_PO_MONTHLY_BUDGET: '/service-po-monthly-budget',
 
   // Settings
   NOTIFICATIONS: '/notifications',

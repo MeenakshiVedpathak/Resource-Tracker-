@@ -49,7 +49,15 @@ apiClient.interceptors.response.use(
   async (error) => {
     const original = error.config;
 
-    if (error.response?.status === 401 && !original._retry) {
+    // RBAC mock: a mock session's access token (`mock.<userId>.<ts>`, see rbacMockDb.js) is
+    // never valid against the real backend — any still-unmocked endpoint (AI Copilot widget,
+    // notifications polling, etc.) legitimately 401s here even though the mock session itself
+    // is fine. Without this guard, that single unrelated 401 would trigger the refresh-token
+    // dance below (which also 401s against the real backend) and hard-logout the mock session
+    // via `handleLogout()` — wiping the demo out from under an otherwise-working screen.
+    const isMockSession = getAccessToken()?.startsWith('mock.');
+
+    if (error.response?.status === 401 && !original._retry && !isMockSession) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });
@@ -107,7 +115,7 @@ const TOKEN_KEYS = {
   ACCESSIBLE_FORMS: 'rut_accessible_forms',
   ORIGINAL_DATA_VISIBLE: 'rut_original_data_visible',
   COMPANY: 'rut_company',
-  LOGIN_TYPE: 'rut_login_type',
+  EMPLOYEE: 'rut_employee',
 };
 
 export const getAccessToken = () => localStorage.getItem(TOKEN_KEYS.ACCESS);
@@ -156,6 +164,17 @@ export const getStoredCompany = () => {
   }
 };
 
+// RBAC redesign: login's sibling `employee` object — null for any account with no linked
+// Employee (every Admin/Manager-tier account that isn't also staff).
+export const getStoredEmployee = () => {
+  try {
+    const raw = localStorage.getItem(TOKEN_KEYS.EMPLOYEE);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
 export const saveTokens = (accessToken, refreshToken) => {
   localStorage.setItem(TOKEN_KEYS.ACCESS, accessToken);
   localStorage.setItem(TOKEN_KEYS.REFRESH, refreshToken);
@@ -185,16 +204,11 @@ export const saveCompany = (company) => {
   }
 };
 
-// Dynamic login: `loginType` ('employee' | 'user') from the login response, discriminating
-// which dashboard/layout to route into — same pattern as `is_platform_admin`, but a
-// top-level field on the response rather than a flag on `user`.
-export const getStoredLoginType = () => localStorage.getItem(TOKEN_KEYS.LOGIN_TYPE);
-
-export const saveLoginType = (loginType) => {
-  if (loginType) {
-    localStorage.setItem(TOKEN_KEYS.LOGIN_TYPE, loginType);
+export const saveEmployee = (employee) => {
+  if (employee) {
+    localStorage.setItem(TOKEN_KEYS.EMPLOYEE, JSON.stringify(employee));
   } else {
-    localStorage.removeItem(TOKEN_KEYS.LOGIN_TYPE);
+    localStorage.removeItem(TOKEN_KEYS.EMPLOYEE);
   }
 };
 
@@ -206,7 +220,7 @@ export const clearAuth = () => {
   localStorage.removeItem(TOKEN_KEYS.ACCESSIBLE_FORMS);
   localStorage.removeItem(TOKEN_KEYS.ORIGINAL_DATA_VISIBLE);
   localStorage.removeItem(TOKEN_KEYS.COMPANY);
-  localStorage.removeItem(TOKEN_KEYS.LOGIN_TYPE);
+  localStorage.removeItem(TOKEN_KEYS.EMPLOYEE);
 };
 
 // ── Logout handler (avoids circular dependency with store) ──

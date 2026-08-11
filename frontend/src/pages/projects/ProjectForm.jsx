@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Save } from 'lucide-react';
 import { useProject, useCreateProject, useUpdateProject } from '@/hooks/useProjects';
+import { useActiveClients } from '@/hooks/useClients';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import { ROUTES } from '@/constants/routes';
@@ -14,6 +15,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { cn } from '@/utils/cn';
 import {
   Sheet,
@@ -24,6 +26,7 @@ import {
 } from "@/components/ui/sheet";
 
 const projectSchema = z.object({
+  client_id: z.coerce.number({ required_error: 'Client is required' }).positive('Client is required'),
   project_name: z
     .string()
     .min(1, 'Project name is required')
@@ -47,12 +50,14 @@ const ProjectForm = () => {
   const { success, error: showError } = useNotification();
 
   const { data: project, isPending: isLoadingProject } = useProject(id);
+  const { data: activeClients = [], isPending: isLoadingClients } = useActiveClients();
   const createMutation = useCreateProject();
   const updateMutation = useUpdateProject(id);
 
   const form = useForm({
     resolver: zodResolver(projectSchema),
     defaultValues: {
+      client_id: '',
       project_name: '',
       project_description: '',
       status: 'active',
@@ -62,6 +67,7 @@ const ProjectForm = () => {
   useEffect(() => {
     if (project && isEdit) {
       form.reset({
+        client_id: project.client_id ?? project.client?.id ?? '',
         project_name: project.project_name ?? '',
         project_description: project.project_description ?? '',
         status: project.status ?? 'active',
@@ -109,6 +115,29 @@ const ProjectForm = () => {
                 <div className="space-y-2">
                   <h3 className="text-xs font-semibold text-foreground border-b pb-1">Project Details</h3>
                   <div className="grid grid-cols-1 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="client_id"
+                      render={({ field }) => (
+                        <FormItem className="space-y-1">
+                          <FormLabel className="text-[11px] text-muted-foreground font-medium"><span className="text-destructive mr-0.5">*</span> Client</FormLabel>
+                          <SearchableSelect
+                            options={activeClients.map((c) => ({
+                              value: String(c.id),
+                              label: c.client_name,
+                            }))}
+                            value={field.value}
+                            onValueChange={(val) => field.onChange(val ? parseInt(val, 10) : undefined)}
+                            disabled={isLoadingClients}
+                            placeholder="Select client"
+                            searchPlaceholder="Search client..."
+                            className="h-8 text-sm"
+                          />
+                          <FormMessage className="text-[10px]" />
+                        </FormItem>
+                      )}
+                    />
+
                     <FormField
                       control={form.control}
                       name="project_name"

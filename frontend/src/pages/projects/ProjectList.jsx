@@ -110,6 +110,14 @@ const ProjectList = () => {
       size: 190,
       cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="170px" />,
     }),
+    columnHelper.display({
+      id: 'client',
+      header: 'Client',
+      size: 200,
+      cell: ({ row }) => (
+        <TruncatedCell value={row.original.client_name ?? row.original.client?.client_name} maxWidth="180px" />
+      ),
+    }),
     columnHelper.accessor('project_description', {
       header: 'Description',
       size: 220,

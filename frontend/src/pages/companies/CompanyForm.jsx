@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { Save, Eye, EyeOff } from 'lucide-react';
 import { useCompany, useCreateCompany, useUpdateCompany } from '@/hooks/useCompanies';
 import { useActiveEntities } from '@/hooks/useEntities';
+import { useAuth } from '@/hooks/useAuth';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import { ROUTES } from '@/constants/routes';
@@ -56,10 +57,16 @@ const CompanyForm = () => {
   const entityIdParam = searchParams.get('entity_id');
   const isEdit = !!id;
   const { success, error: showError } = useNotification();
+  const { hasRole } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
 
   const { data: company, isPending: isLoadingCompany } = useCompany(id);
-  const { data: activeEntities = [], isPending: isLoadingEntities } = useActiveEntities();
+  const {
+    data: activeEntities = [],
+    isPending: isLoadingEntities,
+    isError: isEntitiesError,
+    error: entitiesError,
+  } = useActiveEntities();
   const createMutation = useCreateCompany();
   const updateMutation = useUpdateCompany(id);
 
@@ -78,6 +85,26 @@ const CompanyForm = () => {
       });
     }
   }, [company, isEdit, form]);
+
+  // Surfaces a silent-failure gap: without this, a failed /entities fetch just renders the
+  // dropdown empty with no indication anything went wrong.
+  useEffect(() => {
+    if (isEntitiesError) showError(`Failed to load entities: ${extractApiError(entitiesError)}`);
+  }, [isEntitiesError, entitiesError, showError]);
+
+  // An Entity Admin is only ever adding a BU to their own Entity — GET /entities is already
+  // scoped to whatever's assigned to them, so default-select it instead of making them pick
+  // from a list of one (still changeable if they hold more than one Entity).
+  const didDefaultEntityRef = useRef(false);
+  useEffect(() => {
+    if (
+      !isEdit && !entityIdParam && hasRole('Entity Admin') &&
+      !isLoadingEntities && activeEntities.length > 0 && !didDefaultEntityRef.current
+    ) {
+      didDefaultEntityRef.current = true;
+      form.setValue('entity_id', activeEntities[0].id);
+    }
+  }, [isEdit, entityIdParam, hasRole, isLoadingEntities, activeEntities, form]);
 
   const onSubmit = (values) => {
     const mutation = isEdit ? updateMutation : createMutation;
@@ -139,11 +166,17 @@ const CompanyForm = () => {
                               }))}
                               value={field.value ? String(field.value) : ''}
                               onValueChange={(val) => field.onChange(val ? parseInt(val, 10) : undefined)}
-                              disabled={isLoadingEntities}
+                              disabled={isLoadingEntities || hasRole('Entity Admin')}
                               placeholder="Select entity"
                               searchPlaceholder="Search entity..."
+                              emptyMessage={isEntitiesError ? 'Failed to load entities.' : 'No active entities found.'}
                               className="h-8 text-sm"
                             />
+                            {isEntitiesError && (
+                              <p className="text-[10px] text-destructive">
+                                Couldn't load entities: {extractApiError(entitiesError)}
+                              </p>
+                            )}
                             <FormMessage className="text-[10px]" />
                           </FormItem>
                         )}

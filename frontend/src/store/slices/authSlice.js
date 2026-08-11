@@ -4,8 +4,9 @@ import {
   getStoredRoles, saveRoles, getStoredAccessibleForms, saveAccessibleForms,
   getStoredOriginalDataVisible, saveOriginalDataVisible,
   getStoredCompany, saveCompany,
-  getStoredLoginType, saveLoginType,
+  getStoredEmployee, saveEmployee,
 } from '@/services/apiClient';
+import { ROLE_NAMES } from '@/constants/roleHierarchy';
 
 const initialState = {
   user: getStoredUser(),
@@ -27,10 +28,9 @@ const initialState = {
   // Multi-tenancy retrofit: the logged-in user's company, once the backend sends one on login.
   // `null` for every user today (no backend support yet) — see services/apiClient.js.
   company: getStoredCompany(),
-  // Dynamic login: 'employee' | 'user' from the login response — discriminates the Employee
-  // self-service area from the existing RBAC-driven User/Admin app. `null` until the backend
-  // actually sends this field.
-  loginType: getStoredLoginType(),
+  // RBAC redesign: login's sibling `employee` object — null for any account with no linked
+  // Employee (every Admin/Manager-tier account that isn't also staff).
+  employee: getStoredEmployee(),
 };
 
 const authSlice = createSlice({
@@ -38,7 +38,7 @@ const authSlice = createSlice({
   initialState,
   reducers: {
     setCredentials: (state, action) => {
-      const { user, accessToken, refreshToken, roles, company, loginType } = action.payload;
+      const { user, employee, accessToken, refreshToken, roles, company } = action.payload;
       state.user = user;
       state.accessToken = accessToken;
       state.refreshToken = refreshToken;
@@ -46,9 +46,11 @@ const authSlice = createSlice({
       saveTokens(accessToken, refreshToken);
       saveUser(user);
 
-      const nextLoginType = loginType ?? null;
-      state.loginType = nextLoginType;
-      saveLoginType(nextLoginType);
+      // `employee` is the login response's sibling object — null for any account with no
+      // linked Employee (see §2.1 of the RBAC spec).
+      const nextEmployee = employee ?? null;
+      state.employee = nextEmployee;
+      saveEmployee(nextEmployee);
 
       // `company` is optional and absent from today's real login response — defaults to null
       // (no fabricated tenant data) until the backend actually sends one.
@@ -112,7 +114,7 @@ const authSlice = createSlice({
       state.accessibleFormsLoaded = true;
       state.isOriginalDataVisible = false;
       state.company = null;
-      state.loginType = null;
+      state.employee = null;
       clearAuth();
     },
   },
@@ -146,14 +148,33 @@ export const selectIsOriginalDataVisible = (state) => !!state.auth.isOriginalDat
 export const selectCurrentCompany = (state) => state.auth.company ?? null;
 export const selectCompanyId = (state) => state.auth.company?.id ?? null;
 
-// Authoritative Platform Admin flag from POST /auth/login's user object (`is_platform_admin`) —
-// a user-level flag, independent of the company-scoped Role/Form RBAC system entirely (a Platform
-// Admin has no roles/company at all).
-export const selectIsPlatformAdmin = (state) => !!state.auth.user?.is_platform_admin;
+// RBAC redesign: login's sibling `employee` object — null for any account with no linked
+// Employee.
+export const selectCurrentEmployee = (state) => state.auth.employee ?? null;
 
-// Dynamic login: true when the login response's `loginType` was 'employee' — routes into the
-// Employee self-service area (dashboard/timesheet) instead of the RBAC-driven User/Admin app.
-export const selectIsEmployee = (state) => state.auth.loginType === 'employee';
+// A user's single role now carries `hierarchy_rank` directly (see selectAuthRoles) — this is
+// the RBAC redesign's replacement for role-name arrays where a numeric comparison is more useful
+// (e.g. "is this actor senior enough to do X").
+export const selectHierarchyRank = (state) => state.auth.roles?.[0]?.hierarchyRank ?? null;
+
+// Platform Admin is now just the top of the role hierarchy, not a separate user-level flag —
+// derived from the single role every login returns.
+export const selectIsPlatformAdmin = (state) => state.auth.roles?.[0]?.name === 'Platform Admin';
+
+// An Employee login is identified by its role name — every account authenticates identically
+// now (no more separate `loginType`). Checks ANY held role, not just the first: an account can
+// hold Employee alongside another role (e.g. Employee + Manager), and it must still pass this
+// to reach Employee self-service routes (ProtectedRoute's `employeeOnly` gate).
+export const selectIsEmployee = (state) => (state.auth.roles ?? EMPTY_ROLES).some((r) => r.name === 'Employee');
+
+// True only when Employee is the account's SOLE role. MainLayout uses this (not selectIsEmployee)
+// to decide whether to bounce a user straight to the Employee dashboard — a genuinely multi-role
+// account (Employee + Manager) must still be able to reach MainLayout for its other role's
+// screens, not just the Employee-only ones.
+export const selectIsEmployeeOnly = (state) => {
+  const roles = state.auth.roles ?? EMPTY_ROLES;
+  return roles.length > 0 && roles.every((r) => r.name === 'Employee');
+};
 
 // Returns array of role name strings — prefers the RBAC roles[] from login, falling back to the
 // legacy user.roles/user.role shape so any pre-RBAC session data still resolves.

@@ -5,6 +5,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Save } from 'lucide-react';
 import { useEntity, useCreateEntity, useUpdateEntity } from '@/hooks/useEntities';
+import { useEntityAdmins } from '@/hooks/useEntityAdmins';
+import { useAuth } from '@/hooks/useAuth';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import { ROUTES } from '@/constants/routes';
@@ -13,6 +15,7 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { cn } from '@/utils/cn';
 import {
   Sheet,
@@ -27,6 +30,7 @@ const entitySchema = z.object({
     .string()
     .min(1, 'Entity name is required')
     .max(200, 'Entity name cannot exceed 200 characters'),
+  entity_admin_user_id: z.coerce.number().positive().optional().nullable(),
   status: z.enum(['active', 'inactive']).default('active'),
 });
 
@@ -43,15 +47,30 @@ const EntityForm = () => {
   const { id } = useParams();
   const isEdit = !!id;
   const { success, error: showError } = useNotification();
+  const { hasRole } = useAuth();
+  // Entity Admin can create/edit their own Entity, but the backend always forces
+  // entity_admin_user_id to their own id and 403s if a different value is sent — so this
+  // control only makes sense for an Admin caller.
+  const isEntityAdminCaller = hasRole('Entity Admin');
 
   const { data: entity, isPending: isLoadingEntity } = useEntity(id);
+  // Already scoped server-side to Entity Admins this Admin created (§2) — safe to populate the
+  // dropdown directly from this list with no extra filtering. Skipped entirely for an Entity
+  // Admin caller since the field is hidden for them.
+  const { data: entityAdminsData, isPending: isLoadingEntityAdmins } = useEntityAdmins(
+    { status: 'active', limit: 200 },
+    { enabled: !isEntityAdminCaller }
+  );
   const createMutation = useCreateEntity();
   const updateMutation = useUpdateEntity(id);
+
+  const entityAdmins = entityAdminsData?.data ?? [];
 
   const form = useForm({
     resolver: zodResolver(entitySchema),
     defaultValues: {
       entity_name: '',
+      entity_admin_user_id: null,
       status: 'active',
     },
   });
@@ -60,15 +79,24 @@ const EntityForm = () => {
     if (entity && isEdit) {
       form.reset({
         entity_name: entity.entity_name ?? '',
+        entity_admin_user_id: entity.entity_admin_user_id ?? entity.entity_admin?.id ?? null,
         status: entity.status ?? 'active',
       });
     }
   }, [entity, isEdit, form]);
 
   const onSubmit = (values) => {
+    const { entity_admin_user_id, ...rest } = values;
     const clean = Object.fromEntries(
-      Object.entries(values).filter(([, v]) => v !== '' && v != null)
+      Object.entries(rest).filter(([, v]) => v !== '' && v != null)
     );
+    // Never sent for an Entity Admin caller — the backend ignores/forces this to their own id
+    // anyway, and sending a stale value risks the "not your Entity Admin" 403 on edit.
+    if (!isEntityAdminCaller) {
+      // Always sent explicitly (even null) so unassigning an Entity Admin on edit actually
+      // reaches the backend — the blanket filter above would otherwise drop a `null`.
+      clean.entity_admin_user_id = entity_admin_user_id ?? null;
+    }
 
     const mutation = isEdit ? updateMutation : createMutation;
     mutation.mutate(clean, {
@@ -118,6 +146,31 @@ const EntityForm = () => {
                         </FormItem>
                       )}
                     />
+
+                    {!isEntityAdminCaller && (
+                      <FormField
+                        control={form.control}
+                        name="entity_admin_user_id"
+                        render={({ field }) => (
+                          <FormItem className="space-y-1">
+                            <FormLabel className="text-[11px] text-muted-foreground font-medium">Entity Admin</FormLabel>
+                            <SearchableSelect
+                              options={[
+                                { label: 'Unassigned', value: 'none' },
+                                ...entityAdmins.map((a) => ({ label: a.email, value: String(a.id) })),
+                              ]}
+                              value={field.value != null ? String(field.value) : 'none'}
+                              onValueChange={(v) => field.onChange(v === 'none' ? null : Number(v))}
+                              disabled={isLoadingEntityAdmins}
+                              placeholder="Select entity admin"
+                              searchPlaceholder="Search entity admin..."
+                              className="h-8 text-sm border-gray-200"
+                            />
+                            <FormMessage className="text-[10px]" />
+                          </FormItem>
+                        )}
+                      />
+                    )}
 
                     <FormField
                       control={form.control}

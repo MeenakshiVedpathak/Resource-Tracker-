@@ -6,9 +6,10 @@ import { z } from 'zod';
 import { Save } from 'lucide-react';
 import { useServicePO, useCreateServicePO, useUpdateServicePO } from '@/hooks/useServicePOs';
 import { useActiveClients } from '@/hooks/useClients';
-import { useActiveProjects } from '@/hooks/useProjects';
+import { useProjectsByClient } from '@/hooks/useProjects';
 import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
 import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
+import { useEligibleDeliveryHeads } from '@/hooks/useEmployees';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import { ROUTES } from '@/constants/routes';
@@ -31,10 +32,13 @@ const poSchema = z
   .object({
     service_po_name: z
       .string()
-      .min(3, 'PO name must be at least 3 characters')
-      .max(200, 'PO name cannot exceed 200 characters'),
+      .min(3, 'Service PO name must be at least 3 characters')
+      .max(200, 'Service PO name cannot exceed 200 characters'),
     client_id: z.coerce.number({ required_error: 'Client is required' }).positive('Client is required'),
     project_id: z.coerce.number({ required_error: 'Project is required' }).positive('Project is required'),
+    delivery_head_employee_id: z.coerce
+      .number({ required_error: 'Delivery Head is required' })
+      .positive('Delivery Head is required'),
     service_type_id: z.coerce
       .number({ required_error: 'Service type is required' })
       .positive('Service type is required'),
@@ -60,6 +64,15 @@ const poSchema = z
     { message: 'End date must be on or after start date', path: ['end_date'] }
   );
 
+// Field names for the eligible-delivery-heads response aren't confirmed against the backend
+// contract yet, so this reads common variants defensively rather than assuming one exact shape.
+const formatDeliveryHeadLabel = (e) => {
+  const name = e.full_name ?? e.employee_name ?? e.name ?? '';
+  const code = e.employee_code ?? e.code ?? '';
+  const email = e.email ?? '';
+  return [name, code && `(${code})`, email && `— ${email}`].filter(Boolean).join(' ');
+};
+
 const FormSkeleton = () => (
   <div className="space-y-4 p-4">
     {Array.from({ length: 4 }).map((_, i) => (
@@ -76,9 +89,14 @@ const ServicePOForm = () => {
 
   const { data: po, isPending: isLoadingPO } = useServicePO(id);
   const { data: activeClients = [], isPending: isLoadingClients } = useActiveClients();
-  const { data: activeProjects = [], isPending: isLoadingProjects } = useActiveProjects();
   const { data: serviceTypes = [], isPending: isLoadingTypes } = useActiveServiceTypes();
   const { data: activeCategories = [], isPending: isLoadingCategories } = useActiveServiceCategories();
+  const {
+    data: deliveryHeads = [],
+    isPending: isLoadingDeliveryHeads,
+    isError: isDeliveryHeadsError,
+    error: deliveryHeadsError,
+  } = useEligibleDeliveryHeads();
   const createMutation = useCreateServicePO();
   const updateMutation = useUpdateServicePO(id);
 
@@ -90,6 +108,7 @@ const ServicePOForm = () => {
       service_po_name: '',
       client_id: '',
       project_id: '',
+      delivery_head_employee_id: '',
       service_type_id: '',
       po_value: '',
       start_date: '',
@@ -100,6 +119,16 @@ const ServicePOForm = () => {
       status: 'in-progress',
     },
   });
+
+  // Project dropdown is scoped to whichever Client is currently selected — refetches whenever
+  // it changes, and is disabled until a Client is picked (see Project field below).
+  const watchedClientId = form.watch('client_id');
+  const {
+    data: clientProjects = [],
+    isPending: isLoadingProjects,
+    isError: isProjectsError,
+    error: projectsError,
+  } = useProjectsByClient(watchedClientId);
 
   useEffect(() => {
     if (po && isEdit) {
@@ -113,6 +142,8 @@ const ServicePOForm = () => {
         service_po_name: po.service_po_name ?? '',
         client_id: po.client_id ?? '',
         project_id: po.project_id ?? po.project?.id ?? '',
+        delivery_head_employee_id:
+          po.delivery_head_employee_id ?? po.delivery_head?.id ?? po.delivery_head_employee?.id ?? '',
         service_type_id: po.service_type_id ?? '',
         po_value: po.po_value ?? '',
         start_date: po.start_date ? po.start_date.slice(0, 10) : '',
@@ -186,7 +217,7 @@ const ServicePOForm = () => {
                 render={({ field }) => (
                   <FormItem className="space-y-1 sm:col-span-2">
                     <FormLabel className="text-[13px]">
-                      <span className="text-destructive">*</span> PO Name
+                      <span className="text-destructive">*</span> Service PO Name
                     </FormLabel>
                     <FormControl>
                       <Input placeholder="e.g. Annual Support Services" className="h-8 text-sm" {...field} />
@@ -210,7 +241,12 @@ const ServicePOForm = () => {
                         label: c.client_name
                       }))}
                       value={field.value}
-                      onValueChange={(val) => field.onChange(val ? parseInt(val, 10) : undefined)}
+                      onValueChange={(val) => {
+                        field.onChange(val ? parseInt(val, 10) : undefined);
+                        // Changing Client invalidates whatever Project was picked for the
+                        // previous Client — never carry it over (§3).
+                        form.setValue('project_id', '');
+                      }}
                       disabled={isLoadingClients}
                       placeholder="Select client"
                       searchPlaceholder="Search client..."
@@ -230,17 +266,54 @@ const ServicePOForm = () => {
                       <span className="text-destructive">*</span> Project
                     </FormLabel>
                     <SearchableSelect
-                      options={activeProjects.map(p => ({
+                      options={clientProjects.map(p => ({
                         value: String(p.id),
                         label: p.project_name
                       }))}
                       value={field.value}
                       onValueChange={(val) => field.onChange(val ? parseInt(val, 10) : undefined)}
-                      disabled={isLoadingProjects}
-                      placeholder="Select project"
+                      disabled={!watchedClientId || isLoadingProjects}
+                      placeholder={watchedClientId ? 'Select project' : 'Select a client first'}
                       searchPlaceholder="Search project..."
+                      emptyMessage={isProjectsError ? 'Failed to load projects.' : 'No projects found for this client.'}
                       className="h-8 text-sm"
                     />
+                    {isProjectsError && (
+                      <p className="text-[11px] text-destructive">
+                        Couldn't load projects: {extractApiError(projectsError)}
+                      </p>
+                    )}
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="delivery_head_employee_id"
+                render={({ field }) => (
+                  <FormItem className="space-y-1">
+                    <FormLabel className="text-[13px]">
+                      <span className="text-destructive">*</span> Delivery Head
+                    </FormLabel>
+                    <SearchableSelect
+                      options={deliveryHeads.map((e) => ({
+                        value: String(e.id ?? e.employee_id),
+                        label: formatDeliveryHeadLabel(e),
+                      }))}
+                      value={field.value}
+                      onValueChange={(val) => field.onChange(val ? parseInt(val, 10) : undefined)}
+                      disabled={isLoadingDeliveryHeads}
+                      placeholder="Select delivery head"
+                      searchPlaceholder="Search by name, code or email..."
+                      emptyMessage={isDeliveryHeadsError ? 'Failed to load delivery heads.' : 'No eligible delivery heads found.'}
+                      className="h-8 text-sm"
+                    />
+                    {isDeliveryHeadsError && (
+                      <p className="text-[11px] text-destructive">
+                        Couldn't load delivery heads: {extractApiError(deliveryHeadsError)}
+                      </p>
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}
@@ -248,7 +321,7 @@ const ServicePOForm = () => {
 
               <div className="space-y-1">
                 <FormLabel className="text-[13px]">
-                  <span className="text-destructive">*</span> Service Category
+                  <span className="text-destructive">*</span> Service PO Category
                 </FormLabel>
                   <SearchableSelect
                     options={activeCategories.map(c => ({
@@ -273,7 +346,7 @@ const ServicePOForm = () => {
                 render={({ field }) => (
                   <FormItem className="space-y-1">
                     <FormLabel className="text-[13px]">
-                      <span className="text-destructive">*</span> Service Type
+                      <span className="text-destructive">*</span> Service PO Type
                     </FormLabel>
                         <SearchableSelect
                           options={serviceTypes
@@ -324,7 +397,7 @@ const ServicePOForm = () => {
                 name="service_description"
                 render={({ field }) => (
                   <FormItem className="space-y-1 sm:col-span-2">
-                    <FormLabel className="text-[13px]"><span className="text-destructive">*</span> Service Description</FormLabel>
+                    <FormLabel className="text-[13px]"><span className="text-destructive">*</span> Service PO Description</FormLabel>
                     <FormControl>
                       <Textarea
                         placeholder="Describe the services included in this PO…"

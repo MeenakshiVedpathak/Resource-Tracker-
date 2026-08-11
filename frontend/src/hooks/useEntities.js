@@ -11,12 +11,18 @@ export const useEntities = (params) =>
 
 // No dedicated /entities/active/list endpoint (unlike Clients/Projects) — reuse the paginated
 // list with a generous limit, same fallback the app already uses for Service Types/Categories.
+// `refetchOnMount: 'always'` because this feeds a create-flow dropdown (Create BU) that's opened
+// rarely but must reflect Entities created moments ago on a different screen — the 10 min
+// staleTime below is fine for avoiding duplicate fetches within one mount, but must not let a
+// cached empty result (e.g. fetched before any Entity existed) silently persist into a later
+// mount and hide real options with no error and no visible network call.
 export const useActiveEntities = () =>
   useQuery({
     queryKey: QUERY_KEYS.ENTITIES_ACTIVE,
     queryFn: () => entitiesApi.getAll({ status: 'active', limit: 200 }),
     select: (data) => (Array.isArray(data?.data) ? data.data : []),
     staleTime: 1000 * 60 * 10,
+    refetchOnMount: 'always',
   });
 
 export const useEntity = (id) =>

@@ -13,12 +13,12 @@ import { extractApiError } from '@/services/apiClient';
 import { applyFieldErrors } from '@/utils/authErrors';
 import { emailSchema } from '@/utils/validators';
 import { ROUTES } from '@/constants/routes';
+import { computeHomeRoute } from '@/constants/rbacForms';
 import {
   Form, FormField, FormItem, FormLabel, FormControl, FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import AccountTypeDialog from '@/components/auth/AccountTypeDialog';
 
 const loginSchema = z.object({
   email: emailSchema,
@@ -32,11 +32,11 @@ const Login = () => {
   const { error: showError } = useNotification();
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  // Set when /login responds with requiresUserTypeSelection — holds what's needed to
-  // resubmit once the user picks an account type in the dialog below.
-  const [accountTypePrompt, setAccountTypePrompt] = useState(null);
 
-  const from = location.state?.from?.pathname ?? ROUTES.DASHBOARD;
+  // null (not ROUTES.DASHBOARD) when there's no explicit deep-link target — Dashboard is no
+  // longer guaranteed to be reachable by everyone, so falling back to it unconditionally here
+  // would bounce an account without it mapped straight into Not Authorized right after login.
+  const from = location.state?.from?.pathname ?? null;
 
   const form = useForm({
     resolver: zodResolver(loginSchema),
@@ -44,24 +44,18 @@ const Login = () => {
   });
 
   const completeLogin = (data) => {
-    const { user, employee, accessToken, refreshToken, roles, forms, loginType } = data;
+    const { user, employee, accessToken, refreshToken, roles, forms } = data;
+    const roleName = user?.role?.role_name;
+    // Employee-only means Employee is the account's SOLE role — a multi-role account (e.g.
+    // Employee + Manager) must land wherever `forms` sends it below, not always the Employee
+    // dashboard, so this checks the full `roles[]` array rather than the singular FK role.
+    const isEmployeeOnly = (roles ?? []).length > 0 && (roles ?? []).every((r) => r.name === 'Employee');
 
-    // Dynamic login: an Employee response nests identity under `employee` (id, employee_code,
-    // full_name, email_id, company_id, status) instead of `user`, and omits roles/forms
-    // entirely (RBAC doesn't apply to employees) — normalize both into the same `user` slot
-    // so authSlice/useAuth stay generic.
-    const principal = user ?? employee;
-
-    // Multi-tenancy retrofit: `user.company` (full object, incl. `id`) and `user.is_platform_admin`
-    // are both confirmed fields on the login response's user object — `null`/`false` respectively
-    // for a Platform Admin, who belongs to no company. Neither exists on an employee.
-    // Dynamic login: `loginType` ('employee' | 'user') is a top-level field on the response,
-    // discriminating the Employee self-service area from the existing RBAC-driven app. Only
-    // the Employee path currently sends it — a missing/non-'employee' value means User.
-    setCredentials({
-      user: principal, accessToken, refreshToken, roles, loginType,
-      company: principal?.company ?? null,
-    });
+    // The login response only carries `company_id` (a number), not a nested `company` object
+    // (§0/§2.1) — reshape it into `{ id }` so the existing X-Company-Id request header (which
+    // every company-scoped role must send) keys off it unchanged.
+    const company = user?.company_id ? { id: user.company_id } : null;
+    setCredentials({ user, employee, accessToken, refreshToken, roles, company });
 
     // Paint immediately from whatever the login response embedded, if anything — avoids a
     // blank sidebar flash while the call below is in flight.
@@ -69,46 +63,43 @@ const Login = () => {
 
     // POST /roles/forms is the authoritative source of truth for what each user can see —
     // always call it after login (not just when the login response happens to omit `forms`),
-    // and let its result win. Fired in the background so it doesn't delay navigation.
+    // and let its result win. Fired in the background so it doesn't delay navigation when we
+    // already have enough to decide (`forms` embedded, or an explicit deep-link `from`) — only
+    // awaited below when neither of those tells us where to land.
     const roleIds = (roles ?? []).map((r) => r.id);
-    if (roleIds.length) {
-      rolesApi.getAccessibleForms(roleIds)
-        .then(setAccessibleForms)
-        .catch(() => {
-          // Non-fatal: MainLayout's useSyncAccessibleForms fallback will retry
-          // if the store ends up with no accessible-forms cached at all.
-        });
-    }
+    const formsPromise = roleIds.length
+      ? rolesApi.getAccessibleForms(roleIds)
+        .then((fetched) => { setAccessibleForms(fetched); return fetched; })
+        .catch(() => forms ?? {})
+        // Non-fatal on failure: MainLayout's useSyncAccessibleForms fallback will retry
+        // if the store ends up with no accessible-forms cached at all.
+      : Promise.resolve(forms ?? {});
 
     setIsOriginalDataVisible((roles ?? []).some((r) => r.is_original_data_visible === true));
 
-    // Dynamic login: an Employee account always lands on the Employee dashboard, regardless
-    // of `from` — mirrors the Platform Admin redirect below (MainLayout/AuthLayout also
-    // enforce this on every navigation, but this avoids an unnecessary bounce right after login).
-    // Multi-tenancy retrofit: a Platform Admin's only screen is now Entity Admin creation
-    // (Company Management moved to the Entity Admin tier), so send them straight there rather
-    // than `from`/Dashboard.
-    const destination = loginType === 'employee'
-      ? ROUTES.EMPLOYEE_DASHBOARD
-      : (user?.is_platform_admin ? ROUTES.ENTITY_ADMIN_NEW : from);
-    navigate(destination, { replace: true });
-  };
-
-  // Shared by the initial submit and the account-type dialog's resubmission — an email can
-  // now resolve to a User, an Employee, both (requiresUserTypeSelection), or neither (404).
-  const attemptLogin = async (email, password, loginType) => {
-    const res = await authApi.login(email, password, loginType);
-    if (res.requiresUserTypeSelection) {
-      setAccountTypePrompt({ message: res.message, accountTypes: res.accountTypes, email, password });
-      return;
+    // An Employee/Platform Admin always land on their own fixed home (MainLayout also enforces
+    // this on every navigation, but this avoids an unnecessary bounce right after login).
+    // Everyone else: honor an explicit deep-link target if there is one; otherwise pick a real
+    // landing page from whichever forms answer is available — Dashboard is no longer
+    // guaranteed to be one of them (see ProtectedRoute's `allowIfNoFormsMapped`).
+    if (isEmployeeOnly) {
+      navigate(ROUTES.EMPLOYEE_DASHBOARD, { replace: true });
+    } else if (roleName === 'Platform Admin') {
+      navigate(ROUTES.ADMINS, { replace: true });
+    } else if (from) {
+      navigate(from, { replace: true });
+    } else if (forms) {
+      navigate(computeHomeRoute(forms), { replace: true });
+    } else {
+      formsPromise.then((resolvedForms) => navigate(computeHomeRoute(resolvedForms), { replace: true }));
     }
-    completeLogin(res.data);
   };
 
   const onSubmit = async (values) => {
     setIsLoading(true);
     try {
-      await attemptLogin(values.email, values.password);
+      const res = await authApi.login(values.email, values.password);
+      completeLogin(res.data);
     } catch (err) {
       const status = err?.response?.status;
       if (status === 404) {
@@ -125,28 +116,6 @@ const Login = () => {
       }
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  // Closes the account-type dialog and clears the in-memory password (never persisted) so a
-  // cancelled/defensively-aborted second attempt always lands back on a clean login form.
-  const closeAccountTypePrompt = () => {
-    setAccountTypePrompt(null);
-    form.setValue('password', '');
-  };
-
-  const handleAccountTypeSelect = async (type) => {
-    if (!accountTypePrompt) return;
-    try {
-      await attemptLogin(accountTypePrompt.email, accountTypePrompt.password, type);
-      setAccountTypePrompt(null);
-    } catch (err) {
-      showError(extractApiError(err));
-      // 401 here shouldn't normally happen — the password already matched both accounts
-      // server-side — but defensively bail back to the plain login form rather than leaving
-      // a now-stale dialog open. Any other error (403 inactive, network, 5xx) leaves the
-      // dialog open so the user can retry or pick the other account type.
-      if (err?.response?.status === 401) closeAccountTypePrompt();
     }
   };
 
@@ -239,14 +208,6 @@ const Login = () => {
       <p className="mt-6 text-center text-xs text-muted-foreground">
         Contact your administrator if you don't have access.
       </p>
-
-      <AccountTypeDialog
-        open={!!accountTypePrompt}
-        onOpenChange={(open) => !open && closeAccountTypePrompt()}
-        message={accountTypePrompt?.message}
-        accountTypes={accountTypePrompt?.accountTypes}
-        onSelect={handleAccountTypeSelect}
-      />
     </motion.div>
   );
 };

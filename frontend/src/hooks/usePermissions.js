@@ -3,8 +3,8 @@ import { useAuth } from '@/hooks/useAuth';
 // Read vs Read & Write gating. Permission is carried by the ROLE itself (not per-form/module —
 // the backend contract has no per-form permission field), so this is a single check per user:
 // true if ANY held role carries "Read & Write". An optional roleName narrows the check to only
-// consider roles the caller cares about (e.g. useCanWrite('Management') for a Management-only
-// screen where only Management's own permission should matter).
+// consider roles the caller cares about (e.g. useCanWrite('HR') for an HR-only screen where
+// only HR's own permission should matter).
 // A Platform Admin has no roles at all (sits above the per-company RBAC system), so it always
 // gets full write access on the screens it's allowed onto (Role/Forms Master) rather than
 // reading as permanently read-only.

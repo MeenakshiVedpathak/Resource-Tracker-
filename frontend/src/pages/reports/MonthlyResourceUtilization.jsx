@@ -21,38 +21,11 @@ import { useAuth } from '@/hooks/useAuth';
 
 const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
-const STATIC_COLUMNS = [
-  {
-    category_id: 1,
-    category_name: 'Billable',
-    service_types: [
-      { id: 's-1', name: 'Project' },
-      { id: 's-2', name: 'Staff Augmentation' },
-      { id: 's-3', name: 'ServicePack' },
-      { id: 's-4', name: 'AMC' },
-    ]
-  },
-  {
-    category_id: 2,
-    category_name: 'Customer Non-Billable',
-    service_types: [
-      { id: 's-5', name: 'Customer Work ( Presales, POC, L&D, Extended support)' },
-      { id: 's-6', name: 'Complimentary Hours' },
-    ]
-  },
-  {
-    category_id: 3,
-    category_name: 'Non-Billable',
-    service_types: [
-      { id: 's-7', name: 'Product / Solution / Framework Development' },
-      { id: 's-8', name: 'Internal Support ( HR / Marketing / Finance etc.,)' },
-      { id: 's-9', name: 'Team Management' },
-      { id: 's-10', name: 'Leaves (hours)' },
-      { id: 's-11', name: 'L&D' },
-      { id: 's-12', name: 'Others (Non-work)' },
-    ]
-  }
-];
+// Fixed 3-slot visual order/coloring for the known categories. Matched by name for this
+// ONLY — it's cosmetic (sort order + color), never used to identify a column, so a category
+// rename just falls back to "unranked" (appended last, default color) instead of breaking.
+const CATEGORY_ORDER = { billable: 1, customernonbillable: 2, nonbillable: 3 };
+const normalizeCategoryName = (name) => (name || '').toLowerCase().replace(/[^a-z]/g, '');
 
 const fh = (val) => {
   const n = Number(val);
@@ -184,45 +157,37 @@ const MonthlyResourceUtilization = () => {
   const allRecords = Array.isArray(allData?.data?.records) ? allData.data.records : null;
 
   const dynamicColumns = data?.data?.columns ?? [];
-  
-  const columns = STATIC_COLUMNS.map(staticCat => {
-    const dynCat = dynamicColumns.find(c => 
-      c.category_name.toLowerCase().replace(/[^a-z]/g, '') === staticCat.category_name.toLowerCase().replace(/[^a-z]/g, '')
-    );
-    
-    const mergedServiceTypes = staticCat.service_types.map(staticSt => {
-      const dynSt = dynCat?.service_types.find(st => {
-        const cleanDyn = st.name.trim().toLowerCase().replace(/\s+/g, ' ');
-        const cleanStatic = staticSt.name.trim().toLowerCase().replace(/\s+/g, ' ');
-        return cleanDyn === cleanStatic || cleanStatic.includes(cleanDyn) || cleanDyn.includes(cleanStatic);
-      });
-      return dynSt ? dynSt : staticSt;
-    });
 
-    if (dynCat) {
-      dynCat.service_types.forEach(dynSt => {
-        const cleanDyn = dynSt.name.trim().toLowerCase().replace(/\s+/g, ' ');
-        if (!mergedServiceTypes.find(st => {
-          const cleanStatic = st.name.trim().toLowerCase().replace(/\s+/g, ' ');
-          return cleanDyn === cleanStatic || cleanStatic.includes(cleanDyn) || cleanDyn.includes(cleanStatic);
-        })) {
-          mergedServiceTypes.push(dynSt);
-        }
-      });
-    }
+  // Columns come from the live service-type/category master data — matched and looked up
+  // by real, stable id, never by name — so editing a service type's label can never split
+  // it into two columns or silently merge it into a different one.
+  const columns = activeServiceCategories
+    .map(cat => ({
+      category_id: cat.id,
+      category_name: cat.name,
+      colorRank: CATEGORY_ORDER[normalizeCategoryName(cat.name)] ?? 99,
+      service_types: activeServiceTypes
+        .filter(st => st.service_category_id === cat.id)
+        .sort((a, b) => a.id - b.id)
+        .map(st => ({ id: st.id, name: st.service_type_name })),
+    }))
+    .filter(cat => cat.service_types.length > 0)
+    .sort((a, b) => a.colorRank - b.colorRank);
 
-    return {
-      ...staticCat,
-      // Keep the static category_id for colors/keys; store the backend id separately for filtering
-      dynCategoryId: dynCat ? dynCat.category_id : null,
-      service_types: mergedServiceTypes
-    };
-  });
-
+  // Fold in any service type id the report returned that isn't in the current active
+  // master list (e.g. since deactivated) so historical hours for it don't just disappear.
+  const knownServiceTypeIds = new Set(columns.flatMap(c => c.service_types.map(st => st.id)));
   dynamicColumns.forEach(dynCat => {
-    if (!columns.find(c => c.category_name.toLowerCase().replace(/[^a-z]/g, '') === dynCat.category_name.toLowerCase().replace(/[^a-z]/g, ''))) {
-      columns.push(dynCat);
-    }
+    dynCat.service_types.forEach(dynSt => {
+      if (knownServiceTypeIds.has(dynSt.id)) return;
+      knownServiceTypeIds.add(dynSt.id);
+      let target = columns.find(c => normalizeCategoryName(c.category_name) === normalizeCategoryName(dynCat.category_name));
+      if (!target) {
+        target = { category_id: dynCat.category_id, category_name: dynCat.category_name, colorRank: 99, service_types: [] };
+        columns.push(target);
+      }
+      target.service_types.push(dynSt);
+    });
   });
 
   // Dropdown options from master data (all categories/types, not just current month)
@@ -231,13 +196,8 @@ const MonthlyResourceUtilization = () => {
     .map(st => ({ label: st.service_type_name, value: String(st.id) }));
 
   // Frontend-only filtering — does not affect the API call
-  // Use dynCategoryId (backend id) for category filter so "Customer Non-Billable" and
-  // "Non-Billable" never collide (they have different static category_ids for colors/keys)
   const filteredColumns = columns
-    .filter(cat => {
-      if (serviceCategoryId === 'all') return true;
-      return cat.dynCategoryId != null && String(cat.dynCategoryId) === serviceCategoryId;
-    })
+    .filter(cat => serviceCategoryId === 'all' || String(cat.category_id) === serviceCategoryId)
     .map(cat => ({
       ...cat,
       service_types: cat.service_types.filter(st =>
@@ -295,8 +255,8 @@ const MonthlyResourceUtilization = () => {
     }
   };
 
-  const getCategoryColorClass = (catId) => {
-    switch(catId) {
+  const getCategoryColorClass = (rank) => {
+    switch(rank) {
       case 1: return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400';
       case 2: return 'bg-blue-500/10 text-blue-700 dark:text-blue-400';
       case 3: return 'bg-orange-500/10 text-orange-700 dark:text-orange-400';
@@ -304,8 +264,8 @@ const MonthlyResourceUtilization = () => {
     }
   };
 
-  const getCellColorClass = (catId) => {
-    switch(catId) {
+  const getCellColorClass = (rank) => {
+    switch(rank) {
       case 1: return 'bg-emerald-500/[0.02]';
       case 2: return 'bg-blue-500/[0.02]';
       case 3: return 'bg-orange-500/[0.02]';
@@ -496,7 +456,7 @@ const MonthlyResourceUtilization = () => {
                       <th
                         key={cat.category_id}
                         colSpan={cat.service_types.length}
-                        className={cn('px-3 py-1.5 text-center text-xs font-semibold border-r border-border', getCategoryColorClass(cat.category_id))}
+                        className={cn('px-3 py-1.5 text-center text-xs font-semibold border-r border-border', getCategoryColorClass(cat.colorRank))}
                       >
                         {cat.category_name}
                       </th>
@@ -519,7 +479,7 @@ const MonthlyResourceUtilization = () => {
                     
                     {filteredColumns.map(cat =>
                       cat.service_types.map(st => (
-                        <th key={st.id} className={th('w-[110px] text-right', getCellColorClass(cat.category_id))}>
+                        <th key={st.id} className={th('w-[110px] text-right', getCellColorClass(cat.colorRank))}>
                           {st.name}
                         </th>
                       ))
@@ -553,7 +513,7 @@ const MonthlyResourceUtilization = () => {
                       
                       {filteredColumns.map(cat =>
                         cat.service_types.map(st => (
-                          <td key={st.id} className={td('text-right', getCellColorClass(cat.category_id))}>
+                          <td key={st.id} className={td('text-right', getCellColorClass(cat.colorRank))}>
                             <HoursCell value={row.hours?.[st.id]} />
                           </td>
                         ))

@@ -1,11 +1,12 @@
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
-import { ROUTES } from '@/constants/routes';
+import { useAuth } from '@/hooks/useAuth';
 import { Home } from 'lucide-react';
 
 const NotFound = () => {
   const navigate = useNavigate();
+  const { homeRoute } = useAuth();
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -19,9 +20,9 @@ const NotFound = () => {
         <p className="mt-2 text-sm text-muted-foreground max-w-xs mx-auto">
           The page you're looking for doesn't exist or you don't have permission to access it.
         </p>
-        <Button className="mt-8" onClick={() => navigate(ROUTES.DASHBOARD)}>
+        <Button className="mt-8" onClick={() => navigate(homeRoute)}>
           <Home className="mr-2 h-4 w-4" />
-          Back to Dashboard
+          Back to Home
         </Button>
       </motion.div>
     </div>

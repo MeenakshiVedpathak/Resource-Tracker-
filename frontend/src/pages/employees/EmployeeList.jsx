@@ -9,7 +9,8 @@ import { Plus, Pencil, Trash2, KeyRound, Search, Download, Upload, CheckCircle2,
 import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { useEmployees, useDeleteEmployee, useImportEmployees, useToggleEmployeeStatus, useResetEmployeePassword } from '@/hooks/useEmployees';
+import { useEmployees, useDeleteEmployee, useImportEmployees, useToggleEmployeeStatus } from '@/hooks/useEmployees';
+import { useResetUserPassword } from '@/hooks/useUsers';
 import { employeesApi } from '@/api/employees.api';
 import { useCanWrite } from '@/hooks/usePermissions';
 import { useNotification } from '@/hooks/useNotification';
@@ -61,34 +62,43 @@ const TruncatedCell = ({ value, maxWidth = '150px', className }) => {
   );
 };
 
-const resetPasswordSchema = z.object({
-  password: passwordSchema,
-});
+const resetPasswordSchema = z
+  .object({
+    password: passwordSchema,
+    confirmPassword: z.string(),
+  })
+  .refine((d) => d.password === d.confirmPassword, {
+    message: 'Passwords do not match',
+    path: ['confirmPassword'],
+  });
 
-// Enables an Employee's dynamic login (PUT /employees/:id/reset-password) — the one path for
-// setting a password after creation, kept separate from the general Edit form.
+// PUT /users/:id/reset-password (§2.6), targeting the Employee's LINKED USER id — an Employee's
+// login lives on their linked User now, not on the Employee record itself.
 const ResetPasswordDialog = ({ employee, onOpenChange }) => {
   const { success, error: showError } = useNotification();
-  const resetMutation = useResetEmployeePassword();
+  const resetMutation = useResetUserPassword();
 
   const form = useForm({
     resolver: zodResolver(resetPasswordSchema),
-    defaultValues: { password: '' },
+    defaultValues: { password: '', confirmPassword: '' },
   });
 
   useEffect(() => {
-    if (employee) form.reset({ password: '' });
+    if (employee) form.reset({ password: '', confirmPassword: '' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [employee]);
 
   const onSubmit = (values) => {
-    resetMutation.mutate({ id: employee.id, password: values.password }, {
-      onSuccess: () => {
-        success(`Password reset for ${employee.full_name}.`);
-        onOpenChange(false);
-      },
-      onError: (err) => showError(extractApiError(err)),
-    });
+    resetMutation.mutate(
+      { id: employee.linked_user_id, newPassword: values.password, confirmPassword: values.confirmPassword },
+      {
+        onSuccess: () => {
+          success(`Password reset for ${employee.full_name}.`);
+          onOpenChange(false);
+        },
+        onError: (err) => showError(extractApiError(err)),
+      }
+    );
   };
 
   return (
@@ -99,7 +109,7 @@ const ResetPasswordDialog = ({ employee, onOpenChange }) => {
           <DialogDescription>Set a new password for {employee?.full_name}.</DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form id="reset-password-form" onSubmit={form.handleSubmit(onSubmit)}>
+          <form id="reset-password-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <FormField
               control={form.control}
               name="password"
@@ -108,6 +118,19 @@ const ResetPasswordDialog = ({ employee, onOpenChange }) => {
                   <FormLabel>New Password</FormLabel>
                   <FormControl>
                     <Input type="password" placeholder="At least 8 characters" autoComplete="new-password" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="confirmPassword"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Confirm Password</FormLabel>
+                  <FormControl>
+                    <Input type="password" placeholder="Repeat password" autoComplete="new-password" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -240,8 +263,8 @@ const EmployeeList = () => {
       meta: { sticky: true, left: 250 },
       cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="160px" />,
     }),
-    columnHelper.accessor('email_id', {
-      header: 'Email ID',
+    columnHelper.accessor('email', {
+      header: 'Email',
       size: 220,
       cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="190px" />,
     }),
@@ -279,6 +302,20 @@ const EmployeeList = () => {
       header: 'Status',
       size: 140,
       cell: (info) => <StatusToggle employee={info.row.original} />,
+    }),
+    columnHelper.accessor('is_timesheet_approval_required', {
+      header: 'Timesheet Approval',
+      size: 150,
+      // Straight from the API response, same as every other status-like column here — never
+      // computed client-side.
+      cell: (info) => {
+        const required = info.getValue() ?? true;
+        return (
+          <Badge variant={required ? 'secondary' : 'outline'} className="text-xs">
+            {required ? 'Required' : 'Not Required'}
+          </Badge>
+        );
+      },
     }),
   ], [navigate, isHR]);
 
@@ -379,7 +416,7 @@ const EmployeeList = () => {
       const exportData = data.map(emp => ({
         'Employee ID': emp.employee_code,
         'Name': emp.full_name,
-        'Email ID': emp.email_id,
+        'Email ID': emp.email,
         'Designation': emp.designation,
         'Total Experience (yrs)': emp.total_experience,
         'Company Experience (yrs)': emp.company_experience,
@@ -414,7 +451,7 @@ const EmployeeList = () => {
         const rowData = [
           emp.employee_code,
           emp.full_name,
-          emp.email_id,
+          emp.email,
           emp.designation,
           emp.total_experience || '-',
           emp.company_experience || '-',
@@ -476,7 +513,7 @@ const EmployeeList = () => {
                   <tr>
                     <td>${emp.employee_code || ''}</td>
                     <td>${emp.full_name || ''}</td>
-                    <td>${emp.email_id || ''}</td>
+                    <td>${emp.email || ''}</td>
                     <td>${emp.designation || ''}</td>
                     <td>${emp.total_experience || '-'}</td>
                     <td>${emp.company_experience || '-'}</td>

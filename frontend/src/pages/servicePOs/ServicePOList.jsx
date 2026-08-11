@@ -32,7 +32,7 @@ const columnHelper = createColumnHelper();
 
 const exportToExcel = (rows, categoryByTypeId) => {
   const header = [
-    'PO Code', 'PO Name', 'Client', 'Project', 'Service Category', 'Service Type', 'Account Manager',
+    'Service PO Number', 'Service PO Name', 'Client', 'Project', 'Service Category', 'Service Type', 'Account Manager',
     'Description', 'PO Value', 'Invoice Frequency', 'Invoice Amount',
     'Start Date', 'End Date', 'Status',
   ];
@@ -60,7 +60,7 @@ const exportToExcel = (rows, categoryByTypeId) => {
 
 // Mirrors the fields on the "New Service PO" form (ServicePOForm.jsx) in the same order.
 const SAMPLE_COLUMNS = [
-  'PO Code', 'PO Name', 'Client', 'Service Category', 'Service Type',
+  'Service PO Number', 'Service PO Name', 'Client', 'Service Category', 'Service Type',
   'Account Manager', 'Status', 'Service Description', 'PO Value',
   'Expected Man Hours', 'Start Date', 'End Date', 'Invoice Frequency', 'Invoice Amount',
 ];
@@ -262,7 +262,7 @@ const ServicePOList = () => {
       ),
     }),
     columnHelper.accessor('service_po_code', {
-      header: 'PO Code',
+      header: 'Service PO Number',
       size: 180,
       meta: { sticky: true, left: 160 },
       cell: (info) => (
@@ -272,7 +272,7 @@ const ServicePOList = () => {
       ),
     }),
     columnHelper.accessor('service_po_name', {
-      header: 'PO Name',
+      header: 'Service PO Name',
       size: 200,
       cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="180px" className="font-medium" wrap />,
     }),

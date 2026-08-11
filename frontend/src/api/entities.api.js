@@ -1,7 +1,8 @@
 import apiClient from '@/services/apiClient';
 
-// Entity Master — Entity Admin only. Backend scopes every call to the caller's own Entities;
-// no company header applies here since an Entity Admin belongs to no company.
+// Entity Master — reachable by Admin (platform-wide) and Entity Admin (own Entities); backend
+// scopes every call accordingly. No company header applies here since neither role belongs to
+// a company.
 export const entitiesApi = {
   getAll: (params) => apiClient.get('/entities', { params }).then((r) => r.data),
   getById: (id) => apiClient.get(`/entities/${id}`).then((r) => r.data?.data),

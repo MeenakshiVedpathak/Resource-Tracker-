@@ -30,11 +30,11 @@ const resetStepSchema = z
   });
 
 // Screen 3 (route: /forgot-password/reset-password). Resubmits the SAME otp already verified
-// on the previous screen — the user does not re-enter it. Requires email + otp + loginType
-// from the shared store; missing any of them is a normal "start over", not an error state.
+// on the previous screen — the user does not re-enter it. Requires email + otp from the shared
+// store; missing either is a normal "start over", not an error state.
 const ForgotPasswordReset = () => {
   const navigate = useNavigate();
-  const { email, otp, loginType, clear } = useForgotPassword();
+  const { email, otp, clear } = useForgotPassword();
   const { success, error: showError } = useNotification();
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -52,7 +52,7 @@ const ForgotPasswordReset = () => {
   const confirmValue = useWatch({ control: form.control, name: 'confirmPassword' }) || '';
 
   useEffect(() => {
-    if (!email || !otp || !loginType) {
+    if (!email || !otp) {
       navigate(ROUTES.FORGOT_PASSWORD, { replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -61,7 +61,7 @@ const ForgotPasswordReset = () => {
   // Missing state (direct visit, refresh, or stale back-navigation) — the effect above is
   // already redirecting; render a visible placeholder instead of nothing while that happens,
   // rather than a blank panel with no explanation.
-  if (!email || !otp || !loginType) {
+  if (!email || !otp) {
     return (
       <div className="flex flex-col items-center gap-3 py-12 text-center">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary/20 border-t-primary" />
@@ -73,7 +73,7 @@ const ForgotPasswordReset = () => {
   const onSubmit = async (values) => {
     setIsLoading(true);
     try {
-      const res = await authApi.resetPassword(email, otp, values.password, values.confirmPassword, loginType);
+      const res = await authApi.resetPassword(email, otp, values.password, values.confirmPassword);
       success(res?.message ?? 'Password reset successfully. You can now log in with your new password.');
       clear();
       navigate(ROUTES.LOGIN, { replace: true });

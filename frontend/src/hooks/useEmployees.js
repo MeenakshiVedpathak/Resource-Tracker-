@@ -16,6 +16,21 @@ export const useActiveEmployees = () =>
     staleTime: 1000 * 60 * 10,
   });
 
+// Service PO create/edit's Delivery Head dropdown — response envelope not yet confirmed against
+// the exact shape the new backend endpoint returns, so `select` defensively unwraps either
+// `{ data: [...] }` or a bare array.
+export const useEligibleDeliveryHeads = () =>
+  useQuery({
+    queryKey: QUERY_KEYS.ELIGIBLE_DELIVERY_HEADS,
+    queryFn: employeesApi.getEligibleDeliveryHeads,
+    select: (data) => {
+      if (Array.isArray(data)) return data;
+      if (Array.isArray(data?.data)) return data.data;
+      return [];
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+
 export const useEmployee = (id) =>
   useQuery({
     queryKey: QUERY_KEYS.EMPLOYEE(id),
@@ -65,10 +80,3 @@ export const useToggleEmployeeStatus = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['employees'] }),
   });
 };
-
-// Enables an Employee's dynamic login — doesn't touch the employees list, so no cache to
-// invalidate.
-export const useResetEmployeePassword = () =>
-  useMutation({
-    mutationFn: ({ id, password }) => employeesApi.resetPassword(id, password),
-  });

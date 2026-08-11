@@ -22,12 +22,12 @@ import { Button } from '@/components/ui/button';
 
 const otpStepSchema = z.object({ otp: otpSchema });
 
-// Screen 2 (route: /forgot-password/verify-otp). Requires email + loginType from the shared
-// store — refresh, back button, or a direct visit here without them is a normal "start over",
-// not an error state.
+// Screen 2 (route: /forgot-password/verify-otp). Requires email from the shared store —
+// refresh, back button, or a direct visit here without it is a normal "start over", not an
+// error state.
 const ForgotPasswordOtp = () => {
   const navigate = useNavigate();
-  const { email, loginType, otpExpiresAt, resendAvailableAt, setOtp, restartTimers } = useForgotPassword();
+  const { email, otpExpiresAt, resendAvailableAt, setOtp, restartTimers } = useForgotPassword();
   const { success, error: showError } = useNotification();
   const [isVerifying, setIsVerifying] = useState(false);
   const [isResending, setIsResending] = useState(false);
@@ -38,12 +38,8 @@ const ForgotPasswordOtp = () => {
 
   const form = useForm({ resolver: zodResolver(otpStepSchema), defaultValues: { otp: '' } });
 
-  // TEMPORARY diagnostic — remove once the state-handoff bug is confirmed fixed.
-  // eslint-disable-next-line no-console
-  console.log('[ForgotPasswordOtp] render', { email, loginType, otpExpiresAt, resendAvailableAt });
-
   useEffect(() => {
-    if (!email || !loginType) {
+    if (!email) {
       navigate(ROUTES.FORGOT_PASSWORD, { replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -52,15 +48,11 @@ const ForgotPasswordOtp = () => {
   // Missing state (direct visit, refresh, or stale back-navigation) — the effect above is
   // already redirecting; render a visible placeholder instead of nothing while that happens,
   // rather than a blank panel with no explanation.
-  if (!email || !loginType) {
+  if (!email) {
     return (
       <div className="flex flex-col items-center gap-3 py-12 text-center">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary/20 border-t-primary" />
         <p className="text-sm text-muted-foreground">Redirecting…</p>
-        {/* TEMPORARY diagnostic — remove once the state-handoff bug is confirmed fixed. */}
-        <p className="text-[10px] font-mono text-muted-foreground/60">
-          debug: email={JSON.stringify(email)} loginType={JSON.stringify(loginType)}
-        </p>
       </div>
     );
   }
@@ -68,7 +60,7 @@ const ForgotPasswordOtp = () => {
   const onSubmit = async ({ otp }) => {
     setIsVerifying(true);
     try {
-      await authApi.verifyOtp(email, otp, loginType);
+      await authApi.verifyOtp(email, otp);
       setOtp(otp);
       navigate(ROUTES.FORGOT_PASSWORD_RESET);
     } catch (err) {
@@ -95,14 +87,7 @@ const ForgotPasswordOtp = () => {
   const handleResend = async () => {
     setIsResending(true);
     try {
-      const res = await authApi.resendOtp(email, loginType);
-      if (res.requiresUserTypeSelection) {
-        // Shouldn't happen — loginType is always sent from here — and there's no account-type
-        // popup slot on this screen to resolve it if it somehow does. Hard error, back to Email.
-        showError(res.message);
-        navigate(ROUTES.FORGOT_PASSWORD, { replace: true });
-        return;
-      }
+      await authApi.resendOtp(email);
       success('A new OTP has been sent.');
       form.reset({ otp: '' });
       setIsLockedOut(false);
@@ -133,9 +118,6 @@ const ForgotPasswordOtp = () => {
         <h2 className="text-2xl font-bold tracking-tight">Enter verification code</h2>
         <p className="mt-1.5 text-sm text-muted-foreground">
           We've sent a 6-digit code to <span className="font-medium text-foreground">{email}</span>.
-        </p>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Resetting your {loginType === 'employee' ? 'Employee' : 'User'} account.
         </p>
       </div>
 

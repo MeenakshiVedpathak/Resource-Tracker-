@@ -6,9 +6,9 @@ import { useSyncAccessibleForms } from '@/hooks/useAccessibleForms';
 import { useAuth } from '@/hooks/useAuth';
 import { ROUTES } from '@/constants/routes';
 
-// Multi-tenancy retrofit: the full set of routes a Platform Admin may reach. Company Management
-// moved to the Entity Admin tier — a Platform Admin's own screen is now Entity Admin creation.
-const PLATFORM_ADMIN_ROUTES = [ROUTES.ENTITY_ADMIN_NEW, ROUTES.ROLES, ROUTES.FORMS];
+// RBAC redesign (§6.1): the full set of routes a Platform Admin may reach. Platform Admin only
+// manages Admins now — Entity Admin/Company management moved to the Admin/Entity Admin tiers.
+const PLATFORM_ADMIN_ROUTES = [ROUTES.ADMINS, ROUTES.ADMIN_NEW, ROUTES.ROLES, ROUTES.FORMS];
 
 const MainLayout = () => {
   // Mounted for every authenticated page load — including a hard refresh (a fresh page
@@ -17,26 +17,26 @@ const MainLayout = () => {
   // logged-in user's current role-form mappings, not a stale snapshot from last login.
   useSyncAccessibleForms();
 
-  const { isPlatformAdmin, isEmployee } = useAuth();
+  const { isPlatformAdmin, isEmployeeOnly } = useAuth();
   const { pathname } = useLocation();
 
-  // Dynamic login: an Employee has no business on any RBAC-driven Admin/User route — enforced
-  // here (not just by hiding nav items) so a direct URL visit still bounces them to their own
-  // dashboard, same as the Platform Admin check below.
-  if (isEmployee) {
+  // Dynamic login: an account whose ONLY role is Employee has no business on any RBAC-driven
+  // Admin/User route — enforced here (not just by hiding nav items) so a direct URL visit still
+  // bounces them to their own dashboard, same as the Platform Admin check below. A multi-role
+  // account (e.g. Employee + Manager) must still reach MainLayout for its other role's screens,
+  // so this checks `isEmployeeOnly`, not just `isEmployee`.
+  if (isEmployeeOnly) {
     return <Navigate to={ROUTES.EMPLOYEE_DASHBOARD} replace />;
   }
 
-  // Multi-tenancy retrofit: a Platform Admin's only screens are Entity Admin creation plus
-  // Role Master and Forms Master — enforced here (rather than in ProtectedRoute) since this is
-  // the one layout every authenticated route renders inside, regardless of whether that route
-  // uses formName/allowedRoles guards or none at all (e.g. Profile, Notifications, AI Copilot
-  // pages). `isPlatformAdmin` is the backend's authoritative `is_platform_admin` flag on the
-  // user object, not a role. Company Management is no longer reachable by a Platform Admin at
-  // all (Entity Admin tier) — the backend now 403s it for that token.
+  // A Platform Admin's only screens are Admin creation plus Role Master and Forms Master —
+  // enforced here (rather than in ProtectedRoute) since this is the one layout every
+  // authenticated route renders inside, regardless of whether that route uses
+  // formName/allowedRoles guards or none at all (e.g. Notifications, AI Copilot pages).
+  // `isPlatformAdmin` is derived from the single role every login returns (§0).
   const isOnPlatformAdminRoute = PLATFORM_ADMIN_ROUTES.some((route) => pathname.startsWith(route));
   if (isPlatformAdmin && !isOnPlatformAdminRoute) {
-    return <Navigate to={ROUTES.ENTITY_ADMIN_NEW} replace />;
+    return <Navigate to={ROUTES.ADMINS} replace />;
   }
 
   return (

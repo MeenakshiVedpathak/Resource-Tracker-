@@ -17,49 +17,32 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import AccountTypeDialog from '@/components/auth/AccountTypeDialog';
 
 const emailStepSchema = z.object({ email: emailSchema });
 
-// Screen 1 of the flow (route: /forgot-password). An email can resolve to a User, an
-// Employee, both (requiresUserTypeSelection), or neither (404).
+// Screen 1 of the flow (route: /forgot-password). Every account authenticates identically now,
+// so this always resolves to a single OTP send — no account-type disambiguation.
 const ForgotPasswordEmail = () => {
   const navigate = useNavigate();
   const { startOtpFlow } = useForgotPassword();
   const { error: showError } = useNotification();
   const [isLoading, setIsLoading] = useState(false);
-  const [accountTypePrompt, setAccountTypePrompt] = useState(null);
 
   const form = useForm({ resolver: zodResolver(emailStepSchema), defaultValues: { email: '' } });
-
-  // The resolved `loginType` comes from THIS call's response, never from a local variable —
-  // that response is the single source of truth per the API contract.
-  // ⚠️ Read defensively: the contract says this response is flat (no `data` key), but if the
-  // real backend actually nests it under `data` instead, `res.loginType` alone would silently
-  // be undefined and strand the OTP screen with no loginType — check both shapes.
-  const attemptForgotPassword = async (email, loginType) => {
-    const res = await authApi.forgotPassword(email, loginType);
-    if (res.requiresUserTypeSelection) {
-      setAccountTypePrompt({ message: res.message, accountTypes: res.accountTypes, email });
-      return;
-    }
-    const resolvedLoginType = res.loginType ?? res.data?.loginType ?? null;
-    startOtpFlow(email, resolvedLoginType);
-    navigate(ROUTES.FORGOT_PASSWORD_OTP);
-  };
 
   const onSubmit = async ({ email }) => {
     setIsLoading(true);
     try {
-      await attemptForgotPassword(email);
+      await authApi.forgotPassword(email);
+      startOtpFlow(email);
+      navigate(ROUTES.FORGOT_PASSWORD_OTP);
     } catch (err) {
       const status = err?.response?.status;
       if (status === 404) {
         form.setError('email', { message: extractApiError(err) });
       } else if (status === 429) {
         // A legitimate "you already have one in flight" case, not a hard failure — the user
-        // just waits and resubmits; we don't have a resolved loginType from a 429 to advance
-        // to the OTP screen with, so stay here.
+        // just waits and resubmits, so stay here rather than advancing to the OTP screen.
         showError(extractApiError(err));
       } else if (status === 422) {
         const { hasFieldErrors, leftover } = applyFieldErrors(err, form, ['email']);
@@ -70,17 +53,6 @@ const ForgotPasswordEmail = () => {
       }
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const handleAccountTypeSelect = async (type) => {
-    if (!accountTypePrompt) return;
-    try {
-      await attemptForgotPassword(accountTypePrompt.email, type);
-      setAccountTypePrompt(null);
-    } catch (err) {
-      showError(extractApiError(err));
-      // Leave the dialog open — the user can retry or pick the other account type.
     }
   };
 
@@ -132,14 +104,6 @@ const ForgotPasswordEmail = () => {
         <ArrowLeft className="h-3.5 w-3.5" />
         Back to Login
       </Link>
-
-      <AccountTypeDialog
-        open={!!accountTypePrompt}
-        onOpenChange={(open) => !open && setAccountTypePrompt(null)}
-        message={accountTypePrompt?.message}
-        accountTypes={accountTypePrompt?.accountTypes}
-        onSelect={handleAccountTypeSelect}
-      />
     </motion.div>
   );
 };

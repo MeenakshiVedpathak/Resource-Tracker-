@@ -11,14 +11,12 @@ const RESEND_COOLDOWN_MS = 60 * 1000;
 // which is intentional — the Email screen is the correct "start over" landing for that case.
 export const ForgotPasswordProvider = ({ children }) => {
   const [email, setEmail] = useState(null);
-  const [loginType, setLoginType] = useState(null);
   const [otp, setOtp] = useState(null);
   const [otpExpiresAt, setOtpExpiresAt] = useState(null);
   const [resendAvailableAt, setResendAvailableAt] = useState(null);
 
   const clear = () => {
     setEmail(null);
-    setLoginType(null);
     setOtp(null);
     setOtpExpiresAt(null);
     setResendAvailableAt(null);
@@ -30,9 +28,8 @@ export const ForgotPasswordProvider = ({ children }) => {
 
   // Email screen success -> starts both timers as absolute timestamps (not a relative
   // countdown) so remaining time stays correct regardless of re-renders.
-  const startOtpFlow = (resolvedEmail, resolvedLoginType) => {
+  const startOtpFlow = (resolvedEmail) => {
     setEmail(resolvedEmail);
-    setLoginType(resolvedLoginType);
     const now = Date.now();
     setOtpExpiresAt(now + OTP_VALIDITY_MS);
     setResendAvailableAt(now + RESEND_COOLDOWN_MS);
@@ -46,7 +43,7 @@ export const ForgotPasswordProvider = ({ children }) => {
   };
 
   const value = {
-    email, loginType, otp, otpExpiresAt, resendAvailableAt,
+    email, otp, otpExpiresAt, resendAvailableAt,
     setOtp, startOtpFlow, restartTimers, clear,
   };
 

@@ -5,13 +5,19 @@ import LoadingScreen from '@/components/common/LoadingScreen';
 
 // formName: gate direct URL access against the RBAC accessible-forms map (Step 5) —
 // blocks navigation to a page whose form isn't granted to any of the user's roles.
-// allowedRoles: gate against role names directly (e.g. the Management-only admin screens).
-// platformAdminOnly: gate against the backend's `is_platform_admin` user flag (multi-tenancy
-// retrofit's Company Management routes) — not a role, since a Platform Admin has none.
-// employeeOnly: gate against the dynamic-login `loginType === 'employee'` flag (Employee
-// self-service routes) — sends a non-Employee back to their own dashboard, not not-authorized,
-// since an Admin/User simply has a different home, not a permissions problem.
-const ProtectedRoute = ({ children, allowedRoles, formName, platformAdminOnly, employeeOnly }) => {
+// allowedRoles: gate against role names directly (e.g. Team Mapping is Service PO Admin only).
+// platformAdminOnly: gate against the Platform Admin role — the top of the RBAC hierarchy (§0),
+// which has no company/accessible-forms of its own.
+// employeeOnly: gate against the Employee role (true if Employee is ANY role the account holds,
+// not just its sole one — see selectIsEmployee) — sends a non-Employee back to their own
+// dashboard, not not-authorized, since an Admin/User simply has a different home, not a
+// permissions problem.
+// allowIfNoFormsMapped: only meaningful alongside formName — lets an account through even
+// though this exact form isn't mapped, but ONLY when accessibleForms is entirely empty (no
+// screens mapped at all). Dashboard uses this so there's still a landing page for a
+// zero-forms account, without leaving Dashboard open to everyone regardless of mapping once
+// they DO have other real screens (see routes/index.jsx).
+const ProtectedRoute = ({ children, allowedRoles, formName, platformAdminOnly, employeeOnly, allowIfNoFormsMapped }) => {
   const { isAuthenticated, hasRole, isPlatformAdmin, isEmployee, accessibleForms, accessibleFormsLoaded } = useAuth();
   const location = useLocation();
 
@@ -53,7 +59,7 @@ const ProtectedRoute = ({ children, allowedRoles, formName, platformAdminOnly, e
     const normalize = (s) => (s ?? '').trim().toLowerCase();
     const allForms = Object.values(accessibleForms ?? {}).flat();
     const allowed = allForms.some((f) => normalize(f.name) === normalize(formName));
-    if (!allowed) {
+    if (!allowed && !(allowIfNoFormsMapped && allForms.length === 0)) {
       return <Navigate to={ROUTES.NOT_AUTHORIZED} replace />;
     }
   }

@@ -3,6 +3,7 @@ import { useNavigate, Outlet } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
 import { Plus, Pencil, Trash2, Search, Filter, Building2 } from 'lucide-react';
 import { useEntities, useDeleteEntity } from '@/hooks/useEntities';
+import { useAuth } from '@/hooks/useAuth';
 import { useNotification } from '@/hooks/useNotification';
 import { useDebounce } from '@/hooks/useDebounce';
 import { extractApiError } from '@/services/apiClient';
@@ -10,6 +11,7 @@ import { buildPath, ROUTES } from '@/constants/routes';
 import { formatDate } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
+import EmptyState from '@/components/common/EmptyState';
 import StatusBadge from '@/components/common/StatusBadge';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { Button } from '@/components/ui/button';
@@ -31,6 +33,10 @@ const TruncatedCell = ({ value, maxWidth = '150px', className }) => {
 const EntityList = () => {
   const navigate = useNavigate();
   const { success, error: showError } = useNotification();
+  const { hasRole } = useAuth();
+  // Entity Admin can manage Entity Master the same as Admin (reverts the earlier "ownership
+  // flip (§1)" that made Entity Admin read-only here).
+  const canManageEntities = hasRole('Admin') || hasRole('Entity Admin');
 
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
@@ -67,28 +73,32 @@ const EntityList = () => {
         <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
           <Button
             size="sm"
-            title="Manage Companies"
+            title="Manage BUs"
             onClick={() => navigate(`${ROUTES.COMPANIES}?entity_id=${row.original.id}`)}
             className="h-6 w-6 p-0 bg-emerald-500 hover:bg-emerald-600 text-white rounded transition-colors"
           >
             <Building2 className="h-3 w-3" />
           </Button>
-          <Button
-            size="sm"
-            title="Edit"
-            onClick={() => navigate(buildPath(ROUTES.ENTITY_EDIT, { id: row.original.id }))}
-            className="h-6 w-6 p-0 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
-          >
-            <Pencil className="h-3 w-3" />
-          </Button>
-          <Button
-            size="sm"
-            title="Delete"
-            className="h-6 w-6 p-0 bg-red-500 hover:bg-red-600 text-white rounded transition-colors"
-            onClick={() => setDeleteTarget(row.original)}
-          >
-            <Trash2 className="h-3 w-3" />
-          </Button>
+          {canManageEntities && (
+            <>
+              <Button
+                size="sm"
+                title="Edit"
+                onClick={() => navigate(buildPath(ROUTES.ENTITY_EDIT, { id: row.original.id }))}
+                className="h-6 w-6 p-0 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
+              >
+                <Pencil className="h-3 w-3" />
+              </Button>
+              <Button
+                size="sm"
+                title="Delete"
+                className="h-6 w-6 p-0 bg-red-500 hover:bg-red-600 text-white rounded transition-colors"
+                onClick={() => setDeleteTarget(row.original)}
+              >
+                <Trash2 className="h-3 w-3" />
+              </Button>
+            </>
+          )}
         </div>
       ),
     }),
@@ -102,6 +112,17 @@ const EntityList = () => {
       header: 'Entity Code',
       size: 190,
       cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="170px" />,
+    }),
+    columnHelper.display({
+      id: 'entity_admin',
+      header: 'Entity Admin',
+      size: 220,
+      cell: ({ row }) => (
+        <TruncatedCell
+          value={row.original.entity_admin_email ?? row.original.entity_admin?.email ?? row.original.entityAdmin?.email}
+          maxWidth="200px"
+        />
+      ),
     }),
     columnHelper.accessor('status', {
       header: 'Status',
@@ -131,8 +152,8 @@ const EntityList = () => {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Entity Master"
-        description="Manage your Entities"
+        title={canManageEntities ? 'Entity Management' : 'My Entity'}
+        description={canManageEntities ? 'Create Entities and assign them to Entity Admins' : 'Read-only view of the Entities assigned to you'}
         actions={
           <div className="flex items-center gap-3">
             <div className="relative">
@@ -157,9 +178,11 @@ const EntityList = () => {
                 </span>
               )}
             </Button>
-            <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => navigate(ROUTES.ENTITY_NEW)}>
-              <Plus className="mr-1.5 h-4 w-4" /> Add Entity
-            </Button>
+            {canManageEntities && (
+              <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => navigate(ROUTES.ENTITY_NEW)}>
+                <Plus className="mr-1.5 h-4 w-4" /> Add Entity
+              </Button>
+            )}
           </div>
         }
       />
@@ -211,7 +234,22 @@ const EntityList = () => {
         onSortingChange={(s) => { setSorting(s); setPage(1); }}
         onPageChange={setPage}
         onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
-        onRowClick={(row) => navigate(buildPath(ROUTES.ENTITY_EDIT, { id: row.id }))}
+        onRowClick={canManageEntities ? (row) => navigate(buildPath(ROUTES.ENTITY_EDIT, { id: row.id })) : undefined}
+        emptyState={
+          // A freshly-created Admin/Entity Admin legitimately has zero Entities yet — this is
+          // not an error state (§1 gotcha).
+          !search && statusFilter === 'all' ? (
+            <EmptyState
+              title={canManageEntities ? 'No Entities yet' : 'No Entities assigned to you yet'}
+              description={
+                canManageEntities
+                  ? 'Create one to get started.'
+                  : 'Once an Admin assigns an Entity to you, it will show up here.'
+              }
+              action={canManageEntities ? { label: 'Add Entity', icon: Plus, onClick: () => navigate(ROUTES.ENTITY_NEW) } : undefined}
+            />
+          ) : undefined
+        }
       />
 
       <ConfirmDialog

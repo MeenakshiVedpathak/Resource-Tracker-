@@ -28,13 +28,13 @@ const MAX_SIZE = 10 * 1024 * 1024; // 10 MB
 // Note: there is no raw "Billable" input on that form — is_billable is derived from
 // whether the chosen Service Category is named "Billable" (case-insensitive).
 const SAMPLE_COLUMNS = [
-  'PO Code', 'PO Name', 'Client', 'Service Category', 'Service Type',
+  'Service PO Number', 'Service PO Name', 'Client', 'Service Category', 'Service Type',
   'Account Manager', 'Status', 'Service Description', 'PO Value',
   'Expected Man Hours', 'Start Date', 'End Date', 'Invoice Frequency', 'Invoice Amount',
 ];
 
 const REQUIRED_COLUMNS = [
-  'PO Name', 'Client', 'Service Category', 'Service Type', 'Account Manager',
+  'Service PO Name', 'Client', 'Service Category', 'Service Type', 'Account Manager',
   'Service Description', 'Start Date', 'End Date', 'Invoice Frequency', 'Invoice Amount',
 ];
 
@@ -161,7 +161,7 @@ const ServicePOImport = () => {
               ))}
             </p>
             <p className="mt-2 text-xs text-muted-foreground">
-              <strong>PO Code</strong> is auto-generated if left blank. <strong>Client</strong> and{' '}
+              <strong>Service PO Number</strong> is auto-generated if left blank. <strong>Client</strong> and{' '}
               <strong>Service Category</strong> must match an existing record exactly (case-insensitive) —
               a PO is marked billable only when its Service Category is named "Billable". <strong>Service Type</strong>{' '}
               must belong to the chosen Service Category. <strong>Status</strong> defaults to "in-progress" if left blank.
@@ -286,7 +286,7 @@ const ServicePOImport = () => {
                       <TableHeader className="sticky top-0 z-10 bg-slate-50 dark:bg-slate-900 shadow-sm">
                         <TableRow className="bg-destructive/5">
                           <TableHead className="w-20">Row #</TableHead>
-                          <TableHead>PO Name</TableHead>
+                          <TableHead>Service PO Name</TableHead>
                           <TableHead>Client</TableHead>
                           <TableHead>Errors</TableHead>
                         </TableRow>
