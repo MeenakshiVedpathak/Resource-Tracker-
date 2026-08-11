@@ -256,9 +256,6 @@ export const paginate = (list, { page = 1, limit = 10, search, searchFields = []
   return { data, meta: { page: pageNum, limit: perPage, current_page: pageNum, per_page: perPage, total } };
 };
 
-export const generateTemporaryPassword = () => {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%';
-  let out = '';
-  for (let i = 0; i < 14; i += 1) out += chars[Math.floor(Math.random() * chars.length)];
-  return out;
-};
+// Fixed default rather than a random string, per product decision — every employee added
+// without an explicit password gets this same starter password instead of a one-off generated one.
+export const generateTemporaryPassword = () => 'Gtt@1234';

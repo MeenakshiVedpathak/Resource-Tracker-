@@ -39,7 +39,7 @@ const baseFields = {
 };
 
 // Create allows an optional Primary Manager and an optional password (omit -> backend/mock
-// auto-generates and returns a one-time temporaryPassword, §3.1).
+// falls back to the default password and returns it once as temporaryPassword, §3.1).
 const createSchema = z.object({
   ...baseFields,
   primary_manager_user_id: z.coerce.number().positive().optional().nullable(),
@@ -271,7 +271,7 @@ const EmployeeForm = () => {
                             <FormControl>
                               <Input
                                 type="text"
-                                placeholder="Leave blank to auto-generate"
+                                placeholder="Leave blank to use default (Gtt@1234)"
                                 autoComplete="new-password"
                                 {...field}
                                 className="h-8 text-sm border-gray-200"
