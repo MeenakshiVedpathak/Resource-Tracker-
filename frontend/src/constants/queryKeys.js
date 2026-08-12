@@ -97,6 +97,7 @@ export const QUERY_KEYS = {
 
   // Service PO Monthly Budget (Manager self-service)
   SERVICE_PO_MONTHLY_BUDGET_CURRENT: ['service-po-monthly-budget', 'current'],
+  SERVICE_PO_MONTHLY_BUDGET_MONTH: (month, year) => ['service-po-monthly-budget', 'month', month, year],
 
   // Timesheets
   TIMESHEETS: (params) => ['timesheets', params],

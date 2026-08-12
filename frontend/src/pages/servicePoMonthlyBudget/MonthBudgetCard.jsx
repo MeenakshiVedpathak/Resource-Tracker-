@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/utils/cn';
-import { formatDate } from '@/utils/formatters';
+import { formatDate, formatMonthYear } from '@/utils/formatters';
 import { getDeadlineSeverity, DEADLINE_SEVERITY } from '@/hooks/useDeadlineCountdown';
 
 const SEVERITY_TEXT_CLASS = {
@@ -14,12 +14,16 @@ const SEVERITY_TEXT_CLASS = {
   [DEADLINE_SEVERITY.PASSED]: 'text-destructive',
 };
 
-const CurrentMonthCard = ({ data, isLoading, onFillData }) => {
-  if (isLoading || !data) {
+// `deadline` (with `.deadline`/`.days_remaining`/`.deadline_passed`) is only known for the true
+// current period — the `/current` endpoint is the sole source of that countdown data. Every
+// other month on the year grid renders the same card without that prop and just shows a plain
+// filled/not-filled line instead of a deadline countdown.
+const MonthBudgetCard = ({ month, year, servicePos, isLoading, deadline, isCurrent, onFillData }) => {
+  if (isLoading) {
     return (
-      <Card className="max-w-xl">
+      <Card>
         <CardHeader>
-          <Skeleton className="h-6 w-40" />
+          <Skeleton className="h-6 w-32" />
         </CardHeader>
         <CardContent className="space-y-3">
           <Skeleton className="h-4 w-full" />
@@ -30,17 +34,17 @@ const CurrentMonthCard = ({ data, isLoading, onFillData }) => {
     );
   }
 
-  const servicePos = data.service_pos ?? [];
-  const hasServicePos = servicePos.length > 0;
+  const pos = servicePos ?? [];
+  const hasServicePos = pos.length > 0;
   // No `status` field comes back from the API — a period counts as filled once every row has
   // been saved at least once (updated_at is only ever null for a never-filled row).
-  const isCompleted = hasServicePos && servicePos.every((po) => po.updated_at != null);
-  const severity = getDeadlineSeverity(data.days_remaining, data.deadline_passed);
+  const isCompleted = hasServicePos && pos.every((po) => po.updated_at != null);
+  const severity = deadline ? getDeadlineSeverity(deadline.days_remaining, deadline.deadline_passed) : null;
 
   return (
-    <Card className="max-w-xl">
+    <Card className={cn(isCurrent && 'ring-1 ring-primary')}>
       <CardHeader className="flex-row items-center justify-between space-y-0">
-        <h2 className="text-lg font-semibold">{data.month_name} {data.year}</h2>
+        <h2 className="text-lg font-semibold">{formatMonthYear(month, year)}</h2>
         {hasServicePos && (
           <Badge variant={isCompleted ? 'success' : 'warning'} className="gap-1.5">
             <span className={cn('h-1.5 w-1.5 rounded-full', isCompleted ? 'bg-success' : 'bg-warning')} />
@@ -54,22 +58,30 @@ const CurrentMonthCard = ({ data, isLoading, onFillData }) => {
 
         {hasServicePos ? (
           <>
-            <div>
-              <p className="text-xs font-medium text-muted-foreground">Deadline</p>
-              <p className="mt-0.5 flex items-center gap-1.5 text-sm font-medium">
-                <CalendarClock className="h-3.5 w-3.5 text-muted-foreground" />
-                {formatDate(data.deadline, 'DD MMMM YYYY')}
-              </p>
-            </div>
+            {deadline ? (
+              <>
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">Deadline</p>
+                  <p className="mt-0.5 flex items-center gap-1.5 text-sm font-medium">
+                    <CalendarClock className="h-3.5 w-3.5 text-muted-foreground" />
+                    {formatDate(deadline.deadline, 'DD MMMM YYYY')}
+                  </p>
+                </div>
 
-            <p className={cn('flex items-center gap-1.5 text-sm font-semibold', SEVERITY_TEXT_CLASS[severity])}>
-              {(severity === DEADLINE_SEVERITY.CRITICAL || severity === DEADLINE_SEVERITY.PASSED) && (
-                <AlertTriangle className="h-4 w-4" />
-              )}
-              {data.deadline_passed
-                ? 'Overdue — you can still submit'
-                : `Fill by ${formatDate(data.deadline, 'DD MMM YYYY')} — ${data.days_remaining} ${data.days_remaining === 1 ? 'day' : 'days'} left`}
-            </p>
+                <p className={cn('flex items-center gap-1.5 text-sm font-semibold', SEVERITY_TEXT_CLASS[severity])}>
+                  {(severity === DEADLINE_SEVERITY.CRITICAL || severity === DEADLINE_SEVERITY.PASSED) && (
+                    <AlertTriangle className="h-4 w-4" />
+                  )}
+                  {deadline.deadline_passed
+                    ? 'Overdue — you can still submit'
+                    : `Fill by ${formatDate(deadline.deadline, 'DD MMM YYYY')} — ${deadline.days_remaining} ${deadline.days_remaining === 1 ? 'day' : 'days'} left`}
+                </p>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                {isCompleted ? 'All Service POs filled for this month.' : 'Not filled yet.'}
+              </p>
+            )}
 
             <div className="flex justify-end">
               <Button onClick={onFillData}>
@@ -95,4 +107,4 @@ const CurrentMonthCard = ({ data, isLoading, onFillData }) => {
   );
 };
 
-export default CurrentMonthCard;
+export default MonthBudgetCard;

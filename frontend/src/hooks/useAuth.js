@@ -26,7 +26,7 @@ import {
   setCompany,
 } from '@/store/slices/authSlice';
 import { ROUTES } from '@/constants/routes';
-import { computeHomeRoute } from '@/constants/rbacForms';
+import { computeHomeRoute, FORM_NAMES } from '@/constants/rbacForms';
 
 export const useAuth = () => {
   const dispatch = useDispatch();
@@ -52,12 +52,14 @@ export const useAuth = () => {
   // true if the user has ANY of the specified roles
   const hasRole = (...requiredRoles) => roles.some((r) => requiredRoles.includes(r));
 
-  // Where "back to home" should actually land — Dashboard is no longer guaranteed to be
-  // accessible to everyone (see ProtectedRoute's `allowIfNoFormsMapped`), so anything that used
-  // to hardcode ROUTES.DASHBOARD as a safe fallback (NotFound's button) should use this instead
-  // to avoid bouncing an Entity-Admin-like account straight back into Not Authorized.
+  // Where "back to home" should actually land — Dashboard (or, for an Employee-only account,
+  // Employee Dashboard) is no longer guaranteed to be accessible to everyone (see
+  // ProtectedRoute's `allowIfNoFormsMapped`), so anything that used to hardcode ROUTES.DASHBOARD
+  // / ROUTES.EMPLOYEE_DASHBOARD as a safe fallback (NotFound's button, MainLayout's employee-only
+  // tier guard) should use this instead to avoid bouncing an account straight back into Not
+  // Authorized just because its actual mapped forms don't include that particular one.
   const homeRoute = isEmployeeOnly
-    ? ROUTES.EMPLOYEE_DASHBOARD
+    ? computeHomeRoute(accessibleForms, { homeFormName: FORM_NAMES.EMPLOYEE_DASHBOARD, homeRoute: ROUTES.EMPLOYEE_DASHBOARD })
     : isPlatformAdmin
       ? ROUTES.ADMINS
       : computeHomeRoute(accessibleForms);

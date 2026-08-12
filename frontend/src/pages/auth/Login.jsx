@@ -13,7 +13,7 @@ import { extractApiError } from '@/services/apiClient';
 import { applyFieldErrors } from '@/utils/authErrors';
 import { emailSchema } from '@/utils/validators';
 import { ROUTES } from '@/constants/routes';
-import { computeHomeRoute } from '@/constants/rbacForms';
+import { computeHomeRoute, FORM_NAMES } from '@/constants/rbacForms';
 import {
   Form, FormField, FormItem, FormLabel, FormControl, FormMessage,
 } from '@/components/ui/form';
@@ -77,13 +77,23 @@ const Login = () => {
 
     setIsOriginalDataVisible((roles ?? []).some((r) => r.is_original_data_visible === true));
 
-    // An Employee/Platform Admin always land on their own fixed home (MainLayout also enforces
-    // this on every navigation, but this avoids an unnecessary bounce right after login).
-    // Everyone else: honor an explicit deep-link target if there is one; otherwise pick a real
-    // landing page from whichever forms answer is available — Dashboard is no longer
-    // guaranteed to be one of them (see ProtectedRoute's `allowIfNoFormsMapped`).
+    // A Platform Admin always lands on its own fixed home (MainLayout also enforces this on
+    // every navigation, but this avoids an unnecessary bounce right after login). An Employee
+    // lands on Employee Dashboard only when that form is actually mapped to it — an account
+    // mapped to other Employee forms (e.g. "My Work Log") but not "Employee Dashboard" itself
+    // would otherwise get bounced straight to Not Authorized right after login, even though its
+    // sidebar shows its real mapped forms fine (see ProtectedRoute's formName gate on
+    // ROUTES.EMPLOYEE_DASHBOARD). Everyone else: honor an explicit deep-link target if there is
+    // one; otherwise pick a real landing page from whichever forms answer is available —
+    // Dashboard is no longer guaranteed to be one of them (see ProtectedRoute's
+    // `allowIfNoFormsMapped`).
+    const employeeHomeOpts = { homeFormName: FORM_NAMES.EMPLOYEE_DASHBOARD, homeRoute: ROUTES.EMPLOYEE_DASHBOARD };
     if (isEmployeeOnly) {
-      navigate(ROUTES.EMPLOYEE_DASHBOARD, { replace: true });
+      if (forms) {
+        navigate(computeHomeRoute(forms, employeeHomeOpts), { replace: true });
+      } else {
+        formsPromise.then((resolvedForms) => navigate(computeHomeRoute(resolvedForms, employeeHomeOpts), { replace: true }));
+      }
     } else if (roleName === 'Platform Admin') {
       navigate(ROUTES.ADMINS, { replace: true });
     } else if (from) {

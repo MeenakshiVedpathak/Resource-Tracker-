@@ -128,13 +128,19 @@ export const getFirstAccessibleRoute = (accessibleForms) => {
 // Pure — takes a plain accessible-forms map (module -> [{ name }]), not a hook, so it works
 // equally from Redux-derived state (useAuth's homeRoute) and from a login response's own
 // `forms` object before that's even landed in the store yet (Login.jsx's post-auth redirect,
-// where waiting for a re-render to read it back out of Redux would be too late). Dashboard is
-// the destination whenever it's actually mapped, or when NOTHING is mapped (the zero-forms
-// safety net ProtectedRoute's `allowIfNoFormsMapped` also honors) — otherwise the first form
-// that resolves to a real route.
-export const computeHomeRoute = (accessibleForms) => {
+// where waiting for a re-render to read it back out of Redux would be too late). The preferred
+// home (Dashboard by default) is the destination whenever it's actually mapped, or when NOTHING
+// is mapped (the zero-forms safety net ProtectedRoute's `allowIfNoFormsMapped` also honors) —
+// otherwise the first form that resolves to a real route.
+//
+// `homeFormName`/`homeRoute` let an Employee-only account reuse this same logic against
+// "Employee Dashboard" / EMPLOYEE_DASHBOARD instead of the admin-side Dashboard — an Employee
+// whose role mapping omits
+// "Employee Dashboard" itself (but has other Employee forms like "My Work Log") must still land
+// on one of those, not get bounced to Not Authorized (see Login.jsx, useAuth's homeRoute).
+export const computeHomeRoute = (accessibleForms, { homeFormName = FORM_NAMES.DASHBOARD, homeRoute = ROUTES.DASHBOARD } = {}) => {
   const allForms = Object.values(accessibleForms ?? {}).flat();
-  const hasDashboard = allForms.some((f) => (f?.name ?? '').trim().toLowerCase() === 'dashboard');
-  if (hasDashboard || allForms.length === 0) return ROUTES.DASHBOARD;
-  return getFirstAccessibleRoute(accessibleForms) ?? ROUTES.DASHBOARD;
+  const hasHome = allForms.some((f) => (f?.name ?? '').trim().toLowerCase() === homeFormName.trim().toLowerCase());
+  if (hasHome || allForms.length === 0) return homeRoute;
+  return getFirstAccessibleRoute(accessibleForms) ?? homeRoute;
 };

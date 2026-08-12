@@ -42,7 +42,9 @@ const toDefaultRows = (servicePos) =>
     service_po_id: po.service_po_id,
     service_po_code: po.service_po_code,
     service_po_name: po.service_po_name,
-    client_name: po.client?.client_name,
+    // `/current`'s service_pos nest client info (`po.client.client_name`); the year-grid's
+    // other-month rows come from the active-POs list instead, which has it flat (`po.client_name`).
+    client_name: po.client?.client_name ?? po.client_name,
     updated_at: po.updated_at ?? null,
     invoice_amount: po.invoice_amount ?? '',
     invoice_description: po.invoice_description ?? '',
