@@ -86,8 +86,22 @@ const HourStepper = ({ value, onChange, disabled, hoursCap = DAILY_HOURS_CAP }) 
 // as a single line; expand only the one(s) you want to edit.
 const ProjectGroup = ({ poRow, childrenByParent, day, edits, onCellChange, isPastOrToday, hoursCap, defaultOpen }) => {
   const [isOpen, setIsOpen] = useState(defaultOpen);
+  const [collapsedKeys, setCollapsedKeys] = useState(() => new Set());
 
   const nodeRows = useMemo(() => flattenSubtree(poRow, 0, childrenByParent), [poRow, childrenByParent]);
+  const visibleRows = useMemo(
+    () => nodeRows.filter((row) => !row.ancestorKeys?.some((key) => collapsedKeys.has(key))),
+    [nodeRows, collapsedKeys],
+  );
+
+  const toggleRowCollapse = (rowKey) => {
+    setCollapsedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(rowKey)) next.delete(rowKey);
+      else next.add(rowKey);
+      return next;
+    });
+  };
 
   const cellValueOf = (r) => {
     const edited = edits?.[r.rowKey]?.[day];
@@ -112,19 +126,30 @@ const ProjectGroup = ({ poRow, childrenByParent, day, edits, onCellChange, isPas
 
       {isOpen && (
         <div className="border-t">
-          {nodeRows.map((row, i) => {
+          {visibleRows.map((row, i) => {
             const value = cellValueOf(row);
             const isDirty = edits?.[row.rowKey]?.[day] !== undefined;
+            const hasChildren = (childrenByParent.get(row.rowKey)?.length ?? 0) > 0;
+            const isRowCollapsed = collapsedKeys.has(row.rowKey);
             return (
               <div
                 key={row.rowKey}
                 className={cn('grid grid-cols-[1.5rem_1fr_6.5rem] items-center gap-1.5 px-3 py-0.5 leading-tight', i > 0 && 'border-t border-dashed')}
               >
                 <span className="text-[11px] text-muted-foreground">{i + 1}</span>
-                <span className={cn('truncate text-xs', row.relDepth > 0 && 'text-muted-foreground')} style={{ paddingLeft: row.relDepth * 12 }}>
+                <span className={cn('flex items-center truncate text-xs', row.relDepth > 0 && 'text-muted-foreground')} style={{ paddingLeft: row.relDepth * 12 }}>
                   {row.relDepth > 0 && <span className="mr-1 text-muted-foreground">{'└'}</span>}
-                  {row.label}
-                  {isDirty && <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-amber-400" title="Unsaved change" />}
+                  {hasChildren && (
+                    <button
+                      type="button"
+                      onClick={() => toggleRowCollapse(row.rowKey)}
+                      className="mr-1 flex h-3.5 w-3.5 shrink-0 items-center justify-center text-muted-foreground hover:text-foreground"
+                    >
+                      {isRowCollapsed ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
+                    </button>
+                  )}
+                  <span className="truncate">{row.label}</span>
+                  {isDirty && <span className="ml-1.5 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" title="Unsaved change" />}
                 </span>
                 <div className="flex justify-end">
                   {row.editable && isPastOrToday ? (

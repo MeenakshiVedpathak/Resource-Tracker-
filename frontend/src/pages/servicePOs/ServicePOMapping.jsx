@@ -79,7 +79,7 @@ const SelectPanel = ({ rows, search, onSearchChange, selectedKeys, onToggle, onT
   return (
     <div className="flex flex-col overflow-hidden rounded-lg border bg-background">
       <PanelSearchBar count={filtered.length} search={search} onSearchChange={onSearchChange} />
-      <div className="h-[28rem] overflow-y-auto">
+      <div className="h-[20rem] overflow-y-auto">
         {filtered.length === 0 ? (
           <EmptyState />
         ) : (
@@ -133,7 +133,7 @@ const MappedPanel = ({ rows, search, onSearchChange, renderToggle, selectAll }) 
           </label>
         )}
       </PanelSearchBar>
-      <div className="h-[28rem] overflow-y-auto">
+      <div className="h-[20rem] overflow-y-auto">
         {filtered.length === 0 ? (
           <EmptyState />
         ) : (
@@ -165,7 +165,7 @@ const MappedPanel = ({ rows, search, onSearchChange, renderToggle, selectAll }) 
 };
 
 const MoveButton = ({ disabled, onClick, title }) => (
-  <div className="flex h-[28rem] items-center justify-center">
+  <div className="flex h-[20rem] items-center justify-center">
     <Button
       type="button"
       size="icon"
@@ -181,11 +181,11 @@ const MoveButton = ({ disabled, onClick, title }) => (
 
 const MappingSkeleton = () => (
   <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-2">
-    <Skeleton className="h-[28rem] w-full" />
-    <div className="flex h-[28rem] items-center justify-center px-2">
+    <Skeleton className="h-[20rem] w-full" />
+    <div className="flex h-[20rem] items-center justify-center px-2">
       <Skeleton className="h-9 w-9 rounded-full" />
     </div>
-    <Skeleton className="h-[28rem] w-full" />
+    <Skeleton className="h-[20rem] w-full" />
   </div>
 );
 
@@ -275,7 +275,7 @@ const ServicePOMapping = () => {
   }
 
   return (
-    <div className="space-y-4">
+    <div>
       <PageHeader
         title="Map Employees"
         description={
@@ -296,12 +296,12 @@ const ServicePOMapping = () => {
         }
       />
 
-      <p className="text-xs text-muted-foreground">
+      {/* <p className="text-xs text-muted-foreground">
         Employees mapped here see this Service PO in their Timesheet's Project dropdown.
         {rightRows.length > 0 && (
           <Badge variant="secondary" className="ml-2 text-xs">{rightRows.length} mapped</Badge>
         )}
-      </p>
+      </p> */}
 
       {isLoadingPO || isLoadingMappings ? (
         <MappingSkeleton />
