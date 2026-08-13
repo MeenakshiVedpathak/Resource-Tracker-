@@ -1,4 +1,5 @@
 import { useDispatch, useSelector } from 'react-redux';
+import { queryClient } from '@/lib/queryClient';
 import {
   selectCurrentUser,
   selectIsAuthenticated,
@@ -66,7 +67,10 @@ export const useAuth = () => {
 
   const hasPermission = (permission) => permissions.includes(permission);
 
-  const handleLogout = () => dispatch(logout());
+  const handleLogout = () => {
+    dispatch(logout());
+    queryClient.clear();
+  };
 
   const updateCredentials = (payload) => dispatch(setCredentials(payload));
 

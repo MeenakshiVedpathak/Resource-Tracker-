@@ -116,6 +116,7 @@ const TOKEN_KEYS = {
   ORIGINAL_DATA_VISIBLE: 'rut_original_data_visible',
   COMPANY: 'rut_company',
   EMPLOYEE: 'rut_employee',
+  AI_COPILOT_CONVERSATION: 'rut_ai_copilot_conversation',
 };
 
 export const getAccessToken = () => localStorage.getItem(TOKEN_KEYS.ACCESS);
@@ -221,6 +222,7 @@ export const clearAuth = () => {
   localStorage.removeItem(TOKEN_KEYS.ORIGINAL_DATA_VISIBLE);
   localStorage.removeItem(TOKEN_KEYS.COMPANY);
   localStorage.removeItem(TOKEN_KEYS.EMPLOYEE);
+  localStorage.removeItem(TOKEN_KEYS.AI_COPILOT_CONVERSATION);
 };
 
 // ── Logout handler (avoids circular dependency with store) ──
