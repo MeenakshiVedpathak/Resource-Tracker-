@@ -34,8 +34,11 @@ const MonthBudgetCard = ({ month, year, servicePos, isLoading, deadline, isCurre
   // No `status` field comes back from the API — a period counts as filled once every row has
   // been saved at least once (updated_at is only ever null for a never-filled row).
   const isCompleted = hasServicePos && pos.every((po) => po.updated_at != null);
-  const isOverdue = !!deadline?.deadline_passed;
-  const severity = deadline ? getDeadlineSeverity(deadline.days_remaining, deadline.deadline_passed) : null;
+  // A month completed after its deadline had already passed is still "Completed" — the overdue
+  // countdown is only useful while data is still outstanding, so it never applies once filled.
+  const isOverdue = !isCompleted && !!deadline?.deadline_passed;
+  const showDeadline = deadline && !isCompleted;
+  const severity = showDeadline ? getDeadlineSeverity(deadline.days_remaining, deadline.deadline_passed) : null;
 
   return (
     <Card
@@ -58,7 +61,7 @@ const MonthBudgetCard = ({ month, year, servicePos, isLoading, deadline, isCurre
       {hasServicePos ? (
         <>
           <div className="mt-2">
-            {deadline ? (
+            {showDeadline ? (
               <div className="space-y-0.5">
                 <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <CalendarClock className="h-3.5 w-3.5" />
