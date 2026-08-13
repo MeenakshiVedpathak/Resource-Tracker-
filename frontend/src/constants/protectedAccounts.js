@@ -6,15 +6,16 @@
 // the closest equivalent.)
 export const PROTECTED_ROLE_NAME = 'BU Admin';
 
-// User records come back from the API with either a single `role` object or a `roles` array
-// (see UserForm/UserList role-resolution) — check both shapes.
+// User/Employee records carry a primary `role` object plus an `additionalRoles` array (see
+// EmployeeForm/EmployeeList role-resolution) — check both. BU Admin is a senior tier so it can
+// only ever be a primary role in practice, but check additionalRoles too for safety.
 const getRoleNames = (user) => {
   if (!user) return [];
-  const fromRoles = Array.isArray(user.roles) && user.roles.length > 0
-    ? user.roles.map((r) => r.role_name ?? r.name)
+  const fromAdditional = Array.isArray(user.additionalRoles)
+    ? user.additionalRoles.map((r) => r.role_name ?? r.name)
     : [];
   const fromRole = user.role?.role_name ? [user.role.role_name] : [];
-  return [...fromRoles, ...fromRole];
+  return [...fromAdditional, ...fromRole];
 };
 
 export const isProtectedAccount = (user) => getRoleNames(user).includes(PROTECTED_ROLE_NAME);

@@ -12,7 +12,7 @@
 // and logged via console.warn so mismatches are visible during rollout instead of silently
 // wrong.
 import {
-  LayoutDashboard, Users, UserCog, Shield, Building2,
+  LayoutDashboard, Users, Shield, Building2,
   FileText, FolderOpen, FolderKanban, Clock, DollarSign,
   Tag, Layers, Sparkles, ClipboardList, Landmark, ShieldCheck,
   FileBarChart2, PieChart, CalendarRange, UserCheck, Network, Receipt, Table2, Wallet, IndianRupee,
@@ -23,7 +23,6 @@ export const FORM_NAMES = {
   DASHBOARD: 'Dashboard',
   AI_INSIGHTS: 'AI Insights',
   EMPLOYEES: 'Employee Master',
-  USERS: 'Users',
   ROLES: 'Roles',
   FORMS: 'Forms',
   // Not in FORM_ROUTE_CONFIG on purpose — it's a per-row "Manage Forms" action on the Roles
@@ -79,7 +78,6 @@ export const FORM_ROUTE_CONFIG = {
   [FORM_NAMES.DASHBOARD]: { to: ROUTES.DASHBOARD, icon: LayoutDashboard, exact: true },
   [FORM_NAMES.AI_INSIGHTS]: { to: ROUTES.AI_INSIGHTS, icon: Sparkles, exact: true },
   [FORM_NAMES.EMPLOYEES]: { to: ROUTES.EMPLOYEES, icon: Users },
-  [FORM_NAMES.USERS]: { to: ROUTES.USERS, icon: UserCog },
   [FORM_NAMES.ROLES]: { to: ROUTES.ROLES, icon: Shield },
   [FORM_NAMES.FORMS]: { to: ROUTES.FORMS, icon: ClipboardList },
   [FORM_NAMES.ENTITY_MASTER]: { to: ROUTES.ENTITIES, icon: Landmark },

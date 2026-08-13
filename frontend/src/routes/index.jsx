@@ -29,8 +29,6 @@ const AIInsights = lazy(() => import('@/pages/AIInsights'));
 // ── People ──
 const EmployeeList = lazy(() => import('@/pages/employees/EmployeeList'));
 const EmployeeForm = lazy(() => import('@/pages/employees/EmployeeForm'));
-const UserList = lazy(() => import('@/pages/users/UserList'));
-const UserForm = lazy(() => import('@/pages/users/UserForm'));
 const RoleList = lazy(() => import('@/pages/roles/RoleList'));
 const RoleForm = lazy(() => import('@/pages/roles/RoleForm'));
 
@@ -184,12 +182,6 @@ const AppRoutes = () => {
         <Route path={ROUTES.EMPLOYEES} element={<ProtectedRoute formName={FORM_NAMES.EMPLOYEES}><EmployeeList /></ProtectedRoute>}>
           <Route path="new" element={<EmployeeForm />} />
           <Route path=":id/edit" element={<EmployeeForm />} />
-        </Route>
-
-        {/* Users */}
-        <Route path={ROUTES.USERS} element={<ProtectedRoute formName={FORM_NAMES.USERS}><UserList /></ProtectedRoute>}>
-          <Route path="new" element={<UserForm />} />
-          <Route path=":id/edit" element={<UserForm />} />
         </Route>
 
         {/* Roles — form-mapping is a per-row action on this same page, not a separate menu item */}

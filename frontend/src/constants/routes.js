@@ -33,10 +33,6 @@ export const ROUTES = {
   EMPLOYEE_NEW: '/employees/new',
   EMPLOYEE_EDIT: '/employees/:id/edit',
 
-  USERS: '/users',
-  USER_NEW: '/users/new',
-  USER_EDIT: '/users/:id/edit',
-
   ROLES: '/roles',
   ROLE_NEW: '/roles/new',
   ROLE_EDIT: '/roles/:id/edit',

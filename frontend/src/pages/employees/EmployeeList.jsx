@@ -5,12 +5,13 @@ import { useIsMutating } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus, Pencil, Trash2, KeyRound, Search, Download, Upload, CheckCircle2, AlertCircle, FileDown, FileText, Printer, FileSpreadsheet, ChevronDown } from 'lucide-react';
+import { Plus, Pencil, Trash2, KeyRound, Search, Download, Upload, CheckCircle2, AlertCircle, FileDown, FileText, Printer, FileSpreadsheet, ChevronDown, Lock } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { useEmployees, useDeleteEmployee, useImportEmployees, useToggleEmployeeStatus } from '@/hooks/useEmployees';
 import { useResetUserPassword, useUserByEmployeeId } from '@/hooks/useUsers';
+import { useRoles } from '@/hooks/useRoles';
 import { employeesApi } from '@/api/employees.api';
 import { useCanWrite } from '@/hooks/usePermissions';
 import { useNotification } from '@/hooks/useNotification';
@@ -18,6 +19,7 @@ import { useDebounce } from '@/hooks/useDebounce';
 import { extractApiError } from '@/services/apiClient';
 import { passwordSchema } from '@/utils/validators';
 import { buildPath, ROUTES } from '@/constants/routes';
+import { isProtectedAccount } from '@/constants/protectedAccounts';
 import { formatDate } from '@/utils/formatters';
 import { cn } from '@/utils/cn';
 import DataTable from '@/components/common/DataTable';
@@ -162,11 +164,12 @@ const ResetPasswordDialog = ({ employee, onOpenChange }) => {
 const StatusToggle = ({ employee }) => {
   const { mutate, isPending } = useToggleEmployeeStatus();
   const isActive = employee.status === 'active';
+  const isProtected = isProtectedAccount(employee);
   return (
     <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
       <Switch
         checked={isActive}
-        disabled={isPending}
+        disabled={isPending || isProtected}
         onCheckedChange={(checked) =>
           mutate({ id: employee.id, status: checked ? 'active' : 'inactive' })
         }
@@ -188,6 +191,7 @@ const EmployeeList = () => {
   const [limit, setLimit] = useState(10);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [roleFilter, setRoleFilter] = useState('all');
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [resetPasswordTarget, setResetPasswordTarget] = useState(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -200,11 +204,13 @@ const EmployeeList = () => {
     page,
     limit,
     status: statusFilter,
+    ...(roleFilter !== 'all' && { role_id: roleFilter }),
     ...(debouncedSearch && debouncedSearch.length >= 3 && { search: debouncedSearch }),
     ...(sorting[0] && { sortBy: sorting[0].id, sortOrder: sorting[0].desc ? 'desc' : 'asc' }),
   };
 
   const { data, isPending, isFetching } = useEmployees(params);
+  const { data: rolesData } = useRoles({ limit: 100 });
   const deleteMutation = useDeleteEmployee();
   const importMutation = useImportEmployees();
   const isMutating = useIsMutating();
@@ -218,6 +224,7 @@ const EmployeeList = () => {
 
   const employees = data?.data ?? [];
   const meta = data?.meta ?? {};
+  const roles = rolesData?.data ?? [];
   const isHR = useCanWrite();
 
   const columns = useMemo(() => [
@@ -226,8 +233,15 @@ const EmployeeList = () => {
       header: 'Actions',
       size: 120,
       meta: { sticky: true, left: 0 },
-      cell: ({ row }) => (
-        isHR ? (
+      cell: ({ row }) => {
+        if (isProtectedAccount(row.original)) {
+          return (
+            <div className="flex items-center gap-1 text-muted-foreground" onClick={(e) => e.stopPropagation()} title="Protected system account">
+              <Lock className="h-3 w-3" />
+            </div>
+          );
+        }
+        return isHR ? (
           <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
             <Button
               size="sm"
@@ -254,8 +268,8 @@ const EmployeeList = () => {
               <Trash2 className="h-3 w-3" />
             </Button>
           </div>
-        ) : null
-      ),
+        ) : null;
+      },
     }),
     columnHelper.accessor('employee_code', {
       header: 'Employee ID',
@@ -280,6 +294,24 @@ const EmployeeList = () => {
       header: 'Designation',
       size: 180,
       cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="160px" />,
+    }),
+    columnHelper.accessor('role', {
+      header: 'Role',
+      size: 180,
+      cell: (info) => {
+        const row = info.row.original;
+        const list = row.role ? [row.role, ...(row.additionalRoles ?? [])] : [];
+        if (!list.length) return <span className="text-sm text-muted-foreground">—</span>;
+        return (
+          <div className="flex flex-wrap gap-1">
+            {list.map((r, i) => (
+              <Badge key={r.id ?? i} variant={i === 0 ? 'secondary' : 'outline'} className="text-xs">
+                {r.role_name}
+              </Badge>
+            ))}
+          </div>
+        );
+      },
     }),
     columnHelper.accessor('total_experience', {
       header: 'Total Experience',
@@ -638,7 +670,7 @@ const EmployeeList = () => {
             <FilterToggleButton
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((prev) => !prev)}
-              activeCount={statusFilter !== 'all' ? 1 : 0}
+              activeCount={(statusFilter !== 'all' ? 1 : 0) + (roleFilter !== 'all' ? 1 : 0)}
             />
             {isHR && (
               <DropdownMenu>
@@ -721,6 +753,23 @@ const EmployeeList = () => {
               </button>
             ))}
           </div>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Role</Label>
+          <SearchableSelect
+            options={[
+              { label: "All roles", value: "all" },
+              ...roles.map((r) => ({
+                label: r.role_name,
+                value: String(r.id)
+              }))
+            ]}
+            value={roleFilter}
+            onValueChange={(v) => { setRoleFilter(v); setPage(1); }}
+            placeholder="All roles"
+            searchPlaceholder="Search role..."
+            className="h-9 w-full text-sm bg-white"
+          />
         </div>
       </FilterPanel>
 

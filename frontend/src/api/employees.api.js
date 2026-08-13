@@ -1,18 +1,110 @@
 import apiClient from '@/services/apiClient';
 import { RBAC_MOCK_ENABLED } from '@/mocks/rbacMockConfig';
 import {
-  delay, getDb, persist, nextId, paginate, findEmployeeById, findUserById, findRoleByName,
-  getCurrentMockUser, mockError, generateTemporaryPassword,
+  delay, getDb, persist, nextId, paginate, findEmployeeById, findUserById, findRoleById, findRoleByName,
+  getCurrentMockUser, assertCanAssignRole, assertValidAdditionalRole, mockError, generateTemporaryPassword,
 } from '@/mocks/rbacMockDb';
+import { usersApi } from '@/api/users.api';
+import { ROLE_NAMES } from '@/constants/roleHierarchy';
 
-const serializeEmployeeFull = (employee) => employee && {
-  ...employee,
-  email: findUserById(employee.linked_user_id)?.email ?? null,
+// The real backend keeps Employees and Users as two separate resources — POST/PUT /employees
+// has no role_ids/password/role fields at all (see bakend/src/validations/employeeValidation.js),
+// and creating an Employee there never provisions a login. So on the real backend, "manage
+// login + role from Employee Master" is done here as a second call into the (pre-existing,
+// unrelated-to-this-change) /users endpoints, not by teaching /employees new fields — that would
+// require a backend change, which is out of scope (backend is owned by a different developer).
+const REAL_USER_LOOKUP_PARAMS = { limit: 200, status: 'all' };
+// Used only to backfill a login for a pre-existing employee that never had one, when the admin
+// assigns it a role via Employee Master's edit form (which collects a role but no password) —
+// same fixed starter password the mock uses (see generateTemporaryPassword above).
+const BACKFILL_PASSWORD = 'Gtt@1234';
+// Real GET /employees has no role_id filter and returns no role data of its own (no User/Role
+// join — see bakend/src/repositories/employeeRepository.js). This bounds how many employees the
+// Role filter/column can consider on the real backend: enough for a typical company, but if a
+// company has more than this many employees, matches past this bound silently won't be found —
+// same bound the rest of this app already accepts for cross-referencing Users
+// (useAssignableManagers/useUserByEmployeeId use the same 100-row real-backend page cap).
+const REAL_ROLE_FILTER_SCAN_LIMIT = 100;
+
+// GET /employees (real backend) has no role/user join at all — enrich each employee with its
+// linked User's role by cross-referencing GET /users client-side, then reshape into the exact
+// same { role, additionalRoles } shape serializeEmployeeFull already produces for the mock, so
+// EmployeeList/EmployeeForm don't need to know which backend is live. The real GET /users
+// response already returns `role` (primary) + `additionalRoles` (extras) directly — confirmed
+// against a live response — so this is a straight passthrough, not a derived split.
+const enrichWithRealRole = async (employees) => {
+  if (!employees.length) return employees;
+  const usersRes = await usersApi.getAll(REAL_USER_LOOKUP_PARAMS);
+  const byEmployeeId = new Map(
+    (usersRes?.data ?? []).filter((u) => u.employee_id != null).map((u) => [u.employee_id, u])
+  );
+  return employees.map((e) => {
+    const u = byEmployeeId.get(e.id);
+    return {
+      ...e,
+      email: e.email_id || u?.email || null,
+      role_id: u?.role?.id ?? null,
+      role: u?.role ?? null,
+      additionalRoles: u?.additionalRoles ?? [],
+    };
+  });
+};
+
+// role_ids[0] is the primary role (drives hierarchy/scoping); role_ids[1:] are additional,
+// purely-additive operational roles (§4) — same split users.api.js's mock uses.
+const splitRoleIds = (roleIds) => {
+  const [primaryRoleId, ...additionalRoleIds] = roleIds ?? [];
+  return { primaryRoleId, additionalRoleIds };
+};
+
+// Validates and resolves a role_ids array against the actor's Role Creation Matrix, returning
+// the target primary role plus the additional role rows to store on the linked user.
+//
+// Employee Master always allows assigning the plain Employee role, regardless of the actor's own
+// tier — the Role Creation Matrix's HR entry is deliberately empty ("HR creates Employee via the
+// dedicated Employee-creation flow, not the generic Users screen", see roleHierarchy.js), which
+// used to be enforced by the old Employee form hardcoding role_id to Employee with no picker at
+// all. Every role beyond plain Employee still goes through the real matrix (users.api.js's mock
+// keeps the strict, non-bypassed check for the same matrix, unaffected by this).
+const resolveRoles = (roleIds, actor) => {
+  const { primaryRoleId, additionalRoleIds } = splitRoleIds(roleIds);
+  const targetRole = findRoleById(Number(primaryRoleId));
+  if (!targetRole) throw mockError(422, 'Invalid role.');
+  if (actor && targetRole.role_name !== ROLE_NAMES.EMPLOYEE) {
+    assertCanAssignRole(findRoleById(actor.role_id).role_name, targetRole.role_name);
+  }
+  const additionalRoles = additionalRoleIds.map((rid) => findRoleById(Number(rid))).filter(Boolean);
+  additionalRoles.forEach((r) => assertValidAdditionalRole(r.role_name));
+  return { targetRole, additionalRoles };
+};
+
+const serializeEmployeeFull = (employee) => {
+  if (!employee) return null;
+  const linkedUser = findUserById(employee.linked_user_id);
+  const role = linkedUser ? findRoleById(linkedUser.role_id) : null;
+  const additionalRoles = (linkedUser?.additional_role_ids ?? []).map(findRoleById).filter(Boolean);
+  return {
+    ...employee,
+    email: linkedUser?.email ?? null,
+    role_id: linkedUser?.role_id ?? null,
+    role: role && { id: role.id, role_name: role.role_name },
+    additionalRoles: additionalRoles.map((r) => ({ id: r.id, role_name: r.role_name })),
+  };
 };
 
 const mockGetAll = async (params) => {
   await delay();
-  const result = paginate(getDb().employees, { ...params, searchFields: ['full_name', 'employee_code'] });
+  const result = paginate(getDb().employees, {
+    ...params,
+    searchFields: ['full_name', 'employee_code'],
+    filter: (e) => {
+      if (params?.role_id) {
+        const linkedUser = findUserById(e.linked_user_id);
+        if (!linkedUser || linkedUser.role_id !== Number(params.role_id)) return false;
+      }
+      return true;
+    },
+  });
   return { success: true, message: 'OK', data: result.data.map(serializeEmployeeFull), meta: result.meta };
 };
 
@@ -30,11 +122,16 @@ const mockCreate = async (payload) => {
   await delay();
   const actor = getCurrentMockUser();
   if (!payload.email) throw mockError(422, 'Email is required.');
+  if (!payload.password) throw mockError(422, 'Password is required.');
   if (getDb().users.some((u) => u.email.toLowerCase() === payload.email.toLowerCase())) {
     throw mockError(409, 'A user with this email already exists.');
   }
 
-  const employeeRole = findRoleByName('Employee');
+  // The Employee form always sends role_ids now — the Employee-role fallback only covers
+  // programmatic callers (e.g. import) that don't.
+  const roleIds = payload.role_ids?.length ? payload.role_ids : [findRoleByName('Employee').id];
+  const { targetRole, additionalRoles } = resolveRoles(roleIds, actor);
+
   const employee = {
     id: nextId('employees'),
     company_id: actor?.company_id ?? 1,
@@ -54,16 +151,15 @@ const mockCreate = async (payload) => {
   };
   getDb().employees.push(employee);
 
-  const usedTemporaryPassword = !payload.password;
-  const temporaryPassword = usedTemporaryPassword ? generateTemporaryPassword() : null;
   const user = {
     id: nextId('users'),
     company_id: employee.company_id,
     employee_id: employee.id,
     email: payload.email,
-    password: payload.password || temporaryPassword,
-    role_id: employeeRole.id,
-    status: 'active',
+    password: payload.password,
+    role_id: targetRole.id,
+    additional_role_ids: additionalRoles.map((r) => r.id),
+    status: payload.status ?? 'active',
     last_login: null,
   };
   getDb().users.push(user);
@@ -76,7 +172,6 @@ const mockCreate = async (payload) => {
     data: {
       employee: { id: employee.id, employee_code: employee.employee_code, full_name: employee.full_name, company_id: employee.company_id, status: employee.status },
       user: { id: user.id, email: user.email, role_id: user.role_id, employee_id: employee.id, company_id: user.company_id, status: user.status },
-      ...(usedTemporaryPassword ? { temporaryPassword } : {}),
     },
   };
 };
@@ -85,7 +180,7 @@ const mockUpdate = async (id, payload) => {
   await delay();
   const employee = findEmployeeById(Number(id));
   if (!employee) throw mockError(404, 'Employee not found.');
-  const { email, ...next } = { ...payload };
+  const { email, role_ids, ...next } = { ...payload };
   if ('primary_manager_user_id' in next && next.primary_manager_user_id != null) {
     next.primary_manager_user_id = Number(next.primary_manager_user_id);
   }
@@ -94,10 +189,13 @@ const mockUpdate = async (id, payload) => {
   }
   Object.assign(employee, next);
 
+  const actor = getCurrentMockUser();
+  let linkedUser = findUserById(employee.linked_user_id);
+  let justCreatedUser = false;
+
   // Email lives on the linked user record, not the employee — Object.assign above would
   // otherwise silently drop it (serializeEmployeeFull always re-derives email from the user).
   if (email) {
-    const linkedUser = findUserById(employee.linked_user_id);
     const emailTaken = getDb().users.some(
       (u) => u.id !== linkedUser?.id && u.email.toLowerCase() === email.toLowerCase()
     );
@@ -106,20 +204,41 @@ const mockUpdate = async (id, payload) => {
     if (linkedUser) {
       linkedUser.email = email;
     } else {
-      const employeeRole = findRoleByName('Employee');
-      const user = {
+      const roleIds = role_ids?.length ? role_ids : [findRoleByName('Employee').id];
+      const { targetRole, additionalRoles } = resolveRoles(roleIds, actor);
+      linkedUser = {
         id: nextId('users'),
         company_id: employee.company_id,
         employee_id: employee.id,
         email,
         password: generateTemporaryPassword(),
-        role_id: employeeRole.id,
+        role_id: targetRole.id,
+        additional_role_ids: additionalRoles.map((r) => r.id),
         status: 'active',
         last_login: null,
       };
-      getDb().users.push(user);
-      employee.linked_user_id = user.id;
+      getDb().users.push(linkedUser);
+      employee.linked_user_id = linkedUser.id;
+      justCreatedUser = true;
     }
+  }
+
+  // Sending role_ids at all replaces the entire role set (primary + additional together) on the
+  // linked user, same semantics as users.api.js's mockUpdate (§4) — skipped when the branch above
+  // just created the linked user, since these role_ids were already applied there.
+  if (role_ids != null && linkedUser && !justCreatedUser) {
+    const [primaryRoleId, ...additionalRoleIds] = role_ids;
+    if (Number(primaryRoleId) !== linkedUser.role_id) {
+      const targetRole = findRoleById(Number(primaryRoleId));
+      if (!targetRole) throw mockError(422, 'Invalid role.');
+      if (actor && targetRole.role_name !== ROLE_NAMES.EMPLOYEE) {
+        assertCanAssignRole(findRoleById(actor.role_id).role_name, targetRole.role_name);
+      }
+    }
+    const additionalRoles = additionalRoleIds.map((rid) => findRoleById(Number(rid))).filter(Boolean);
+    additionalRoles.forEach((r) => assertValidAdditionalRole(r.role_name));
+    linkedUser.role_id = Number(primaryRoleId);
+    linkedUser.additional_role_ids = additionalRoles.map((r) => r.id);
   }
 
   persist();
@@ -135,10 +254,37 @@ const mockDelete = async (id) => {
   return { success: true, message: 'Employee deleted successfully.' };
 };
 
+// Real GET /employees can't filter by role_id server-side — scan a bounded batch, enrich with
+// role, filter client-side, then re-paginate the matches ourselves using the page/limit the
+// caller actually asked for.
+const realGetAllByRole = async (roleId, employeeParams) => {
+  const { status, search } = employeeParams;
+  const batchRes = await apiClient
+    .get('/employees', { params: { page: 1, limit: REAL_ROLE_FILTER_SCAN_LIMIT, status, search } })
+    .then((r) => r.data);
+  const enriched = await enrichWithRealRole(batchRes?.data ?? []);
+  const matches = enriched.filter((e) => e.role_id === Number(roleId));
+
+  const page = Number(employeeParams.page) || 1;
+  const limit = Number(employeeParams.limit) || 10;
+  const start = (page - 1) * limit;
+  const total = matches.length;
+  return {
+    success: true,
+    message: batchRes?.message ?? 'OK',
+    data: matches.slice(start, start + limit),
+    meta: { total, page, limit, totalPages: Math.ceil(total / limit) || 0, hasNext: page * limit < total, hasPrev: page > 1 },
+  };
+};
+
 export const employeesApi = {
-  getAll: (params) => {
+  getAll: async (params) => {
     if (RBAC_MOCK_ENABLED) return mockGetAll(params);
-    return apiClient.get('/employees', { params }).then((r) => r.data);
+    const { role_id, ...employeeParams } = params ?? {};
+    if (role_id) return realGetAllByRole(role_id, employeeParams);
+    const employeesRes = await apiClient.get('/employees', { params: employeeParams }).then((r) => r.data);
+    const data = await enrichWithRealRole(employeesRes?.data ?? []);
+    return { ...employeesRes, data };
   },
 
   getActiveList: () => {
@@ -146,19 +292,71 @@ export const employeesApi = {
     return apiClient.get('/employees/active/list').then((r) => r.data?.data ?? []);
   },
 
-  getById: (id) => {
+  getById: async (id) => {
     if (RBAC_MOCK_ENABLED) return mockGetById(id);
-    return apiClient.get(`/employees/${id}`).then((r) => r.data?.data);
+    const employee = await apiClient.get(`/employees/${id}`).then((r) => r.data?.data);
+    if (!employee) return employee;
+    const [enriched] = await enrichWithRealRole([employee]);
+    return enriched;
   },
 
-  create: (payload) => {
+  // Creates the Employee record, then provisions its login/role via POST /users (see the
+  // module comment above — the real /employees endpoint has no fields for either). If the
+  // second call fails, the Employee still exists with no login; re-opening it in Edit and
+  // saving a Role again will backfill one (see `update` below).
+  create: async (payload) => {
     if (RBAC_MOCK_ENABLED) return mockCreate(payload);
-    return apiClient.post('/employees', payload).then((r) => r.data);
+    const { role_ids, password, email, ...employeeFields } = payload;
+    const employeeRes = await apiClient.post('/employees', { ...employeeFields, email_id: email }).then((r) => r.data);
+    const employeeId = employeeRes?.data?.id;
+    if (employeeId) {
+      await apiClient.post('/users', {
+        email,
+        password,
+        confirm_password: password,
+        role_ids,
+        employee_id: employeeId,
+        status: employeeFields.status ?? 'active',
+      });
+    }
+    return employeeRes;
   },
 
-  update: (id, payload) => {
+  // Updates the Employee record, then the linked User's role/email via PUT /users/:id — found
+  // by scanning GET /users for this employee_id, since GET /employees doesn't return one. An
+  // employee with no login yet gets one backfilled here (BACKFILL_PASSWORD) the first time a
+  // Role is saved for it.
+  update: async (id, payload) => {
     if (RBAC_MOCK_ENABLED) return mockUpdate(id, payload);
-    return apiClient.put(`/employees/${id}`, payload).then((r) => r.data);
+    const { role_ids, email, ...employeeFields } = payload;
+    const employeeBody = { ...employeeFields };
+    if (email !== undefined) employeeBody.email_id = email;
+    const employeeRes = await apiClient.put(`/employees/${id}`, employeeBody).then((r) => r.data);
+
+    if (role_ids != null || email) {
+      const usersRes = await usersApi.getAll(REAL_USER_LOOKUP_PARAMS);
+      const linkedUser = (usersRes?.data ?? []).find((u) => u.employee_id === Number(id));
+
+      if (linkedUser) {
+        const userPayload = {};
+        if (role_ids != null) userPayload.role_ids = role_ids;
+        if (email) userPayload.email = email;
+        if (Object.keys(userPayload).length) {
+          await apiClient.put(`/users/${linkedUser.id}`, userPayload);
+        }
+      } else if (email && role_ids?.length) {
+        await apiClient.post('/users', {
+          email,
+          password: BACKFILL_PASSWORD,
+          confirm_password: BACKFILL_PASSWORD,
+          role_ids,
+          employee_id: Number(id),
+          status: employeeFields.status ?? 'active',
+        });
+      }
+    }
+
+    return employeeRes;
   },
 
   delete: (id) => {

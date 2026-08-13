@@ -6,18 +6,13 @@ import { MANAGER_TIER_ROLES } from '@/constants/roleHierarchy';
 // The real backend only supports filtering /users by role_id (not role_name — see
 // managerCandidatesParams), so it silently ignores that param and returns every user,
 // Employee-role accounts included. Re-check the role client-side against both the primary
-// role and any additional roles so an Employee never ends up in the manager picker.
+// role (`role`) and any additional roles (`additionalRoles` — confirmed against a live
+// response; NOT `roles`) so an Employee never ends up in the manager picker, and a manager-tier
+// role held only as an additional role still counts.
 const hasManagerTierRole = (u) => {
-  const roleNames = [u.role?.role_name, ...(u.roles ?? []).map((r) => r.role_name)];
+  const roleNames = [u.role?.role_name, ...(u.additionalRoles ?? []).map((r) => r.role_name)];
   return roleNames.some((name) => MANAGER_TIER_ROLES.includes(name));
 };
-
-export const useUsers = (params) =>
-  useQuery({
-    queryKey: QUERY_KEYS.USERS(params),
-    queryFn: () => usersApi.getAll(params),
-    placeholderData: (prev) => prev,
-  });
 
 // Manager-tier Users (Manager, Service PO Admin, Project Admin — §3.1) for the Employee
 // primary/secondary manager pickers. Restricted to those also linked to an Employee record
@@ -32,13 +27,6 @@ export const useAssignableManagers = () =>
       .filter(hasManagerTierRole),
   });
 
-export const useUser = (id) =>
-  useQuery({
-    queryKey: QUERY_KEYS.USER(id),
-    queryFn: () => usersApi.getById(id),
-    enabled: !!id,
-  });
-
 // The Employee List's "Reset password" action needs the Employee's linked User id, but
 // GET /employees doesn't return one (confirmed against the real backend response — no
 // user_id/linked_user_id field). Users do carry `employee_id` back to their Employee, so —
@@ -51,41 +39,6 @@ export const useUserByEmployeeId = (employeeId) =>
     select: (res) => (res?.data ?? []).find((u) => u.employee_id === employeeId),
     enabled: !!employeeId,
   });
-
-export const useCreateUser = () => {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: usersApi.create,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
-  });
-};
-
-export const useUpdateUser = (id) => {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (payload) => usersApi.update(id, payload),
-    onSuccess: () => Promise.all([
-        qc.invalidateQueries({ queryKey: ['users'] }),
-        qc.invalidateQueries({ queryKey: QUERY_KEYS.USER(id) })
-      ]),
-  });
-};
-
-export const useDeleteUser = () => {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: usersApi.delete,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
-  });
-};
-
-export const useToggleUserStatus = () => {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, status }) => usersApi.update(id, { status }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
-  });
-};
 
 // HR/senior-admin resets a User's forgotten password — no old password required (§2.6). Used
 // both from the Users screen directly and from Employee List (targeting the Employee's linked

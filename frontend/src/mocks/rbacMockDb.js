@@ -1,7 +1,7 @@
 // In-memory mock "backend" for the RBAC redesign spec (see rbacMockConfig.js for why this
 // exists). Persisted to sessionStorage so a page refresh mid-demo doesn't lose state; a new
 // browser tab/session starts fresh from the seed below.
-import { ROLE_HIERARCHY, ROLE_NAMES, ROLE_CREATION_MATRIX, NO_COMPANY_ROLES } from '@/constants/roleHierarchy';
+import { ROLE_HIERARCHY, ROLE_NAMES, ROLE_CREATION_MATRIX, NO_COMPANY_ROLES, ADDITIONAL_ROLE_NAMES } from '@/constants/roleHierarchy';
 import { getAccessToken } from '@/services/apiClient';
 
 const STORAGE_KEY = 'rbac_mock_db_v1';
@@ -192,7 +192,7 @@ const FORMS_BY_ROLE = {
   [ROLE_NAMES.ENTITY_ADMIN]: { 'Entity Management': [{ id: 101, name: 'Entity Master' }, { id: 102, name: 'BU Admin Master' }] },
   [ROLE_NAMES.BU_ADMIN]: {
     Administration: [{ id: 103, name: 'Roles' }, { id: 104, name: 'Forms' }],
-    People: [{ id: 105, name: 'Employees' }, { id: 106, name: 'Users' }],
+    People: [{ id: 105, name: 'Employees' }],
   },
   [ROLE_NAMES.PROJECT_ADMIN]: {},
   [ROLE_NAMES.SERVICE_PO_ADMIN]: {},
@@ -221,6 +221,18 @@ export const assertCanAssignRole = (actorRoleName, targetRoleName) => {
   if (!allowed.includes(targetRoleName)) {
     const err = new Error(roleMatrixError(actorRoleName, targetRoleName));
     err.mockStatus = 403;
+    throw err;
+  }
+};
+
+// Multi-role support (§4): senior tiers can only ever be someone's one primary role. Shared by
+// every mocked endpoint that can assign additional roles (Users, Employees).
+export const assertValidAdditionalRole = (roleName) => {
+  if (!ADDITIONAL_ROLE_NAMES.includes(roleName)) {
+    const err = new Error(
+      `"${roleName}" cannot be held as an additional role — only Project Admin, Service PO Admin, Manager, HR, or Employee may be assigned as additional roles.`
+    );
+    err.response = { status: 400, data: { success: false, message: err.message } };
     throw err;
   }
 };

@@ -18,7 +18,6 @@ export const QUERY_KEYS = {
 
   // Users
   USERS: (params) => ['users', params],
-  USER: (id) => ['users', id],
 
   // Roles
   ROLES: (params) => ['roles', params],
