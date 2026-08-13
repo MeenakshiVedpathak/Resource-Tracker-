@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { Route, Routes } from 'react-router-dom';
 import { ROUTES } from '@/constants/routes';
 import { FORM_NAMES } from '@/constants/rbacForms';
+import { useAuth } from '@/hooks/useAuth';
 import ProtectedRoute from './ProtectedRoute';
 import AuthLayout from '@/layouts/AuthLayout';
 import MainLayout from '@/layouts/MainLayout';
@@ -22,7 +23,7 @@ const EmployeeMonthlySummary = lazy(() => import('@/pages/employee/EmployeeMonth
 const EmployeeReports = lazy(() => import('@/pages/employee/EmployeeReports'));
 
 // ── Core ──
-const Dashboard = lazy(() => import('@/pages/Dashboard'));
+const DashboardGate = lazy(() => import('@/pages/DashboardGate'));
 const AIInsights = lazy(() => import('@/pages/AIInsights'));
 
 // ── People ──
@@ -114,7 +115,37 @@ const Notifications = lazy(() => import('@/pages/Notifications'));
 // ── Errors ──
 const NotFound = lazy(() => import('@/pages/NotFound'));
 
-const AppRoutes = () => (
+// Employee self-service screens — reused under whichever layout actually fits the caller (see
+// AppRoutes below). Gating stays formName-only, same as every other RBAC-driven screen; the
+// `employeeOnly` tier check that used to double as "which layout do these live under" is now
+// just a defensive re-check inside the EmployeeLayout branch, not the sole gate.
+//
+// A plain function called inline (`{employeeSelfServiceRoutes()}`), NOT a component used as
+// `<EmployeeSelfServiceRoutes/>` — React Router's route-config extraction walks the literal
+// `<Route>`/Fragment elements in the JSX tree without ever rendering custom components, so a
+// `<Route>` hidden inside one would silently never register. Calling the function inline
+// splices its returned Fragment's `<Route>` children directly into the tree instead.
+const employeeSelfServiceRoutes = () => (
+  <>
+    <Route path={ROUTES.EMPLOYEE_DASHBOARD} element={<ProtectedRoute formName={FORM_NAMES.EMPLOYEE_DASHBOARD} allowIfNoFormsMapped><EmployeeDashboard /></ProtectedRoute>} />
+    <Route path={ROUTES.EMPLOYEE_TIMESHEET} element={<ProtectedRoute formName={FORM_NAMES.EMPLOYEE_WORK_LOG}><EmployeeTimesheet /></ProtectedRoute>} />
+    <Route path={ROUTES.EMPLOYEE_MONTHLY_SUMMARY} element={<ProtectedRoute formName={FORM_NAMES.EMPLOYEE_MONTHLY_SUMMARY}><EmployeeMonthlySummary /></ProtectedRoute>} />
+    <Route path={ROUTES.EMPLOYEE_REPORTS} element={<ProtectedRoute formName={FORM_NAMES.EMPLOYEE_REPORTS}><EmployeeReports /></ProtectedRoute>} />
+  </>
+);
+
+const AppRoutes = () => {
+  // A multi-role account (e.g. Employee + Manager) must reach Employee self-service screens
+  // (My Work Log, PO Wise Report, etc.) inside the SAME MainLayout/Sidebar shell as its other
+  // forms — Sidebar.jsx already renders nav links for these whenever they're mapped (module ->
+  // form, same as everything else), but until now those links 404'd because the routes only
+  // existed under the separate employeeOnly-gated EmployeeLayout tree, which a Manager holding
+  // Employee only as a secondary role would bounce into and out of, losing Manager-only nav
+  // (My Team, Team Mapping) and the AI Copilot widget along the way. Only an account whose SOLE
+  // role is Employee (isEmployeeOnly) still gets the separate, reduced EmployeeLayout shell.
+  const { isEmployeeOnly } = useAuth();
+
+  return (
   <Suspense fallback={<LoadingScreen />}>
     <Routes>
       {/* Auth */}
@@ -140,12 +171,12 @@ const AppRoutes = () => (
         }
       >
         {/* Dashboard — gated like every other screen by whether it's actually mapped to the
-            caller's roles; `allowIfNoFormsMapped` only kicks in for an account with literally
-            nothing else mapped, so there's still a landing page to fall back to (see
-            NotFound's "Back to Dashboard" button, and the post-login redirect) instead of an
-            immediate dead end. An Entity Admin with real screens mapped (Entity Master, etc.)
-            no longer sees Dashboard just because the route used to have zero gate at all. */}
-        <Route path={ROUTES.DASHBOARD} element={<ProtectedRoute formName={FORM_NAMES.DASHBOARD} allowIfNoFormsMapped><Dashboard /></ProtectedRoute>} />
+            caller's roles; the zero-forms safety net (nothing mapped at all) still lands on the
+            real Dashboard (empty state). An account with OTHER real forms mapped but not
+            Dashboard itself (e.g. an Entity Admin, or a Manager mapped to reporting/self-service
+            screens only) gets WelcomeNoDashboard instead of the old dead-end 404 bounce — see
+            DashboardGate.jsx, which reuses computeHomeRoute rather than duplicating the check. */}
+        <Route path={ROUTES.DASHBOARD} element={<DashboardGate />} />
         <Route path={ROUTES.AI_INSIGHTS} element={<ProtectedRoute formName={FORM_NAMES.AI_INSIGHTS}><AIInsights /></ProtectedRoute>} />
 
         {/* Employees */}
@@ -308,28 +339,32 @@ const AppRoutes = () => (
             (ChangePasswordDialog) opened from UserMenu instead, so that route is gone. */}
         <Route path={ROUTES.NOTIFICATIONS} element={<Notifications />} />
 
+        {/* Employee self-service, rendered here (same shell, same formName gating as every
+            other screen above) for any account that ISN'T employee-only — a Manager who also
+            holds Employee, for instance, keeps My Team/Team Mapping/AI Copilot while using
+            My Work Log or PO Wise Report instead of losing them to a shell swap. */}
+        {!isEmployeeOnly && employeeSelfServiceRoutes()}
+
         {/* RBAC guard redirect target — a real path, unlike the '*' catch-all below */}
         <Route path={ROUTES.NOT_AUTHORIZED} element={<NotFound />} />
       </Route>
 
-      {/* Employee self-service — every account authenticates identically now (§2), so an
-          Employee is just the account whose single role is "Employee". Still its own layout
-          tree (separate from MainLayout — no AICopilotWidget, reduced EmployeeSidebar), but
-          each screen is now formName-gated by Form Master + Role-Form Mapping like everywhere
-          else, layered on top of the `employeeOnly` tier check — it used to be static/always-on
-          regardless of any mapping. Dashboard alone carries `allowIfNoFormsMapped` so a
-          brand-new Employee with nothing mapped yet still has a landing page instead of an
-          infinite Not-Authorized <-> MainLayout-redirect loop (see ProtectedRoute.jsx). */}
-      <Route element={<ProtectedRoute employeeOnly><EmployeeLayout /></ProtectedRoute>}>
-        <Route path={ROUTES.EMPLOYEE_DASHBOARD} element={<ProtectedRoute formName={FORM_NAMES.EMPLOYEE_DASHBOARD} allowIfNoFormsMapped><EmployeeDashboard /></ProtectedRoute>} />
-        <Route path={ROUTES.EMPLOYEE_TIMESHEET} element={<ProtectedRoute formName={FORM_NAMES.EMPLOYEE_WORK_LOG}><EmployeeTimesheet /></ProtectedRoute>} />
-        <Route path={ROUTES.EMPLOYEE_MONTHLY_SUMMARY} element={<ProtectedRoute formName={FORM_NAMES.EMPLOYEE_MONTHLY_SUMMARY}><EmployeeMonthlySummary /></ProtectedRoute>} />
-        <Route path={ROUTES.EMPLOYEE_REPORTS} element={<ProtectedRoute formName={FORM_NAMES.EMPLOYEE_REPORTS}><EmployeeReports /></ProtectedRoute>} />
-      </Route>
+      {/* Employee self-service for an account whose SOLE role is Employee (isEmployeeOnly) —
+          the separate, reduced shell (no AICopilotWidget, no Manager/Admin nav) still applies
+          only here; anyone holding an additional role gets the block above instead. Dashboard
+          alone carries `allowIfNoFormsMapped` so a brand-new Employee with nothing mapped yet
+          still has a landing page instead of an infinite Not-Authorized <-> MainLayout-redirect
+          loop (see ProtectedRoute.jsx). */}
+      {isEmployeeOnly && (
+        <Route element={<ProtectedRoute employeeOnly><EmployeeLayout /></ProtectedRoute>}>
+          {employeeSelfServiceRoutes()}
+        </Route>
+      )}
 
       <Route path={ROUTES.NOT_FOUND} element={<NotFound />} />
     </Routes>
   </Suspense>
-);
+  );
+};
 
 export default AppRoutes;

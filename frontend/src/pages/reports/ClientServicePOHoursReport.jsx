@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { AnimatePresence, motion } from 'framer-motion';
-import { AlertCircle, ChevronDown, ChevronUp, ChevronsUpDown, Download, Filter, Search } from 'lucide-react';
+import { AlertCircle, ChevronDown, ChevronUp, ChevronsUpDown, Download, Search } from 'lucide-react';
 import { useClientServicePOHours } from '@/hooks/useReports';
 import { useActiveClients } from '@/hooks/useClients';
 import { useActiveServicePOs } from '@/hooks/useServicePOs';
@@ -12,6 +12,8 @@ import { useDebounce } from '@/hooks/useDebounce';
 import { extractApiError } from '@/services/apiClient';
 import { formatDate, formatHours } from '@/utils/formatters';
 import PageHeader from '@/components/common/PageHeader';
+import FilterToggleButton from '@/components/common/FilterToggleButton';
+import FilterPanel from '@/components/common/FilterPanel';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -260,19 +262,12 @@ const ClientServicePOHoursReport = () => {
                 ))}
               </div>
             )}
-            <Button
-              size="sm"
-              onClick={() => setFiltersOpen((p) => !p)}
-              className="h-9 gap-2 bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              <Filter className="h-4 w-4" />
-              Filters
-              {activeFilterCount > 0 && (
-                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
-                  {activeFilterCount}
-                </span>
-              )}
-            </Button>
+            <FilterToggleButton
+              isOpen={filtersOpen}
+              onToggle={() => setFiltersOpen((p) => !p)}
+              activeCount={activeFilterCount}
+              className="h-9"
+            />
             {visibleClientGroups.length > 0 && (
               <Button variant="outline" size="sm" className="h-9" onClick={() => exportToExcel(visibleClientGroups, periodLabel)}>
                 <Download className="mr-1.5 h-4 w-4" />Export Excel
@@ -283,9 +278,7 @@ const ClientServicePOHoursReport = () => {
       />
 
       {/* Collapsible filter panel */}
-      <div className={`overflow-hidden transition-all duration-500 ease-in-out ${filtersOpen ? 'max-h-[480px] opacity-100 mb-5' : 'max-h-0 opacity-0 mb-0'}`}>
-        <div className="rounded-lg border bg-muted/30 p-4">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full">
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[480px]">
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs">Month &amp; Year <span className="text-destructive">*</span></Label>
               <MonthYearPicker
@@ -371,9 +364,7 @@ const ClientServicePOHoursReport = () => {
                 className="h-9 w-full text-sm"
               />
             </div>
-          </div>
-        </div>
-      </div>
+      </FilterPanel>
 
       {errorMessage && (
         <div className="mb-4 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">

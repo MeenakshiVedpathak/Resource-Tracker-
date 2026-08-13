@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import * as XLSX from 'xlsx';
-import { Download, Filter } from 'lucide-react';
+import { Download } from 'lucide-react';
 import { useServicePOResourceReport } from '@/hooks/useReports';
 import { useCanViewOriginalData } from '@/hooks/usePermissions';
 import { reportsApi } from '@/api/reports.api';
@@ -11,6 +11,8 @@ import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
 import { useActiveClients } from '@/hooks/useClients';
 import { formatMonthYear } from '@/utils/formatters';
 import PageHeader from '@/components/common/PageHeader';
+import FilterToggleButton from '@/components/common/FilterToggleButton';
+import FilterPanel from '@/components/common/FilterPanel';
 import { Button } from '@/components/ui/button';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -242,19 +244,12 @@ const ServicePOResource = () => {
                 ))}
               </div>
             )}
-            <Button
-              size="sm"
-              className="h-9 gap-2 bg-blue-600 hover:bg-blue-700 text-white"
-              onClick={() => setFiltersOpen((o) => !o)}
-            >
-              <Filter className="h-4 w-4" />
-              Filters
-              {activeFilterCount > 0 && (
-                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
-                  {activeFilterCount}
-                </span>
-              )}
-            </Button>
+            <FilterToggleButton
+              isOpen={filtersOpen}
+              onToggle={() => setFiltersOpen((o) => !o)}
+              activeCount={activeFilterCount}
+              className="h-9"
+            />
             {rows.length > 0 && (
               <Button variant="outline" size="sm" className="h-9" onClick={handleExport} disabled={exporting}>
                 <Download className="mr-1.5 h-4 w-4" />{exporting ? 'Exporting…' : 'Export Excel'}
@@ -265,8 +260,7 @@ const ServicePOResource = () => {
       />
 
       {/* ── Collapsible Filter Panel ── */}
-      <div className={`overflow-hidden transition-all duration-500 ease-in-out ${filtersOpen ? 'max-h-[420px] opacity-100 mb-5' : 'max-h-0 opacity-0 mb-0'}`}>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full rounded-lg border bg-muted/30 p-4">
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[420px]">
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs font-medium">Month &amp; Year</Label>
             <MonthYearPicker
@@ -366,9 +360,7 @@ const ServicePOResource = () => {
               className="h-9 text-sm w-full"
             />
           </div>
-
-        </div>
-      </div>
+      </FilterPanel>
 
       {/* ── States ── */}
       {isPending ? (

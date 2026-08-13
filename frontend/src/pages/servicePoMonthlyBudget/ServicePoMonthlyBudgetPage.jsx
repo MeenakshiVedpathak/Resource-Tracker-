@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react';
 import PageHeader from '@/components/common/PageHeader';
+import FilterToggleButton from '@/components/common/FilterToggleButton';
+import FilterPanel from '@/components/common/FilterPanel';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
 import MonthBudgetCard from './MonthBudgetCard';
 import ServicePoMonthlyBudgetModal from './ServicePoMonthlyBudgetModal';
 import { useActiveServicePOs } from '@/hooks/useServicePOs';
@@ -47,6 +50,7 @@ const MonthGridCard = ({ month, year, activePOs, isCurrent, currentData, isCurre
 const ServicePoMonthlyBudgetPage = () => {
   const [year, setYear] = useState(CURRENT_YEAR);
   const [modalState, setModalState] = useState(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const { data: currentData, isPending: isCurrentLoading } = useCurrentServicePoMonthlyBudget();
   const { data: activePOs = [] } = useActiveServicePOs();
@@ -63,8 +67,19 @@ const ServicePoMonthlyBudgetPage = () => {
         title="Service PO Monthly Budget"
         description="Manage monthly invoice and billed amounts for Service POs."
         actions={(
+          <FilterToggleButton
+            isOpen={filtersOpen}
+            onToggle={() => setFiltersOpen((prev) => !prev)}
+            activeCount={year !== CURRENT_YEAR ? 1 : 0}
+          />
+        )}
+      />
+
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[100px]" gridClassName="grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 w-full">
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Year</Label>
           <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
-            <SelectTrigger className="w-28">
+            <SelectTrigger className="w-full h-9 text-sm bg-white">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -73,8 +88,8 @@ const ServicePoMonthlyBudgetPage = () => {
               ))}
             </SelectContent>
           </Select>
-        )}
-      />
+        </div>
+      </FilterPanel>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {months.map(({ month, year: y, isCurrent }) => (

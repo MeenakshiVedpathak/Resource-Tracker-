@@ -13,6 +13,8 @@ import { downloadMonthlyCostSample } from '@/utils/monthlyCostSample';
 import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
+import FilterToggleButton from '@/components/common/FilterToggleButton';
+import FilterPanel from '@/components/common/FilterPanel';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
@@ -49,6 +51,7 @@ const MonthlyCostList = () => {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [selectedKeys, setSelectedKeys] = useState([]);
   const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const [calcOpen, setCalcOpen] = useState(false);
   const [calcMonthYear, setCalcMonthYear] = useState(() => {
@@ -204,6 +207,11 @@ const MonthlyCostList = () => {
         description="Uploaded and calculated cost periods, grouped by month"
         actions={
           <div className="flex items-center gap-2">
+            <FilterToggleButton
+              isOpen={filtersOpen}
+              onToggle={() => setFiltersOpen((prev) => !prev)}
+              activeCount={monthYearFilter ? 1 : 0}
+            />
             <Button variant="outline" size="sm" onClick={downloadMonthlyCostSample}>
               <Download className="mr-1.5 h-4 w-4" />
               Download Sample
@@ -223,6 +231,22 @@ const MonthlyCostList = () => {
           </div>
         }
       />
+
+      <FilterPanel
+        isOpen={filtersOpen}
+        maxHeightClass="max-h-[100px]"
+        gridClassName="grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 w-full"
+      >
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Month &amp; Year</Label>
+          <MonthYearPicker
+            value={monthYearFilter}
+            onChange={(val) => { setMonthYearFilter(val); setPage(1); clearSelection(); }}
+            placeholder="All months"
+            className="w-44"
+          />
+        </div>
+      </FilterPanel>
 
       {selectedKeys.length > 0 && (
         <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-3 py-2">
@@ -246,14 +270,7 @@ const MonthlyCostList = () => {
         columns={columns}
         data={records}
         isLoading={isPending}
-        toolbar={
-          <MonthYearPicker
-            value={monthYearFilter}
-            onChange={(val) => { setMonthYearFilter(val); setPage(1); clearSelection(); }}
-            placeholder="All months"
-            className="w-44"
-          />
-        }
+        toolbar={null}
         pagination={
           meta.total != null
             ? { page: meta.page ?? page, limit: meta.limit ?? limit, total: meta.total }

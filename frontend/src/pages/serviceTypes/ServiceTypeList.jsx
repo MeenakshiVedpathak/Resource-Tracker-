@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate, Outlet } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
 import * as XLSX from 'xlsx';
-import { Plus, Pencil, Trash2, Search, Filter, Download } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Download } from 'lucide-react';
 import { useServiceTypes, useDeleteServiceType } from '@/hooks/useServiceTypes';
 import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
 import { useCanWrite } from '@/hooks/usePermissions';
@@ -16,6 +16,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
+import FilterToggleButton from '@/components/common/FilterToggleButton';
+import FilterPanel from '@/components/common/FilterPanel';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import { cn } from '@/utils/cn';
@@ -165,19 +167,11 @@ const ServiceTypeList = () => {
                 onChange={(e) => { setSearch(e.target.value); setPage(1); }}
               />
             </div>
-            <Button
-              size="sm"
-              className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
-              onClick={() => setFiltersOpen((prev) => !prev)}
-            >
-              <Filter className="h-4 w-4" />
-              Filters
-              {categoryFilter !== 'all' && (
-                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
-                  1
-                </span>
-              )}
-            </Button>
+            <FilterToggleButton
+              isOpen={filtersOpen}
+              onToggle={() => setFiltersOpen((prev) => !prev)}
+              activeCount={categoryFilter !== 'all' ? 1 : 0}
+            />
             {rows.length > 0 && (
               <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={handleExport}>
                 <Download className="h-4 w-4" /> Export Excel
@@ -192,28 +186,25 @@ const ServiceTypeList = () => {
         }
       />
 
-      {/* Collapsible filter panel */}
-      <div className={`overflow-hidden transition-all duration-500 ease-in-out ${filtersOpen ? 'max-h-[160px] opacity-100 mb-2' : 'max-h-0 opacity-0 mb-0'}`}>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full rounded-lg border bg-muted/30 p-4">
-          <div className="flex flex-col gap-1.5">
-            <Label className="text-xs">Service Category</Label>
-            <SearchableSelect
-              options={[
-                { label: "All Categories", value: "all" },
-                ...serviceCategories.map((cat) => ({
-                  label: cat.name,
-                  value: String(cat.id)
-                }))
-              ]}
-              value={categoryFilter}
-              onValueChange={(v) => { setCategoryFilter(v); setPage(1); }}
-              placeholder="All Categories"
-              searchPlaceholder="Search category..."
-              className="h-9 w-full text-sm bg-white"
-            />
-          </div>
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[160px]">
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Service Category</Label>
+          <SearchableSelect
+            options={[
+              { label: "All Categories", value: "all" },
+              ...serviceCategories.map((cat) => ({
+                label: cat.name,
+                value: String(cat.id)
+              }))
+            ]}
+            value={categoryFilter}
+            onValueChange={(v) => { setCategoryFilter(v); setPage(1); }}
+            placeholder="All Categories"
+            searchPlaceholder="Search category..."
+            className="h-9 w-full text-sm bg-white"
+          />
         </div>
-      </div>
+      </FilterPanel>
 
       <DataTable
         columns={columns}

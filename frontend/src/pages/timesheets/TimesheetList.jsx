@@ -15,6 +15,8 @@ import { formatDate } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
+import FilterToggleButton from '@/components/common/FilterToggleButton';
+import FilterPanel from '@/components/common/FilterPanel';
 import SyncWorkLogsDialog from '@/components/timesheets/SyncWorkLogsDialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -46,6 +48,7 @@ const TimesheetList = () => {
   const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
   const [monthYearFilter, setMonthYearFilter] = useState(null);
   const [openingId, setOpeningId] = useState(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const [sorting, setSorting] = useState([]);
 
@@ -248,6 +251,11 @@ const TimesheetList = () => {
         description="History of all uploaded timesheet files"
         actions={
           <div className="flex items-center gap-2">
+            <FilterToggleButton
+              isOpen={filtersOpen}
+              onToggle={() => setFiltersOpen((prev) => !prev)}
+              activeCount={monthYearFilter ? 1 : 0}
+            />
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -279,6 +287,22 @@ const TimesheetList = () => {
         }
       />
 
+      <FilterPanel
+        isOpen={filtersOpen}
+        maxHeightClass="max-h-[100px]"
+        gridClassName="grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 w-full"
+      >
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Month &amp; Year</Label>
+          <MonthYearPicker
+            value={monthYearFilter}
+            onChange={(val) => { setMonthYearFilter(val); setPage(1); setSelectedIds([]); }}
+            placeholder="All months"
+            className="w-44"
+          />
+        </div>
+      </FilterPanel>
+
       {selectedIds.length > 0 && (
         <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-3 py-2">
           <span className="text-sm font-medium">{selectedIds.length} selected</span>
@@ -301,14 +325,7 @@ const TimesheetList = () => {
         columns={columns}
         data={records}
         isLoading={isPending}
-        toolbar={
-          <MonthYearPicker
-            value={monthYearFilter}
-            onChange={(val) => { setMonthYearFilter(val); setPage(1); setSelectedIds([]); }}
-            placeholder="All months"
-            className="w-44"
-          />
-        }
+        toolbar={null}
         pagination={
           records.length > 0
             ? {

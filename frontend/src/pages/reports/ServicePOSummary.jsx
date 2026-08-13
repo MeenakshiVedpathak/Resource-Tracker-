@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Download, Filter, Search } from 'lucide-react';
+import { Download, Search } from 'lucide-react';
 import { useServicePOSummary, useServicePOSummaryTotals } from '@/hooks/useReports';
 import { useCanViewOriginalData } from '@/hooks/usePermissions';
 import { reportsApi } from '@/api/reports.api';
@@ -14,6 +14,8 @@ import { formatCurrency, formatDate, formatHours } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
 import StatusBadge from '@/components/common/StatusBadge';
+import FilterToggleButton from '@/components/common/FilterToggleButton';
+import FilterPanel from '@/components/common/FilterPanel';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -317,19 +319,12 @@ const ServicePOSummary = () => {
                 ))}
               </div>
             )}
-            <Button
-              size="sm"
-              onClick={() => setFiltersOpen((p) => !p)}
-              className="h-9 gap-2 bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              <Filter className="h-4 w-4" />
-              Filters
-              {activeFilterCount > 0 && (
-                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
-                  {activeFilterCount}
-                </span>
-              )}
-            </Button>
+            <FilterToggleButton
+              isOpen={filtersOpen}
+              onToggle={() => setFiltersOpen((p) => !p)}
+              activeCount={activeFilterCount}
+              className="h-9"
+            />
             {records.length > 0 && (
               <Button variant="outline" size="sm" className="h-9" onClick={handleExport} disabled={exporting}>
                 <Download className="mr-1.5 h-4 w-4" />{exporting ? 'Exporting…' : 'Export Excel'}
@@ -340,8 +335,7 @@ const ServicePOSummary = () => {
       />
 
       {/* Collapsible filter panel */}
-      <div className={`overflow-hidden transition-all duration-500 ease-in-out ${filtersOpen ? 'max-h-[420px] opacity-100 mb-5' : 'max-h-0 opacity-0 mb-0'}`}>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full rounded-lg border bg-muted/30 p-4">
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[420px]">
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs">Month &amp; Year <span className="text-destructive">*</span></Label>
             <MonthYearPicker
@@ -449,9 +443,7 @@ const ServicePOSummary = () => {
               className="h-9 w-full text-sm"
             />
           </div>
-
-        </div>
-      </div>
+      </FilterPanel>
 
       <DataTable
         tableContainerClassName="max-h-[50vh]"

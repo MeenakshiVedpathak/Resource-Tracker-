@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Outlet } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Plus, Pencil, Trash2, Search, Filter } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search } from 'lucide-react';
 import { useServiceCategories, useDeleteServiceCategory } from '@/hooks/useServiceCategories';
 import { useCanWrite } from '@/hooks/usePermissions';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -14,6 +14,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
+import FilterToggleButton from '@/components/common/FilterToggleButton';
+import FilterPanel from '@/components/common/FilterPanel';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import { cn } from '@/utils/cn';
@@ -140,19 +142,11 @@ const ServiceCategoryList = () => {
                 onChange={(e) => { setSearch(e.target.value); setPage(1); }}
               />
             </div>
-            <Button
-              size="sm"
-              className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
-              onClick={() => setFiltersOpen((prev) => !prev)}
-            >
-              <Filter className="h-4 w-4" />
-              Filters
-              {statusFilter !== 'all' && (
-                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
-                  1
-                </span>
-              )}
-            </Button>
+            <FilterToggleButton
+              isOpen={filtersOpen}
+              onToggle={() => setFiltersOpen((prev) => !prev)}
+              activeCount={statusFilter !== 'all' ? 1 : 0}
+            />
             {canManage && (
               <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => navigate(ROUTES.SERVICE_CATEGORY_NEW)}>
                 <Plus className="mr-1.5 h-4 w-4" /> Add Category
@@ -162,34 +156,31 @@ const ServiceCategoryList = () => {
         }
       />
 
-      {/* Collapsible filter panel */}
-      <div className={`overflow-hidden transition-all duration-500 ease-in-out ${filtersOpen ? 'max-h-[160px] opacity-100 mb-2' : 'max-h-0 opacity-0 mb-0'}`}>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full rounded-lg border bg-muted/30 p-4">
-          <div className="flex flex-col gap-1.5">
-            <Label className="text-xs">Status</Label>
-            <div className="flex items-center rounded-md border overflow-hidden h-9 text-sm bg-white">
-              {[
-                { label: 'All', value: 'all' },
-                { label: 'Active', value: 'active' },
-                { label: 'Inactive', value: 'inactive' },
-              ].map(({ label, value }) => (
-                <button
-                  key={value}
-                  onClick={() => { setStatusFilter(value); setPage(1); }}
-                  className={cn(
-                    'flex-1 px-3 h-full font-medium text-center transition-colors border-r last:border-r-0',
-                    statusFilter === value
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-background text-muted-foreground hover:bg-muted'
-                  )}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[160px]">
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Status</Label>
+          <div className="flex items-center rounded-md border overflow-hidden h-9 text-sm bg-white">
+            {[
+              { label: 'All', value: 'all' },
+              { label: 'Active', value: 'active' },
+              { label: 'Inactive', value: 'inactive' },
+            ].map(({ label, value }) => (
+              <button
+                key={value}
+                onClick={() => { setStatusFilter(value); setPage(1); }}
+                className={cn(
+                  'flex-1 px-3 h-full font-medium text-center transition-colors border-r last:border-r-0',
+                  statusFilter === value
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-background text-muted-foreground hover:bg-muted'
+                )}
+              >
+                {label}
+              </button>
+            ))}
           </div>
         </div>
-      </div>
+      </FilterPanel>
 
       <DataTable
         columns={columns}

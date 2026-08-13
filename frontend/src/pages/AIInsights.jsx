@@ -7,8 +7,11 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
+import FilterToggleButton from '@/components/common/FilterToggleButton';
+import FilterPanel from '@/components/common/FilterPanel';
 import { useAIInsights } from '@/hooks/useAIInsights';
 import { ROUTES } from '@/constants/routes';
 import { formatRelativeTime, formatDateTime } from '@/utils/formatters';
@@ -232,6 +235,7 @@ const AIInsights = () => {
   const [activeCategory, setActiveCategory] = useState('all');
   const [audience, setAudience] = useState('all');
   const [severityFilter, setSeverityFilter] = useState(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const listRef = useRef(null);
   const { data, isLoading, isFetching, refetch } = useAIInsights();
 
@@ -385,26 +389,42 @@ const AIInsights = () => {
                 </motion.span>
               )}
             </AnimatePresence>
-            {/* {audienceOptions.length > 0 && (
-              <Select value={audience} onValueChange={setAudience}>
-                <SelectTrigger className="w-40 h-9 rounded-xl gap-1.5 bg-background">
-                  <Users className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Audiences</SelectItem>
-                  {audienceOptions.map((role) => (
-                    <SelectItem key={role} value={role}>{role}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )} */}
+            {audienceOptions.length > 0 && (
+              <FilterToggleButton
+                isOpen={filtersOpen}
+                onToggle={() => setFiltersOpen((prev) => !prev)}
+                activeCount={audience !== 'all' ? 1 : 0}
+                className="h-9 rounded-xl"
+              />
+            )}
             <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching} className="h-9 rounded-xl gap-1.5 bg-background">
               <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? 'animate-spin' : ''}`} />
               {/* <span className="hidden sm:inline">Refresh</span> */}
             </Button>
           </div>
         </div>
+
+        {audienceOptions.length > 0 && (
+          <div className="relative px-5 sm:px-6 pb-5">
+            <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[100px]" gridClassName="grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 w-full">
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs">Audience</Label>
+                <Select value={audience} onValueChange={setAudience}>
+                  <SelectTrigger className="w-full h-9 rounded-xl gap-1.5 bg-background">
+                    <Users className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Audiences</SelectItem>
+                    {audienceOptions.map((role) => (
+                      <SelectItem key={role} value={role}>{role}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </FilterPanel>
+          </div>
+        )}
       </div>
 
       {/* ── Summary strip ── */}

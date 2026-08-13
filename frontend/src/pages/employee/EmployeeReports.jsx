@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import dayjs from 'dayjs';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Filter, Download } from 'lucide-react';
+import { Download } from 'lucide-react';
 import { employeeReportsApi } from '@/api/employeeReports.api';
 import { useEmployeeDailyReport, useEmployeeMonthlyReport, useEmployeeRangeReport } from '@/hooks/useEmployeeReports';
 import { useNotification } from '@/hooks/useNotification';
@@ -17,6 +17,8 @@ import { DateRangePicker } from '@/components/ui/date-range-picker';
 import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
 import EmptyState from '@/components/common/EmptyState';
+import FilterToggleButton from '@/components/common/FilterToggleButton';
+import FilterPanel from '@/components/common/FilterPanel';
 
 const REPORT_TYPES = [
   { label: 'Daily', value: 'daily' },
@@ -58,7 +60,7 @@ const TotalHoursBar = ({ totalHours }) => (
 
 const EmployeeReports = () => {
   const { error: showError } = useNotification();
-  const [filtersOpen, setFiltersOpen] = useState(true);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
   const [reportType, setReportType] = useState('daily');
@@ -111,14 +113,10 @@ const EmployeeReports = () => {
         title="PO Wise Report"
         actions={
           <div className="flex items-center gap-3">
-            <Button
-              size="sm"
-              className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
-              onClick={() => setFiltersOpen((prev) => !prev)}
-            >
-              <Filter className="h-4 w-4" />
-              Filters
-            </Button>
+            <FilterToggleButton
+              isOpen={filtersOpen}
+              onToggle={() => setFiltersOpen((prev) => !prev)}
+            />
             {rows.length > 0 && (
               <Button variant="outline" size="sm" className="h-9 gap-1.5" disabled={isExporting} onClick={handleExport}>
                 <Download className="h-4 w-4" />
@@ -130,8 +128,7 @@ const EmployeeReports = () => {
       />
 
       {/* Collapsible filter panel */}
-      <div className={`overflow-hidden transition-all duration-500 ease-in-out ${filtersOpen ? 'max-h-[160px] opacity-100 mb-2' : 'max-h-0 opacity-0 mb-0'}`}>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full rounded-lg border bg-muted/30 p-4">
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[160px]">
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs">Report Type</Label>
             <div className="flex items-center rounded-md border overflow-hidden h-9 text-sm bg-white">
@@ -178,8 +175,7 @@ const EmployeeReports = () => {
               <DateRangePicker value={range} onChange={setRange} placeholder="Select a date range" className="h-9 w-full text-sm bg-white" clearable />
             </div>
           )}
-        </div>
-      </div>
+      </FilterPanel>
 
       {hasSelection && isError && (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">

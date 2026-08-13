@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import { useNavigate, useSearchParams, Outlet } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Plus, Pencil, Eye, Trash2, Search, Filter, Download, Upload, Users, GitBranch } from 'lucide-react';
+import { Plus, Pencil, Eye, Trash2, Search, Download, Upload, Users, GitBranch } from 'lucide-react';
 import { useServicePOs, useDeleteServicePO } from '@/hooks/useServicePOs';
 import { servicePOsApi } from '@/api/servicePOs.api';
 import { useActiveClients } from '@/hooks/useClients';
@@ -19,6 +19,8 @@ import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
 import StatusBadge from '@/components/common/StatusBadge';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
+import FilterToggleButton from '@/components/common/FilterToggleButton';
+import FilterPanel from '@/components/common/FilterPanel';
 import ServicePOHierarchyDrawer from './ServicePOHierarchyDrawer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -370,19 +372,11 @@ const ServicePOList = () => {
                 onChange={(e) => { setSearch(e.target.value); setPage(1); }}
               />
             </div>
-            <Button
-              size="sm"
-              className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
-              onClick={() => setFiltersOpen((prev) => !prev)}
-            >
-              <Filter className="h-4 w-4" />
-              Filters
-              {activeFilterCount > 0 && (
-                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
-                  {activeFilterCount}
-                </span>
-              )}
-            </Button>
+            <FilterToggleButton
+              isOpen={filtersOpen}
+              onToggle={() => setFiltersOpen((prev) => !prev)}
+              activeCount={activeFilterCount}
+            />
             {servicePOs.length > 0 && (
               <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={handleExport} disabled={exporting}>
                 <Download className="h-4 w-4" /> {exporting ? 'Exporting…' : 'Export Excel'}
@@ -407,9 +401,7 @@ const ServicePOList = () => {
         }
       />
 
-      {/* Collapsible filter panel */}
-      <div className={`overflow-hidden transition-all duration-500 ease-in-out ${filtersOpen ? 'max-h-[420px] opacity-100 mb-2' : 'max-h-0 opacity-0 mb-0'}`}>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full rounded-lg border bg-muted/30 p-4">
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[420px]">
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs">Client</Label>
             <SearchableSelect
@@ -515,8 +507,7 @@ const ServicePOList = () => {
               className="h-9 w-full text-sm bg-white"
             />
           </div>
-        </div>
-      </div>
+      </FilterPanel>
 
       <DataTable
         columns={columns}

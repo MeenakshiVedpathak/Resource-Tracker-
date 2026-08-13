@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Outlet } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Plus, Pencil, Trash2, Search, Filter } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search } from 'lucide-react';
 import { useSubProjects, useDeleteSubProject } from '@/hooks/useSubProjects';
 import { useActiveServicePOs } from '@/hooks/useServicePOs';
 import { useCanWrite } from '@/hooks/usePermissions';
@@ -13,6 +13,8 @@ import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
 import StatusBadge from '@/components/common/StatusBadge';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
+import FilterToggleButton from '@/components/common/FilterToggleButton';
+import FilterPanel from '@/components/common/FilterPanel';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -149,19 +151,11 @@ const SubProjectList = () => {
                 onChange={(e) => { setSearch(e.target.value); setPage(1); }}
               />
             </div>
-            <Button
-              size="sm"
-              className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
-              onClick={() => setFiltersOpen((prev) => !prev)}
-            >
-              <Filter className="h-4 w-4" />
-              Filters
-              {activeFilterCount > 0 && (
-                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
-                  {activeFilterCount}
-                </span>
-              )}
-            </Button>
+            <FilterToggleButton
+              isOpen={filtersOpen}
+              onToggle={() => setFiltersOpen((prev) => !prev)}
+              activeCount={activeFilterCount}
+            />
             {canManage && (
               <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => navigate(ROUTES.SUB_PROJECT_NEW)}>
                 <Plus className="mr-1.5 h-4 w-4" /> Add Sub-Project
@@ -171,43 +165,40 @@ const SubProjectList = () => {
         }
       />
 
-      {/* Collapsible filter panel */}
-      <div className={`overflow-hidden transition-all duration-500 ease-in-out ${filtersOpen ? 'max-h-[160px] opacity-100 mb-2' : 'max-h-0 opacity-0 mb-0'}`}>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full rounded-lg border bg-muted/30 p-4">
-          <div className="flex flex-col gap-1.5">
-            <Label className="text-xs">Service PO</Label>
-            <SearchableSelect
-              options={[
-                { label: "All POs", value: "all" },
-                ...activePOs.map((po) => ({
-                  label: po.po_number ?? po.service_po_name ?? String(po.id),
-                  value: String(po.id)
-                }))
-              ]}
-              value={poFilter}
-              onValueChange={(v) => { setPoFilter(v); setPage(1); }}
-              placeholder="All POs"
-              searchPlaceholder="Search PO..."
-              className="h-9 w-full text-sm bg-white"
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label className="text-xs">Status</Label>
-            <SearchableSelect
-              showSearch={false}
-              options={[
-                { label: "All status", value: "all" },
-                { label: "Active", value: "active" },
-                { label: "Inactive", value: "inactive" },
-              ]}
-              value={statusFilter}
-              onValueChange={(v) => { setStatusFilter(v); setPage(1); }}
-              placeholder="All status"
-              className="h-9 w-full text-sm bg-white"
-            />
-          </div>
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[160px]">
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Service PO</Label>
+          <SearchableSelect
+            options={[
+              { label: "All POs", value: "all" },
+              ...activePOs.map((po) => ({
+                label: po.po_number ?? po.service_po_name ?? String(po.id),
+                value: String(po.id)
+              }))
+            ]}
+            value={poFilter}
+            onValueChange={(v) => { setPoFilter(v); setPage(1); }}
+            placeholder="All POs"
+            searchPlaceholder="Search PO..."
+            className="h-9 w-full text-sm bg-white"
+          />
         </div>
-      </div>
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Status</Label>
+          <SearchableSelect
+            showSearch={false}
+            options={[
+              { label: "All status", value: "all" },
+              { label: "Active", value: "active" },
+              { label: "Inactive", value: "inactive" },
+            ]}
+            value={statusFilter}
+            onValueChange={(v) => { setStatusFilter(v); setPage(1); }}
+            placeholder="All status"
+            className="h-9 w-full text-sm bg-white"
+          />
+        </div>
+      </FilterPanel>
 
       <DataTable
         columns={columns}
