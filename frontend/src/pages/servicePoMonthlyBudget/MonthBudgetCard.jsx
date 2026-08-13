@@ -1,5 +1,5 @@
 import { CalendarClock, AlertTriangle, Pencil, PlusCircle } from 'lucide-react';
-import { Card, CardHeader, CardContent } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -21,15 +21,10 @@ const SEVERITY_TEXT_CLASS = {
 const MonthBudgetCard = ({ month, year, servicePos, isLoading, deadline, isCurrent, onFillData }) => {
   if (isLoading) {
     return (
-      <Card>
-        <CardHeader>
-          <Skeleton className="h-6 w-32" />
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-4 w-2/3" />
-          <Skeleton className="h-9 w-28" />
-        </CardContent>
+      <Card className="space-y-2 p-3">
+        <Skeleton className="h-5 w-28" />
+        <Skeleton className="h-3.5 w-full" />
+        <Skeleton className="ml-auto h-7 w-20" />
       </Card>
     );
   }
@@ -39,70 +34,64 @@ const MonthBudgetCard = ({ month, year, servicePos, isLoading, deadline, isCurre
   // No `status` field comes back from the API — a period counts as filled once every row has
   // been saved at least once (updated_at is only ever null for a never-filled row).
   const isCompleted = hasServicePos && pos.every((po) => po.updated_at != null);
+  const isOverdue = !!deadline?.deadline_passed;
   const severity = deadline ? getDeadlineSeverity(deadline.days_remaining, deadline.deadline_passed) : null;
 
   return (
-    <Card className={cn(isCurrent && 'ring-1 ring-primary')}>
-      <CardHeader className="flex-row items-center justify-between space-y-0">
-        <h2 className="text-lg font-semibold">{formatMonthYear(month, year)}</h2>
+    <Card
+      className={cn(
+        'p-3',
+        isOverdue && 'border-destructive/30 bg-destructive/[0.03]',
+        isCurrent && !isOverdue && 'border-primary/30'
+      )}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold text-foreground">{formatMonthYear(month, year)}</h2>
         {hasServicePos && (
-          <Badge variant={isCompleted ? 'success' : 'warning'} className="gap-1.5">
+          <Badge variant={isCompleted ? 'success' : 'warning'} className="gap-1 px-2 py-0.5 text-[11px] font-medium">
             <span className={cn('h-1.5 w-1.5 rounded-full', isCompleted ? 'bg-success' : 'bg-warning')} />
             {isCompleted ? 'Completed' : 'Active'}
           </Badge>
         )}
-      </CardHeader>
+      </div>
 
-      <CardContent className="space-y-4">
-        <p className="text-sm text-muted-foreground">Monthly Service PO Financial Data</p>
-
-        {hasServicePos ? (
-          <>
+      {hasServicePos ? (
+        <>
+          <div className="mt-2">
             {deadline ? (
-              <>
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground">Deadline</p>
-                  <p className="mt-0.5 flex items-center gap-1.5 text-sm font-medium">
-                    <CalendarClock className="h-3.5 w-3.5 text-muted-foreground" />
-                    {formatDate(deadline.deadline, 'DD MMMM YYYY')}
-                  </p>
-                </div>
-
-                <p className={cn('flex items-center gap-1.5 text-sm font-semibold', SEVERITY_TEXT_CLASS[severity])}>
+              <div className="space-y-0.5">
+                <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <CalendarClock className="h-3.5 w-3.5" />
+                  {formatDate(deadline.deadline, 'DD MMM YYYY')}
+                </p>
+                <p className={cn('flex items-center gap-1 text-xs font-medium', SEVERITY_TEXT_CLASS[severity])}>
                   {(severity === DEADLINE_SEVERITY.CRITICAL || severity === DEADLINE_SEVERITY.PASSED) && (
-                    <AlertTriangle className="h-4 w-4" />
+                    <AlertTriangle className="h-3.5 w-3.5" />
                   )}
                   {deadline.deadline_passed
                     ? 'Overdue — you can still submit'
-                    : `Fill by ${formatDate(deadline.deadline, 'DD MMM YYYY')} — ${deadline.days_remaining} ${deadline.days_remaining === 1 ? 'day' : 'days'} left`}
+                    : `${deadline.days_remaining} ${deadline.days_remaining === 1 ? 'day' : 'days'} left`}
                 </p>
-              </>
+              </div>
             ) : (
-              <p className="text-sm text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 {isCompleted ? 'All Service POs filled for this month.' : 'Not filled yet.'}
               </p>
             )}
+          </div>
 
-            <div className="flex justify-end">
-              <Button onClick={onFillData}>
-                {isCompleted ? (
-                  <>
-                    <Pencil className="mr-1.5 h-4 w-4" /> Edit Data
-                  </>
-                ) : (
-                  <>
-                    <PlusCircle className="mr-1.5 h-4 w-4" /> Fill Data
-                  </>
-                )}
-              </Button>
-            </div>
-          </>
-        ) : (
-          <p className="py-6 text-center text-sm text-muted-foreground">
-            No active Service POs for your company
-          </p>
-        )}
-      </CardContent>
+          <div className="mt-2 flex justify-end border-t pt-2">
+            <Button size="sm" variant={isCompleted ? 'outline' : 'default'} onClick={onFillData} className="h-7 gap-1.5 px-2.5 text-xs">
+              {isCompleted ? <Pencil className="h-3 w-3" /> : <PlusCircle className="h-3 w-3" />}
+              {isCompleted ? 'Edit Data' : 'Fill Data'}
+            </Button>
+          </div>
+        </>
+      ) : (
+        <p className="mt-2 py-1 text-center text-xs text-muted-foreground">
+          No active Service POs for your company
+        </p>
+      )}
     </Card>
   );
 };

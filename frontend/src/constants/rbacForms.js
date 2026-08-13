@@ -37,7 +37,7 @@ export const FORM_NAMES = {
   CLIENTS: 'Clients',
   // Matches the actual Form Master row name ("Project Master"), not the page's own title.
   PROJECTS: 'Project Master',
-  SERVICE_POS: 'Service POs',
+  SERVICE_POS: 'Service PO Master',
   SUB_PROJECTS: 'Sub-Projects',
   SERVICE_TYPES: 'Service Types',
   SERVICE_CATEGORIES: 'Service Categories',
