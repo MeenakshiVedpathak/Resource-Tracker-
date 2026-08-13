@@ -22,7 +22,7 @@ import { ROUTES } from '@/constants/routes';
 export const FORM_NAMES = {
   DASHBOARD: 'Dashboard',
   AI_INSIGHTS: 'AI Insights',
-  EMPLOYEES: 'Employees',
+  EMPLOYEES: 'Employee Master',
   USERS: 'Users',
   ROLES: 'Roles',
   FORMS: 'Forms',
