@@ -32,9 +32,9 @@ const groupByServicePO = (records) => {
 };
 
 const MonthCell = ({ record }) => {
-  if (!record) return <TableCell className="text-center text-muted-foreground">—</TableCell>;
+  if (!record) return <TableCell className="text-right text-muted-foreground">—</TableCell>;
   return (
-    <TableCell className="whitespace-nowrap">
+    <TableCell className="whitespace-nowrap text-right">
       <div className="text-xs font-medium">{formatCurrency(record.invoice_amount, 'INR', 0)}</div>
       <div className="text-[11px] text-muted-foreground">{formatCurrency(record.billed_amount, 'INR', 0)}</div>
     </TableCell>
@@ -77,7 +77,7 @@ const ServicePoYearlyBudgetView = ({ year, onYearChange }) => {
           </div>
           <div>
             <CardTitle>Yearly Overview</CardTitle>
-            <CardDescription>Invoice / Billed amount by Service PO, across all 12 months.</CardDescription>
+            <CardDescription>Invoice / Billable amount by Service PO, across all 12 months.</CardDescription>
           </div>
         </div>
 
@@ -118,7 +118,7 @@ const ServicePoYearlyBudgetView = ({ year, onYearChange }) => {
                 <TableRow>
                   <TableHead className="sticky left-0 z-10 min-w-[180px] bg-background">Service PO</TableHead>
                   {MONTHS.map((m) => (
-                    <TableHead key={m.num} className="min-w-[90px] text-center">{m.label}</TableHead>
+                    <TableHead key={m.num} className="min-w-[90px] text-right">{m.label}</TableHead>
                   ))}
                   <TableHead className="min-w-[110px] text-right">Total</TableHead>
                 </TableRow>
@@ -152,11 +152,11 @@ const ServicePoYearlyBudgetView = ({ year, onYearChange }) => {
               </TableBody>
               <TableFooter>
                 <TableRow>
-                  <TableCell className="sticky left-0 z-10 bg-muted/50 text-xs font-semibold uppercase text-muted-foreground">
+                  <TableCell className="sticky left-0 z-10 bg-muted text-xs font-semibold uppercase text-muted-foreground">
                     Total
                   </TableCell>
                   {MONTHS.map((m) => (
-                    <TableCell key={m.num} className="whitespace-nowrap">
+                    <TableCell key={m.num} className="whitespace-nowrap text-right">
                       <div className="text-xs font-semibold">{formatCurrency(monthTotals[m.num].invoice, 'INR', 0)}</div>
                       <div className="text-[11px] text-muted-foreground">{formatCurrency(monthTotals[m.num].billed, 'INR', 0)}</div>
                     </TableCell>
@@ -173,7 +173,7 @@ const ServicePoYearlyBudgetView = ({ year, onYearChange }) => {
 
         {!isError && (
           <p className="mt-3 flex flex-wrap items-center gap-x-1.5 text-[11px] text-muted-foreground">
-            <span className="font-medium">Reading cells:</span> top value is Invoice Amount, bottom (muted) is Billed Amount.
+            <span className="font-medium">Reading cells:</span> top value is Invoice Amount, bottom (muted) is Billable Amount.
             <Badge variant="muted" className="font-normal">Switch to the Monthly tab to add or edit an entry.</Badge>
           </p>
         )}

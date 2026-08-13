@@ -39,7 +39,7 @@ const BudgetCard = ({ record, onEdit }) => {
         <span className="font-semibold">{formatCurrency(record.invoice_amount)}</span>
       </div>
       <div className="flex items-center justify-between text-xs">
-        <span className="text-muted-foreground">Billed</span>
+        <span className="text-muted-foreground">Billable</span>
         <span className="font-semibold">{formatCurrency(record.billed_amount)}</span>
       </div>
 
@@ -81,7 +81,7 @@ const ServicePoMonthlyBudgetList = ({ month, year, records, isLoading, onEdit, o
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="secondary">{records.length} {records.length === 1 ? 'entry' : 'entries'}</Badge>
             <Badge variant="muted" className="font-normal">Invoice {formatCurrency(totals.invoice)}</Badge>
-            <Badge variant="muted" className="font-normal">Billed {formatCurrency(totals.billed)}</Badge>
+            <Badge variant="muted" className="font-normal">Billable {formatCurrency(totals.billed)}</Badge>
           </div>
         )}
       </CardHeader>

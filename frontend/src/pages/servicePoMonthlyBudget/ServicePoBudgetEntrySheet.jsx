@@ -36,7 +36,7 @@ const requiredAmount = (label) =>
 const formSchema = z.object({
   invoice_amount: requiredAmount('Invoice Amount'),
   invoice_description: z.string().optional(),
-  billed_amount: requiredAmount('Billed Amount'),
+  billed_amount: requiredAmount('Billable Amount'),
   billed_remark: z.string().optional(),
 });
 
@@ -190,7 +190,7 @@ const ServicePoBudgetEntrySheet = ({ open, onOpenChange, month, year, initialSer
                       name="billed_amount"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Billed Amount <span className="text-destructive">*</span></FormLabel>
+                          <FormLabel>Billable Amount <span className="text-destructive">*</span></FormLabel>
                           <FormControl>
                             <CurrencyInput placeholder="95,000" disabled={isRecordLoading} {...field} />
                           </FormControl>
