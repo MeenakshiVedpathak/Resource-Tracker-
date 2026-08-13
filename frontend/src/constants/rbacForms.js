@@ -15,7 +15,7 @@ import {
   LayoutDashboard, Users, UserCog, Shield, Building2,
   FileText, FolderOpen, FolderKanban, Clock, DollarSign,
   Tag, Layers, Sparkles, ClipboardList, Landmark, ShieldCheck,
-  FileBarChart2, PieChart, CalendarRange, UserCheck, Network, Receipt, Table2, Wallet,
+  FileBarChart2, PieChart, CalendarRange, UserCheck, Network, Receipt, Table2, Wallet, IndianRupee,
 } from 'lucide-react';
 import { ROUTES } from '@/constants/routes';
 
@@ -34,7 +34,7 @@ export const FORM_NAMES = {
   // reached via buttons on these two screens, not a sidebar item (see CompanyList/BuAdminList).
   ENTITY_MASTER: 'Entity Master',
   BU_ADMIN_MASTER: 'BU Admin Master',
-  CLIENTS: 'Clients',
+  CLIENTS: 'Client Master',
   // Matches the actual Form Master row name ("Project Master"), not the page's own title.
   PROJECTS: 'Project Master',
   SERVICE_POS: 'Service PO Master',
@@ -45,6 +45,7 @@ export const FORM_NAMES = {
   MONTHLY_COSTS: 'Monthly Costs',
   REPORT_PO_VS_RESOURCE: 'PO vs Resource',
   REPORT_SERVICE_PO_SUMMARY: 'Service PO Summary',
+  REPORT_INVOICE_PO_SUMMARY: 'Invoice PO Summary',
   REPORT_MONTHLY_UTILIZATION: 'Monthly Utilization',
   REPORT_RESOURCE_ALLOCATION: 'Resource Allocation',
   REPORT_RESOURCE_PROJECT_UTILIZATION: 'Resource Project Utilization',
@@ -65,12 +66,12 @@ export const FORM_NAMES = {
   // gets). Both point at the same EmployeeTimesheet page/route as "My Work Log" — that page
   // already renders the Manager-only selector + approval view on top of the self-service UI, and
   // the spec forbids a separate screen for this.
-  MANAGER_TIMESHEET: 'Timesheet',
+  MANAGER_TIMESHEET: 'Timesheets',
   MANAGER_TIMESHEET_APPROVAL: 'Timesheet Approval',
   // Business module, Service PO Admin login (confirmed via GET /roles/forms) — the Form Master
   // row now exists on the backend, so this is picked up automatically by Sidebar's RBAC-driven
   // buildNavGroups() instead of the Manager-only hardcoded injection below.
-  SERVICE_PO_MONTHLY_BUDGET: 'Service PO Monthly Budget',
+  SERVICE_PO_MONTHLY_BUDGET: 'Invoice Master',
 };
 
 // form_name (lowercased/trimmed) -> { to, icon, exact }. Icons are used by the dynamic Sidebar.
@@ -93,6 +94,7 @@ export const FORM_ROUTE_CONFIG = {
   [FORM_NAMES.MONTHLY_COSTS]: { to: ROUTES.MONTHLY_COSTS, icon: DollarSign },
   [FORM_NAMES.REPORT_PO_VS_RESOURCE]: { to: ROUTES.REPORT_SERVICE_PO_RESOURCE, icon: Network },
   [FORM_NAMES.REPORT_SERVICE_PO_SUMMARY]: { to: ROUTES.REPORT_SERVICE_PO_SUMMARY, icon: FileBarChart2 },
+  [FORM_NAMES.REPORT_INVOICE_PO_SUMMARY]: { to: ROUTES.REPORT_INVOICE_PO_SUMMARY, icon: IndianRupee },
   [FORM_NAMES.REPORT_MONTHLY_UTILIZATION]: { to: ROUTES.REPORT_MONTHLY_RESOURCE_UTILIZATION, icon: CalendarRange },
   [FORM_NAMES.REPORT_RESOURCE_ALLOCATION]: { to: ROUTES.REPORT_RESOURCE_ALLOCATION, icon: PieChart },
   [FORM_NAMES.REPORT_RESOURCE_PROJECT_UTILIZATION]: { to: ROUTES.REPORT_RESOURCE_PROJECT_UTILIZATION, icon: UserCheck },

@@ -5,6 +5,7 @@ import { cn } from '@/utils/cn';
 const NAV = [
   { label: 'PO vs Resource', to: ROUTES.REPORT_SERVICE_PO_RESOURCE },
   { label: 'Service PO Summary', to: ROUTES.REPORT_SERVICE_PO_SUMMARY },
+  { label: 'Invoice PO Summary', to: ROUTES.REPORT_INVOICE_PO_SUMMARY },
   { label: 'Monthly Utilization', to: ROUTES.REPORT_MONTHLY_RESOURCE_UTILIZATION },
   { label: 'Resource Allocation', to: ROUTES.REPORT_RESOURCE_ALLOCATION },
   { label: 'Resource Project Utilization', to: ROUTES.REPORT_RESOURCE_PROJECT_UTILIZATION },

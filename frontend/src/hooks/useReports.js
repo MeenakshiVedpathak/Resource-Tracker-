@@ -72,6 +72,49 @@ export const useServicePOSummaryTotals = (filterParams) => {
   });
 };
 
+export const useInvoicePOSummary = (params) =>
+  useQuery({
+    queryKey: QUERY_KEYS.REPORT_INVOICE_PO_SUMMARY(params),
+    queryFn: () => reportsApi.getInvoicePOSummary(params),
+    enabled: !!(params?.month && params?.year),
+    staleTime: 0,
+    placeholderData: (prev) => prev,
+  });
+
+/*
+ * Same page-only `summary` limitation as Service PO Summary (confirmed by the backend team for
+ * this endpoint too — "summary totals are computed over the current page only, not the full
+ * filtered dataset"). Walk every page and sum client-side for a correct grand total.
+ */
+const INVOICE_PO_SUMMARY_PAGE_LIMIT = 100;
+const MAX_INVOICE_PO_SUMMARY_PAGES = 50; // safety cap: 5,000 records: far beyond any realistic PO count
+
+export const useInvoicePOSummaryTotals = (filterParams) => {
+  const { page: _page, limit: _limit, ...baseParams } = filterParams ?? {};
+  return useQuery({
+    queryKey: QUERY_KEYS.REPORT_INVOICE_PO_SUMMARY_TOTALS(baseParams),
+    queryFn: async () => {
+      const first = await reportsApi.getInvoicePOSummary({ ...baseParams, page: 1, limit: INVOICE_PO_SUMMARY_PAGE_LIMIT });
+      const total = first?.meta?.total ?? 0;
+      const totalPages = Math.min(MAX_INVOICE_PO_SUMMARY_PAGES, Math.max(1, Math.ceil(total / INVOICE_PO_SUMMARY_PAGE_LIMIT)));
+      const summaries = [first?.data?.summary].filter(Boolean);
+
+      for (let p = 2; p <= totalPages; p++) {
+        const res = await reportsApi.getInvoicePOSummary({ ...baseParams, page: p, limit: INVOICE_PO_SUMMARY_PAGE_LIMIT });
+        if (res?.data?.summary) summaries.push(res.data.summary);
+      }
+
+      return summaries.reduce((acc, s) => {
+        Object.keys(s).forEach((key) => { acc[key] = (acc[key] ?? 0) + (Number(s[key]) || 0); });
+        return acc;
+      }, {});
+    },
+    enabled: !!(baseParams?.month && baseParams?.year),
+    staleTime: 0,
+    placeholderData: (prev) => prev,
+  });
+};
+
 export const useMonthlyResourceUtilization = (params) =>
   useQuery({
     queryKey: QUERY_KEYS.REPORT_MONTHLY_RESOURCE_UTILIZATION(params),

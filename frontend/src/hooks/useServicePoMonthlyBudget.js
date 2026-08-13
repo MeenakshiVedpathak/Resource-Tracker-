@@ -2,47 +2,45 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { servicePoMonthlyBudgetApi } from '@/api/servicePoMonthlyBudget.api';
 import { QUERY_KEYS } from '@/constants/queryKeys';
 
-export const useCurrentServicePoMonthlyBudget = () =>
+export const useServicePoMonthlyBudgetServicePOs = () =>
   useQuery({
-    queryKey: QUERY_KEYS.SERVICE_PO_MONTHLY_BUDGET_CURRENT,
-    queryFn: servicePoMonthlyBudgetApi.getCurrentMonthData,
+    queryKey: QUERY_KEYS.SERVICE_PO_MONTHLY_BUDGET_SERVICE_POS,
+    queryFn: servicePoMonthlyBudgetApi.getServicePOs,
+    staleTime: 1000 * 60 * 10,
   });
 
-// For any non-current month there's no single "period" endpoint, so this fans out one
-// getMonthlyData call per active Service PO (metadata from activePOs, values from the API — a
-// 404/null just means that PO hasn't been filled for this month yet) and merges them into the
-// same shape the modal/card expect from the `/current` endpoint's `service_pos[]`.
-export const useServicePoMonthlyBudgetMonth = (month, year, activePOs) =>
+export const useServicePoMonthlyBudgetList = (month, year) =>
   useQuery({
-    queryKey: QUERY_KEYS.SERVICE_PO_MONTHLY_BUDGET_MONTH(month, year),
-    queryFn: async () => {
-      const rows = await Promise.all(
-        activePOs.map((po) => servicePoMonthlyBudgetApi.getMonthlyData(po.id, month, year))
-      );
-      return activePOs.map((po, i) => ({
-        service_po_id: po.id,
-        service_po_code: po.service_po_code,
-        service_po_name: po.service_po_name,
-        client_name: po.client_name,
-        updated_at: rows[i]?.updated_at ?? null,
-        invoice_amount: rows[i]?.invoice_amount ?? null,
-        invoice_description: rows[i]?.invoice_description ?? null,
-        billed_amount: rows[i]?.billed_amount ?? null,
-        billed_remark: rows[i]?.billed_remark ?? null,
-      }));
-    },
-    enabled: !!month && !!year && activePOs.length > 0,
+    queryKey: QUERY_KEYS.SERVICE_PO_MONTHLY_BUDGET_LIST(month, year),
+    queryFn: () => servicePoMonthlyBudgetApi.getMonthList(month, year),
+    enabled: !!month && !!year,
   });
 
-// Saves every row from the modal's FormArray — the upsert API is per Service PO (§10/§15 of the
-// spec), so one "Save Data" click fans out into one call per row rather than a single bulk call.
+// Backs the Yearly tab — only enabled once that tab is actually opened, since it's an
+// unconfirmed query shape (see api layer) and shouldn't fire on every Monthly-tab page load.
+export const useServicePoMonthlyBudgetYearList = (year, enabled) =>
+  useQuery({
+    queryKey: QUERY_KEYS.SERVICE_PO_MONTHLY_BUDGET_YEAR_LIST(year),
+    queryFn: () => servicePoMonthlyBudgetApi.getYearList(year),
+    enabled: !!year && enabled,
+    retry: false,
+  });
+
+// Prefills the entry form once a Service PO + month + year are all chosen; a null result (no
+// prior save for this combination) just means the form stays empty rather than an error.
+export const useServicePoMonthlyBudgetRecord = (servicePoId, month, year) =>
+  useQuery({
+    queryKey: QUERY_KEYS.SERVICE_PO_MONTHLY_BUDGET_RECORD(servicePoId, month, year),
+    queryFn: () => servicePoMonthlyBudgetApi.getRecord(servicePoId, month, year),
+    enabled: !!servicePoId && !!month && !!year,
+  });
+
 export const useSaveServicePoMonthlyBudget = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (rows) => Promise.all(rows.map((row) => servicePoMonthlyBudgetApi.saveMonthlyData(row))),
-    // Broad prefix match — a save for any month can affect both the `/current` card (if that
-    // month is the current period) and that month's own grid card, so invalidate everything
-    // under this feature rather than tracking which key applies.
+    mutationFn: servicePoMonthlyBudgetApi.saveBudget,
+    // Broad prefix match — a save affects both this month's list and this PO's own record
+    // query, so invalidate everything under this feature rather than tracking which key applies.
     onSuccess: () => qc.invalidateQueries({ queryKey: ['service-po-monthly-budget'] }),
   });
 };

@@ -95,9 +95,12 @@ export const QUERY_KEYS = {
   MONTHLY_COSTS: (params) => ['monthly-costs', params],
   MONTHLY_COST: (id) => ['monthly-costs', id],
 
-  // Service PO Monthly Budget (Manager self-service)
-  SERVICE_PO_MONTHLY_BUDGET_CURRENT: ['service-po-monthly-budget', 'current'],
-  SERVICE_PO_MONTHLY_BUDGET_MONTH: (month, year) => ['service-po-monthly-budget', 'month', month, year],
+  // Service PO Monthly Budget (Invoice Master)
+  SERVICE_PO_MONTHLY_BUDGET_SERVICE_POS: ['service-po-monthly-budget', 'service-pos'],
+  SERVICE_PO_MONTHLY_BUDGET_LIST: (month, year) => ['service-po-monthly-budget', 'list', month, year],
+  SERVICE_PO_MONTHLY_BUDGET_YEAR_LIST: (year) => ['service-po-monthly-budget', 'year-list', year],
+  SERVICE_PO_MONTHLY_BUDGET_RECORD: (servicePoId, month, year) =>
+    ['service-po-monthly-budget', 'record', servicePoId, month, year],
 
   // Timesheets
   TIMESHEETS: (params) => ['timesheets', params],
@@ -112,6 +115,8 @@ export const QUERY_KEYS = {
   REPORT_SERVICE_PO_RESOURCE: (params) => ['reports', 'service-po-resource', params],
   REPORT_SERVICE_PO_SUMMARY: (params) => ['reports', 'service-po-summary', params],
   REPORT_SERVICE_PO_SUMMARY_TOTALS: (params) => ['reports', 'service-po-summary-totals', params],
+  REPORT_INVOICE_PO_SUMMARY: (params) => ['reports', 'invoice-po-summary', params],
+  REPORT_INVOICE_PO_SUMMARY_TOTALS: (params) => ['reports', 'invoice-po-summary-totals', params],
   REPORT_MONTHLY_RESOURCE_UTILIZATION: (params) => ['reports', 'monthly-resource-utilization', params],
   REPORT_RESOURCE_PROJECT_UTILIZATION: (params) => ['reports', 'resource-project-utilization', params],
   REPORT_CLIENT_SERVICE_PO_HOURS: (params) => ['reports', 'client-service-po-hours', params],
