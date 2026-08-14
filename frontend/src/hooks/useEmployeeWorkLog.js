@@ -59,12 +59,14 @@ export const useDeleteWorkLogEntry = () => {
 };
 
 // Monthly mode — one month's Service PO -> hierarchy tree, total hours per node instead of
-// per-day. `eligible` comes straight from the backend and is never recomputed here.
-export const useEmployeeMonthlyWorkLog = (month, year) =>
+// per-day. `eligible` comes straight from the backend and is never recomputed here. `enabled`
+// lets a caller that only sometimes needs this (e.g. a tab that isn't always active) skip the
+// fetch entirely rather than firing it and discarding the result.
+export const useEmployeeMonthlyWorkLog = (month, year, enabled = true) =>
   useQuery({
     queryKey: QUERY_KEYS.EMPLOYEE_WORKLOG_MONTHLY(month, year),
     queryFn: () => employeeWorkLogApi.getMonthly({ month, year }),
-    enabled: !!month && !!year,
+    enabled: enabled && !!month && !!year,
     placeholderData: (prev) => prev,
   });
 

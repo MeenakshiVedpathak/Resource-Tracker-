@@ -1,20 +1,30 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useState, useMemo } from 'react';
 import dayjs from 'dayjs';
 import * as XLSX from 'xlsx';
 import { useQueryClient } from '@tanstack/react-query';
-import { Save, Download } from 'lucide-react';
-import { useEmployeeMonthlySummary, useSaveWorkLogDay } from '@/hooks/useEmployeeWorkLog';
+import { Save, Download, Trash2 } from 'lucide-react';
+import {
+  useEmployeeMonthlySummary, useSaveWorkLogDay, useEmployeeMonthlyWorkLog, useSaveWorkLogMonth, useDeleteWorkLogMonth,
+} from '@/hooks/useEmployeeWorkLog';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import {
-  buildMonthlySummaryRows, buildMonthlySummaryMonthRows, buildDayEntries, validateDayEntries,
+  buildMonthlySummaryRows, buildDayEntries, validateDayEntries,
 } from '@/utils/employeeMonthlySummary';
 import MonthNavigator from '@/components/employee/MonthNavigator';
 import SummaryTable from '@/components/employee/SummaryTable';
-import MonthlySummaryMonthTable from '@/components/employee/MonthlySummaryMonthTable';
-import { DAILY_HOURS_CAP } from '@/components/employee/WorkLogEntryModal';
+import WorkLogEntryTable from '@/components/employee/WorkLogEntryTable';
+import { DAILY_HOURS_CAP, MONTHLY_HOURS_CAP } from '@/components/employee/WorkLogEntryModal';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import ConfirmDialog from '@/components/common/ConfirmDialog';
+
+// Month View has no real per-day date, so every row is bucketed under this one pseudo-day key —
+// same trick My Work Log's Monthly tab uses — letting it reuse the exact same row-building
+// (buildMonthlySummaryRows/buildDayEntries) and rendering (WorkLogEntryTable) Day View uses.
+const MONTH_DAY_KEY = 1;
+const pseudoMonthDate = (year, month) => `${year}-${String(month).padStart(2, '0')}-01`;
 
 // Mirrors SummaryTable's own cell/total computation so the export matches exactly what's on
 // screen, including any unsaved edits — not a separate re-fetch of server values.
@@ -41,13 +51,17 @@ const exportSummaryToExcel = (rows, edits, month, year) => {
   XLSX.writeFile(wb, `Monthly_Summary_${dayjs(`${year}-${String(month).padStart(2, '0')}-01`).format('MMMM_YYYY')}.xlsx`);
 };
 
-// Month View's export — its rows are already server-rolled-up totals (no per-day cells, no
-// unsaved edits to overlay), so this is just label/hours straight off buildMonthlySummaryMonthRows.
-const exportMonthSummaryToExcel = (summary, month, year) => {
-  const rows = buildMonthlySummaryMonthRows(summary);
+// Month View's export — rows are keyed on the single MONTH_DAY_KEY pseudo-day, so this mirrors
+// exportSummaryToExcel but with one hours column instead of one per calendar day.
+const exportMonthlyWorkLogToExcel = (rows, edits, month, year) => {
+  const cellValue = (row) => {
+    const edited = edits?.[row.rowKey]?.[MONTH_DAY_KEY];
+    return edited !== undefined ? Number(edited || 0) : Number(row.hoursByDay?.[MONTH_DAY_KEY] ?? 0);
+  };
+
   const header = ['Service / Project', 'Total Hours'];
-  const dataRows = rows.map((row) => [`${'  '.repeat(row.depth ?? 0)}${row.label}`, row.hours]);
-  const totalsRow = ['Total', Number(summary?.total_hours ?? 0)];
+  const dataRows = rows.map((row) => [`${'  '.repeat(row.depth ?? 0)}${row.label}`, cellValue(row)]);
+  const totalsRow = ['Total', rows.reduce((sum, row) => sum + cellValue(row), 0)];
 
   const ws = XLSX.utils.aoa_to_sheet([header, ...dataRows, totalsRow]);
   const wb = XLSX.utils.book_new();
@@ -72,51 +86,64 @@ const exportMonthSummaryToExcel = (summary, month, year) => {
 // not a per-row create/update. One call per edited date, each carrying every row that should
 // survive that date (edited cells overlaid on the already-loaded hours) — any row left out of
 // the array is deleted server-side, so a save must never send just the touched cells.
+//
+// Month View edits against the separate whole-month Monthly Work Log (/employee-timesheets/
+// monthly) — same interaction model as Day View, just one save that replaces every Daily Work
+// Log entry for the month at once, gated by the backend's `eligible` flag. That's a materially
+// bigger blast radius than one day's save, so it goes through a confirm dialog first.
 const MonthlySummaryPage = () => {
   const today = dayjs().startOf('day');
   const [month, setMonth] = useState(today.month() + 1);
   const [year, setYear] = useState(today.year());
   // 'day' (default) keeps today's calendar/day rendering untouched; 'month' swaps in the
-  // expandable Service PO hierarchy table, aggregated for the whole month. Toggling only changes
-  // viewType on the same month/year — the underlying useQuery key includes viewType, so it
-  // refetches fresh instead of reusing stale data.
+  // whole-month editable view. Toggling only changes viewMode on the same month/year.
   const [viewMode, setViewMode] = useState('day');
   // { [rowKey]: { [day]: hoursString } } — unsaved cell overrides, cleared on save/month change.
   // rowKey is `po:<servicePOId>` or `h:<hierarchyId>` (see buildMonthlySummaryRows) since a
-  // hierarchy node and a Service PO don't share an id space. Day View only — Month View has no
-  // per-day cells to edit.
+  // hierarchy node and a Service PO don't share an id space.
   const [edits, setEdits] = useState({});
   const [isSaving, setIsSaving] = useState(false);
+
+  // Month View's own edits, keyed the same way but bucketed under MONTH_DAY_KEY instead of a
+  // calendar day.
+  const [monthlyEdits, setMonthlyEdits] = useState({});
+  const [isMonthlySaving, setIsMonthlySaving] = useState(false);
+  const [isMonthlyDeleting, setIsMonthlyDeleting] = useState(false);
+  const [confirmSaveOpen, setConfirmSaveOpen] = useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
   const { success, error: showError } = useNotification();
   const qc = useQueryClient();
 
   const {
-    data: summary, isLoading, isError, error: summaryError,
-  } = useEmployeeMonthlySummary(month, year, viewMode);
+    data: summary, isLoading, isError,
+  } = useEmployeeMonthlySummary(month, year);
+
+  const {
+    data: monthlyData, isLoading: isMonthlyLoading, isError: isMonthlyError,
+  } = useEmployeeMonthlyWorkLog(month, year, viewMode === 'month');
 
   const saveDayMutation = useSaveWorkLogDay();
+  const saveMonthMutation = useSaveWorkLogMonth();
+  const deleteMonthMutation = useDeleteWorkLogMonth();
 
-  // Day View's own tree-flattening; a no-op call in Month View since `summary` is then the
-  // { service_pos, total_hours } hierarchy shape, not the day-entries array this expects —
-  // MonthlySummaryMonthTable does its own flattening of that shape internally.
-  const rows = useMemo(() => (viewMode === 'day' ? buildMonthlySummaryRows(summary) : []), [summary, viewMode]);
+  const rows = useMemo(() => buildMonthlySummaryRows(summary), [summary]);
   const editedCount = Object.values(edits).reduce((n, byDay) => n + Object.keys(byDay).length, 0);
 
-  // Month View has no inline error banner of its own (unlike Day View below), so its fetch
-  // errors — this endpoint only 422s on a missing/invalid month, year, or viewType — surface via
-  // the same toast used for save errors, showing the server's message as-is.
-  useEffect(() => {
-    if (viewMode === 'month' && isError) {
-      showError(extractApiError(summaryError));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewMode, isError, summaryError]);
+  const monthlyRows = useMemo(
+    () => buildMonthlySummaryRows([{ date: pseudoMonthDate(year, month), service_pos: monthlyData?.service_pos ?? [] }]),
+    [monthlyData, year, month]
+  );
+  const monthlyEditedCount = Object.values(monthlyEdits).reduce((n, byDay) => n + Object.keys(byDay).length, 0);
+  // `eligible` comes straight from the backend response — never computed here.
+  const isMonthlyIneligible = !isMonthlyLoading && monthlyData != null && monthlyData.eligible === false;
+  const hasExistingMonthlyEntries = monthlyRows.some((r) => Number(r.hoursByDay?.[MONTH_DAY_KEY] ?? 0) > 0);
 
   const handleMonthChange = (m, y) => {
     setMonth(m);
     setYear(y);
     setEdits({});
+    setMonthlyEdits({});
   };
 
   const handleCellChange = (rowKey, day, value) => {
@@ -171,6 +198,47 @@ const MonthlySummaryPage = () => {
     }
   };
 
+  const handleMonthlyCellChange = (rowKey, cellDay, value) => {
+    if (!rowKey) return;
+    setMonthlyEdits((prev) => ({
+      ...prev,
+      [rowKey]: { ...prev[rowKey], [cellDay]: value },
+    }));
+  };
+
+  const handleMonthlyDiscard = () => setMonthlyEdits({});
+
+  const handleMonthlySaveConfirmed = async () => {
+    const entries = buildDayEntries(monthlyRows, MONTH_DAY_KEY, monthlyEdits);
+    setIsMonthlySaving(true);
+    try {
+      await saveMonthMutation.mutateAsync({ month, year, entries });
+      success('Monthly work log saved.');
+      setMonthlyEdits({});
+      setConfirmSaveOpen(false);
+      qc.invalidateQueries({ queryKey: ['employee-worklog'] });
+    } catch (err) {
+      showError(extractApiError(err));
+    } finally {
+      setIsMonthlySaving(false);
+    }
+  };
+
+  const handleDeleteMonthConfirmed = async () => {
+    setIsMonthlyDeleting(true);
+    try {
+      await deleteMonthMutation.mutateAsync({ month, year });
+      success('Monthly work log deleted.');
+      setMonthlyEdits({});
+      setConfirmDeleteOpen(false);
+      qc.invalidateQueries({ queryKey: ['employee-worklog'] });
+    } catch (err) {
+      showError(extractApiError(err));
+    } finally {
+      setIsMonthlyDeleting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3">
@@ -179,7 +247,7 @@ const MonthlySummaryPage = () => {
           <p className="text-sm text-muted-foreground">
             {viewMode === 'day'
               ? 'Hours logged per Service/Project for each day of the month.'
-              : 'Total hours logged per Service/Project for the whole month.'}
+              : 'Log your total hours per Service/Project for the whole month.'}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -194,8 +262,8 @@ const MonthlySummaryPage = () => {
             size="sm"
             onClick={() => (viewMode === 'day'
               ? exportSummaryToExcel(rows, edits, month, year)
-              : exportMonthSummaryToExcel(summary, month, year))}
-            disabled={isLoading || (viewMode === 'day' ? rows.length === 0 : !summary?.service_pos?.length)}
+              : exportMonthlyWorkLogToExcel(monthlyRows, monthlyEdits, month, year))}
+            disabled={viewMode === 'day' ? (isLoading || rows.length === 0) : (isMonthlyLoading || monthlyRows.length === 0)}
           >
             <Download className="mr-1.5 h-4 w-4" />
             Export Excel
@@ -206,6 +274,11 @@ const MonthlySummaryPage = () => {
       {viewMode === 'day' && isError && (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
           Unable to load your monthly summary. Please try again.
+        </div>
+      )}
+      {viewMode === 'month' && isMonthlyError && (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+          Unable to load monthly work log. Please try again.
         </div>
       )}
 
@@ -221,11 +294,28 @@ const MonthlySummaryPage = () => {
           onCellChange={handleCellChange}
         />
       ) : (
-        <MonthlySummaryMonthTable data={summary} isLoading={isLoading} />
+        <div className="space-y-3">
+          {isMonthlyIneligible && (
+            <Alert variant="warning">
+              <AlertDescription>
+                {monthlyData?.message || 'This month is not open for editing.'}
+              </AlertDescription>
+            </Alert>
+          )}
+          <WorkLogEntryTable
+            rows={monthlyRows}
+            day={MONTH_DAY_KEY}
+            isLoading={isMonthlyLoading}
+            isPastOrToday={!isMonthlyIneligible}
+            edits={monthlyEdits}
+            onCellChange={handleMonthlyCellChange}
+            hoursCap={MONTHLY_HOURS_CAP}
+            emptyMessage="No Service POs mapped."
+          />
+        </div>
       )}
 
-      {/* Save sits last — after the table, only relevant once something's actually changed.
-          Month View has no per-day cells, so there's nothing here to save/discard. */}
+      {/* Save sits last — after the table, only relevant once something's actually changed. */}
       {viewMode === 'day' && (
         <div className="flex items-center justify-end gap-3 rounded-xl border bg-card px-4 py-3">
           <span className="mr-auto text-xs text-muted-foreground">
@@ -240,6 +330,61 @@ const MonthlySummaryPage = () => {
           </Button>
         </div>
       )}
+
+      {viewMode === 'month' && monthlyRows.length > 0 && (
+        <div className="flex items-center justify-end gap-3 rounded-xl border bg-card px-4 py-3">
+          <span className="mr-auto text-xs text-muted-foreground">
+            {monthlyEditedCount > 0 ? `${monthlyEditedCount} unsaved change${monthlyEditedCount === 1 ? '' : 's'}` : 'No changes to save'}
+          </span>
+          {hasExistingMonthlyEntries && !isMonthlyIneligible && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-destructive"
+              onClick={() => setConfirmDeleteOpen(true)}
+              disabled={isMonthlyDeleting || isMonthlySaving}
+            >
+              <Trash2 className="mr-1.5 h-4 w-4" />
+              Delete
+            </Button>
+          )}
+          <Button variant="outline" size="sm" onClick={handleMonthlyDiscard} disabled={monthlyEditedCount === 0 || isMonthlySaving}>
+            Discard
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => setConfirmSaveOpen(true)}
+            disabled={monthlyEditedCount === 0 || isMonthlySaving || isMonthlyIneligible}
+          >
+            <Save className="mr-1.5 h-4 w-4" />
+            {isMonthlySaving ? 'Saving…' : 'Save'}
+          </Button>
+        </div>
+      )}
+
+      <ConfirmDialog
+        open={confirmSaveOpen}
+        onOpenChange={setConfirmSaveOpen}
+        title="Replace Daily Work Logs?"
+        description="Saving a Monthly Work Log will replace all existing Daily Work Logs for the selected month. Do you want to continue?"
+        confirmLabel="Continue"
+        cancelLabel="Cancel"
+        variant="destructive"
+        onConfirm={handleMonthlySaveConfirmed}
+        isLoading={isMonthlySaving}
+      />
+
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        onOpenChange={setConfirmDeleteOpen}
+        title="Delete Monthly Work Log?"
+        description={`This will delete the Monthly Work Log for ${dayjs(pseudoMonthDate(year, month)).format('MMMM YYYY')}.`}
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        variant="destructive"
+        onConfirm={handleDeleteMonthConfirmed}
+        isLoading={isMonthlyDeleting}
+      />
     </div>
   );
 };
