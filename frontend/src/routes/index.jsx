@@ -319,8 +319,11 @@ const AppRoutes = () => {
             rather than formName since there's no Form Master row for this feature. */}
         <Route path={ROUTES.TEAM_MAPPINGS} element={<ProtectedRoute allowedRoles={['Service PO Admin']}><TeamMappingList /></ProtectedRoute>} />
 
-        {/* My Team — Manager's own team self-service (§8), net-new. */}
-        <Route path={ROUTES.MY_TEAM} element={<ProtectedRoute allowedRoles={['Manager']}><MyTeamList /></ProtectedRoute>} />
+        {/* My Team — People module Form Master row (confirmed via GET /roles/forms), now gated
+            dynamically by formName like every other RBAC-driven screen instead of a hardcoded
+            allowedRoles whitelist, so any role the admin maps this form to gets access
+            automatically. */}
+        <Route path={ROUTES.MY_TEAM} element={<ProtectedRoute formName={FORM_NAMES.MY_TEAM}><MyTeamList /></ProtectedRoute>} />
 
         {/* Service PO Monthly Budget — Business module Form Master row (confirmed via
             GET /roles/forms), now gated dynamically by formName like every other RBAC-driven

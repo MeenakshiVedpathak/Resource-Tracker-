@@ -71,6 +71,10 @@ export const FORM_NAMES = {
   // row now exists on the backend, so this is picked up automatically by Sidebar's RBAC-driven
   // buildNavGroups() instead of the Manager-only hardcoded injection below.
   SERVICE_PO_MONTHLY_BUDGET: 'Invoice Master',
+  // People module, Manager login (confirmed via GET /roles/forms) — the Form Master row now
+  // exists on the backend, so this is picked up automatically by buildNavGroups() instead of
+  // the MY_TEAM_ROLES hardcoded injection in Sidebar.jsx.
+  MY_TEAM: 'My Team',
 };
 
 // form_name (lowercased/trimmed) -> { to, icon, exact }. Icons are used by the dynamic Sidebar.
@@ -104,6 +108,7 @@ export const FORM_ROUTE_CONFIG = {
   [FORM_NAMES.MANAGER_TIMESHEET]: { to: ROUTES.EMPLOYEE_TIMESHEET, icon: Clock },
   [FORM_NAMES.MANAGER_TIMESHEET_APPROVAL]: { to: ROUTES.EMPLOYEE_TIMESHEET, icon: Clock },
   [FORM_NAMES.SERVICE_PO_MONTHLY_BUDGET]: { to: ROUTES.SERVICE_PO_MONTHLY_BUDGET, icon: Wallet, exact: true },
+  [FORM_NAMES.MY_TEAM]: { to: ROUTES.MY_TEAM, icon: Network, exact: true },
 };
 
 const NORMALIZED_CONFIG = Object.fromEntries(

@@ -8,7 +8,7 @@ import { cn } from '@/utils/cn';
 import { useAuth } from '@/hooks/useAuth';
 import { resolveFormRoute } from '@/constants/rbacForms';
 import { ROUTES } from '@/constants/routes';
-import { ChevronLeft, ChevronRight, UserPlus, Shield, ClipboardList, UserCog, Landmark, Network } from 'lucide-react';
+import { ChevronLeft, ChevronRight, UserPlus, Shield, ClipboardList, UserCog, Landmark } from 'lucide-react';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 
 // A Platform Admin (top of the RBAC hierarchy, §0) sees ONLY these nav items — everything else
@@ -35,7 +35,6 @@ const RESTRICTED_MODULES = ['administration'];
 // resolved from accessibleForms, same pattern as the BU Admin bypass above.
 const ENTITY_ADMIN_MANAGEMENT_ROLES = ['Admin'];
 const TEAM_MAPPING_ROLES = ['Service PO Admin'];
-const MY_TEAM_ROLES = ['Manager'];
 
 // Fixed display order for module sections, overriding whatever order the API happens to
 // return them in (it's alphabetical server-side). Any module not listed here keeps its
@@ -183,7 +182,6 @@ const Sidebar = () => {
   const isSuperAdmin = hasRole('BU Admin');
   const canViewEntityAdmins = hasRole(...ENTITY_ADMIN_MANAGEMENT_ROLES);
   const canViewTeamMapping = hasRole(...TEAM_MAPPING_ROLES);
-  const canViewMyTeam = hasRole(...MY_TEAM_ROLES);
   // isPlatformAdmin is derived from the single role every login returns (§0) — overrides the
   // normal accessible-forms-driven nav entirely.
   const navGroups = useMemo(() => {
@@ -197,9 +195,6 @@ const Sidebar = () => {
     if (canViewTeamMapping) {
       injected.push({ group: 'People', item: { label: 'Team Mapping', icon: UserCog, to: ROUTES.TEAM_MAPPINGS, exact: true } });
     }
-    if (canViewMyTeam) {
-      injected.push({ group: 'People', item: { label: 'My Team', icon: Network, to: ROUTES.MY_TEAM, exact: true } });
-    }
     if (injected.length === 0) return base;
 
     return injected.reduce((groups, { group: groupLabel, item }) => {
@@ -209,7 +204,7 @@ const Sidebar = () => {
       const prepend = groupLabel === 'Entity Management';
       return groups.map((g, i) => (i === idx ? { ...g, items: prepend ? [item, ...g.items] : [...g.items, item] } : g));
     }, base);
-  }, [accessibleForms, isSuperAdmin, isPlatformAdmin, canViewEntityAdmins, canViewTeamMapping, canViewMyTeam]);
+  }, [accessibleForms, isSuperAdmin, isPlatformAdmin, canViewEntityAdmins, canViewTeamMapping]);
 
   // Guards navigation away from a page with unsaved changes (e.g. Timesheet
   // Import Detail's Modified Hours edits) — any page can opt in via the
