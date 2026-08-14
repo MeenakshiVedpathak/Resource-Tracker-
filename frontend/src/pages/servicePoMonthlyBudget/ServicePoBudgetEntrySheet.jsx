@@ -216,7 +216,7 @@ const ServicePoBudgetEntrySheet = ({ open, onOpenChange, month, year, initialSer
                       name="billed_remark"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Billed Remark</FormLabel>
+                          <FormLabel>Billable Remark</FormLabel>
                           <FormControl>
                             <Input placeholder="e.g. Partial payment received" disabled={isRecordLoading} {...field} />
                           </FormControl>

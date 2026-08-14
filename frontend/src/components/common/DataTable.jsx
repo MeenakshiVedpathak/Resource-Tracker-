@@ -122,6 +122,7 @@ const DataTable = ({
               {headerGroup.headers.map((header) => {
                   const isSticky = header.column.columnDef.meta?.sticky && hasOverflow;
                   const left = header.column.columnDef.meta?.left || 0;
+                  const align = header.column.columnDef.meta?.align;
                   // header.getSize() falls back to TanStack's own default (150) when a column
                   // doesn't declare `size` — comparing against that value can't tell "unset"
                   // apart from a column that explicitly asked for 150, so check the columnDef
@@ -130,7 +131,7 @@ const DataTable = ({
                   return (
                     <TableHead
                       key={header.id}
-                      className={cn(isSticky && 'sticky-col')}
+                      className={cn(isSticky && 'sticky-col', align === 'right' && 'text-right')}
                       style={{
                         ...(w ? { width: w, minWidth: w, maxWidth: w } : {}),
                         ...(isSticky ? { left } : {})
@@ -191,11 +192,12 @@ const DataTable = ({
                   {row.getVisibleCells().map((cell) => {
                     const isSticky = cell.column.columnDef.meta?.sticky && hasOverflow;
                     const left = cell.column.columnDef.meta?.left || 0;
+                    const align = cell.column.columnDef.meta?.align;
                     const w = (cell.column.columnDef.size !== undefined || isSticky) ? cell.column.getSize() : undefined;
                     return (
                       <TableCell
                         key={cell.id}
-                        className={cn(isSticky && 'sticky-col')}
+                        className={cn(isSticky && 'sticky-col', align === 'right' && 'text-right')}
                         style={{
                           ...(w ? { width: w, minWidth: w, maxWidth: w } : {}),
                           ...(isSticky ? { left } : {})

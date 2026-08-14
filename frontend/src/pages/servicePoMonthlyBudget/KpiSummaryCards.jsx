@@ -5,7 +5,7 @@ import { formatCompactCurrency } from '@/utils/formatters';
 
 const KPI_DEFS = [
   { key: 'totalPOs', label: 'Total Service POs', Icon: FileText, format: (v) => String(v) },
-  { key: 'totalBilled', label: 'Total Billed', Icon: IndianRupee, format: (v) => formatCompactCurrency(v) },
+  { key: 'totalBilled', label: 'Total Billable', Icon: IndianRupee, format: (v) => formatCompactCurrency(v) },
   { key: 'totalInvoiced', label: 'Total Invoiced', Icon: Receipt, format: (v) => formatCompactCurrency(v) },
   { key: 'completionPct', label: 'Completion', Icon: Percent, format: (v) => `${v}%` },
 ];

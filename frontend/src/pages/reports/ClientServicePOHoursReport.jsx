@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
+import { useQuery } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
-import { AlertCircle, ChevronDown, ChevronUp, ChevronsUpDown, Download, Search } from 'lucide-react';
+import { AlertCircle, ChevronDown, ChevronRight, ChevronUp, ChevronsUpDown, Download, Search } from 'lucide-react';
 import { useClientServicePOHours } from '@/hooks/useReports';
+import { reportsApi } from '@/api/reports.api';
 import { useActiveClients } from '@/hooks/useClients';
 import { useActiveServicePOs } from '@/hooks/useServicePOs';
 import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
@@ -97,6 +99,71 @@ const SortableHeader = ({ label, column, sortBy, sortOrder, onSort, align }) => 
   );
 };
 
+// The resource-allocation API's field names vary by backend version (same defensive lookup
+// ServicePOResource.jsx uses) — try each candidate key in order, first non-empty value wins.
+const getField = (row, ...keys) => {
+  for (const k of keys) {
+    if (row[k] != null && row[k] !== '') return row[k];
+  }
+  return null;
+};
+
+// Lazily fetches the employee-level hours breakdown for one Service PO, only once that PO
+// row is expanded — reuses /reports/resource-allocation (already scoped by poId/month/year)
+// rather than a new endpoint, so this needs no backend change.
+const ServicePoEmployeeBreakdown = ({ poId, monthYear, hoursSource }) => {
+  const { data, isFetching, isError } = useQuery({
+    queryKey: ['clientServicePoHours', 'employeeBreakdown', poId, monthYear?.month, monthYear?.year, hoursSource],
+    queryFn: () => reportsApi.getResourceAllocation({
+      month: monthYear.month,
+      year: monthYear.year,
+      hoursSource,
+      poId,
+      page: 1,
+      limit: 500,
+    }),
+    enabled: !!poId,
+    staleTime: 0,
+  });
+
+  const rows = Array.isArray(data?.data) ? data.data : [];
+
+  if (isFetching) {
+    return (
+      <div className={cn('grid gap-2 px-4 py-2 text-xs text-muted-foreground border-t', GRID_COLS)}>
+        <span />
+        <span style={{ paddingLeft: 28 }}>Loading employees…</span>
+        <span />
+      </div>
+    );
+  }
+
+  if (isError || rows.length === 0) {
+    return (
+      <div className={cn('grid gap-2 px-4 py-2 text-xs text-muted-foreground border-t', GRID_COLS)}>
+        <span />
+        <span style={{ paddingLeft: 28 }}>{isError ? 'Failed to load employee hours.' : 'No employee hours found.'}</span>
+        <span />
+      </div>
+    );
+  }
+
+  return rows.map((row, i) => {
+    const employee = getField(row, 'full_name', 'employee_name', 'resource_name') ?? 'Unassigned';
+    const hours = getField(row, 'total_hours_logged', 'hours_logged', 'hours', 'time_in_hrs');
+    return (
+      <div key={i} className={cn('grid gap-2 px-4 py-1.5 text-xs bg-muted/20 border-t', GRID_COLS)}>
+        <span />
+        <span className="flex items-center truncate text-muted-foreground" style={{ paddingLeft: 28 }}>
+          <span className="mr-1.5">└</span>
+          <span className="truncate">{employee}</span>
+        </span>
+        <span className="text-right tabular-nums">{formatHours(Number(hours) || 0)}</span>
+      </div>
+    );
+  });
+};
+
 const ClientServicePOHoursReport = () => {
   const [monthYear, setMonthYear] = useState({
     month: prevMonth.getMonth() + 1,
@@ -110,6 +177,7 @@ const ClientServicePOHoursReport = () => {
   const [status, setStatus] = useState('all');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [collapsedClientIds, setCollapsedClientIds] = useState(() => new Set());
+  const [expandedPoIds, setExpandedPoIds] = useState(() => new Set());
   const canViewOriginal = useCanViewOriginalData();
   const [hoursSource, setHoursSource] = useState('M');
 
@@ -223,6 +291,15 @@ const ClientServicePOHoursReport = () => {
       const next = new Set(prev);
       if (next.has(clientKey)) next.delete(clientKey);
       else next.add(clientKey);
+      return next;
+    });
+  };
+
+  const togglePo = (poKey) => {
+    setExpandedPoIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(poKey)) next.delete(poKey);
+      else next.add(poKey);
       return next;
     });
   };
@@ -406,10 +483,17 @@ const ClientServicePOHoursReport = () => {
               <button
                 type="button"
                 onClick={() => toggleClient(clientKey)}
-                className={cn('w-full grid gap-2 items-center px-4 py-2.5 text-left hover:bg-muted/30 transition-colors', GRID_COLS)}
+                className={cn(
+                  'w-full grid gap-2 items-center px-4 py-2.5 text-left border-l-2 border-l-primary/40 hover:bg-muted/30 transition-colors',
+                  GRID_COLS
+                )}
               >
                 <span className="flex items-center gap-2 font-semibold truncate">
-                  <ChevronDown className={cn('h-4 w-4 shrink-0 text-muted-foreground transition-transform', !isExpanded && '-rotate-90')} />
+                  {isExpanded ? (
+                    <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  ) : (
+                    <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  )}
                   <span className="truncate">{group.client_name}</span>
                 </span>
                 <span className="text-xs text-muted-foreground">
@@ -429,13 +513,51 @@ const ClientServicePOHoursReport = () => {
                     transition={{ duration: 0.2 }}
                     className="overflow-hidden"
                   >
-                    {(group.service_pos ?? []).map((po) => (
-                      <div key={po.service_po_id} className={cn('grid gap-2 px-4 py-2 text-sm border-t', GRID_COLS)}>
-                        <span className="pl-6 text-muted-foreground truncate">{group.client_name}</span>
-                        <span className="truncate">{po.service_po_name}</span>
-                        <span className="text-right tabular-nums">{formatHours(po.hours)}</span>
-                      </div>
-                    ))}
+                    {(group.service_pos ?? []).map((po) => {
+                      const poExpanded = expandedPoIds.has(po.service_po_id);
+                      return (
+                        <div key={po.service_po_id}>
+                          <button
+                            type="button"
+                            onClick={() => togglePo(po.service_po_id)}
+                            className={cn(
+                              'w-full grid gap-2 px-4 py-2 text-sm text-left bg-muted/10 border-t hover:bg-muted/20 transition-colors',
+                              GRID_COLS
+                            )}
+                          >
+                            <span className="text-muted-foreground truncate text-xs">{group.client_name}</span>
+                            <span className="flex items-center truncate text-muted-foreground" style={{ paddingLeft: 14 }}>
+                              <span className="mr-1.5">└</span>
+                              {poExpanded ? (
+                                <ChevronDown className="h-3 w-3 mr-1 shrink-0" />
+                              ) : (
+                                <ChevronRight className="h-3 w-3 mr-1 shrink-0" />
+                              )}
+                              <span className="truncate">{po.service_po_name}</span>
+                            </span>
+                            <span className="text-right tabular-nums">{formatHours(po.hours)}</span>
+                          </button>
+
+                          <AnimatePresence initial={false}>
+                            {poExpanded && (
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: 0.15 }}
+                                className="overflow-hidden"
+                              >
+                                <ServicePoEmployeeBreakdown
+                                  poId={po.service_po_id}
+                                  monthYear={monthYear}
+                                  hoursSource={hoursSource}
+                                />
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      );
+                    })}
                     <div className={cn('grid gap-2 px-4 py-2 text-sm font-semibold bg-muted/20 border-t', GRID_COLS)}>
                       <span className="pl-6">Total</span>
                       <span />

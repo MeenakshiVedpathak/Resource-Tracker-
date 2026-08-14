@@ -1,6 +1,9 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import dayjs from 'dayjs';
-import { ChevronLeft, ChevronRight, CalendarRange, AlertTriangle } from 'lucide-react';
+import {
+  ChevronLeft, ChevronRight, CalendarRange, AlertTriangle,
+  ChevronUp, ChevronDown, ChevronsUpDown,
+} from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -22,14 +25,24 @@ const groupByServicePO = (records) => {
         service_po_id: r.service_po_id,
         service_po_name: r.service_po_name,
         service_po_code: r.service_po_code,
+        client_id: r.client?.id,
         client_name: r.client?.client_name,
         months: {},
       });
     }
     byPo.get(r.service_po_id).months[r.month] = r;
   }
-  return Array.from(byPo.values()).sort((a, b) => a.service_po_name.localeCompare(b.service_po_name));
+  return Array.from(byPo.values());
 };
+
+const rowTotal = (row) => MONTHS.reduce(
+  (acc, m) => {
+    const rec = row.months[m.num];
+    if (!rec) return acc;
+    return { invoice: acc.invoice + Number(rec.invoice_amount ?? 0), billed: acc.billed + Number(rec.billed_amount ?? 0) };
+  },
+  { invoice: 0, billed: 0 }
+);
 
 const MonthCell = ({ record }) => {
   if (!record) return <TableCell className="text-right text-muted-foreground">—</TableCell>;
@@ -41,10 +54,59 @@ const MonthCell = ({ record }) => {
   );
 };
 
-const ServicePoYearlyBudgetView = ({ year, onYearChange }) => {
+const SortableHead = ({ label, active, dir, onClick, className }) => (
+  <TableHead className={className}>
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center gap-0.5 hover:text-foreground transition-colors"
+    >
+      {label}
+      {active ? (
+        dir === 'asc' ? <ChevronUp className="ml-1 h-3 w-3" /> : <ChevronDown className="ml-1 h-3 w-3" />
+      ) : (
+        <ChevronsUpDown className="ml-1 h-3 w-3 opacity-40" />
+      )}
+    </button>
+  </TableHead>
+);
+
+const ServicePoYearlyBudgetView = ({ year, onYearChange, search = '', clientFilter = 'all', poFilterIds = null }) => {
   const { data: records = [], isPending, isError } = useServicePoMonthlyBudgetYearList(year, true);
 
-  const rows = useMemo(() => groupByServicePO(records), [records]);
+  const [sortBy, setSortBy] = useState('name');
+  const [sortDir, setSortDir] = useState('asc');
+
+  const allRows = useMemo(() => groupByServicePO(records), [records]);
+
+  const filteredRows = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return allRows.filter((row) => {
+      if (clientFilter !== 'all' && String(row.client_id) !== clientFilter) return false;
+      if (poFilterIds && !poFilterIds.has(row.service_po_id)) return false;
+      if (!term) return true;
+      return [row.service_po_name, row.service_po_code, row.client_name]
+        .filter(Boolean)
+        .some((v) => v.toLowerCase().includes(term));
+    });
+  }, [allRows, search, clientFilter, poFilterIds]);
+
+  const rows = useMemo(() => {
+    const dir = sortDir === 'asc' ? 1 : -1;
+    return [...filteredRows].sort((a, b) => {
+      if (sortBy === 'total') return dir * (rowTotal(a).invoice - rowTotal(b).invoice);
+      return dir * a.service_po_name.localeCompare(b.service_po_name);
+    });
+  }, [filteredRows, sortBy, sortDir]);
+
+  const toggleSort = (col) => {
+    if (sortBy === col) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortBy(col);
+      setSortDir('asc');
+    }
+  };
 
   const monthTotals = useMemo(() => {
     const totals = {};
@@ -105,34 +167,41 @@ const ServicePoYearlyBudgetView = ({ year, onYearChange }) => {
               <Skeleton key={i} className="h-11 w-full" />
             ))}
           </div>
-        ) : rows.length === 0 ? (
+        ) : allRows.length === 0 ? (
           <EmptyState
             icon={CalendarRange}
             title="No budgets saved yet"
             description={`Nothing has been entered for any month in ${year}.`}
           />
+        ) : rows.length === 0 ? (
+          <EmptyState title="No records found" description="Try adjusting your search or filters." />
         ) : (
           <div className="rounded-md border">
             <Table containerClassName="overflow-x-auto">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="sticky left-0 z-10 min-w-[180px] bg-background">Service PO</TableHead>
+                  <SortableHead
+                    label="Service PO"
+                    active={sortBy === 'name'}
+                    dir={sortDir}
+                    onClick={() => toggleSort('name')}
+                    className="sticky left-0 z-10 min-w-[180px] bg-background"
+                  />
                   {MONTHS.map((m) => (
                     <TableHead key={m.num} className="min-w-[90px] text-right">{m.label}</TableHead>
                   ))}
-                  <TableHead className="min-w-[110px] text-right">Total</TableHead>
+                  <SortableHead
+                    label="Total"
+                    active={sortBy === 'total'}
+                    dir={sortDir}
+                    onClick={() => toggleSort('total')}
+                    className="min-w-[110px] text-right"
+                  />
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {rows.map((row) => {
-                  const rowTotal = MONTHS.reduce(
-                    (acc, m) => {
-                      const rec = row.months[m.num];
-                      if (!rec) return acc;
-                      return { invoice: acc.invoice + Number(rec.invoice_amount ?? 0), billed: acc.billed + Number(rec.billed_amount ?? 0) };
-                    },
-                    { invoice: 0, billed: 0 }
-                  );
+                  const total = rowTotal(row);
                   return (
                     <TableRow key={row.service_po_id}>
                       <TableCell className="sticky left-0 z-10 bg-background align-top">
@@ -143,8 +212,8 @@ const ServicePoYearlyBudgetView = ({ year, onYearChange }) => {
                       </TableCell>
                       {MONTHS.map((m) => <MonthCell key={m.num} record={row.months[m.num]} />)}
                       <TableCell className="whitespace-nowrap text-right">
-                        <div className="text-xs font-semibold">{formatCurrency(rowTotal.invoice, 'INR', 0)}</div>
-                        <div className="text-[11px] text-muted-foreground">{formatCurrency(rowTotal.billed, 'INR', 0)}</div>
+                        <div className="text-xs font-semibold">{formatCurrency(total.invoice, 'INR', 0)}</div>
+                        <div className="text-[11px] text-muted-foreground">{formatCurrency(total.billed, 'INR', 0)}</div>
                       </TableCell>
                     </TableRow>
                   );

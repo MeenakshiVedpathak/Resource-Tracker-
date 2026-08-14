@@ -57,7 +57,13 @@ apiClient.interceptors.response.use(
     // via `handleLogout()` — wiping the demo out from under an otherwise-working screen.
     const isMockSession = getAccessToken()?.startsWith('mock.');
 
-    if (error.response?.status === 401 && !original._retry && !isMockSession) {
+    // Public auth endpoints (login, forgot/reset-password, etc.) return 401 for "wrong
+    // credentials," not "your session expired" — running the refresh/logout dance on them
+    // wipes local state and hard-redirects to /login before the caller's own catch block
+    // (e.g. Login.jsx's showError) ever gets to render the real message.
+    const isPublicAuthRequest = original?.url?.startsWith('/auth/') && original.url !== '/auth/profile' && original.url !== '/auth/change-password';
+
+    if (error.response?.status === 401 && !original._retry && !isMockSession && !isPublicAuthRequest) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });
