@@ -65,7 +65,7 @@ export const FORM_NAMES = {
   // gets). Both point at the same EmployeeTimesheet page/route as "My Work Log" — that page
   // already renders the Manager-only selector + approval view on top of the self-service UI, and
   // the spec forbids a separate screen for this.
-  MANAGER_TIMESHEET: 'Timesheets',
+  MANAGER_TIMESHEET: 'Timesheet',
   MANAGER_TIMESHEET_APPROVAL: 'Timesheet Approval',
   // Business module, Service PO Admin login (confirmed via GET /roles/forms) — the Form Master
   // row now exists on the backend, so this is picked up automatically by Sidebar's RBAC-driven

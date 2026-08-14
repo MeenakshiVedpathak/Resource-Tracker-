@@ -49,7 +49,7 @@ const moduleRank = (moduleName) => {
 // Fixed display order for individual nav items within a module, overriding the API's own
 // (alphabetical) order — e.g. Resources comes back as "Monthly Costs" then "Timesheets".
 // Any form not listed here keeps its original relative position, appended after these.
-const FORM_ORDER = ['timesheets', 'monthly costs', 'entity master', 'bu admin master'];
+const FORM_ORDER = ['timesheets', 'monthly costs', 'entity master', 'bu admin master', 'my work log', 'monthly summary'];
 const formRank = (formName) => {
   const i = FORM_ORDER.indexOf(formName.trim().toLowerCase());
   return i === -1 ? FORM_ORDER.length : i;

@@ -60,24 +60,29 @@ const exportToExcel = (rows, categoryByTypeId) => {
 };
 
 // Mirrors the fields on the "New Service PO" form (ServicePOForm.jsx) in the same order.
+// "Hierarchy Parent"/"Hierarchy Child" are template-only — hierarchy is currently set via the
+// separate hierarchy editor UI and is not parsed by the file import endpoint.
 const SAMPLE_COLUMNS = [
-  'Service PO Number', 'Service PO Name', 'Client', 'Service Category', 'Service Type',
-  'Account Manager', 'Status', 'Service Description', 'PO Value',
+  'Service PO Number', 'Service PO Name', 'Client', 'Project', 'Service Category', 'Service Type',
+  'Delivery Head Manager', 'Status', 'Service Description', 'PO Value',
   'Expected Man Hours', 'Start Date', 'End Date', 'Invoice Frequency', 'Invoice Amount',
+  'Hierarchy Parent', 'Hierarchy Child',
 ];
 
 const downloadSampleExcel = () => {
   const wsData = [
     SAMPLE_COLUMNS,
     [
-      '', 'Annual Support Contract', 'Acme Technologies', 'Billable', 'Managed Services',
+      '', 'Annual Support Contract', 'Acme Technologies', 'Order Management Platform', 'Billable', 'Managed Services',
       'Jane Doe', 'in-progress', 'Ongoing L1/L2 support', 500000,
       2000, '2026-01-01', '2026-12-31', 'monthly', 41666.67,
+      '', '',
     ],
     [
-      '', 'Internal Tooling POC', 'Zenith Retail', 'Non-Billable', 'Project',
+      '', 'Internal Tooling POC', 'Zenith Retail', 'Internal Dashboard Revamp', 'Non-Billable', 'Project',
       'John Smith', 'pending', 'Proof of concept, no client invoicing', '',
       400, '2026-02-01', '2026-04-30', 'internal-no-invoice', 0,
+      '', '',
     ],
   ];
   const ws = XLSX.utils.aoa_to_sheet(wsData);

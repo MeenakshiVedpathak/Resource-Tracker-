@@ -154,8 +154,8 @@ const EmployeeForm = () => {
       date_of_leaving: '',
       status: 'active',
       role_ids: [],
-      password: '',
-      confirmPassword: '',
+      password: 'Gtt@1234',
+      confirmPassword: 'Gtt@1234',
       primary_manager_user_id: null,
       secondary_manager_user_id: null,
       // No backend value exists yet for a brand-new employee, so this just seeds the toggle in
@@ -190,6 +190,17 @@ const EmployeeForm = () => {
     const years = diffMs / (1000 * 60 * 60 * 24 * 365.25);
     form.setValue('company_experience', Math.max(0, parseFloat(years.toFixed(1))));
   }, [dateOfJoining, form]);
+
+  // Employee is the common case for this form (§ role bypass above), so pre-select it on create
+  // instead of making every submission start from an empty Roles picker — the admin can still
+  // swap/add roles before saving. Runs once roles are loaded and only if nothing's selected yet,
+  // so it never clobbers a role the admin already picked.
+  useEffect(() => {
+    if (isEdit || !allRoles.length || form.getValues('role_ids').length) return;
+    const employeeRole = allRoles.find((r) => r.role_name === ROLE_NAMES.EMPLOYEE);
+    if (employeeRole) form.setValue('role_ids', [employeeRole.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEdit, rolesData, form]);
 
   useEffect(() => {
     if (employee && isEdit) {

@@ -9,10 +9,14 @@ import { ROLE_NAMES } from '@/constants/roleHierarchy';
 
 // The real backend keeps Employees and Users as two separate resources — POST/PUT /employees
 // has no role_ids/password/role fields at all (see bakend/src/validations/employeeValidation.js),
-// and creating an Employee there never provisions a login. So on the real backend, "manage
-// login + role from Employee Master" is done here as a second call into the (pre-existing,
-// unrelated-to-this-change) /users endpoints, not by teaching /employees new fields — that would
-// require a backend change, which is out of scope (backend is owned by a different developer).
+// and creating an Employee there never provisions a login on its own. So on the real backend,
+// "manage login + role from Employee Master" is done here as a second call into the (pre-existing,
+// unrelated-to-this-change) /users endpoints. NOTE: despite the local bakend/ schema still showing
+// `email_id`, the live backend's POST /employees now validates a required `email` field too (error:
+// "Email is required to create the Employees login account") — confirmed 2026-08-14 against the
+// real deployed backend, which has moved ahead of what's checked into bakend/ here. `create` below
+// sends `email` accordingly; `update`'s PUT /employees still sends `email_id` and hasn't been
+// re-verified against the live backend.
 const REAL_USER_LOOKUP_PARAMS = { limit: 200, status: 'all' };
 // Used only to backfill a login for a pre-existing employee that never had one, when the admin
 // assigns it a role via Employee Master's edit form (which collects a role but no password) —
@@ -307,7 +311,7 @@ export const employeesApi = {
   create: async (payload) => {
     if (RBAC_MOCK_ENABLED) return mockCreate(payload);
     const { role_ids, password, email, ...employeeFields } = payload;
-    const employeeRes = await apiClient.post('/employees', { ...employeeFields, email_id: email }).then((r) => r.data);
+    const employeeRes = await apiClient.post('/employees', { ...employeeFields, email }).then((r) => r.data);
     const employeeId = employeeRes?.data?.id;
     if (employeeId) {
       await apiClient.post('/users', {

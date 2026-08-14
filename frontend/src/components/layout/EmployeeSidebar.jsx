@@ -8,6 +8,15 @@ import { useAuth } from '@/hooks/useAuth';
 import { resolveFormRoute } from '@/constants/rbacForms';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
+// Fixed display order for nav items within a module, overriding the backend's own order —
+// e.g. the API returns "Monthly Summary" ahead of "My Work Log". Any form not listed here
+// keeps its original relative position, appended after these (Array.sort is stable).
+const FORM_ORDER = ['my work log', 'monthly summary'];
+const formRank = (formName) => {
+  const i = FORM_ORDER.indexOf(formName.trim().toLowerCase());
+  return i === -1 ? FORM_ORDER.length : i;
+};
+
 // RBAC-driven, same as the admin Sidebar's buildNavGroups — one group per module, one item per
 // mapped form. Used to be a hardcoded NAV_GROUPS array shown to every Employee regardless of
 // any Form Master mapping; now an Employee only sees what's actually mapped to them.
@@ -27,7 +36,8 @@ const buildNavGroups = (accessibleForms) =>
           }
           return { label: form.name, icon: cfg.icon, to: cfg.to, exact: cfg.exact };
         })
-        .filter(Boolean),
+        .filter(Boolean)
+        .sort((a, b) => formRank(a.label) - formRank(b.label)),
     }))
     .filter((group) => group.items.length > 0);
 
