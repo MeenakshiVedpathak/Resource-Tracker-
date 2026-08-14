@@ -24,21 +24,19 @@ import { cn } from '@/utils/cn';
 
 const MAX_SIZE = 10 * 1024 * 1024; // 10 MB
 
-// Mirrors the fields on the "New Service PO" form (ServicePOForm.jsx) in the same order.
-// Note: there is no raw "Billable" input on that form — is_billable is derived from
-// whether the chosen Service Category is named "Billable" (case-insensitive).
-// "Hierarchy Parent"/"Hierarchy Child" are template-only — hierarchy is currently set via the
-// separate hierarchy editor UI and is not parsed by the file import endpoint.
+// Matches the company's standard Service PO import template format.
+// Note: there is no raw "Billable" input — is_billable is derived from the matched
+// Service Type's category, never read from the sheet.
+// "Project Name", "Delivery Head Manager", "Hierarchy Parent"/"Hierarchy Child" are
+// template-only — they are not parsed by the file import endpoint.
 const SAMPLE_COLUMNS = [
-  'Service PO Number', 'Service PO Name', 'Client', 'Project', 'Service Category', 'Service Type',
-  'Delivery Head Manager', 'Status', 'Service Description', 'PO Value',
-  'Expected Man Hours', 'Start Date', 'End Date', 'Invoice Frequency', 'Invoice Amount',
-  'Hierarchy Parent', 'Hierarchy Child',
+  'Service PO Name', 'Client Name', 'Project Name', 'Service Type', 'PO Value',
+  'Start Date', 'End Date', 'Expected Man Hours', 'Delivery Head Manager', 'Service Description',
+  'Invoice Frequency', 'Status', 'Hierarchy Parent', 'Hierarchy Child',
 ];
 
 const REQUIRED_COLUMNS = [
-  'Service PO Name', 'Client', 'Project', 'Service Category', 'Service Type', 'Delivery Head Manager',
-  'Service Description', 'Start Date', 'End Date', 'Invoice Frequency', 'Invoice Amount',
+  'Service PO Name', 'Client Name', 'Service Type', 'PO Value', 'Start Date', 'End Date',
 ];
 
 const ServicePOImport = () => {
@@ -79,16 +77,14 @@ const ServicePOImport = () => {
     const wsData = [
       SAMPLE_COLUMNS,
       [
-        '', 'Annual Support Contract', 'Acme Technologies', 'Order Management Platform', 'Billable', 'Managed Services',
-        'Jane Doe', 'in-progress', 'Ongoing L1/L2 support', 500000,
-        2000, '2026-01-01', '2026-12-31', 'monthly', 41666.67,
-        '', '',
+        'Analytics Support one', 'pockit', 'pockit mobile', 'Project', 500000,
+        '2026-01-01', '2026-12-31', 2000, 'Akshaya Arun jadhav', 'Ongoing analytics platform support',
+        'monthly', 'in-progress', 'Development', 'Frontend',
       ],
       [
-        '', 'Internal Tooling POC', 'Zenith Retail', 'Internal Dashboard Revamp', 'Non-Billable', 'Project',
-        'John Smith', 'pending', 'Proof of concept, no client invoicing', '',
-        400, '2026-02-01', '2026-04-30', 'internal-no-invoice', 0,
-        '', '',
+        'Analytics Support two', 'pockit', 'pockit mobile', 'Project', 500000,
+        '2026-01-01', '2026-12-31', 2000, 'Akshaya Arun jadhav', 'Ongoing analytics platform support',
+        'monthly', 'in-progress', 'Development', 'Frontend',
       ],
     ];
 
@@ -166,16 +162,16 @@ const ServicePOImport = () => {
               ))}
             </p>
             <p className="mt-2 text-xs text-muted-foreground">
-              <strong>Service PO Number</strong> is auto-generated if left blank. <strong>Client</strong>,{' '}
-              <strong>Project</strong> (scoped to the chosen Client) and <strong>Service Category</strong> must match
-              an existing record exactly (case-insensitive) — a PO is marked billable only when its Service Category
-              is named "Billable". <strong>Service Type</strong> must belong to the chosen Service Category.{' '}
-              <strong>Status</strong> defaults to "in-progress" if left blank.
+              A Service PO Number/Code is always auto-generated — no column for it is needed.{' '}
+              <strong>Client Name</strong> and <strong>Service Type</strong> must match an existing record
+              exactly (case-insensitive) — a PO is marked billable based on the matched Service Type's
+              category, not a column in the sheet. <strong>Status</strong> defaults to "pending" if left blank.
               Dates accept <strong>YYYY-MM-DD</strong> or <strong>DD/MM/YYYY</strong>.
             </p>
             <p className="mt-2 text-xs text-muted-foreground">
-              <strong>Hierarchy Parent</strong> / <strong>Hierarchy Child</strong> are shown for reference only —
-              they are not read by this import; set PO hierarchy from the Service POs list after import.
+              <strong>Project Name</strong>, <strong>Delivery Head Manager</strong>,{' '}
+              <strong>Hierarchy Parent</strong> and <strong>Hierarchy Child</strong> are shown for reference
+              only — they are not read by this import; set PO hierarchy from the Service POs list after import.
             </p>
           </CardContent>
         </Card>

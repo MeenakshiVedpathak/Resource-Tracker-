@@ -59,30 +59,27 @@ const exportToExcel = (rows, categoryByTypeId) => {
   XLSX.writeFile(wb, 'Service_POs.xlsx');
 };
 
-// Mirrors the fields on the "New Service PO" form (ServicePOForm.jsx) in the same order.
-// "Hierarchy Parent"/"Hierarchy Child" are template-only — hierarchy is currently set via the
-// separate hierarchy editor UI and is not parsed by the file import endpoint.
+// Matches the company's standard Service PO import template format.
+// "Project Name", "Delivery Head Manager", "Hierarchy Parent"/"Hierarchy Child" are
+// template-only — they are not parsed by the file import endpoint.
 const SAMPLE_COLUMNS = [
-  'Service PO Number', 'Service PO Name', 'Client', 'Project', 'Service Category', 'Service Type',
-  'Delivery Head Manager', 'Status', 'Service Description', 'PO Value',
-  'Expected Man Hours', 'Start Date', 'End Date', 'Invoice Frequency', 'Invoice Amount',
-  'Hierarchy Parent', 'Hierarchy Child',
+  'Service PO Name', 'Client Name', 'Project Name', 'Service Type', 'PO Value',
+  'Start Date', 'End Date', 'Expected Man Hours', 'Delivery Head Manager', 'Service Description',
+  'Invoice Frequency', 'Status', 'Hierarchy Parent', 'Hierarchy Child',
 ];
 
 const downloadSampleExcel = () => {
   const wsData = [
     SAMPLE_COLUMNS,
     [
-      '', 'Annual Support Contract', 'Acme Technologies', 'Order Management Platform', 'Billable', 'Managed Services',
-      'Jane Doe', 'in-progress', 'Ongoing L1/L2 support', 500000,
-      2000, '2026-01-01', '2026-12-31', 'monthly', 41666.67,
-      '', '',
+      'Analytics Support one', 'pockit', 'pockit mobile', 'Project', 500000,
+      '2026-01-01', '2026-12-31', 2000, 'Akshaya Arun jadhav', 'Ongoing analytics platform support',
+      'monthly', 'in-progress', 'Development', 'Frontend',
     ],
     [
-      '', 'Internal Tooling POC', 'Zenith Retail', 'Internal Dashboard Revamp', 'Non-Billable', 'Project',
-      'John Smith', 'pending', 'Proof of concept, no client invoicing', '',
-      400, '2026-02-01', '2026-04-30', 'internal-no-invoice', 0,
-      '', '',
+      'Analytics Support two', 'pockit', 'pockit mobile', 'Project', 500000,
+      '2026-01-01', '2026-12-31', 2000, 'Akshaya Arun jadhav', 'Ongoing analytics platform support',
+      'monthly', 'in-progress', 'Development', 'Frontend',
     ],
   ];
   const ws = XLSX.utils.aoa_to_sheet(wsData);

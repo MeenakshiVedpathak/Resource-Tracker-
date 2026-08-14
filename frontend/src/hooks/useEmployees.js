@@ -42,7 +42,10 @@ export const useCreateEmployee = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: employeesApi.create,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['employees'] }),
+    onSuccess: () => Promise.all([
+        qc.invalidateQueries({ queryKey: ['employees'] }),
+        qc.invalidateQueries({ queryKey: ['users'] })
+      ]),
   });
 };
 
@@ -52,7 +55,8 @@ export const useUpdateEmployee = (id) => {
     mutationFn: (payload) => employeesApi.update(id, payload),
     onSuccess: () => Promise.all([
         qc.invalidateQueries({ queryKey: ['employees'] }),
-        qc.invalidateQueries({ queryKey: QUERY_KEYS.EMPLOYEE(id) })
+        qc.invalidateQueries({ queryKey: QUERY_KEYS.EMPLOYEE(id) }),
+        qc.invalidateQueries({ queryKey: ['users'] })
       ]),
   });
 };
@@ -77,6 +81,9 @@ export const useToggleEmployeeStatus = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, status }) => employeesApi.update(id, { status }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['employees'] }),
+    onSuccess: () => Promise.all([
+        qc.invalidateQueries({ queryKey: ['employees'] }),
+        qc.invalidateQueries({ queryKey: ['users'] })
+      ]),
   });
 };
