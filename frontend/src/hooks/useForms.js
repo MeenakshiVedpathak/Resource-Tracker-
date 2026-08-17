@@ -9,6 +9,14 @@ export const useForms = (params) =>
     placeholderData: (prev) => prev,
   });
 
+// Module rows only — source for the "Module" dropdown on the Add/Edit Form screen. Never derive
+// this from the flat useForms() list.
+export const useFormModules = (params = { status: 'active' }) =>
+  useQuery({
+    queryKey: QUERY_KEYS.FORM_MODULES(params),
+    queryFn: () => formsApi.getModules(params),
+  });
+
 export const useFormById = (id) =>
   useQuery({
     queryKey: QUERY_KEYS.FORM(id),
@@ -39,6 +47,22 @@ export const useDeleteForm = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: formsApi.delete,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['forms'] }),
+  });
+};
+
+export const useReorderModules = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (items) => formsApi.reorderModules(items),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['forms'] }),
+  });
+};
+
+export const useReorderForms = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ moduleName, items }) => formsApi.reorderForms(moduleName, items),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['forms'] }),
   });
 };

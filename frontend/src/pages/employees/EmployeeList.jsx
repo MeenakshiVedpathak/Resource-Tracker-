@@ -445,10 +445,35 @@ const EmployeeList = () => {
     });
   };
 
+  const getExportParams = () => ({
+    status: statusFilter,
+    ...(roleFilter !== 'all' && { role_id: roleFilter }),
+    ...(debouncedSearch && debouncedSearch.length >= 3 && { search: debouncedSearch }),
+  });
+
+  // The real backend caps `limit` at 200 per request (bakend/src/validations/employeeValidation.js)
+  // and rejects anything higher outright, so exports/print page through it instead of asking for
+  // everything in one call.
+  const EXPORT_PAGE_LIMIT = 200;
+
+  const fetchAllEmployeesForExport = async (filterParams) => {
+    const all = [];
+    let page = 1;
+    let total = Infinity;
+    while (all.length < total) {
+      const res = await employeesApi.getAll({ ...filterParams, page, limit: EXPORT_PAGE_LIMIT });
+      const batch = res?.data ?? [];
+      if (!batch.length) break;
+      all.push(...batch);
+      total = res?.meta?.total ?? all.length;
+      page += 1;
+    }
+    return all;
+  };
+
   const handleExportExcel = async () => {
     try {
-      const res = await employeesApi.getAll({ limit: 10000, status: statusFilter, search: debouncedSearch });
-      const data = res?.data ?? [];
+      const data = await fetchAllEmployeesForExport(getExportParams());
       if (data.length === 0) {
         showError("No data to export");
         return;
@@ -469,14 +494,14 @@ const EmployeeList = () => {
       XLSX.writeFile(wb, "employees_export.xlsx");
       success("Exported to Excel successfully");
     } catch (error) {
+      console.error("Excel Export Error:", error);
       showError("Failed to export Excel");
     }
   };
 
   const handleExportPDF = async () => {
     try {
-      const res = await employeesApi.getAll({ limit: 10000, status: statusFilter, search: debouncedSearch });
-      const data = res?.data ?? [];
+      const data = await fetchAllEmployeesForExport(getExportParams());
       if (data.length === 0) {
         showError("No data to export");
         return;
@@ -515,8 +540,7 @@ const EmployeeList = () => {
 
   const handlePrint = async () => {
     try {
-      const res = await employeesApi.getAll({ limit: 10000, status: statusFilter, search: debouncedSearch });
-      const data = res?.data ?? [];
+      const data = await fetchAllEmployeesForExport(getExportParams());
       if (data.length === 0) {
         showError("No data to print");
         return;
@@ -572,6 +596,7 @@ const EmployeeList = () => {
         printWindow.close();
       }, 250);
     } catch (error) {
+      console.error("Print Error:", error);
       showError("Failed to print");
     }
   };

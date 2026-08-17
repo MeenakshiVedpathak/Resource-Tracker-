@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from 'react';
 import dayjs from 'dayjs';
+import * as XLSX from 'xlsx';
 import {
-  ChevronLeft, ChevronRight, CalendarRange, AlertTriangle,
+  ChevronLeft, ChevronRight, CalendarRange, AlertTriangle, Pencil,
   ChevronUp, ChevronDown, ChevronsUpDown,
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
@@ -11,6 +12,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import EmptyState from '@/components/common/EmptyState';
 import { Table, TableHeader, TableBody, TableFooter, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { useServicePoMonthlyBudgetYearList } from '@/hooks/useServicePoMonthlyBudget';
+import { useNotification } from '@/hooks/useNotification';
 import { formatCurrency } from '@/utils/formatters';
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => ({ num: i + 1, label: dayjs().month(i).format('MMM') }));
@@ -44,15 +46,30 @@ const rowTotal = (row) => MONTHS.reduce(
   { invoice: 0, billed: 0 }
 );
 
-const MonthCell = ({ record }) => {
-  if (!record) return <TableCell className="text-right text-muted-foreground">—</TableCell>;
-  return (
-    <TableCell className="whitespace-nowrap text-right">
-      <div className="text-xs font-medium">{formatCurrency(record.invoice_amount, 'INR', 0)}</div>
-      <div className="text-[11px] text-muted-foreground">{formatCurrency(record.billed_amount, 'INR', 0)}</div>
-    </TableCell>
-  );
-};
+const MonthCell = ({ record, onClick }) => (
+  <TableCell
+    role="button"
+    tabIndex={0}
+    onClick={onClick}
+    onKeyDown={(e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        onClick();
+      }
+    }}
+    className="group relative cursor-pointer whitespace-nowrap text-right transition-colors hover:bg-muted/60"
+  >
+    {record ? (
+      <>
+        <div className="text-xs font-medium">{formatCurrency(record.invoice_amount, 'INR', 0)}</div>
+        <div className="text-[11px] text-muted-foreground">{formatCurrency(record.billed_amount, 'INR', 0)}</div>
+      </>
+    ) : (
+      <span className="text-muted-foreground">—</span>
+    )}
+    <Pencil className="absolute right-1 top-1 h-3 w-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+  </TableCell>
+);
 
 const SortableHead = ({ label, active, dir, onClick, className }) => (
   <TableHead className={className}>
@@ -71,7 +88,10 @@ const SortableHead = ({ label, active, dir, onClick, className }) => (
   </TableHead>
 );
 
-const ServicePoYearlyBudgetView = ({ year, onYearChange, search = '', clientFilter = 'all', poFilterIds = null }) => {
+const ServicePoYearlyBudgetView = forwardRef(({
+  year, onYearChange, search = '', clientFilter = 'all', poFilterIds = null, onEditCell, onExportStateChange,
+}, ref) => {
+  const { success, error: showError } = useNotification();
   const { data: records = [], isPending, isError } = useServicePoMonthlyBudgetYearList(year, true);
 
   const [sortBy, setSortBy] = useState('name');
@@ -129,6 +149,54 @@ const ServicePoYearlyBudgetView = ({ year, onYearChange, search = '', clientFilt
     ),
     [monthTotals]
   );
+
+  const handleExportExcel = () => {
+    if (rows.length === 0) {
+      showError('No data to export');
+      return;
+    }
+    const exportData = rows.map((row) => {
+      const total = rowTotal(row);
+      const monthCols = {};
+      MONTHS.forEach((m) => {
+        const rec = row.months[m.num];
+        monthCols[`${m.label} Invoice`] = Number(rec?.invoice_amount ?? 0);
+        monthCols[`${m.label} Billable`] = Number(rec?.billed_amount ?? 0);
+      });
+      return {
+        'Service PO': row.service_po_name || '',
+        'PO Code': row.service_po_code || '',
+        'Client': row.client_name || '',
+        ...monthCols,
+        'Total Invoice': total.invoice,
+        'Total Billable': total.billed,
+      };
+    });
+    const totalRow = { 'Service PO': 'Total', 'PO Code': '', 'Client': '' };
+    MONTHS.forEach((m) => {
+      totalRow[`${m.label} Invoice`] = monthTotals[m.num].invoice;
+      totalRow[`${m.label} Billable`] = monthTotals[m.num].billed;
+    });
+    totalRow['Total Invoice'] = grandTotal.invoice;
+    totalRow['Total Billable'] = grandTotal.billed;
+    exportData.push(totalRow);
+
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Yearly Overview');
+    XLSX.writeFile(wb, `Invoice_Master_Yearly_${year}.xlsx`);
+    success('Exported to Excel successfully');
+  };
+
+  const canExport = !isPending && !isError && allRows.length > 0;
+
+  useEffect(() => {
+    onExportStateChange?.(canExport);
+    return () => onExportStateChange?.(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canExport]);
+
+  useImperativeHandle(ref, () => ({ exportExcel: handleExportExcel }));
 
   return (
     <Card>
@@ -210,7 +278,13 @@ const ServicePoYearlyBudgetView = ({ year, onYearChange, search = '', clientFilt
                           {row.client_name || row.service_po_code || '—'}
                         </div>
                       </TableCell>
-                      {MONTHS.map((m) => <MonthCell key={m.num} record={row.months[m.num]} />)}
+                      {MONTHS.map((m) => (
+                        <MonthCell
+                          key={m.num}
+                          record={row.months[m.num]}
+                          onClick={() => onEditCell?.(row.service_po_id, m.num, year)}
+                        />
+                      ))}
                       <TableCell className="whitespace-nowrap text-right">
                         <div className="text-xs font-semibold">{formatCurrency(total.invoice, 'INR', 0)}</div>
                         <div className="text-[11px] text-muted-foreground">{formatCurrency(total.billed, 'INR', 0)}</div>
@@ -243,12 +317,14 @@ const ServicePoYearlyBudgetView = ({ year, onYearChange, search = '', clientFilt
         {!isError && (
           <p className="mt-3 flex flex-wrap items-center gap-x-1.5 text-[11px] text-muted-foreground">
             <span className="font-medium">Reading cells:</span> top value is Invoice Amount, bottom (muted) is Billable Amount.
-            <Badge variant="muted" className="font-normal">Switch to the Monthly tab to add or edit an entry.</Badge>
+            <Badge variant="muted" className="font-normal">Click any month cell to add or edit that entry.</Badge>
           </p>
         )}
       </CardContent>
     </Card>
   );
-};
+});
+
+ServicePoYearlyBudgetView.displayName = 'ServicePoYearlyBudgetView';
 
 export default ServicePoYearlyBudgetView;

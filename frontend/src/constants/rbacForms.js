@@ -16,6 +16,7 @@ import {
   FileText, FolderOpen, FolderKanban, Clock, DollarSign,
   Tag, Layers, Sparkles, ClipboardList, Landmark, ShieldCheck,
   FileBarChart2, PieChart, CalendarRange, UserCheck, Network, Receipt, Table2, Wallet, IndianRupee,
+  ListTree, ListChecks,
 } from 'lucide-react';
 import { ROUTES } from '@/constants/routes';
 
@@ -60,6 +61,14 @@ export const FORM_NAMES = {
   EMPLOYEE_WORK_LOG: 'My Work Log',
   EMPLOYEE_MONTHLY_SUMMARY: 'Monthly Summary',
   EMPLOYEE_REPORTS: 'PO Wise Report',
+  // Guessed name — same caveat as the rest of this file's Employee self-service entries; confirm
+  // against the actual Form Master row once one is seeded for this new report.
+  EMPLOYEE_PROJECT_HOURS_REPORT: 'Project Hours Report',
+  // Guessed name — same caveat as the rest of this file's Employee self-service entries; confirm
+  // against the actual Form Master row once one is seeded for this new report. Shared by both
+  // Employee and Manager logins (single endpoint auto-resolves "own" vs "team" data), so whichever
+  // role(s) this form gets mapped to will reach the same page/route.
+  EMPLOYEE_TIMESHEET_APPROVAL_STATUS_REPORT: 'Timesheet Approval Status Report',
   // Manager Timesheet Access & Approval — the backend's Form Master grants Managers these two
   // Resources-module rows (distinct from the Employee Self-Service "My Work Log" row an Employee
   // gets). Both point at the same EmployeeTimesheet page/route as "My Work Log" — that page
@@ -105,6 +114,8 @@ export const FORM_ROUTE_CONFIG = {
   [FORM_NAMES.EMPLOYEE_WORK_LOG]: { to: ROUTES.EMPLOYEE_TIMESHEET, icon: Clock },
   [FORM_NAMES.EMPLOYEE_MONTHLY_SUMMARY]: { to: ROUTES.EMPLOYEE_MONTHLY_SUMMARY, icon: Table2 },
   [FORM_NAMES.EMPLOYEE_REPORTS]: { to: ROUTES.EMPLOYEE_REPORTS, icon: FileBarChart2 },
+  [FORM_NAMES.EMPLOYEE_PROJECT_HOURS_REPORT]: { to: ROUTES.EMPLOYEE_PROJECT_HOURS_REPORT, icon: ListTree },
+  [FORM_NAMES.EMPLOYEE_TIMESHEET_APPROVAL_STATUS_REPORT]: { to: ROUTES.EMPLOYEE_TIMESHEET_APPROVAL_STATUS_REPORT, icon: ListChecks },
   [FORM_NAMES.MANAGER_TIMESHEET]: { to: ROUTES.EMPLOYEE_TIMESHEET, icon: Clock },
   [FORM_NAMES.MANAGER_TIMESHEET_APPROVAL]: { to: ROUTES.EMPLOYEE_TIMESHEET, icon: Clock },
   [FORM_NAMES.SERVICE_PO_MONTHLY_BUDGET]: { to: ROUTES.SERVICE_PO_MONTHLY_BUDGET, icon: Wallet, exact: true },

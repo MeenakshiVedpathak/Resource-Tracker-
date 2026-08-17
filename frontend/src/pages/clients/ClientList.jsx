@@ -54,7 +54,7 @@ const ClientList = () => {
   const params = {
     page,
     limit,
-    ...(statusFilter !== 'all' && { status: statusFilter }),
+    status: statusFilter,
     ...(debouncedSearch && { search: debouncedSearch }),
     ...(sorting[0] && { sortBy: sorting[0].id, sortOrder: sorting[0].desc ? 'desc' : 'asc' }),
   };
@@ -162,14 +162,32 @@ const ClientList = () => {
     XLSX.writeFile(wb, "client_sample.xlsx");
   };
 
+  // The real backend caps `limit` at 200 per request (bakend/src/validations/clientValidation.js)
+  // and rejects anything higher outright, so export pages through it instead of asking for
+  // everything (e.g. meta.total) in one call.
+  const EXPORT_PAGE_LIMIT = 200;
+
+  const fetchAllClientsForExport = async (filterParams) => {
+    const all = [];
+    let clientPage = 1;
+    let total = Infinity;
+    while (all.length < total) {
+      const res = await clientsApi.getAll({ ...filterParams, page: clientPage, limit: EXPORT_PAGE_LIMIT });
+      const batch = res?.data ?? [];
+      if (!batch.length) break;
+      all.push(...batch);
+      total = res?.meta?.total ?? all.length;
+      clientPage += 1;
+    }
+    return all;
+  };
+
   const handleExportExcel = async () => {
     try {
-      const res = await clientsApi.getAll({
-        limit: meta.total || 10000,
-        ...(statusFilter !== 'all' && { status: statusFilter }),
+      const data = await fetchAllClientsForExport({
+        status: statusFilter,
         ...(debouncedSearch && { search: debouncedSearch }),
       });
-      const data = res?.data ?? [];
       if (data.length === 0) {
         showError('No data to export');
         return;
@@ -186,6 +204,7 @@ const ClientList = () => {
       XLSX.writeFile(wb, 'clients_export.xlsx');
       success('Exported to Excel successfully');
     } catch (error) {
+      console.error('Excel Export Error:', error);
       showError('Failed to export Excel');
     }
   };

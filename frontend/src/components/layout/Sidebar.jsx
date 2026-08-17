@@ -6,6 +6,7 @@ import { selectSidebarCollapsed, toggleSidebar, setSidebarCollapsed } from '@/st
 import { selectIsDirty, selectDirtyMessage, clearDirty } from '@/store/slices/navigationGuardSlice';
 import { cn } from '@/utils/cn';
 import { useAuth } from '@/hooks/useAuth';
+import { useFormModules, useForms } from '@/hooks/useForms';
 import { resolveFormRoute } from '@/constants/rbacForms';
 import { ROUTES } from '@/constants/routes';
 import { ChevronLeft, ChevronRight, UserPlus, Shield, ClipboardList, UserCog, Landmark } from 'lucide-react';
@@ -36,30 +37,15 @@ const RESTRICTED_MODULES = ['administration'];
 const ENTITY_ADMIN_MANAGEMENT_ROLES = ['Admin'];
 const TEAM_MAPPING_ROLES = ['Service PO Admin'];
 
-// Fixed display order for module sections, overriding whatever order the API happens to
-// return them in (it's alphabetical server-side). Any module not listed here keeps its
-// original relative position, appended after these (Array.sort is stable).
-const MODULE_ORDER = ['core', 'administration', 'people', 'business', 'resources', 'reports'];
-const moduleRank = (moduleName) => {
-  const i = MODULE_ORDER.indexOf(moduleName.trim().toLowerCase());
-  return i === -1 ? MODULE_ORDER.length : i;
-};
-
-// Fixed display order for individual nav items within a module, overriding the API's own
-// (alphabetical) order — e.g. Resources comes back as "Monthly Costs" then "Timesheets".
-// Any form not listed here keeps its original relative position, appended after these.
-const FORM_ORDER = ['timesheets', 'monthly costs', 'entity master', 'bu admin master', 'my work log', 'monthly summary', 'client master', 'project master', 'service po master'];
-const formRank = (formName) => {
-  const i = FORM_ORDER.indexOf(formName.trim().toLowerCase());
-  return i === -1 ? FORM_ORDER.length : i;
-};
-
 // Builds one nav group per module, one item per form — driven entirely by the RBAC
 // accessible-forms map (module -> [{ id, name }]) so a user only ever sees what their
-// roles actually grant. Section order follows MODULE_ORDER above, not the API's own
-// (alphabetical) key order. A form with no known route mapping is dropped (and logged)
-// rather than rendered as a dead link — see constants/rbacForms.js.
-const buildNavGroups = (accessibleForms, { isSuperAdmin }) =>
+// roles actually grant. Section AND item order follow each row's real Form Master `seq`
+// (moduleRank/formRank, resolved from GET /forms/modules + GET /forms — see useMenuRank
+// below), not the API's own (alphabetical) key order — no module/form name is hardcoded
+// here, so a re-sequence on the Form Master screen is reflected with no frontend change.
+// A form with no known route mapping is dropped (and logged) rather than rendered as a
+// dead link — see constants/rbacForms.js.
+const buildNavGroups = (accessibleForms, { isSuperAdmin, moduleRank, formRank }) =>
   Object.entries(accessibleForms ?? {})
     .filter(
       ([moduleName]) => isSuperAdmin || !RESTRICTED_MODULES.includes(moduleName.trim().toLowerCase())
@@ -79,10 +65,39 @@ const buildNavGroups = (accessibleForms, { isSuperAdmin }) =>
           return { label: form.name, icon: cfg.icon, to: cfg.to, exact: cfg.exact };
         })
         .filter(Boolean)
-        .sort((a, b) => formRank(a.label) - formRank(b.label)),
+        .sort((a, b) => formRank(moduleName, a.label) - formRank(moduleName, b.label)),
     }))
     .filter((group) => group.items.length > 0)
     .sort((a, b) => moduleRank(a.label) - moduleRank(b.label));
+
+// Real module/form ordering, sourced from the same Form Master data the /forms screen
+// manages (GET /forms/modules for module seq, GET /forms for per-module form seq) —
+// available to every authenticated user regardless of whether they hold the "Forms" RBAC
+// permission themselves (that permission only gates writes). Unknown names (not yet
+// resolvable — e.g. a brand-new module before this query has loaded) rank last rather than
+// erroring, so the nav still renders, just unsorted for that item until the seq data lands.
+const useMenuRank = () => {
+  const { data: moduleRows } = useFormModules({ status: 'active' });
+  const { data: formsList } = useForms({ status: 'active' });
+
+  return useMemo(() => {
+    const moduleSeq = new Map();
+    (moduleRows ?? []).forEach((m) => moduleSeq.set(m.form_name.trim().toLowerCase(), m.seq));
+
+    const formSeq = new Map();
+    (formsList?.data ?? []).forEach((f) => {
+      if (f.module_name != null) {
+        formSeq.set(`${f.module_name.trim().toLowerCase()}::${f.form_name.trim().toLowerCase()}`, f.seq);
+      }
+    });
+
+    return {
+      moduleRank: (moduleName) => moduleSeq.get(moduleName.trim().toLowerCase()) ?? Number.MAX_SAFE_INTEGER,
+      formRank: (moduleName, formName) =>
+        formSeq.get(`${moduleName.trim().toLowerCase()}::${formName.trim().toLowerCase()}`) ?? Number.MAX_SAFE_INTEGER,
+    };
+  }, [moduleRows, formsList]);
+};
 
 const isActive = (to, pathname, exact) => {
   if (exact) return pathname === to;
@@ -182,11 +197,12 @@ const Sidebar = () => {
   const isSuperAdmin = hasRole('BU Admin');
   const canViewEntityAdmins = hasRole(...ENTITY_ADMIN_MANAGEMENT_ROLES);
   const canViewTeamMapping = hasRole(...TEAM_MAPPING_ROLES);
+  const { moduleRank, formRank } = useMenuRank();
   // isPlatformAdmin is derived from the single role every login returns (§0) — overrides the
   // normal accessible-forms-driven nav entirely.
   const navGroups = useMemo(() => {
     if (isPlatformAdmin) return SUPER_ADMIN_NAV_GROUPS;
-    const base = buildNavGroups(accessibleForms, { isSuperAdmin });
+    const base = buildNavGroups(accessibleForms, { isSuperAdmin, moduleRank, formRank });
 
     const injected = [];
     if (canViewEntityAdmins) {
@@ -204,7 +220,7 @@ const Sidebar = () => {
       const prepend = groupLabel === 'Entity Management';
       return groups.map((g, i) => (i === idx ? { ...g, items: prepend ? [item, ...g.items] : [...g.items, item] } : g));
     }, base);
-  }, [accessibleForms, isSuperAdmin, isPlatformAdmin, canViewEntityAdmins, canViewTeamMapping]);
+  }, [accessibleForms, isSuperAdmin, isPlatformAdmin, canViewEntityAdmins, canViewTeamMapping, moduleRank, formRank]);
 
   // Guards navigation away from a page with unsaved changes (e.g. Timesheet
   // Import Detail's Modified Hours edits) — any page can opt in via the

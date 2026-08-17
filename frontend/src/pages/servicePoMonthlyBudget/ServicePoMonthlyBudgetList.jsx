@@ -1,4 +1,5 @@
-import { useMemo } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useMemo } from 'react';
+import * as XLSX from 'xlsx';
 import { createColumnHelper } from '@tanstack/react-table';
 import { ClipboardList, Pencil, Plus } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
@@ -6,14 +7,17 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import DataTable from '@/components/common/DataTable';
 import EmptyState from '@/components/common/EmptyState';
+import { useNotification } from '@/hooks/useNotification';
 import { formatCurrency, formatDate, formatMonthYear } from '@/utils/formatters';
 
-const REMARK_SEPARATOR = ' · ';
 const columnHelper = createColumnHelper();
 
-const ServicePoMonthlyBudgetList = ({
-  month, year, records, isLoading, search = '', clientFilter = 'all', poFilterIds = null, onEdit, onAddEntry,
-}) => {
+const ServicePoMonthlyBudgetList = forwardRef(({
+  month, year, records, isLoading, search = '', clientFilter = 'all', poFilterIds = null,
+  onEdit, onAddEntry, onExportStateChange,
+}, ref) => {
+  const { success, error: showError } = useNotification();
+
   const filteredRecords = useMemo(() => {
     const term = search.trim().toLowerCase();
     return records.filter((r) => {
@@ -36,6 +40,38 @@ const ServicePoMonthlyBudgetList = ({
     ),
     [filteredRecords]
   );
+
+  const handleExportExcel = () => {
+    if (filteredRecords.length === 0) {
+      showError('No data to export');
+      return;
+    }
+    const exportData = filteredRecords.map((r) => ({
+      'Service PO': r.service_po_name || '',
+      'PO Code': r.service_po_code || '',
+      'Client': r.client?.client_name || '',
+      'Invoice Amount': Number(r.invoice_amount ?? 0),
+      'Invoice Description': r.invoice_description || '',
+      'Billable Amount': Number(r.billed_amount ?? 0),
+      'Billable Remark': r.billed_remark || '',
+      'Updated': formatDate(r.updated_at),
+    }));
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Monthly Budgets');
+    XLSX.writeFile(wb, `Invoice_Master_${formatMonthYear(month, year).replace(/\s+/g, '_')}.xlsx`);
+    success('Exported to Excel successfully');
+  };
+
+  const canExport = !isLoading && records.length > 0;
+
+  useEffect(() => {
+    onExportStateChange?.(canExport);
+    return () => onExportStateChange?.(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canExport]);
+
+  useImperativeHandle(ref, () => ({ exportExcel: handleExportExcel }));
 
   const columns = [
     columnHelper.display({
@@ -66,9 +102,11 @@ const ServicePoMonthlyBudgetList = ({
     }),
     columnHelper.accessor('service_po_code', {
       header: 'PO Code',
-      size: 140,
+      size: 160,
       cell: (info) => (
-        <span className="font-mono text-xs text-muted-foreground">{info.getValue() || '—'}</span>
+        <span className="block truncate font-mono text-xs text-muted-foreground" title={info.getValue() || ''}>
+          {info.getValue() || '—'}
+        </span>
       ),
     }),
     columnHelper.accessor('client.client_name', {
@@ -79,36 +117,34 @@ const ServicePoMonthlyBudgetList = ({
       ),
     }),
     columnHelper.accessor('invoice_amount', {
-      header: 'Invoice Amount',
-      size: 140,
+      header: () => <span className="whitespace-nowrap">Invoice Amount</span>,
+      size: 160,
       meta: { align: 'right' },
-      cell: (info) => <span className="tabular-nums">{formatCurrency(info.getValue())}</span>,
+      cell: (info) => <span className="tabular-nums pr-2">{formatCurrency(info.getValue())}</span>,
+    }),
+    columnHelper.accessor('invoice_description', {
+      header: () => <span className="whitespace-nowrap">Invoice Description</span>,
+      size: 200,
+      cell: (info) => (
+        <div className="truncate max-w-[180px] text-muted-foreground" title={info.getValue()}>
+          {info.getValue() || '—'}
+        </div>
+      ),
     }),
     columnHelper.accessor('billed_amount', {
-      header: 'Billable Amount',
-      size: 140,
+      header: () => <span className="whitespace-nowrap">Billable Amount</span>,
+      size: 160,
       meta: { align: 'right' },
-      cell: (info) => <span className="tabular-nums">{formatCurrency(info.getValue())}</span>,
+      cell: (info) => <span className="tabular-nums pr-2">{formatCurrency(info.getValue())}</span>,
     }),
-    columnHelper.display({
-      id: 'remark',
-      header: 'Remark',
+    columnHelper.accessor('billed_remark', {
+      header: () => <span className="whitespace-nowrap">Billable Remark</span>,
       size: 200,
-      cell: ({ row }) => {
-        const remark = [row.original.invoice_description, row.original.billed_remark]
-          .filter(Boolean)
-          .join(REMARK_SEPARATOR);
-        return (
-          <div className="truncate max-w-[180px] text-muted-foreground" title={remark}>
-            {remark || '—'}
-          </div>
-        );
-      },
-    }),
-    columnHelper.accessor('updated_at', {
-      header: 'Updated',
-      size: 110,
-      cell: (info) => formatDate(info.getValue()),
+      cell: (info) => (
+        <div className="truncate max-w-[180px] text-muted-foreground" title={info.getValue()}>
+          {info.getValue() || '—'}
+        </div>
+      ),
     }),
   ];
 
@@ -155,6 +191,8 @@ const ServicePoMonthlyBudgetList = ({
       </CardContent>
     </Card>
   );
-};
+});
+
+ServicePoMonthlyBudgetList.displayName = 'ServicePoMonthlyBudgetList';
 
 export default ServicePoMonthlyBudgetList;

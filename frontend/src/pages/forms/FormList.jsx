@@ -1,15 +1,19 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, Outlet } from 'react-router-dom';
-import { createColumnHelper } from '@tanstack/react-table';
-import { Pencil, Trash2, Plus, Search } from 'lucide-react';
-import { useForms, useDeleteForm } from '@/hooks/useForms';
+import { Pencil, Trash2, Plus, Search, GripVertical, GripHorizontal, ChevronDown, ChevronRight, FolderTree } from 'lucide-react';
+import {
+  DndContext, closestCenter, PointerSensor, useSensor, useSensors,
+} from '@dnd-kit/core';
+import {
+  SortableContext, verticalListSortingStrategy, useSortable, arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { useForms, useDeleteForm, useReorderModules, useReorderForms } from '@/hooks/useForms';
 import { useCanWrite } from '@/hooks/usePermissions';
 import { useNotification } from '@/hooks/useNotification';
 import { useDebounce } from '@/hooks/useDebounce';
 import { extractApiError } from '@/services/apiClient';
 import { buildPath, ROUTES } from '@/constants/routes';
-import { formatDate } from '@/utils/formatters';
-import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
 import StatusBadge from '@/components/common/StatusBadge';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
@@ -20,13 +24,146 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/utils/cn';
 
-const columnHelper = createColumnHelper();
+const ROW_GRID = 'grid grid-cols-[40px_1fr_90px_110px_96px] items-center gap-2';
 
-const TruncatedCell = ({ value, maxWidth = '150px', className }) => {
-  if (!value) return <span className="text-sm text-muted-foreground">—</span>;
+// Groups the flat module+form rows returned by GET /forms into a module -> forms tree, ordered
+// by each level's own `seq`. A form whose module_name doesn't match any module row currently in
+// the list (e.g. hidden by the active status filter) is still shown, under a non-reorderable
+// "orphan" group, rather than silently dropped.
+const buildTree = (rows) => {
+  const modules = rows
+    .filter((r) => r.module_name == null)
+    .slice()
+    .sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0));
+
+  const childrenByModule = {};
+  rows.forEach((r) => {
+    if (r.module_name != null) {
+      (childrenByModule[r.module_name] ??= []).push(r);
+    }
+  });
+  Object.values(childrenByModule).forEach((list) => list.sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0)));
+
+  const knownModuleNames = new Set(modules.map((m) => m.form_name));
+  const orphanGroups = Object.keys(childrenByModule)
+    .filter((name) => !knownModuleNames.has(name))
+    .map((name) => ({
+      id: `orphan-${name}`,
+      form_name: name,
+      module_name: null,
+      status: 'active',
+      seq: null,
+      forms: childrenByModule[name],
+      isOrphan: true,
+    }));
+
+  return [...modules.map((m) => ({ ...m, forms: childrenByModule[m.form_name] ?? [] })), ...orphanGroups];
+};
+
+const FormRow = ({ form, canWrite, onEdit, onDelete }) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: form.id,
+    disabled: !canWrite,
+  });
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
+
   return (
-    <div className={cn("text-sm truncate", className)} style={{ maxWidth }} title={value}>
-      {value}
+    <div ref={setNodeRef} style={style} className={cn(ROW_GRID, 'px-3 py-2 border-t border-dashed bg-white')}>
+      <button
+        type="button"
+        title={canWrite ? 'Drag to reorder within this module' : undefined}
+        className={cn('flex items-center justify-center pl-4 text-muted-foreground', canWrite ? 'cursor-grab active:cursor-grabbing' : 'cursor-not-allowed opacity-30')}
+        {...(canWrite ? { ...attributes, ...listeners } : {})}
+      >
+        <GripHorizontal className="h-3.5 w-3.5" />
+      </button>
+      <span className="truncate pl-2 text-sm">{form.form_name}</span>
+      <span className="text-sm text-muted-foreground">{form.seq ?? '—'}</span>
+      <StatusBadge status={form.status} />
+      <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+        {canWrite && (
+          <>
+            <Button size="sm" title="Edit" onClick={onEdit} className="h-6 w-6 p-0 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors">
+              <Pencil className="h-3 w-3" />
+            </Button>
+            <Button size="sm" title="Delete" onClick={onDelete} className="h-6 w-6 p-0 bg-red-500 hover:bg-red-600 text-white rounded transition-colors">
+              <Trash2 className="h-3 w-3" />
+            </Button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const ModuleBlock = ({ module, canWrite, expanded, onToggleExpand, onEditModule, onDeleteModule, onEditForm, onDeleteForm, onFormsReorder }) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: module.id,
+    disabled: module.isOrphan || !canWrite,
+  });
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
+
+  const formSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+
+  const handleFormsDragEnd = (event) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = module.forms.findIndex((f) => f.id === active.id);
+    const newIndex = module.forms.findIndex((f) => f.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    onFormsReorder(module.form_name, arrayMove(module.forms, oldIndex, newIndex));
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="border-b last:border-b-0">
+      <div className={cn(ROW_GRID, 'px-3 py-2.5 bg-slate-50/70')}>
+        <button
+          type="button"
+          title={module.isOrphan ? undefined : canWrite ? 'Drag to reorder modules' : undefined}
+          className={cn('flex items-center justify-center text-muted-foreground', (module.isOrphan || !canWrite) ? 'cursor-not-allowed opacity-30' : 'cursor-grab active:cursor-grabbing')}
+          {...(module.isOrphan || !canWrite ? {} : { ...attributes, ...listeners })}
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
+        <button type="button" onClick={onToggleExpand} className="flex min-w-0 items-center gap-1.5 text-left text-sm font-semibold">
+          {expanded ? <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
+          <span className="truncate">{module.form_name}</span>
+        </button>
+        <span className="text-sm text-muted-foreground">{module.seq ?? '—'}</span>
+        <StatusBadge status={module.status} />
+        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+          {canWrite && !module.isOrphan && (
+            <>
+              <Button size="sm" title="Edit module" onClick={onEditModule} className="h-6 w-6 p-0 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors">
+                <Pencil className="h-3 w-3" />
+              </Button>
+              <Button size="sm" title="Delete module" onClick={onDeleteModule} className="h-6 w-6 p-0 bg-red-500 hover:bg-red-600 text-white rounded transition-colors">
+                <Trash2 className="h-3 w-3" />
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {expanded && (
+        module.forms.length === 0 ? (
+          <div className="pl-12 pr-3 py-2 text-xs text-muted-foreground bg-white">No forms in this module yet.</div>
+        ) : (
+          <DndContext sensors={formSensors} collisionDetection={closestCenter} onDragEnd={handleFormsDragEnd}>
+            <SortableContext items={module.forms.map((f) => f.id)} strategy={verticalListSortingStrategy}>
+              {module.forms.map((form) => (
+                <FormRow
+                  key={form.id}
+                  form={form}
+                  canWrite={canWrite}
+                  onEdit={() => onEditForm(form)}
+                  onDelete={() => onDeleteForm(form)}
+                />
+              ))}
+            </SortableContext>
+          </DndContext>
+        )
+      )}
     </div>
   );
 };
@@ -38,29 +175,68 @@ const FormList = () => {
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(10);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
-  const [sorting, setSorting] = useState([]);
+  const [collapsed, setCollapsed] = useState(() => new Set());
+  const [tree, setTree] = useState(null);
 
   const debouncedSearch = useDebounce(search, 400);
-
   const params = {
-    page,
-    limit,
     ...(statusFilter !== 'all' && { status: statusFilter }),
     ...(debouncedSearch && { search: debouncedSearch }),
-    ...(sorting[0] && { sortBy: sorting[0].id, sortOrder: sorting[0].desc ? 'desc' : 'asc' }),
   };
 
   const { data, isPending } = useForms(params);
   const deleteMutation = useDeleteForm();
+  const reorderModulesMutation = useReorderModules();
+  const reorderFormsMutation = useReorderForms();
 
-  const forms = data?.data ?? [];
-  const meta = data?.meta ?? {};
+  useEffect(() => {
+    setTree(buildTree(data?.data ?? []));
+  }, [data]);
 
   const activeFilterCount = statusFilter !== 'all' ? 1 : 0;
+
+  const moduleSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+
+  const toggleExpand = (id) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleModulesDragEnd = (event) => {
+    const { active, over } = event;
+    if (!tree || !over || active.id === over.id) return;
+    if (typeof active.id === 'string' && active.id.startsWith('orphan-')) return;
+    const oldIndex = tree.findIndex((m) => m.id === active.id);
+    const newIndex = tree.findIndex((m) => m.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const reordered = arrayMove(tree, oldIndex, newIndex);
+    // Stamp the seq we're about to send onto the local rows immediately, so the "Sequence"
+    // column always shows the value that's actually current/in-flight rather than the stale
+    // pre-drag number until the refetch lands.
+    let nextSeq = 1;
+    const withSeq = reordered.map((m) => (m.isOrphan ? m : { ...m, seq: nextSeq++ }));
+    setTree(withSeq);
+    const items = withSeq.filter((m) => !m.isOrphan).map((m) => ({ id: m.id, seq: m.seq }));
+    reorderModulesMutation.mutate(items, {
+      onError: (err) => showError(extractApiError(err)),
+    });
+  };
+
+  const handleFormsReorder = (moduleName, reorderedForms) => {
+    const withSeq = reorderedForms.map((f, i) => ({ ...f, seq: i + 1 }));
+    setTree((prev) => (prev ?? []).map((m) => (m.form_name === moduleName && !m.isOrphan ? { ...m, forms: withSeq } : m)));
+    const items = withSeq.map((f) => ({ id: f.id, seq: f.seq }));
+    reorderFormsMutation.mutate({ moduleName, items }, {
+      onError: (err) => showError(extractApiError(err)),
+    });
+  };
 
   const handleDelete = () => {
     deleteMutation.mutate(deleteTarget.id, {
@@ -75,73 +251,22 @@ const FormList = () => {
     });
   };
 
-  const columns = [
-    columnHelper.display({
-      id: 'actions',
-      header: 'Actions',
-      size: 96,
-      meta: { sticky: true, left: 0 },
-      cell: ({ row }) =>
-        canWrite ? (
-          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-            <Button
-              size="sm"
-              title="Edit"
-              onClick={() => navigate(buildPath(ROUTES.FORMS + '/' + row.original.id + '/edit'))}
-              className="h-6 w-6 p-0 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
-            >
-              <Pencil className="h-3 w-3" />
-            </Button>
-            <Button
-              size="sm"
-              className="h-6 w-6 p-0 bg-red-500 hover:bg-red-600 text-white rounded transition-colors"
-              title="Delete"
-              onClick={() => setDeleteTarget(row.original)}
-            >
-              <Trash2 className="h-3 w-3" />
-            </Button>
-          </div>
-        ) : null,
-    }),
-    columnHelper.accessor('module_name', {
-      header: 'Module',
-      size: 200,
-      meta: { sticky: true, left: 96 },
-      cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="180px" className="font-medium" />,
-    }),
-    columnHelper.accessor('form_name', {
-      header: 'Form Name',
-      size: 240,
-      cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="220px" />,
-    }),
-    columnHelper.accessor('status', {
-      header: 'Status',
-      size: 100,
-      cell: (info) => <StatusBadge status={info.getValue()} />,
-    }),
-    columnHelper.accessor('created_at', {
-      header: 'Created',
-      size: 140,
-      cell: (info) => (
-        <span className="text-xs text-muted-foreground">{formatDate(info.getValue())}</span>
-      ),
-    }),
-  ];
+  const isDeletingModule = deleteTarget && deleteTarget.module_name == null;
 
   return (
     <div className="space-y-4">
       <PageHeader
         title="Forms"
-        description="Manage the forms available for role-based access control"
+        description="Manage modules and forms available for role-based access control"
         actions={
           <div className="flex items-center gap-3">
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search forms…"
-                className="pl-9 w-[250px] h-9 text-sm bg-white"
+                className="pl-9 w-[220px] h-9 text-sm bg-white"
                 value={search}
-                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                onChange={(e) => setSearch(e.target.value)}
               />
             </div>
             <FilterToggleButton
@@ -150,9 +275,14 @@ const FormList = () => {
               activeCount={activeFilterCount}
             />
             {canWrite && (
-              <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => navigate(ROUTES.FORM_NEW)}>
-                <Plus className="mr-1.5 h-4 w-4" /> Add Form
-              </Button>
+              <>
+                <Button size="sm" variant="outline" onClick={() => navigate(`${ROUTES.FORM_NEW}?type=module`)}>
+                  <FolderTree className="mr-1.5 h-4 w-4" /> Add Module
+                </Button>
+                <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => navigate(`${ROUTES.FORM_NEW}?type=form`)}>
+                  <Plus className="mr-1.5 h-4 w-4" /> Add Form
+                </Button>
+              </>
             )}
           </div>
         }
@@ -169,7 +299,7 @@ const FormList = () => {
             ].map(({ label, value }) => (
               <button
                 key={value}
-                onClick={() => { setStatusFilter(value); setPage(1); }}
+                onClick={() => setStatusFilter(value)}
                 className={cn(
                   'flex-1 px-3 h-full font-medium text-center transition-colors border-r last:border-r-0',
                   statusFilter === value
@@ -184,27 +314,66 @@ const FormList = () => {
         </div>
       </FilterPanel>
 
-      <DataTable
-        columns={columns}
-        data={forms}
-        isLoading={isPending}
-        toolbar={null}
-        pagination={
-          meta.total != null
-            ? { page: meta.current_page ?? page, limit: meta.per_page ?? limit, total: meta.total }
-            : undefined
-        }
-        sorting={sorting}
-        onSortingChange={(s) => { setSorting(s); setPage(1); }}
-        onPageChange={setPage}
-        onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
-      />
+      {canWrite && (
+        <div className="flex items-center gap-4 rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700">
+          <span className="flex items-center gap-1.5">
+            <GripVertical className="h-3.5 w-3.5 shrink-0" /> Drag to reorder modules
+          </span>
+          <span className="flex items-center gap-1.5">
+            <GripHorizontal className="h-3.5 w-3.5 shrink-0" /> Drag to reorder forms within a module
+          </span>
+          <span className="text-blue-700/70">— sequence updates automatically.</span>
+        </div>
+      )}
+
+      <div className="rounded-lg border bg-white overflow-hidden">
+        <div className={cn(ROW_GRID, 'border-b bg-muted/40 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground')}>
+          <span />
+          <span>Module / Form</span>
+          <span>Sequence</span>
+          <span>Status</span>
+          <span>Actions</span>
+        </div>
+
+        {isPending ? (
+          <div className="space-y-2 p-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="h-10 bg-muted animate-pulse rounded-md" />
+            ))}
+          </div>
+        ) : !tree || tree.length === 0 ? (
+          <div className="p-10 text-center text-sm text-muted-foreground">No modules or forms found.</div>
+        ) : (
+          <DndContext sensors={moduleSensors} collisionDetection={closestCenter} onDragEnd={handleModulesDragEnd}>
+            <SortableContext items={tree.map((m) => m.id)} strategy={verticalListSortingStrategy}>
+              {tree.map((module) => (
+                <ModuleBlock
+                  key={module.id}
+                  module={module}
+                  canWrite={canWrite}
+                  expanded={!collapsed.has(module.id)}
+                  onToggleExpand={() => toggleExpand(module.id)}
+                  onEditModule={() => navigate(buildPath(ROUTES.FORMS + '/' + module.id + '/edit'))}
+                  onDeleteModule={() => setDeleteTarget(module)}
+                  onEditForm={(form) => navigate(buildPath(ROUTES.FORMS + '/' + form.id + '/edit'))}
+                  onDeleteForm={(form) => setDeleteTarget(form)}
+                  onFormsReorder={handleFormsReorder}
+                />
+              ))}
+            </SortableContext>
+          </DndContext>
+        )}
+      </div>
 
       <ConfirmDialog
         open={!!deleteTarget}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
-        title="Delete form?"
-        description={`${deleteTarget?.form_name} will be set to inactive and removed from any role's accessible forms.`}
+        title={isDeletingModule ? 'Delete module?' : 'Delete form?'}
+        description={
+          isDeletingModule
+            ? `"${deleteTarget?.form_name}" will be set to inactive. If it still has forms under it, this action will be blocked.`
+            : `"${deleteTarget?.form_name}" will be set to inactive and removed from any role's accessible forms.`
+        }
         confirmLabel="Delete"
         onConfirm={handleDelete}
         isLoading={deleteMutation.isPending}

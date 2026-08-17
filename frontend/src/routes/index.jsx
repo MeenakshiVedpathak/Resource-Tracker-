@@ -21,6 +21,8 @@ const EmployeeDashboard = lazy(() => import('@/pages/employee/EmployeeDashboard'
 const EmployeeTimesheet = lazy(() => import('@/pages/employee/EmployeeTimesheet'));
 const EmployeeMonthlySummary = lazy(() => import('@/pages/employee/EmployeeMonthlySummary'));
 const EmployeeReports = lazy(() => import('@/pages/employee/EmployeeReports'));
+const EmployeeProjectHoursReport = lazy(() => import('@/pages/employee/EmployeeProjectHoursReport'));
+const TimesheetApprovalStatusReport = lazy(() => import('@/pages/employee/TimesheetApprovalStatusReport'));
 
 // ── Core ──
 const DashboardGate = lazy(() => import('@/pages/DashboardGate'));
@@ -130,6 +132,8 @@ const employeeSelfServiceRoutes = () => (
     <Route path={ROUTES.EMPLOYEE_TIMESHEET} element={<ProtectedRoute formName={FORM_NAMES.EMPLOYEE_WORK_LOG}><EmployeeTimesheet /></ProtectedRoute>} />
     <Route path={ROUTES.EMPLOYEE_MONTHLY_SUMMARY} element={<ProtectedRoute formName={FORM_NAMES.EMPLOYEE_MONTHLY_SUMMARY}><EmployeeMonthlySummary /></ProtectedRoute>} />
     <Route path={ROUTES.EMPLOYEE_REPORTS} element={<ProtectedRoute formName={FORM_NAMES.EMPLOYEE_REPORTS}><EmployeeReports /></ProtectedRoute>} />
+    <Route path={ROUTES.EMPLOYEE_PROJECT_HOURS_REPORT} element={<ProtectedRoute formName={FORM_NAMES.EMPLOYEE_PROJECT_HOURS_REPORT}><EmployeeProjectHoursReport /></ProtectedRoute>} />
+    <Route path={ROUTES.EMPLOYEE_TIMESHEET_APPROVAL_STATUS_REPORT} element={<ProtectedRoute formName={FORM_NAMES.EMPLOYEE_TIMESHEET_APPROVAL_STATUS_REPORT}><TimesheetApprovalStatusReport /></ProtectedRoute>} />
   </>
 );
 

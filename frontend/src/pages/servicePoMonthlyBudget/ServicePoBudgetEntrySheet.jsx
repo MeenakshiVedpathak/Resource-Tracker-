@@ -185,6 +185,19 @@ const ServicePoBudgetEntrySheet = ({ open, onOpenChange, month, year, initialSer
                         </FormItem>
                       )}
                     />
+                     <FormField
+                      control={form.control}
+                      name="invoice_description"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Invoice Description</FormLabel>
+                          <FormControl>
+                            <Input placeholder="e.g. August milestone invoice" disabled={isRecordLoading} {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                     <FormField
                       control={form.control}
                       name="billed_amount"
@@ -198,19 +211,7 @@ const ServicePoBudgetEntrySheet = ({ open, onOpenChange, month, year, initialSer
                         </FormItem>
                       )}
                     />
-                    <FormField
-                      control={form.control}
-                      name="invoice_description"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Invoice Description</FormLabel>
-                          <FormControl>
-                            <Input placeholder="e.g. August milestone invoice" disabled={isRecordLoading} {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                   
                     <FormField
                       control={form.control}
                       name="billed_remark"

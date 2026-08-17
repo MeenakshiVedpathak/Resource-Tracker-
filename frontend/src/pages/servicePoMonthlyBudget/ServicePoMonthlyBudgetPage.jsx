@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Plus, RotateCcw, Search } from 'lucide-react';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { Download, Plus, RotateCcw, Search } from 'lucide-react';
 import PageHeader from '@/components/common/PageHeader';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
@@ -27,8 +27,18 @@ const ServicePoMonthlyBudgetPage = () => {
   const [tab, setTab] = useState('monthly');
   const [period, setPeriod] = useState({ month: CURRENT_MONTH, year: CURRENT_YEAR });
   const [yearlyYear, setYearlyYear] = useState(CURRENT_YEAR);
-  // null = sheet closed, '' = adding a new entry, otherwise the PO id being edited.
-  const [sheetTarget, setSheetTarget] = useState(null);
+  // null = sheet closed, otherwise { servicePoId, month, year } — servicePoId '' means "adding new".
+  const [editSheet, setEditSheet] = useState(null);
+
+  const monthlyListRef = useRef(null);
+  const yearlyViewRef = useRef(null);
+  const [canExport, setCanExport] = useState(false);
+  const handleExportStateChange = useCallback((can) => setCanExport(can), []);
+
+  const handleExportClick = () => {
+    const ref = tab === 'monthly' ? monthlyListRef : yearlyViewRef;
+    ref.current?.exportExcel();
+  };
 
   const [search, setSearch] = useState('');
   const [clientFilter, setClientFilter] = useState('all');
@@ -142,8 +152,22 @@ const ServicePoMonthlyBudgetPage = () => {
                 className="h-9"
               />
 
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 gap-1.5"
+                disabled={!canExport}
+                onClick={handleExportClick}
+              >
+                <Download className="h-4 w-4" /> Export Excel
+              </Button>
+
               {tab === 'monthly' && (
-                <Button size="sm" className="gap-1.5" onClick={() => setSheetTarget('')}>
+                <Button
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => setEditSheet({ servicePoId: '', month: period.month, year: period.year })}
+                >
                   <Plus className="h-4 w-4" /> Add Entry
                 </Button>
               )}
@@ -218,6 +242,7 @@ const ServicePoMonthlyBudgetPage = () => {
 
         <TabsContent value="monthly" className="mt-0 space-y-4">
           <ServicePoMonthlyBudgetList
+            ref={monthlyListRef}
             month={period.month}
             year={period.year}
             records={records}
@@ -225,28 +250,32 @@ const ServicePoMonthlyBudgetPage = () => {
             search={debouncedSearch}
             clientFilter={clientFilter}
             poFilterIds={allowedPoIds}
-            onEdit={(poId) => setSheetTarget(String(poId))}
-            onAddEntry={() => setSheetTarget('')}
+            onEdit={(poId) => setEditSheet({ servicePoId: String(poId), month: period.month, year: period.year })}
+            onAddEntry={() => setEditSheet({ servicePoId: '', month: period.month, year: period.year })}
+            onExportStateChange={handleExportStateChange}
           />
         </TabsContent>
 
         <TabsContent value="yearly" className="mt-0">
           <ServicePoYearlyBudgetView
+            ref={yearlyViewRef}
             year={yearlyYear}
             onYearChange={setYearlyYear}
             search={debouncedSearch}
             clientFilter={clientFilter}
             poFilterIds={allowedPoIds}
+            onEditCell={(servicePoId, month, y) => setEditSheet({ servicePoId: String(servicePoId), month, year: y })}
+            onExportStateChange={handleExportStateChange}
           />
         </TabsContent>
       </div>
 
       <ServicePoBudgetEntrySheet
-        open={sheetTarget !== null}
-        onOpenChange={(next) => !next && setSheetTarget(null)}
-        month={period.month}
-        year={period.year}
-        initialServicePoId={sheetTarget || ''}
+        open={editSheet !== null}
+        onOpenChange={(next) => !next && setEditSheet(null)}
+        month={editSheet?.month ?? period.month}
+        year={editSheet?.year ?? period.year}
+        initialServicePoId={editSheet?.servicePoId ?? ''}
       />
     </Tabs>
   );

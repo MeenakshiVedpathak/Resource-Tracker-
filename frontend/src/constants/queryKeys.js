@@ -28,6 +28,7 @@ export const QUERY_KEYS = {
   // Forms (Form Master)
   FORMS: (params) => ['forms', params],
   FORM: (id) => ['forms', id],
+  FORM_MODULES: (params) => ['forms', 'modules', params],
 
   // Clients
   CLIENTS: (params) => ['clients', params],
@@ -138,4 +139,11 @@ export const QUERY_KEYS = {
   EMPLOYEE_REPORT_DAILY: (date) => ['employee-report', 'daily', date],
   EMPLOYEE_REPORT_MONTHLY: (month, year) => ['employee-report', 'monthly', month, year],
   EMPLOYEE_REPORT_RANGE: (startDate, endDate) => ['employee-report', 'range', startDate, endDate],
+
+  // Employee Project Hours Report
+  EMPLOYEE_PROJECT_HOURS_FILTER_TREE: ['employee-project-hours-report', 'filter-tree'],
+  EMPLOYEE_PROJECT_HOURS_REPORT: (params) => ['employee-project-hours-report', 'report', params],
+
+  // Timesheet Approval Status Report (Employee sees own, Manager sees mapped team — one endpoint)
+  TIMESHEET_APPROVAL_STATUS_REPORT: (params) => ['timesheet-approval-status-report', params],
 };

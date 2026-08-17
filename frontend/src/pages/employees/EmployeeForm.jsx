@@ -30,7 +30,8 @@ import { cn } from '@/utils/cn';
 
 const baseFields = {
   employee_code: z.string().min(2, 'Must be at least 2 characters').max(20).regex(/^[A-Z0-9_-]+$/).transform((v) => v.toUpperCase()),
-  full_name: z.string().min(2, 'Must be at least 2 characters').max(100),
+  full_name: z.string().min(2, 'Must be at least 2 characters').max(100)
+    .regex(/^[A-Za-z\s]+$/, 'Only alphabetic characters are allowed'),
   email: z.string().min(1, 'Email is required').email('Invalid email address'),
   designation: z.string().max(100).optional().or(z.literal('')),
   total_experience: z.preprocess((v) => (v === '' || v == null ? null : Number(v)), z.number().min(0).max(60).nullable().optional()),
@@ -315,7 +316,12 @@ const EmployeeForm = () => {
                         <FormItem className="space-y-1">
                           <FormLabel className="text-[11px] text-muted-foreground font-medium"><span className="text-destructive mr-0.5">*</span> Full Name</FormLabel>
                           <FormControl>
-                            <Input placeholder="e.g. John Smith" {...field} className="h-8 text-sm border-gray-200" />
+                            <Input
+                              placeholder="e.g. John Smith"
+                              {...field}
+                              onChange={(e) => field.onChange(e.target.value.replace(/[^A-Za-z\s]/g, ''))}
+                              className="h-8 text-sm border-gray-200"
+                            />
                           </FormControl>
                           <FormMessage className="text-[10px]" />
                         </FormItem>

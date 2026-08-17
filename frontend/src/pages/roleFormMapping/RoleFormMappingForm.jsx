@@ -32,9 +32,11 @@ const RoleFormMappingForm = () => {
   const replaceMutation = useReplaceRoleFormMappings(roleId);
 
   // Administration forms (Users, Roles, Forms, mapping screens, etc.) are RBAC-admin-only —
-  // never offered here so a role can't be granted access to manage RBAC itself.
+  // never offered here so a role can't be granted access to manage RBAC itself. Module rows
+  // themselves (module_name: null — see Form Master) are excluded too: they're navigation
+  // groupings, not grantable forms.
   const allForms = (formsData?.data ?? []).filter(
-    (f) => (f.module_name ?? '').trim().toLowerCase() !== 'administration'
+    (f) => f.module_name != null && f.module_name.trim().toLowerCase() !== 'administration'
   );
   const [checkedIds, setCheckedIds] = useState([]);
   const didInitRef = useRef(false);

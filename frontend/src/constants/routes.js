@@ -16,6 +16,8 @@ export const ROUTES = {
   EMPLOYEE_TIMESHEET: '/employee/timesheet',
   EMPLOYEE_MONTHLY_SUMMARY: '/employee/monthly-summary',
   EMPLOYEE_REPORTS: '/employee/reports',
+  EMPLOYEE_PROJECT_HOURS_REPORT: '/employee/project-hours-report',
+  EMPLOYEE_TIMESHEET_APPROVAL_STATUS_REPORT: '/employee/timesheet-approval-status-report',
 
   // AI Copilot — new pages added on top of the existing app, reachable from the
   // floating AI Copilot widget's launcher rather than the RBAC-driven sidebar

@@ -5,22 +5,43 @@ import { useDispatch, useSelector } from 'react-redux';
 import { selectSidebarCollapsed, toggleSidebar, setSidebarCollapsed } from '@/store/slices/uiSlice';
 import { cn } from '@/utils/cn';
 import { useAuth } from '@/hooks/useAuth';
+import { useFormModules, useForms } from '@/hooks/useForms';
 import { resolveFormRoute } from '@/constants/rbacForms';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
-// Fixed display order for nav items within a module, overriding the backend's own order —
-// e.g. the API returns "Monthly Summary" ahead of "My Work Log". Any form not listed here
-// keeps its original relative position, appended after these (Array.sort is stable).
-const FORM_ORDER = ['my work log', 'monthly summary'];
-const formRank = (formName) => {
-  const i = FORM_ORDER.indexOf(formName.trim().toLowerCase());
-  return i === -1 ? FORM_ORDER.length : i;
+// Real module/form ordering, sourced from the same Form Master data the /forms screen
+// manages (GET /forms/modules for module seq, GET /forms for per-module form seq) — see the
+// identical helper in Sidebar.jsx. Available to every authenticated user regardless of
+// whether they hold the "Forms" RBAC permission (that permission only gates writes).
+const useMenuRank = () => {
+  const { data: moduleRows } = useFormModules({ status: 'active' });
+  const { data: formsList } = useForms({ status: 'active' });
+
+  return useMemo(() => {
+    const moduleSeq = new Map();
+    (moduleRows ?? []).forEach((m) => moduleSeq.set(m.form_name.trim().toLowerCase(), m.seq));
+
+    const formSeq = new Map();
+    (formsList?.data ?? []).forEach((f) => {
+      if (f.module_name != null) {
+        formSeq.set(`${f.module_name.trim().toLowerCase()}::${f.form_name.trim().toLowerCase()}`, f.seq);
+      }
+    });
+
+    return {
+      moduleRank: (moduleName) => moduleSeq.get(moduleName.trim().toLowerCase()) ?? Number.MAX_SAFE_INTEGER,
+      formRank: (moduleName, formName) =>
+        formSeq.get(`${moduleName.trim().toLowerCase()}::${formName.trim().toLowerCase()}`) ?? Number.MAX_SAFE_INTEGER,
+    };
+  }, [moduleRows, formsList]);
 };
 
 // RBAC-driven, same as the admin Sidebar's buildNavGroups — one group per module, one item per
-// mapped form. Used to be a hardcoded NAV_GROUPS array shown to every Employee regardless of
-// any Form Master mapping; now an Employee only sees what's actually mapped to them.
-const buildNavGroups = (accessibleForms) =>
+// mapped form, both ordered by the real Form Master seq (moduleRank/formRank above) rather
+// than a hardcoded name list. Used to be a hardcoded NAV_GROUPS array shown to every Employee
+// regardless of any Form Master mapping; now an Employee only sees what's actually mapped to
+// them, in the order an admin actually arranged.
+const buildNavGroups = (accessibleForms, { moduleRank, formRank }) =>
   Object.entries(accessibleForms ?? {})
     .map(([moduleName, forms]) => ({
       label: moduleName,
@@ -37,9 +58,10 @@ const buildNavGroups = (accessibleForms) =>
           return { label: form.name, icon: cfg.icon, to: cfg.to, exact: cfg.exact };
         })
         .filter(Boolean)
-        .sort((a, b) => formRank(a.label) - formRank(b.label)),
+        .sort((a, b) => formRank(moduleName, a.label) - formRank(moduleName, b.label)),
     }))
-    .filter((group) => group.items.length > 0);
+    .filter((group) => group.items.length > 0)
+    .sort((a, b) => moduleRank(a.label) - moduleRank(b.label));
 
 const isActive = (to, pathname, exact) =>
   exact ? pathname === to : pathname === to || pathname.startsWith(to + '/');
@@ -49,7 +71,8 @@ const EmployeeSidebar = () => {
   const collapsed = useSelector(selectSidebarCollapsed);
   const { pathname } = useLocation();
   const { accessibleForms } = useAuth();
-  const navGroups = useMemo(() => buildNavGroups(accessibleForms), [accessibleForms]);
+  const { moduleRank, formRank } = useMenuRank();
+  const navGroups = useMemo(() => buildNavGroups(accessibleForms, { moduleRank, formRank }), [accessibleForms, moduleRank, formRank]);
 
   useEffect(() => {
     if (window.innerWidth < 768) dispatch(setSidebarCollapsed(true));
