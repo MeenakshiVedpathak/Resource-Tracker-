@@ -42,6 +42,7 @@ const RoleFormMappingForm = lazy(() => import('@/pages/roleFormMapping/RoleFormM
 // ── Platform Admin / Admin tier ──
 const AdminList = lazy(() => import('@/pages/admins/AdminList'));
 const AdminCreate = lazy(() => import('@/pages/admins/AdminCreate'));
+const OrganizationOverview = lazy(() => import('@/pages/organizationOverview/OrganizationOverview'));
 
 // ── Entity Admin tier (also reachable by Admin, platform-wide) ──
 const EntityAdminList = lazy(() => import('@/pages/entityAdmins/EntityAdminList'));
@@ -221,6 +222,11 @@ const AppRoutes = () => {
         <Route path={ROUTES.ADMINS} element={<ProtectedRoute platformAdminOnly><AdminList /></ProtectedRoute>}>
           <Route path="new" element={<AdminCreate />} />
         </Route>
+
+        {/* Organization Overview — Platform Admin's read-only, whole-platform screen. One route,
+            one form, tabs inside (Overview/Business Units/Projects & POs/Users) — see
+            pages/organizationOverview/OrganizationOverview.jsx. */}
+        <Route path={ROUTES.ORGANIZATION_OVERVIEW} element={<ProtectedRoute platformAdminOnly><OrganizationOverview /></ProtectedRoute>} />
 
         {/* Admin tier — manages Entity Admins platform-wide. Same drawer-over-list pattern as
             Admins above. */}

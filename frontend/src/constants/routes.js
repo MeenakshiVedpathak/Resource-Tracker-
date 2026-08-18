@@ -50,6 +50,10 @@ export const ROUTES = {
   ADMINS: '/admins',
   ADMIN_NEW: '/admins/new',
 
+  // Organization Overview — Platform Admin only, single read-only screen (Entity/BU/Project/
+  // Service PO/User overview across the whole platform, tabbed — see pages/organizationOverview)
+  ORGANIZATION_OVERVIEW: '/platform-admin/organization-overview',
+
   // Entity Admin management (Admin tier, platform-wide, §6.2)
   ENTITY_ADMINS: '/entity-admins',
   ENTITY_ADMIN_NEW: '/entity-admins/new',

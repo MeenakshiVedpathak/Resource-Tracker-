@@ -9,7 +9,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useFormModules, useForms } from '@/hooks/useForms';
 import { resolveFormRoute } from '@/constants/rbacForms';
 import { ROUTES } from '@/constants/routes';
-import { ChevronLeft, ChevronRight, UserPlus, Shield, ClipboardList, UserCog, Landmark } from 'lucide-react';
+import { ChevronLeft, ChevronRight, UserPlus, Shield, ClipboardList, UserCog, Landmark, Network } from 'lucide-react';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 
 // A Platform Admin (top of the RBAC hierarchy, §0) sees ONLY these nav items — everything else
@@ -22,6 +22,7 @@ const SUPER_ADMIN_NAV_GROUPS = [
       { label: 'Admins', icon: UserPlus, to: ROUTES.ADMINS, exact: false },
       { label: 'Role Master', icon: Shield, to: ROUTES.ROLES, exact: false },
       { label: 'Forms Master', icon: ClipboardList, to: ROUTES.FORMS, exact: false },
+      { label: 'Organization Overview', icon: Network, to: ROUTES.ORGANIZATION_OVERVIEW, exact: true },
     ],
   },
 ];

@@ -54,6 +54,9 @@ export const QUERY_KEYS = {
   // Admins (Platform Admin -> Admin)
   ADMINS: (params) => ['admins', params],
 
+  // Organization Overview (Platform Admin only — one API, all tabs read from this one cache entry)
+  ORGANIZATION_OVERVIEW: ['organization-overview'],
+
   // Entity Admins (Admin tier)
   ENTITY_ADMINS: (params) => ['entity-admins', params],
   ENTITY_ADMIN: (id) => ['entity-admins', id],
