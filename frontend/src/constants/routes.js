@@ -119,6 +119,16 @@ export const ROUTES = {
   REPORT_MONTHLY_RESOURCE_UTILIZATION: '/reports/monthly-resource-utilization',
   REPORT_RESOURCE_PROJECT_UTILIZATION: '/reports/resource-project-utilization',
   REPORT_CLIENT_SERVICE_PO_HOURS: '/reports/client-service-po-hours',
+  REPORT_SERVICE_PO_PROFITABILITY: '/reports/service-po-profitability',
+  REPORT_BUDGETED_MARGIN_FORECAST: '/reports/budgeted-margin-forecast',
+  REPORT_RESOURCE_STAFFING_PLAN_ACCURACY: '/reports/resource-staffing-plan-accuracy',
+  REPORT_CLIENT_PROFITABILITY_CONCENTRATION: '/reports/client-profitability-concentration',
+  REPORT_BU_PERFORMANCE_SCORECARD: '/reports/bu-performance-scorecard',
+  REPORT_EMPLOYEE_CAPACITY_FORECAST: '/reports/employee-capacity-forecast',
+  REPORT_SERVICE_PO_TIMELINE_RISK: '/reports/service-po-timeline-risk',
+  REPORT_DELIVERY_HEAD_PERFORMANCE: '/reports/delivery-head-performance',
+  REPORT_INVOICE_REALIZATION_TREND: '/reports/invoice-realization-trend',
+  REPORT_SERVICE_LINE_BUSINESS_MIX: '/reports/service-line-business-mix',
 
   // Team Mapping — Service PO Admin self-service (§7)
   TEAM_MAPPINGS: '/team-mappings',

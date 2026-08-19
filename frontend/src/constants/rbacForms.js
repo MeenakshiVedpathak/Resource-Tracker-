@@ -17,6 +17,8 @@ import {
   Tag, Layers, Sparkles, ClipboardList, Landmark, ShieldCheck,
   FileBarChart2, PieChart, CalendarRange, UserCheck, Network, Receipt, Table2, Wallet, IndianRupee,
   ListTree, ListChecks, Banknote, CalendarClock,
+  TrendingUp, LineChart, Target, Percent, Award, BatteryCharging, AlertTriangle, Crown,
+  ReceiptText, GitCompare,
 } from 'lucide-react';
 import { ROUTES } from '@/constants/routes';
 
@@ -89,6 +91,20 @@ export const FORM_NAMES = {
   // real GET /roles/forms response once these are seeded.
   COST_BUDGET: 'Cost Budget',
   RESOURCE_BUDGET: 'Resource Budget',
+  // Guessed names — same caveat as the rest of this file: these ten margin/profitability/risk
+  // reports are brand new (no Form Master rows confirmed yet). Confirm against the real
+  // GET /roles/forms response once seeded. REPORT_BU_PERFORMANCE_SCORECARD in particular should
+  // only ever be mapped to the Admin / Entity Admin roles — the backend 403s everyone else.
+  REPORT_SERVICE_PO_PROFITABILITY: 'Service PO Profitability',
+  REPORT_BUDGETED_MARGIN_FORECAST: 'Budgeted Margin Forecast',
+  REPORT_RESOURCE_STAFFING_PLAN_ACCURACY: 'Resource Staffing Plan Accuracy',
+  REPORT_CLIENT_PROFITABILITY_CONCENTRATION: 'Client Profitability & Concentration',
+  REPORT_BU_PERFORMANCE_SCORECARD: 'BU Performance Scorecard',
+  REPORT_EMPLOYEE_CAPACITY_FORECAST: 'Employee Capacity & Bench Forecast',
+  REPORT_SERVICE_PO_TIMELINE_RISK: 'Service PO Timeline Risk',
+  REPORT_DELIVERY_HEAD_PERFORMANCE: 'Delivery Head Performance',
+  REPORT_INVOICE_REALIZATION_TREND: 'Invoice Realization Trend',
+  REPORT_SERVICE_LINE_BUSINESS_MIX: 'Service Line Business Mix',
 };
 
 // form_name (lowercased/trimmed) -> { to, icon, exact }. Icons are used by the dynamic Sidebar.
@@ -127,6 +143,16 @@ export const FORM_ROUTE_CONFIG = {
   [FORM_NAMES.MY_TEAM]: { to: ROUTES.MY_TEAM, icon: Network, exact: true },
   [FORM_NAMES.COST_BUDGET]: { to: ROUTES.COST_BUDGETS, icon: Banknote, exact: true },
   [FORM_NAMES.RESOURCE_BUDGET]: { to: ROUTES.RESOURCE_BUDGETS, icon: CalendarClock, exact: true },
+  [FORM_NAMES.REPORT_SERVICE_PO_PROFITABILITY]: { to: ROUTES.REPORT_SERVICE_PO_PROFITABILITY, icon: TrendingUp },
+  [FORM_NAMES.REPORT_BUDGETED_MARGIN_FORECAST]: { to: ROUTES.REPORT_BUDGETED_MARGIN_FORECAST, icon: LineChart },
+  [FORM_NAMES.REPORT_RESOURCE_STAFFING_PLAN_ACCURACY]: { to: ROUTES.REPORT_RESOURCE_STAFFING_PLAN_ACCURACY, icon: Target },
+  [FORM_NAMES.REPORT_CLIENT_PROFITABILITY_CONCENTRATION]: { to: ROUTES.REPORT_CLIENT_PROFITABILITY_CONCENTRATION, icon: Percent },
+  [FORM_NAMES.REPORT_BU_PERFORMANCE_SCORECARD]: { to: ROUTES.REPORT_BU_PERFORMANCE_SCORECARD, icon: Award },
+  [FORM_NAMES.REPORT_EMPLOYEE_CAPACITY_FORECAST]: { to: ROUTES.REPORT_EMPLOYEE_CAPACITY_FORECAST, icon: BatteryCharging },
+  [FORM_NAMES.REPORT_SERVICE_PO_TIMELINE_RISK]: { to: ROUTES.REPORT_SERVICE_PO_TIMELINE_RISK, icon: AlertTriangle },
+  [FORM_NAMES.REPORT_DELIVERY_HEAD_PERFORMANCE]: { to: ROUTES.REPORT_DELIVERY_HEAD_PERFORMANCE, icon: Crown },
+  [FORM_NAMES.REPORT_INVOICE_REALIZATION_TREND]: { to: ROUTES.REPORT_INVOICE_REALIZATION_TREND, icon: ReceiptText },
+  [FORM_NAMES.REPORT_SERVICE_LINE_BUSINESS_MIX]: { to: ROUTES.REPORT_SERVICE_LINE_BUSINESS_MIX, icon: GitCompare },
 };
 
 const NORMALIZED_CONFIG = Object.fromEntries(

@@ -1,0 +1,266 @@
+import { useState } from 'react';
+import * as XLSX from 'xlsx';
+import { createColumnHelper } from '@tanstack/react-table';
+import { Download } from 'lucide-react';
+import { useServicePOProfitability } from '@/hooks/useReports';
+import { reportsApi } from '@/api/reports.api';
+import { useActiveClients } from '@/hooks/useClients';
+import { formatCurrency, formatHours, formatPercentage } from '@/utils/formatters';
+import DataTable from '@/components/common/DataTable';
+import PageHeader from '@/components/common/PageHeader';
+import StatusBadge from '@/components/common/StatusBadge';
+import FilterToggleButton from '@/components/common/FilterToggleButton';
+import FilterPanel from '@/components/common/FilterPanel';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { SearchableSelect } from '@/components/ui/searchable-select';
+import { MonthYearPicker } from '@/components/ui/month-year-picker';
+
+const columnHelper = createColumnHelper();
+
+const exportToExcel = (rows) => {
+  const header = [
+    'PO Code', 'PO Name', 'Client', 'Service Type', 'Category', 'Status',
+    'Hours Delivered', 'Invoiced Amount', 'Delivery Cost', 'Margin', 'Margin %',
+  ];
+  const dataRows = rows.map((r) => [
+    r.service_po_code ?? '',
+    r.service_po_name ?? '',
+    r.client_name ?? '',
+    r.service_type ?? '',
+    r.service_category_name ?? '',
+    r.status ?? '',
+    r.hours_delivered != null ? Number(r.hours_delivered) : '',
+    r.invoiced_amount != null ? Number(r.invoiced_amount) : '',
+    r.delivery_cost != null ? Number(r.delivery_cost) : '',
+    r.margin != null ? Number(r.margin) : '',
+    r.margin_pct != null ? Number(r.margin_pct) : '',
+  ]);
+  const ws = XLSX.utils.aoa_to_sheet([header, ...dataRows]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Service PO Profitability');
+  XLSX.writeFile(wb, `Service_PO_Profitability.xlsx`);
+};
+
+const now = new Date();
+const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+const columns = [
+  columnHelper.accessor('service_po_code', {
+    header: 'PO Code',
+    size: 160,
+    meta: { sticky: true, left: 0 },
+    cell: (info) => (
+      <span className="font-mono text-xs font-semibold text-muted-foreground whitespace-nowrap">
+        {info.getValue() || '—'}
+      </span>
+    ),
+  }),
+  columnHelper.accessor('service_po_name', {
+    header: 'PO Name',
+    size: 240,
+    meta: { sticky: true, left: 160 },
+    cell: (info) => <div className="truncate font-medium max-w-[220px]" title={info.getValue()}>{info.getValue() || '—'}</div>,
+  }),
+  columnHelper.accessor('client_name', {
+    header: 'Client',
+    size: 220,
+    cell: (info) => <div className="truncate max-w-[200px]" title={info.getValue()}>{info.getValue() || '—'}</div>,
+  }),
+  columnHelper.accessor('service_type', {
+    header: 'Service Type',
+    size: 150,
+    cell: (info) => info.getValue() || '—',
+  }),
+  columnHelper.accessor('service_category_name', {
+    header: 'Category',
+    size: 140,
+    cell: (info) => info.getValue() || '—',
+  }),
+  columnHelper.accessor('status', {
+    header: 'Status',
+    size: 160,
+    cell: (info) => <StatusBadge status={info.getValue()} />,
+  }),
+  columnHelper.accessor('hours_delivered', {
+    header: 'Hours Delivered',
+    size: 150,
+    cell: (info) => <span className="tabular-nums">{formatHours(info.getValue())}</span>,
+  }),
+  columnHelper.accessor('invoiced_amount', {
+    header: 'Invoiced Amount',
+    size: 160,
+    cell: (info) => <span className="tabular-nums">{formatCurrency(info.getValue())}</span>,
+  }),
+  columnHelper.accessor('delivery_cost', {
+    header: 'Delivery Cost',
+    size: 160,
+    cell: (info) => <span className="tabular-nums">{formatCurrency(info.getValue())}</span>,
+  }),
+  columnHelper.accessor('margin', {
+    header: 'Margin',
+    size: 160,
+    cell: (info) => {
+      const value = info.getValue();
+      return (
+        <span className={`tabular-nums ${value < 0 ? 'text-destructive' : ''}`}>
+          {formatCurrency(value)}
+        </span>
+      );
+    },
+  }),
+  columnHelper.accessor('margin_pct', {
+    header: 'Margin %',
+    size: 130,
+    cell: (info) => {
+      const value = info.getValue();
+      return (
+        <span className={`tabular-nums ${value < 0 ? 'text-destructive' : ''}`}>
+          {formatPercentage(value)}
+        </span>
+      );
+    },
+  }),
+];
+
+const SummaryItem = ({ label, value, negative = false }) => (
+  <div className="flex flex-col gap-0.5">
+    <span className="text-[11px] text-muted-foreground">{label}</span>
+    <span className={`text-sm font-semibold tabular-nums ${negative ? 'text-destructive' : 'text-foreground'}`}>
+      {value}
+    </span>
+  </div>
+);
+
+const ServicePOProfitability = () => {
+  const [monthYear, setMonthYear] = useState({
+    month: prevMonth.getMonth() + 1,
+    year: prevMonth.getFullYear(),
+  });
+  const [clientId, setClientId] = useState('all');
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
+  const [exporting, setExporting] = useState(false);
+
+  const { data: activeClients = [] } = useActiveClients();
+
+  const params = {
+    ...(monthYear && { month: monthYear.month, year: monthYear.year }),
+    ...(clientId && clientId !== 'all' && { clientId }),
+    page,
+    limit,
+  };
+
+  const { data, isPending } = useServicePOProfitability(params);
+
+  const records = data?.data?.records ?? [];
+  const summary = data?.data ?? null;
+  const meta = data?.meta ?? {};
+
+  const activeFilterCount = [
+    clientId !== 'all',
+  ].filter(Boolean).length;
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const total = meta.total > 0 ? meta.total : 1000;
+      const res = await reportsApi.getServicePOProfitability({ ...params, page: 1, limit: total });
+      const allRecords = res?.data?.records ?? [];
+      exportToExcel(allRecords);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  return (
+    <div>
+      <PageHeader
+        title="Service PO Profitability"
+        description="Margin analysis per Service PO — invoiced amount vs delivery cost."
+        actions={
+          <div className="flex items-center gap-2">
+            <FilterToggleButton
+              isOpen={filtersOpen}
+              onToggle={() => setFiltersOpen((p) => !p)}
+              activeCount={activeFilterCount}
+              className="h-9"
+            />
+            {records.length > 0 && (
+              <Button variant="outline" size="sm" className="h-9" onClick={handleExport} disabled={exporting}>
+                <Download className="mr-1.5 h-4 w-4" />{exporting ? 'Exporting…' : 'Export Excel'}
+              </Button>
+            )}
+          </div>
+        }
+      />
+
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[240px]">
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Month &amp; Year <span className="text-destructive">*</span></Label>
+          <MonthYearPicker
+            value={monthYear}
+            onChange={(val) => { setMonthYear(val); setPage(1); }}
+            placeholder="Select month"
+            className="w-full"
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Client</Label>
+          <SearchableSelect
+            options={[
+              { label: 'All Clients', value: 'all' },
+              ...activeClients.map((c) => ({
+                label: c.client_name,
+                value: String(c.id),
+              })),
+            ]}
+            value={clientId}
+            onValueChange={(v) => { setClientId(v); setPage(1); }}
+            placeholder="All Clients"
+            searchPlaceholder="Search client..."
+            className="h-9 w-full text-sm"
+          />
+        </div>
+      </FilterPanel>
+
+      <DataTable
+        tableContainerClassName="max-h-[50vh]"
+        columns={columns}
+        data={records}
+        isLoading={isPending}
+        pagination={meta.total != null ? {
+          page: meta.page ?? page,
+          limit: meta.limit ?? limit,
+          total: meta.total,
+        } : undefined}
+        onPageChange={setPage}
+        onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
+      />
+
+      {summary && (
+        <div className="mt-4 rounded-lg border bg-muted/40 px-4 py-3">
+          <p className="mb-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Totals</p>
+          <div className="flex flex-wrap gap-x-6 gap-y-2">
+            <SummaryItem label="Total Invoiced" value={formatCurrency(summary.total_invoiced_amount)} />
+            <SummaryItem label="Total Delivery Cost" value={formatCurrency(summary.total_delivery_cost)} />
+            <SummaryItem
+              label="Total Margin"
+              value={formatCurrency(summary.total_margin)}
+              negative={summary.total_margin < 0}
+            />
+            <SummaryItem
+              label="Overall Margin %"
+              value={formatPercentage(summary.overall_margin_pct)}
+              negative={summary.overall_margin_pct < 0}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default ServicePOProfitability;

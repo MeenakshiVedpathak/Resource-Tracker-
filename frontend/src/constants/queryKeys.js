@@ -132,6 +132,16 @@ export const QUERY_KEYS = {
   REPORT_MONTHLY_RESOURCE_UTILIZATION: (params) => ['reports', 'monthly-resource-utilization', params],
   REPORT_RESOURCE_PROJECT_UTILIZATION: (params) => ['reports', 'resource-project-utilization', params],
   REPORT_CLIENT_SERVICE_PO_HOURS: (params) => ['reports', 'client-service-po-hours', params],
+  REPORT_SERVICE_PO_PROFITABILITY: (params) => ['reports', 'service-po-profitability', params],
+  REPORT_BUDGETED_MARGIN_FORECAST: (params) => ['reports', 'budgeted-margin-forecast', params],
+  REPORT_RESOURCE_STAFFING_PLAN_ACCURACY: (params) => ['reports', 'resource-staffing-plan-accuracy', params],
+  REPORT_CLIENT_PROFITABILITY_CONCENTRATION: (params) => ['reports', 'client-profitability-concentration', params],
+  REPORT_BU_PERFORMANCE_SCORECARD: (params) => ['reports', 'bu-performance-scorecard', params],
+  REPORT_EMPLOYEE_CAPACITY_FORECAST: (params) => ['reports', 'employee-capacity-forecast', params],
+  REPORT_SERVICE_PO_TIMELINE_RISK: (params) => ['reports', 'service-po-timeline-risk', params],
+  REPORT_DELIVERY_HEAD_PERFORMANCE: (params) => ['reports', 'delivery-head-performance', params],
+  REPORT_INVOICE_REALIZATION_TREND: (params) => ['reports', 'invoice-realization-trend', params],
+  REPORT_SERVICE_LINE_BUSINESS_MIX: (params) => ['reports', 'service-line-business-mix', params],
 
   // Notifications
   NOTIFICATIONS: (params) => ['notifications', params],

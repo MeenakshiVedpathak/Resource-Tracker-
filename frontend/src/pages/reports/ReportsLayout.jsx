@@ -10,6 +10,16 @@ const NAV = [
   { label: 'Resource Allocation', to: ROUTES.REPORT_RESOURCE_ALLOCATION },
   { label: 'Resource Project Utilization', to: ROUTES.REPORT_RESOURCE_PROJECT_UTILIZATION },
   { label: 'Client Service PO Hours', to: ROUTES.REPORT_CLIENT_SERVICE_PO_HOURS },
+  { label: 'Service PO Profitability', to: ROUTES.REPORT_SERVICE_PO_PROFITABILITY },
+  { label: 'Budgeted Margin Forecast', to: ROUTES.REPORT_BUDGETED_MARGIN_FORECAST },
+  { label: 'Staffing Plan Accuracy', to: ROUTES.REPORT_RESOURCE_STAFFING_PLAN_ACCURACY },
+  { label: 'Client Profitability', to: ROUTES.REPORT_CLIENT_PROFITABILITY_CONCENTRATION },
+  { label: 'BU Performance Scorecard', to: ROUTES.REPORT_BU_PERFORMANCE_SCORECARD },
+  { label: 'Capacity & Bench Forecast', to: ROUTES.REPORT_EMPLOYEE_CAPACITY_FORECAST },
+  { label: 'PO Timeline Risk', to: ROUTES.REPORT_SERVICE_PO_TIMELINE_RISK },
+  { label: 'Delivery Head Performance', to: ROUTES.REPORT_DELIVERY_HEAD_PERFORMANCE },
+  { label: 'Invoice Realization Trend', to: ROUTES.REPORT_INVOICE_REALIZATION_TREND },
+  { label: 'Service Line Business Mix', to: ROUTES.REPORT_SERVICE_LINE_BUSINESS_MIX },
 ];
 
 const ReportsLayout = () => (

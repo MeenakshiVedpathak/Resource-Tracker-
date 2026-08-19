@@ -15,4 +15,26 @@ export const reportsApi = {
     apiClient.get('/reports/resource-project-utilization-report', { params }).then((r) => r.data),
   getClientServicePOHours: (params) =>
     apiClient.get('/reports/client-service-po-hours', { params }).then((r) => r.data),
+
+  // Analytics — margin/profitability/risk reports (§ new report suite)
+  getServicePOProfitability: (params) =>
+    apiClient.get('/reports/service-po-profitability', { params }).then((r) => r.data),
+  getBudgetedMarginForecast: (params) =>
+    apiClient.get('/reports/budgeted-margin-forecast', { params }).then((r) => r.data),
+  getResourceStaffingPlanAccuracy: (params) =>
+    apiClient.get('/reports/resource-staffing-plan-accuracy', { params }).then((r) => r.data),
+  getClientProfitabilityConcentration: (params) =>
+    apiClient.get('/reports/client-profitability-concentration', { params }).then((r) => r.data),
+  getBUPerformanceScorecard: (params) =>
+    apiClient.get('/reports/bu-performance-scorecard', { params }).then((r) => r.data),
+  getEmployeeCapacityForecast: (params) =>
+    apiClient.get('/reports/employee-capacity-forecast', { params }).then((r) => r.data),
+  getServicePOTimelineRisk: (params) =>
+    apiClient.get('/reports/service-po-timeline-risk', { params }).then((r) => r.data),
+  getDeliveryHeadPerformance: (params) =>
+    apiClient.get('/reports/delivery-head-performance', { params }).then((r) => r.data),
+  getInvoiceRealizationTrend: (params) =>
+    apiClient.get('/reports/invoice-realization-trend', { params }).then((r) => r.data),
+  getServiceLineBusinessMix: (params) =>
+    apiClient.get('/reports/service-line-business-mix', { params }).then((r) => r.data),
 };

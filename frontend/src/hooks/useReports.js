@@ -147,3 +147,103 @@ export const useClientServicePOHours = (params) => {
     retry: false,
   });
 };
+
+export const useServicePOProfitability = (params) =>
+  useQuery({
+    queryKey: QUERY_KEYS.REPORT_SERVICE_PO_PROFITABILITY(params),
+    queryFn: () => reportsApi.getServicePOProfitability(params),
+    enabled: !!(params?.month && params?.year),
+    staleTime: 0,
+    placeholderData: (prev) => prev,
+  });
+
+export const useBudgetedMarginForecast = (params) =>
+  useQuery({
+    queryKey: QUERY_KEYS.REPORT_BUDGETED_MARGIN_FORECAST(params),
+    queryFn: () => reportsApi.getBudgetedMarginForecast(params),
+    enabled: !!(params?.month && params?.year),
+    staleTime: 0,
+    placeholderData: (prev) => prev,
+  });
+
+export const useResourceStaffingPlanAccuracy = (params) =>
+  useQuery({
+    queryKey: QUERY_KEYS.REPORT_RESOURCE_STAFFING_PLAN_ACCURACY(params),
+    queryFn: () => reportsApi.getResourceStaffingPlanAccuracy(params),
+    enabled: !!(params?.month && params?.year),
+    staleTime: 0,
+    placeholderData: (prev) => prev,
+  });
+
+export const useClientProfitabilityConcentration = (params) =>
+  useQuery({
+    queryKey: QUERY_KEYS.REPORT_CLIENT_PROFITABILITY_CONCENTRATION(params),
+    queryFn: () => reportsApi.getClientProfitabilityConcentration(params),
+    enabled: !!(params?.month && params?.year),
+    staleTime: 0,
+    placeholderData: (prev) => prev,
+  });
+
+// Entity Admin / Admin only — the backend 403s for every other role. This hook doesn't special-case
+// that; the page just renders whatever error extractApiError surfaces for a 403.
+export const useBUPerformanceScorecard = (params) =>
+  useQuery({
+    queryKey: QUERY_KEYS.REPORT_BU_PERFORMANCE_SCORECARD(params),
+    queryFn: () => reportsApi.getBUPerformanceScorecard(params),
+    enabled: !!(params?.month && params?.year),
+    staleTime: 0,
+    placeholderData: (prev) => prev,
+    retry: false,
+  });
+
+export const useEmployeeCapacityForecast = (params) =>
+  useQuery({
+    queryKey: QUERY_KEYS.REPORT_EMPLOYEE_CAPACITY_FORECAST(params),
+    queryFn: () => reportsApi.getEmployeeCapacityForecast(params),
+    enabled: !!(params?.month && params?.year),
+    staleTime: 0,
+    placeholderData: (prev) => prev,
+  });
+
+// No month/year required — asOfDate is optional and defaults server-side to today, so this
+// always fires (unlike every other period-gated hook above).
+export const useServicePOTimelineRisk = (params) =>
+  useQuery({
+    queryKey: QUERY_KEYS.REPORT_SERVICE_PO_TIMELINE_RISK(params),
+    queryFn: () => reportsApi.getServicePOTimelineRisk(params),
+    staleTime: 0,
+    placeholderData: (prev) => prev,
+  });
+
+export const useDeliveryHeadPerformance = (params) =>
+  useQuery({
+    queryKey: QUERY_KEYS.REPORT_DELIVERY_HEAD_PERFORMANCE(params),
+    queryFn: () => reportsApi.getDeliveryHeadPerformance(params),
+    enabled: !!(params?.month && params?.year),
+    staleTime: 0,
+    placeholderData: (prev) => prev,
+  });
+
+// Accepts either the single-month shorthand {month, year} or a range {startMonth, startYear,
+// endMonth, endYear} — fires once either full mode is present.
+export const useInvoiceRealizationTrend = (params) => {
+  const hasMonthYear = !!(params?.month && params?.year);
+  const hasRange = !!(params?.startMonth && params?.startYear && params?.endMonth && params?.endYear);
+  return useQuery({
+    queryKey: QUERY_KEYS.REPORT_INVOICE_REALIZATION_TREND(params),
+    queryFn: () => reportsApi.getInvoiceRealizationTrend(params),
+    enabled: hasMonthYear || hasRange,
+    staleTime: 0,
+    placeholderData: (prev) => prev,
+  });
+};
+
+// Not paginated — small, fixed result set per month.
+export const useServiceLineBusinessMix = (params) =>
+  useQuery({
+    queryKey: QUERY_KEYS.REPORT_SERVICE_LINE_BUSINESS_MIX(params),
+    queryFn: () => reportsApi.getServiceLineBusinessMix(params),
+    enabled: !!(params?.month && params?.year),
+    staleTime: 0,
+    placeholderData: (prev) => prev,
+  });

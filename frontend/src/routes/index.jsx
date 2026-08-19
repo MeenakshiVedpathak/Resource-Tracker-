@@ -91,6 +91,16 @@ const InvoicePOSummary = lazy(() => import('@/pages/reports/InvoicePOSummary'));
 const MonthlyResourceUtilization = lazy(() => import('@/pages/reports/MonthlyResourceUtilization'));
 const ResourceProjectUtilization = lazy(() => import('@/pages/reports/ResourceProjectUtilization'));
 const ClientServicePOHoursReport = lazy(() => import('@/pages/reports/ClientServicePOHoursReport'));
+const ServicePOProfitability = lazy(() => import('@/pages/reports/ServicePOProfitability'));
+const BudgetedMarginForecast = lazy(() => import('@/pages/reports/BudgetedMarginForecast'));
+const ResourceStaffingPlanAccuracy = lazy(() => import('@/pages/reports/ResourceStaffingPlanAccuracy'));
+const ClientProfitabilityConcentration = lazy(() => import('@/pages/reports/ClientProfitabilityConcentration'));
+const BUPerformanceScorecard = lazy(() => import('@/pages/reports/BUPerformanceScorecard'));
+const EmployeeCapacityForecast = lazy(() => import('@/pages/reports/EmployeeCapacityForecast'));
+const ServicePOTimelineRisk = lazy(() => import('@/pages/reports/ServicePOTimelineRisk'));
+const DeliveryHeadPerformance = lazy(() => import('@/pages/reports/DeliveryHeadPerformance'));
+const InvoiceRealizationTrend = lazy(() => import('@/pages/reports/InvoiceRealizationTrend'));
+const ServiceLineBusinessMix = lazy(() => import('@/pages/reports/ServiceLineBusinessMix'));
 
 // ── AI Copilot (new pages, launched from the floating AI Copilot widget) ──
 const RootCauseView = lazy(() => import('@/pages/ai/RootCauseView'));
@@ -315,6 +325,16 @@ const AppRoutes = () => {
           <Route path={ROUTES.REPORT_MONTHLY_RESOURCE_UTILIZATION} element={<ProtectedRoute formName={FORM_NAMES.REPORT_MONTHLY_UTILIZATION}><MonthlyResourceUtilization /></ProtectedRoute>} />
           <Route path={ROUTES.REPORT_RESOURCE_PROJECT_UTILIZATION} element={<ProtectedRoute formName={FORM_NAMES.REPORT_RESOURCE_PROJECT_UTILIZATION}><ResourceProjectUtilization /></ProtectedRoute>} />
           <Route path={ROUTES.REPORT_CLIENT_SERVICE_PO_HOURS} element={<ProtectedRoute formName={FORM_NAMES.REPORT_CLIENT_SERVICE_PO_HOURS}><ClientServicePOHoursReport /></ProtectedRoute>} />
+          <Route path={ROUTES.REPORT_SERVICE_PO_PROFITABILITY} element={<ProtectedRoute formName={FORM_NAMES.REPORT_SERVICE_PO_PROFITABILITY}><ServicePOProfitability /></ProtectedRoute>} />
+          <Route path={ROUTES.REPORT_BUDGETED_MARGIN_FORECAST} element={<ProtectedRoute formName={FORM_NAMES.REPORT_BUDGETED_MARGIN_FORECAST}><BudgetedMarginForecast /></ProtectedRoute>} />
+          <Route path={ROUTES.REPORT_RESOURCE_STAFFING_PLAN_ACCURACY} element={<ProtectedRoute formName={FORM_NAMES.REPORT_RESOURCE_STAFFING_PLAN_ACCURACY}><ResourceStaffingPlanAccuracy /></ProtectedRoute>} />
+          <Route path={ROUTES.REPORT_CLIENT_PROFITABILITY_CONCENTRATION} element={<ProtectedRoute formName={FORM_NAMES.REPORT_CLIENT_PROFITABILITY_CONCENTRATION}><ClientProfitabilityConcentration /></ProtectedRoute>} />
+          <Route path={ROUTES.REPORT_BU_PERFORMANCE_SCORECARD} element={<ProtectedRoute formName={FORM_NAMES.REPORT_BU_PERFORMANCE_SCORECARD}><BUPerformanceScorecard /></ProtectedRoute>} />
+          <Route path={ROUTES.REPORT_EMPLOYEE_CAPACITY_FORECAST} element={<ProtectedRoute formName={FORM_NAMES.REPORT_EMPLOYEE_CAPACITY_FORECAST}><EmployeeCapacityForecast /></ProtectedRoute>} />
+          <Route path={ROUTES.REPORT_SERVICE_PO_TIMELINE_RISK} element={<ProtectedRoute formName={FORM_NAMES.REPORT_SERVICE_PO_TIMELINE_RISK}><ServicePOTimelineRisk /></ProtectedRoute>} />
+          <Route path={ROUTES.REPORT_DELIVERY_HEAD_PERFORMANCE} element={<ProtectedRoute formName={FORM_NAMES.REPORT_DELIVERY_HEAD_PERFORMANCE}><DeliveryHeadPerformance /></ProtectedRoute>} />
+          <Route path={ROUTES.REPORT_INVOICE_REALIZATION_TREND} element={<ProtectedRoute formName={FORM_NAMES.REPORT_INVOICE_REALIZATION_TREND}><InvoiceRealizationTrend /></ProtectedRoute>} />
+          <Route path={ROUTES.REPORT_SERVICE_LINE_BUSINESS_MIX} element={<ProtectedRoute formName={FORM_NAMES.REPORT_SERVICE_LINE_BUSINESS_MIX}><ServiceLineBusinessMix /></ProtectedRoute>} />
         </Route>
 
         {/* AI Copilot — new, additive pages. No RBAC form rows exist for these yet (they're
