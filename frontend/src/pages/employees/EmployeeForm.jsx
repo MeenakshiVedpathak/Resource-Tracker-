@@ -10,7 +10,7 @@ import { useRoles } from '@/hooks/useRoles';
 import { useAuth } from '@/hooks/useAuth';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
-import { passwordSchema } from '@/utils/validators';
+import { employeeBaseFields, employeePasswordField } from '@/constants/employeeFormSchema';
 import { ROUTES } from '@/constants/routes';
 import { isProtectedAccount } from '@/constants/protectedAccounts';
 import { getAssignableRoleNames, ADDITIONAL_ROLE_NAMES, SENIOR_ROLE_NAMES, ROLE_NAMES } from '@/constants/roleHierarchy';
@@ -28,29 +28,11 @@ import {
 } from '@/components/ui/sheet';
 import { cn } from '@/utils/cn';
 
-const baseFields = {
-  employee_code: z.string().min(2, 'Must be at least 2 characters').max(20).regex(/^[A-Z0-9_-]+$/).transform((v) => v.toUpperCase()),
-  full_name: z.string().min(2, 'Must be at least 2 characters').max(100)
-    .regex(/^[A-Za-z\s]+$/, 'Only alphabetic characters are allowed'),
-  email: z.string().min(1, 'Email is required').email('Invalid email address'),
-  designation: z.string().max(100).optional().or(z.literal('')),
-  total_experience: z.preprocess((v) => (v === '' || v == null ? null : Number(v)), z.number().min(0).max(60).nullable().optional()),
-  company_experience: z.preprocess((v) => (v === '' || v == null ? null : Number(v)), z.number().min(0).max(60).nullable().optional()),
-  resource_description: z.string().max(2000).optional().or(z.literal('')),
-  date_of_joining: z.string().min(1, 'Date of joining is required'),
-  date_of_leaving: z.string().optional().or(z.literal('')),
-  status: z.enum(['active', 'inactive']).default('active'),
-  secondary_manager_user_id: z.coerce.number().positive().optional().nullable(),
-  is_timesheet_approval_required: z.boolean(),
-};
+const baseFields = employeeBaseFields;
 
 const roleIdsField = z.array(z.coerce.number()).min(1, 'Select at least one role');
 
-const passwordField = passwordSchema
-  .regex(/[A-Z]/, 'Must contain at least one uppercase letter')
-  .regex(/[a-z]/, 'Must contain at least one lowercase letter')
-  .regex(/[0-9]/, 'Must contain at least one digit')
-  .regex(/[^A-Za-z0-9]/, 'Must contain at least one special character');
+const passwordField = employeePasswordField;
 
 // Create requires a Role and a Password (this is now the only place a login gets created —
 // former User Master's Account Details/Role sections, merged in) — Primary Manager stays optional.
@@ -140,6 +122,10 @@ const EmployeeForm = () => {
   const roleOptions = allRoles
     .filter((r) => assignableNames.includes(r.role_name) || ADDITIONAL_ROLE_NAMES.includes(r.role_name))
     .map((r) => ({ label: r.role_name, value: String(r.id) }));
+  // Every row here IS an employee, so plain Employee is mandatory — pinned checked & disabled in
+  // the picker rather than just conveniently pre-selected (see the sync effect below too).
+  const employeeRoleId = allRoles.find((r) => r.role_name === ROLE_NAMES.EMPLOYEE)?.id;
+  const lockedRoleValues = employeeRoleId != null ? [String(employeeRoleId)] : [];
 
   const form = useForm({
     resolver: zodResolver(isEdit ? editSchema : createSchema),
@@ -170,6 +156,7 @@ const EmployeeForm = () => {
   const formStatus = useWatch({ control: form.control, name: 'status' });
   const primaryManagerId = useWatch({ control: form.control, name: 'primary_manager_user_id' });
   const timesheetApprovalRequired = useWatch({ control: form.control, name: 'is_timesheet_approval_required' });
+  const watchedRoleIds = useWatch({ control: form.control, name: 'role_ids' }) ?? [];
 
   const managerOptions = managers.map((m) => ({
     label: m.employee?.full_name ?? m.email,
@@ -192,16 +179,17 @@ const EmployeeForm = () => {
     form.setValue('company_experience', Math.max(0, parseFloat(years.toFixed(1))));
   }, [dateOfJoining, form]);
 
-  // Employee is the common case for this form (§ role bypass above), so pre-select it on create
-  // instead of making every submission start from an empty Roles picker — the admin can still
-  // swap/add roles before saving. Runs once roles are loaded and only if nothing's selected yet,
-  // so it never clobbers a role the admin already picked.
+  // Every row in Employee Master IS an employee (§ role bypass above — this screen absorbed User
+  // Master), so plain Employee is a mandatory baseline role, not just a convenient default: it's
+  // pinned selected-and-disabled in the picker (see lockedRoleValues/MultiSelect below) and this
+  // effect keeps the underlying form value in sync with that — seeding it on create, and topping
+  // it back up on edit if a legacy record's saved role_ids happens to be missing it.
   useEffect(() => {
-    if (isEdit || !allRoles.length || form.getValues('role_ids').length) return;
-    const employeeRole = allRoles.find((r) => r.role_name === ROLE_NAMES.EMPLOYEE);
-    if (employeeRole) form.setValue('role_ids', [employeeRole.id]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isEdit, rolesData, form]);
+    if (employeeRoleId == null) return;
+    if (!watchedRoleIds.map(Number).includes(employeeRoleId)) {
+      form.setValue('role_ids', [...watchedRoleIds.map(Number), employeeRoleId]);
+    }
+  }, [employeeRoleId, watchedRoleIds, form]);
 
   useEffect(() => {
     if (employee && isEdit) {
@@ -373,6 +361,7 @@ const EmployeeForm = () => {
                           <MultiSelect
                             options={roleOptions}
                             value={(field.value ?? []).map(String)}
+                            lockedValues={lockedRoleValues}
                             onValueChange={(vals) => {
                               const numeric = vals.map(Number);
                               const seniorSelected = numeric.filter((rid) => {

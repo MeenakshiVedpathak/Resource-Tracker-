@@ -16,7 +16,7 @@ import {
   FileText, FolderOpen, FolderKanban, Clock, DollarSign,
   Tag, Layers, Sparkles, ClipboardList, Landmark, ShieldCheck,
   FileBarChart2, PieChart, CalendarRange, UserCheck, Network, Receipt, Table2, Wallet, IndianRupee,
-  ListTree, ListChecks,
+  ListTree, ListChecks, Banknote, CalendarClock,
 } from 'lucide-react';
 import { ROUTES } from '@/constants/routes';
 
@@ -84,6 +84,11 @@ export const FORM_NAMES = {
   // exists on the backend, so this is picked up automatically by buildNavGroups() instead of
   // the MY_TEAM_ROLES hardcoded injection in Sidebar.jsx.
   MY_TEAM: 'My Team',
+  // Guessed names — same caveat as the rest of this file: these two screens are brand new
+  // (backend spec dated 2026-08-19, no Form Master rows confirmed yet). Confirm against the
+  // real GET /roles/forms response once these are seeded.
+  COST_BUDGET: 'Cost Budget',
+  RESOURCE_BUDGET: 'Resource Budget',
 };
 
 // form_name (lowercased/trimmed) -> { to, icon, exact }. Icons are used by the dynamic Sidebar.
@@ -120,6 +125,8 @@ export const FORM_ROUTE_CONFIG = {
   [FORM_NAMES.MANAGER_TIMESHEET_APPROVAL]: { to: ROUTES.EMPLOYEE_TIMESHEET, icon: Clock },
   [FORM_NAMES.SERVICE_PO_MONTHLY_BUDGET]: { to: ROUTES.SERVICE_PO_MONTHLY_BUDGET, icon: Wallet, exact: true },
   [FORM_NAMES.MY_TEAM]: { to: ROUTES.MY_TEAM, icon: Network, exact: true },
+  [FORM_NAMES.COST_BUDGET]: { to: ROUTES.COST_BUDGETS, icon: Banknote, exact: true },
+  [FORM_NAMES.RESOURCE_BUDGET]: { to: ROUTES.RESOURCE_BUDGETS, icon: CalendarClock, exact: true },
 };
 
 const NORMALIZED_CONFIG = Object.fromEntries(

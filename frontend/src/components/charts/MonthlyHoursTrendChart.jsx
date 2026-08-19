@@ -69,7 +69,7 @@ const MonthlyHoursTrendChart = ({ data = [], isLoading, fiscalYear, quarter }) =
   );
 
   return (
-    <Card>
+    <Card className="h-full flex flex-col">
       <CardHeader>
         <CardTitle>Monthly Hours Trend</CardTitle>
         <CardDescription>
@@ -77,13 +77,13 @@ const MonthlyHoursTrendChart = ({ data = [], isLoading, fiscalYear, quarter }) =
           {quarter ? `Q${quarter} of ` : ''}{fyLabel}
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex-1 flex flex-col">
         {!hasData ? (
           <EmptyState
             icon={TrendingUp}
             title="No timesheet data yet"
             description="Hours will appear here once timesheets are submitted."
-            className="py-12"
+            className="flex-1 justify-center py-12"
           />
         ) : (
           <ResponsiveContainer width="100%" height={260}>

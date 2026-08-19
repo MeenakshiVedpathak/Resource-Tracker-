@@ -105,6 +105,15 @@ export const QUERY_KEYS = {
   SERVICE_PO_MONTHLY_BUDGET_RECORD: (servicePoId, month, year) =>
     ['service-po-monthly-budget', 'record', servicePoId, month, year],
 
+  // Cost Budget
+  COST_BUDGETS: (params) => ['cost-budgets', params],
+  COST_BUDGETS_BY_SERVICE_PO: (servicePoId) => ['cost-budgets', 'service-po', servicePoId],
+
+  // Resource Budget
+  RESOURCE_BUDGET_MAPPED_EMPLOYEES: (servicePoId) => ['resource-budgets', 'mapped-employees', servicePoId],
+  RESOURCE_BUDGETS_BY_SERVICE_PO: (servicePoId) => ['resource-budgets', 'service-po', servicePoId],
+  RESOURCE_BUDGETS: (params) => ['resource-budgets', params],
+
   // Timesheets
   TIMESHEETS: (params) => ['timesheets', params],
   TIMESHEET: (id) => ['timesheets', id],

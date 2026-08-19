@@ -111,6 +111,10 @@ const MyTeamList = lazy(() => import('@/pages/myTeam/MyTeamList'));
 // ── Service PO Monthly Budget (Manager self-service, net-new — same allowedRoles gating) ──
 const ServicePoMonthlyBudgetPage = lazy(() => import('@/pages/servicePoMonthlyBudget/ServicePoMonthlyBudgetPage'));
 
+// ── Cost Budget / Resource Budget (net-new, per Service PO + month) ──
+const CostBudgetList = lazy(() => import('@/pages/costBudgets/CostBudgetList'));
+const ResourceBudgetPage = lazy(() => import('@/pages/resourceBudgets/ResourceBudgetPage'));
+
 // ── Settings ──
 const Notifications = lazy(() => import('@/pages/Notifications'));
 
@@ -340,6 +344,11 @@ const AppRoutes = () => {
             screen instead of a hardcoded allowedRoles whitelist, so any role the admin maps
             this form to (Manager, Service PO Admin, BU Admin, etc.) gets access automatically. */}
         <Route path={ROUTES.SERVICE_PO_MONTHLY_BUDGET} element={<ProtectedRoute formName={FORM_NAMES.SERVICE_PO_MONTHLY_BUDGET}><ServicePoMonthlyBudgetPage /></ProtectedRoute>} />
+
+        {/* Cost Budget / Resource Budget — net-new, gated by formName like every other
+            RBAC-driven screen (see rbacForms.js for the guessed Form Master names). */}
+        <Route path={ROUTES.COST_BUDGETS} element={<ProtectedRoute formName={FORM_NAMES.COST_BUDGET}><CostBudgetList /></ProtectedRoute>} />
+        <Route path={ROUTES.RESOURCE_BUDGETS} element={<ProtectedRoute formName={FORM_NAMES.RESOURCE_BUDGET}><ResourceBudgetPage /></ProtectedRoute>} />
 
         {/* Settings — personal-account pages, always available to any authenticated user.
             Change Password used to live at ROUTES.PROFILE as a full page — it's now a modal

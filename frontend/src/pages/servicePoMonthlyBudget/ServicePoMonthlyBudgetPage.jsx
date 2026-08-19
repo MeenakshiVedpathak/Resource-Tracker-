@@ -18,6 +18,7 @@ import { useActiveServicePOs } from '@/hooks/useServicePOs';
 import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
 import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
 import { useDebounce } from '@/hooks/useDebounce';
+import { isInvoiceMasterPeriodWritable, INVOICE_MASTER_LOCK_MESSAGE } from '@/utils/invoiceMasterWindow';
 
 const now = new Date();
 const CURRENT_MONTH = now.getMonth() + 1;
@@ -55,6 +56,7 @@ const ServicePoMonthlyBudgetPage = () => {
   const { data: records = [], isPending: isListLoading } = useServicePoMonthlyBudgetList(period.month, period.year);
 
   const isCurrentPeriod = period.month === CURRENT_MONTH && period.year === CURRENT_YEAR;
+  const isPeriodWritable = isInvoiceMasterPeriodWritable(period.month, period.year);
 
   // Type → Category, so a PO can be matched against a selected Category via its own Type.
   const typeCategoryMap = useMemo(() => {
@@ -166,6 +168,8 @@ const ServicePoMonthlyBudgetPage = () => {
                 <Button
                   size="sm"
                   className="gap-1.5"
+                  disabled={!isPeriodWritable}
+                  title={isPeriodWritable ? undefined : INVOICE_MASTER_LOCK_MESSAGE}
                   onClick={() => setEditSheet({ servicePoId: '', month: period.month, year: period.year })}
                 >
                   <Plus className="h-4 w-4" /> Add Entry

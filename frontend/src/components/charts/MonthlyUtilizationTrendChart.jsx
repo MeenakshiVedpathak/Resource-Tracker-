@@ -42,18 +42,18 @@ const MonthlyUtilizationTrendChart = ({ data = [], isLoading }) => {
   const latest = chartData[chartData.length - 1];
 
   return (
-    <Card>
+    <Card className="h-full flex flex-col">
       <CardHeader>
         <CardTitle>Utilization Trend</CardTitle>
         <CardDescription>Overall utilization % by month</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex-1 flex flex-col">
         {!hasData ? (
           <EmptyState
             icon={Gauge}
             title="No utilization data yet"
             description="Utilization % will appear here once timesheets are submitted."
-            className="py-12"
+            className="flex-1 justify-center py-12"
           />
         ) : (
           <>

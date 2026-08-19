@@ -104,7 +104,10 @@ const mockGetAll = async (params) => {
     filter: (e) => {
       if (params?.role_id) {
         const linkedUser = findUserById(e.linked_user_id);
-        if (!linkedUser || linkedUser.role_id !== Number(params.role_id)) return false;
+        const targetId = Number(params.role_id);
+        const holdsRole = linkedUser
+          && (linkedUser.role_id === targetId || (linkedUser.additional_role_ids ?? []).includes(targetId));
+        if (!holdsRole) return false;
       }
       return true;
     },
@@ -260,14 +263,19 @@ const mockDelete = async (id) => {
 
 // Real GET /employees can't filter by role_id server-side — scan a bounded batch, enrich with
 // role, filter client-side, then re-paginate the matches ourselves using the page/limit the
-// caller actually asked for.
+// caller actually asked for. Matches on the primary role OR any additional role (e.g. Service PO
+// Admin/HR are commonly held as an additional role layered on a primary like Employee — see
+// ADDITIONAL_ROLE_NAMES — so a primary-only check silently returned nothing for those filters).
 const realGetAllByRole = async (roleId, employeeParams) => {
   const { status, search } = employeeParams;
   const batchRes = await apiClient
     .get('/employees', { params: { page: 1, limit: REAL_ROLE_FILTER_SCAN_LIMIT, status, search } })
     .then((r) => r.data);
   const enriched = await enrichWithRealRole(batchRes?.data ?? []);
-  const matches = enriched.filter((e) => e.role_id === Number(roleId));
+  const targetId = Number(roleId);
+  const matches = enriched.filter((e) =>
+    e.role_id === targetId || (e.additionalRoles ?? []).some((r) => r.id === targetId)
+  );
 
   const page = Number(employeeParams.page) || 1;
   const limit = Number(employeeParams.limit) || 10;

@@ -176,9 +176,9 @@ const TimesheetList = () => {
         const name = imp?.employee?.full_name ?? imp?.email ?? '—';
         const code = imp?.employee?.employee_code;
         return (
-          <div>
-            <p className="text-sm font-medium">{name}</p>
-            {code && <p className="text-xs text-muted-foreground font-mono">{code}</p>}
+          <div className="max-w-[190px]">
+            <p className="text-sm font-medium truncate" title={name}>{name}</p>
+            {code && <p className="text-xs text-muted-foreground font-mono truncate">{code}</p>}
           </div>
         );
       },

@@ -20,7 +20,13 @@ export const useCreateCompany = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: companiesApi.create,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['companies'] }),
+    // Create also bootstraps a BU Admin (bu-admins list) and, per the BU-Admin-is-also-an-Employee
+    // requirement, an Employee Master record — so both lists need to go stale alongside companies.
+    onSuccess: () => Promise.all([
+      qc.invalidateQueries({ queryKey: ['companies'] }),
+      qc.invalidateQueries({ queryKey: ['bu-admins'] }),
+      qc.invalidateQueries({ queryKey: ['employees'] }),
+    ]),
   });
 };
 

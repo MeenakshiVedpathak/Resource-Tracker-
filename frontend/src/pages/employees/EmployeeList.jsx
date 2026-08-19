@@ -14,6 +14,8 @@ import { useResetUserPassword, useUserByEmployeeId } from '@/hooks/useUsers';
 import { useRoles } from '@/hooks/useRoles';
 import { employeesApi } from '@/api/employees.api';
 import { useCanWrite } from '@/hooks/usePermissions';
+import { useAuth } from '@/hooks/useAuth';
+import { ROLE_NAMES } from '@/constants/roleHierarchy';
 import { useNotification } from '@/hooks/useNotification';
 import { useDebounce } from '@/hooks/useDebounce';
 import { extractApiError } from '@/services/apiClient';
@@ -222,9 +224,17 @@ const EmployeeList = () => {
   const [importResult, setImportResult] = useState(null);
   const [previewLimit, setPreviewLimit] = useState(5);
 
+  const { role: actorRoleName } = useAuth();
   const employees = data?.data ?? [];
   const meta = data?.meta ?? {};
-  const roles = rolesData?.data ?? [];
+  // BU Admin sits below Admin/Entity Admin in the hierarchy and can't manage senior-tier
+  // accounts, so those roles shouldn't appear as filter options for a BU Admin login.
+  const roleFilterOptions =
+    actorRoleName === ROLE_NAMES.BU_ADMIN
+      ? (rolesData?.data ?? []).filter(
+          (r) => ![ROLE_NAMES.ADMIN, ROLE_NAMES.BU_ADMIN, ROLE_NAMES.ENTITY_ADMIN].includes(r.role_name)
+        )
+      : rolesData?.data ?? [];
   const isHR = useCanWrite();
 
   const columns = useMemo(() => [
@@ -784,7 +794,7 @@ const EmployeeList = () => {
           <SearchableSelect
             options={[
               { label: "All roles", value: "all" },
-              ...roles.map((r) => ({
+              ...roleFilterOptions.map((r) => ({
                 label: r.role_name,
                 value: String(r.id)
               }))

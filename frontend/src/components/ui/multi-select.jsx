@@ -18,6 +18,8 @@ import {
 } from "@/components/ui/popover"
 
 // options: [{ label, value }]. value: array of selected values (as strings).
+// lockedValues: values that are always selected and can't be toggled off or cleared — the
+// checkbox renders checked-but-disabled for these (e.g. a role every record must carry).
 export function MultiSelect({
   options = [],
   value = [],
@@ -26,10 +28,12 @@ export function MultiSelect({
   searchPlaceholder = "Search...",
   emptyMessage = "No option found.",
   disabled = false,
+  lockedValues = [],
   className,
 }) {
   const [open, setOpen] = React.useState(false)
 
+  const locked = React.useMemo(() => new Set(lockedValues.map(String)), [lockedValues])
   const selected = React.useMemo(() => new Set(value.map(String)), [value])
 
   const selectedLabels = React.useMemo(
@@ -38,9 +42,11 @@ export function MultiSelect({
   )
 
   const allSelected = options.length > 0 && selected.size === options.length
+  const clearableCount = [...selected].filter((v) => !locked.has(v)).length
 
   const toggle = (optValue) => {
     const key = String(optValue)
+    if (locked.has(key)) return
     const next = selected.has(key)
       ? value.filter((v) => String(v) !== key)
       : [...value, key]
@@ -48,7 +54,7 @@ export function MultiSelect({
   }
 
   const selectAll = () => onValueChange(options.map((opt) => String(opt.value)))
-  const clearAll = () => onValueChange([])
+  const clearAll = () => onValueChange([...locked])
 
   return (
     <div className="relative">
@@ -92,7 +98,7 @@ export function MultiSelect({
               <button
                 type="button"
                 className="text-xs font-medium text-primary hover:underline disabled:pointer-events-none disabled:opacity-50"
-                disabled={selected.size === 0}
+                disabled={clearableCount === 0}
                 onClick={clearAll}
               >
                 Clear all
@@ -103,14 +109,16 @@ export function MultiSelect({
               <CommandGroup>
                 {options.map((option) => {
                   const isSelected = selected.has(String(option.value))
+                  const isLocked = locked.has(String(option.value))
                   return (
                     <CommandItem
                       key={option.value}
                       value={String(option.label)}
                       onSelect={() => toggle(option.value)}
+                      disabled={isLocked}
                       className="gap-2"
                     >
-                      <Checkbox checked={isSelected} className="pointer-events-none" />
+                      <Checkbox checked={isSelected} disabled={isLocked} className="pointer-events-none" />
                       <span className="truncate">{option.label}</span>
                     </CommandItem>
                   )
@@ -123,7 +131,7 @@ export function MultiSelect({
 
       {/* Rendered as a sibling (not nested in the trigger button) so its click
           never bubbles into the Popover trigger and re-toggles/eats the event. */}
-      {selectedLabels.length > 0 && !disabled && (
+      {clearableCount > 0 && !disabled && (
         <button
           type="button"
           aria-label="Clear selection"

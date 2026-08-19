@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import dayjs from 'dayjs';
-import { Save, Building2, Clock } from 'lucide-react';
+import { Save, Building2, Clock, Lock } from 'lucide-react';
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter,
 } from '@/components/ui/sheet';
@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   useServicePoMonthlyBudgetServicePOs,
   useServicePoMonthlyBudgetRecord,
@@ -22,6 +23,7 @@ import {
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import { formatMonthYear, formatDateTime, getStatusColor } from '@/utils/formatters';
+import { isInvoiceMasterPeriodWritable, INVOICE_MASTER_LOCK_MESSAGE } from '@/utils/invoiceMasterWindow';
 
 const FORM_ID = 'service-po-budget-entry-form';
 
@@ -64,7 +66,9 @@ const CurrencyInput = ({ disabled, ...props }) => (
 // this screen. `initialServicePoId` truthy means "edit" (PO locked); '' means "new" (PO pickable).
 const ServicePoBudgetEntrySheet = ({ open, onOpenChange, month, year, initialServicePoId }) => {
   const [servicePoId, setServicePoId] = useState('');
+  const [lockError, setLockError] = useState('');
   const isEdit = !!initialServicePoId;
+  const isWindowOpen = isInvoiceMasterPeriodWritable(month, year);
   const { success, error: showError } = useNotification();
 
   const { data: servicePos = [], isPending: isServicePosLoading } = useServicePoMonthlyBudgetServicePOs();
@@ -76,7 +80,10 @@ const ServicePoBudgetEntrySheet = ({ open, onOpenChange, month, year, initialSer
   // Re-seed only at the moment the sheet opens (or the PO it's opened for changes) — not on every
   // background refetch while it's already open, which would silently overwrite an in-flight edit.
   useEffect(() => {
-    if (open) setServicePoId(initialServicePoId ?? '');
+    if (open) {
+      setServicePoId(initialServicePoId ?? '');
+      setLockError('');
+    }
   }, [open, initialServicePoId]);
 
   useEffect(() => {
@@ -94,6 +101,13 @@ const ServicePoBudgetEntrySheet = ({ open, onOpenChange, month, year, initialSer
   const selectedPo = servicePos.find((po) => String(po.service_po_id) === String(servicePoId));
 
   const onSubmit = (values) => {
+    // Save button is already disabled while the window is closed — this is a backstop against a
+    // stale sheet left open across a date rollover (e.g. left open past midnight on the 7th).
+    if (!isWindowOpen) {
+      setLockError(INVOICE_MASTER_LOCK_MESSAGE);
+      return;
+    }
+
     const payload = {
       service_po_id: Number(servicePoId),
       month,
@@ -104,6 +118,7 @@ const ServicePoBudgetEntrySheet = ({ open, onOpenChange, month, year, initialSer
       billed_remark: values.billed_remark || '',
     };
 
+    setLockError('');
     saveMutation.mutate(payload, {
       onSuccess: (result) => {
         const deadline = result?.deadline;
@@ -116,7 +131,16 @@ const ServicePoBudgetEntrySheet = ({ open, onOpenChange, month, year, initialSer
         }
         onOpenChange(false);
       },
-      onError: (err) => showError(extractApiError(err)),
+      onError: (err) => {
+        const message = extractApiError(err);
+        // The backend's date-lock 400 gets a persistent form-level banner instead of a toast that
+        // vanishes before the user reads why their save was rejected.
+        if (message === INVOICE_MASTER_LOCK_MESSAGE) {
+          setLockError(message);
+        } else {
+          showError(message);
+        }
+      },
     });
   };
 
@@ -135,6 +159,13 @@ const ServicePoBudgetEntrySheet = ({ open, onOpenChange, month, year, initialSer
         </SheetHeader>
 
         <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
+          {(!isWindowOpen || lockError) && (
+            <Alert variant="warning">
+              <Lock className="h-4 w-4" />
+              <AlertDescription>{lockError || INVOICE_MASTER_LOCK_MESSAGE}</AlertDescription>
+            </Alert>
+          )}
+
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs">Service PO</Label>
             <SearchableSelect
@@ -179,7 +210,7 @@ const ServicePoBudgetEntrySheet = ({ open, onOpenChange, month, year, initialSer
                         <FormItem>
                           <FormLabel>Invoice Amount <span className="text-destructive">*</span></FormLabel>
                           <FormControl>
-                            <CurrencyInput placeholder="1,00,000" disabled={isRecordLoading} {...field} />
+                            <CurrencyInput placeholder="1,00,000" disabled={isRecordLoading || !isWindowOpen} {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -192,7 +223,7 @@ const ServicePoBudgetEntrySheet = ({ open, onOpenChange, month, year, initialSer
                         <FormItem>
                           <FormLabel>Invoice Description</FormLabel>
                           <FormControl>
-                            <Input placeholder="e.g. August milestone invoice" disabled={isRecordLoading} {...field} />
+                            <Input placeholder="e.g. August milestone invoice" disabled={isRecordLoading || !isWindowOpen} {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -205,7 +236,7 @@ const ServicePoBudgetEntrySheet = ({ open, onOpenChange, month, year, initialSer
                         <FormItem>
                           <FormLabel>Billable Amount <span className="text-destructive">*</span></FormLabel>
                           <FormControl>
-                            <CurrencyInput placeholder="95,000" disabled={isRecordLoading} {...field} />
+                            <CurrencyInput placeholder="95,000" disabled={isRecordLoading || !isWindowOpen} {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -219,7 +250,7 @@ const ServicePoBudgetEntrySheet = ({ open, onOpenChange, month, year, initialSer
                         <FormItem>
                           <FormLabel>Billable Remark</FormLabel>
                           <FormControl>
-                            <Input placeholder="e.g. Partial payment received" disabled={isRecordLoading} {...field} />
+                            <Input placeholder="e.g. Partial payment received" disabled={isRecordLoading || !isWindowOpen} {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -241,7 +272,7 @@ const ServicePoBudgetEntrySheet = ({ open, onOpenChange, month, year, initialSer
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>
             Cancel
           </Button>
-          <Button type="submit" form={FORM_ID} disabled={isSaving || isRecordLoading || !servicePoId}>
+          <Button type="submit" form={FORM_ID} disabled={isSaving || isRecordLoading || !servicePoId || !isWindowOpen}>
             <Save className="mr-1.5 h-4 w-4" />
             {isSaving ? 'Saving…' : 'Save'}
           </Button>

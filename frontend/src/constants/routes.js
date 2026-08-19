@@ -129,6 +129,10 @@ export const ROUTES = {
   // Service PO Monthly Budget — Manager self-service, net-new (Service PO Manager screen)
   SERVICE_PO_MONTHLY_BUDGET: '/service-po-monthly-budget',
 
+  // Cost Budget / Resource Budget — net-new, per Service PO + month
+  COST_BUDGETS: '/cost-budgets',
+  RESOURCE_BUDGETS: '/resource-budgets',
+
   // Settings
   NOTIFICATIONS: '/notifications',
   SETTINGS: '/settings',
