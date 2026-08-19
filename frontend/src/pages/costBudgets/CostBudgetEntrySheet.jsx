@@ -11,7 +11,6 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { SearchableSelect } from '@/components/ui/searchable-select';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form';
 import { useCreateCostBudget, useUpdateCostBudget } from '@/hooks/useCostBudgets';
@@ -44,13 +43,14 @@ const CurrencyInput = ({ disabled, ...props }) => (
   </div>
 );
 
-// `initialData` set (a Cost Budget record) means "edit" — Service PO and month are fixed once
-// created, only invoice_amount/description can change. null means "new".
-const CostBudgetEntrySheet = ({ open, onOpenChange, initialData, servicePos = [], isServicePosLoading }) => {
+// The list page already scopes everything to one Service PO before this sheet ever opens, so
+// there's no PO picker here — `servicePo` (create) / `initialData` (edit) supply its display
+// info, and only the month (create-only — locked once created, same as invoice_amount/description
+// are the only editable fields in edit mode) needs picking.
+const CostBudgetEntrySheet = ({ open, onOpenChange, initialData, servicePo }) => {
   const isEdit = !!initialData;
   const { success, error: showError } = useNotification();
 
-  const [servicePoId, setServicePoId] = useState('');
   const [period, setPeriod] = useState(null);
 
   const createMutation = useCreateCostBudget();
@@ -62,29 +62,21 @@ const CostBudgetEntrySheet = ({ open, onOpenChange, initialData, servicePos = []
   useEffect(() => {
     if (!open) return;
     if (initialData) {
-      setServicePoId(String(initialData.service_po_id));
       setPeriod(fromApiMonth(initialData.month));
       form.reset({
         invoice_amount: initialData.invoice_amount ?? '',
         description: initialData.description ?? '',
       });
     } else {
-      setServicePoId('');
       setPeriod(null);
       form.reset(EMPTY_VALUES);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialData]);
 
-  const options = servicePos.map((po) => ({
-    value: String(po.id),
-    label: `${po.service_po_name}${po.service_po_code ? ` (${po.service_po_code})` : ''}`,
-    searchValue: `${po.service_po_name} ${po.service_po_code ?? ''} ${po.client?.client_name ?? ''}`,
-  }));
-
-  const selectedPo = isEdit
+  const displayPo = isEdit
     ? { client: initialData.client, service_po_name: initialData.service_po_name, service_po_code: initialData.service_po_code }
-    : servicePos.find((po) => String(po.id) === String(servicePoId));
+    : servicePo;
 
   const onSubmit = (values) => {
     if (isEdit) {
@@ -103,7 +95,7 @@ const CostBudgetEntrySheet = ({ open, onOpenChange, initialData, servicePos = []
 
     createMutation.mutate(
       {
-        service_po_id: Number(servicePoId),
+        service_po_id: servicePo.id,
         month: toApiMonth(period),
         invoice_amount: values.invoice_amount,
         description: values.description || '',
@@ -118,7 +110,7 @@ const CostBudgetEntrySheet = ({ open, onOpenChange, initialData, servicePos = []
     );
   };
 
-  const canSubmit = isEdit || (!!servicePoId && !!period);
+  const canSubmit = isEdit || !!period;
 
   return (
     <Sheet open={open} onOpenChange={(next) => !isSaving && onOpenChange(next)}>
@@ -129,34 +121,17 @@ const CostBudgetEntrySheet = ({ open, onOpenChange, initialData, servicePos = []
       >
         <SheetHeader className="border-b px-5 py-4">
           <SheetTitle>{isEdit ? 'Edit Cost Budget' : 'New Cost Budget'}</SheetTitle>
-          <SheetDescription>{period ? formatMonthYear(period.month, period.year) : 'Select a Service PO and month'}</SheetDescription>
+          <SheetDescription>
+            {displayPo?.service_po_name}
+            {displayPo?.service_po_code ? ` (${displayPo.service_po_code})` : ''}
+          </SheetDescription>
         </SheetHeader>
 
         <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
-          <div className="flex flex-col gap-1.5">
-            <Label className="text-xs">Service PO</Label>
-            {isEdit ? (
-              <p className="text-sm font-medium">
-                {initialData.service_po_name}
-                {initialData.service_po_code ? ` (${initialData.service_po_code})` : ''}
-              </p>
-            ) : (
-              <SearchableSelect
-                options={options}
-                value={servicePoId}
-                onValueChange={(v) => v && setServicePoId(v)}
-                disabled={isServicePosLoading}
-                placeholder={isServicePosLoading ? 'Loading…' : 'Select a Service PO'}
-                searchPlaceholder="Search Service PO…"
-                emptyMessage="No Service POs available."
-              />
-            )}
-          </div>
-
-          {selectedPo?.client?.client_name && (
+          {displayPo?.client?.client_name && (
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="muted" className="gap-1.5 font-normal">
-                <Building2 className="h-3 w-3" /> {selectedPo.client.client_name}
+                <Building2 className="h-3 w-3" /> {displayPo.client.client_name}
               </Badge>
             </div>
           )}
@@ -166,7 +141,7 @@ const CostBudgetEntrySheet = ({ open, onOpenChange, initialData, servicePos = []
             {isEdit ? (
               <p className="text-sm font-medium">{formatMonthYear(period?.month, period?.year)}</p>
             ) : (
-              <MonthYearPicker value={period} onChange={setPeriod} placeholder="Select month" className="w-full" />
+              <MonthYearPicker value={period} onChange={setPeriod} placeholder="Select month" clearable={false} className="w-full" />
             )}
           </div>
 

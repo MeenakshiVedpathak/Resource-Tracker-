@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
+import { createColumnHelper } from '@tanstack/react-table';
 import { Save, Ban, AlertCircle, Users } from 'lucide-react';
 import PageHeader from '@/components/common/PageHeader';
 import EmptyState from '@/components/common/EmptyState';
+import DataTable from '@/components/common/DataTable';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -21,13 +22,15 @@ import {
 import { useCanWrite } from '@/hooks/usePermissions';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
-import { formatMonthYear } from '@/utils/formatters';
-import { toApiMonth } from '@/utils/monthApi';
+import { formatMonthYear, getStatusColor } from '@/utils/formatters';
+import { toApiMonth, fromApiMonth } from '@/utils/monthApi';
 
 const MONTHLY_HOURS_CAP = 176;
 
 const now = new Date();
 const DEFAULT_PERIOD = { month: now.getMonth() + 1, year: now.getFullYear() };
+
+const historyColumnHelper = createColumnHelper();
 
 const ResourceBudgetPage = () => {
   const [servicePoId, setServicePoId] = useState('');
@@ -52,6 +55,17 @@ const ResourceBudgetPage = () => {
     poBudgets.filter((b) => b.month === apiMonth).forEach((b) => map.set(String(b.emp_id), b));
     return map;
   }, [poBudgets, apiMonth]);
+
+  // Every month ever saved for this PO, across every employee — not just the one month currently
+  // being edited above. "YYYY-MM" sorts correctly as a plain string, most recent first.
+  const employeesById = useMemo(
+    () => new Map(mappedEmployees.map((e) => [String(e.id), e])),
+    [mappedEmployees]
+  );
+  const historyRows = useMemo(
+    () => [...poBudgets].sort((a, b) => (a.month < b.month ? 1 : a.month > b.month ? -1 : 0)),
+    [poBudgets]
+  );
 
   const cellValue = (empId) => {
     const edited = edits[empId];
@@ -112,6 +126,58 @@ const ResourceBudgetPage = () => {
     });
   };
 
+  const historyColumns = [
+    historyColumnHelper.accessor((row) => employeesById.get(String(row.emp_id))?.full_name, {
+      id: 'employee',
+      header: 'Employee',
+      size: 220,
+      cell: (info) => {
+        const emp = employeesById.get(String(info.row.original.emp_id));
+        const label = emp ? `${emp.full_name} (${emp.employee_code})` : `Employee #${info.row.original.emp_id}`;
+        return (
+          <div className="truncate text-sm font-medium" title={label}>
+            {label}
+          </div>
+        );
+      },
+    }),
+    historyColumnHelper.accessor((row) => fromApiMonth(row.month), {
+      id: 'month',
+      header: 'Month',
+      size: 140,
+      cell: (info) => {
+        const p = info.getValue();
+        return <span className="text-sm whitespace-nowrap">{formatMonthYear(p?.month, p?.year)}</span>;
+      },
+    }),
+    historyColumnHelper.accessor('hours', {
+      header: 'Hours',
+      size: 100,
+      cell: (info) => <span className="tabular-nums text-sm font-medium">{info.getValue()}h</span>,
+    }),
+    historyColumnHelper.accessor('status', {
+      header: 'Status',
+      size: 100,
+      cell: (info) => <Badge variant={getStatusColor(info.getValue())}>{info.getValue()}</Badge>,
+    }),
+    historyColumnHelper.display({
+      id: 'actions',
+      header: 'Actions',
+      size: 90,
+      cell: ({ row }) =>
+        canManage && row.original.status === 'active' ? (
+          <Button
+            size="sm"
+            title="Deactivate"
+            onClick={() => setDeactivateTarget(row.original)}
+            className="h-6 w-6 p-0 bg-red-500 hover:bg-red-600 text-white rounded transition-colors"
+          >
+            <Ban className="h-3 w-3" />
+          </Button>
+        ) : null,
+    }),
+  ];
+
   const servicePoOptions = servicePos.map((po) => ({
     value: String(po.id),
     label: `${po.service_po_name}${po.service_po_code ? ` (${po.service_po_code})` : ''}`,
@@ -123,31 +189,26 @@ const ResourceBudgetPage = () => {
       <PageHeader
         title="Resource Budget"
         description="Planned monthly hours per employee for a Service PO — capped at 176 hrs/employee/month across all Service POs"
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <SearchableSelect
+              options={servicePoOptions}
+              value={servicePoId}
+              onValueChange={(v) => { if (v) { setServicePoId(v); setEdits({}); setFieldErrors({}); } }}
+              placeholder="Select a Service PO"
+              searchPlaceholder="Search Service PO…"
+              emptyMessage="No Service POs available."
+              className="w-72 bg-white"
+            />
+            <MonthYearPicker
+              value={period}
+              onChange={(v) => { if (v) { setPeriod(v); setEdits({}); setFieldErrors({}); } }}
+              clearable={false}
+              className="w-44"
+            />
+          </div>
+        }
       />
-
-      <div className="flex flex-col gap-4 rounded-lg border bg-muted/30 p-4 sm:flex-row sm:items-end">
-        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-          <Label className="text-xs">Service PO</Label>
-          <SearchableSelect
-            options={servicePoOptions}
-            value={servicePoId}
-            onValueChange={(v) => { if (v) { setServicePoId(v); setEdits({}); setFieldErrors({}); } }}
-            placeholder="Select a Service PO"
-            searchPlaceholder="Search Service PO…"
-            emptyMessage="No Service POs available."
-            className="bg-white"
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">Month</Label>
-          <MonthYearPicker
-            value={period}
-            onChange={(v) => { if (v) { setPeriod(v); setEdits({}); setFieldErrors({}); } }}
-            clearable={false}
-            className="w-44"
-          />
-        </div>
-      </div>
 
       {!servicePoId ? (
         <EmptyState
@@ -155,88 +216,109 @@ const ResourceBudgetPage = () => {
           title="Select a Service PO"
           description="Choose a Service PO and month above to enter planned resource hours for its mapped employees."
         />
-      ) : isLoading ? (
-        <div className="space-y-2 rounded-lg border bg-white p-4">
-          {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-9 w-full" />)}
-        </div>
-      ) : mappedEmployees.length === 0 ? (
-        <EmptyState
-          icon={Users}
-          title="No mapped employees"
-          description="No employees are currently allocated to this Service PO."
-        />
       ) : (
         <>
-          <Table containerClassName="rounded-lg border bg-white">
-            <TableHeader>
-              <TableRow>
-                <TableHead>Employee Code</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Designation</TableHead>
-                <TableHead className="w-40">Hours</TableHead>
-                {canManage && <TableHead className="w-16">Actions</TableHead>}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {mappedEmployees.map((emp) => {
-                const rowError = fieldErrors[String(emp.id)];
-                const existing = budgetByEmpId.get(String(emp.id));
-                return (
-                  <TableRow key={emp.id}>
-                    <TableCell className="text-sm font-medium">{emp.employee_code}</TableCell>
-                    <TableCell className="text-sm">{emp.full_name}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{emp.designation ?? '—'}</TableCell>
-                    <TableCell>
-                      <div className="flex flex-col gap-1">
-                        <Input
-                          type="number"
-                          min="0"
-                          max={MONTHLY_HOURS_CAP}
-                          step="0.5"
-                          value={cellValue(emp.id)}
-                          onChange={(e) => handleCellChange(emp.id, e.target.value)}
-                          disabled={!canManage || isSaving}
-                          className={`h-8 w-28 text-sm ${rowError ? 'border-destructive focus-visible:ring-destructive' : ''}`}
-                        />
-                        {rowError && (
-                          <span className="flex items-start gap-1 text-xs text-destructive">
-                            <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" /> {rowError}
-                          </span>
-                        )}
-                      </div>
-                    </TableCell>
-                    {canManage && (
-                      <TableCell>
-                        {existing && (
-                          <Button
-                            size="sm"
-                            title="Deactivate"
-                            onClick={() => setDeactivateTarget(existing)}
-                            className="h-6 w-6 p-0 bg-red-500 hover:bg-red-600 text-white rounded transition-colors"
-                          >
-                            <Ban className="h-3 w-3" />
-                          </Button>
-                        )}
-                      </TableCell>
-                    )}
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-
-          <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-4 py-3">
-            <div className="flex items-center gap-2 text-sm">
-              <span className="text-muted-foreground">Total planned hours for this Service PO:</span>
-              <Badge variant={totalHours > MONTHLY_HOURS_CAP ? 'destructive' : 'secondary'} className="tabular-nums">
-                {totalHours}h
-              </Badge>
+          {isLoading ? (
+            <div className="space-y-2 rounded-lg border bg-white p-4">
+              {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-9 w-full" />)}
             </div>
-            {canManage && (
-              <Button size="sm" className="gap-1.5" onClick={handleSave} disabled={isSaving}>
-                <Save className="h-4 w-4" /> {isSaving ? 'Saving…' : 'Save'}
-              </Button>
-            )}
+          ) : mappedEmployees.length === 0 ? (
+            <EmptyState
+              icon={Users}
+              title="No mapped employees"
+              description="No employees are currently allocated to this Service PO."
+            />
+          ) : (
+            <>
+              <Table containerClassName="rounded-lg border bg-white">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Employee Code</TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Designation</TableHead>
+                    <TableHead className="w-40">Hours</TableHead>
+                    {canManage && <TableHead className="w-16">Actions</TableHead>}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {mappedEmployees.map((emp) => {
+                    const rowError = fieldErrors[String(emp.id)];
+                    const existing = budgetByEmpId.get(String(emp.id));
+                    return (
+                      <TableRow key={emp.id}>
+                        <TableCell className="text-sm font-medium">{emp.employee_code}</TableCell>
+                        <TableCell className="text-sm">{emp.full_name}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{emp.designation ?? '—'}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-col gap-1">
+                            <Input
+                              type="number"
+                              min="0"
+                              max={MONTHLY_HOURS_CAP}
+                              step="0.5"
+                              value={cellValue(emp.id)}
+                              onChange={(e) => handleCellChange(emp.id, e.target.value)}
+                              disabled={!canManage || isSaving}
+                              className={`h-8 w-28 text-sm ${rowError ? 'border-destructive focus-visible:ring-destructive' : ''}`}
+                            />
+                            {rowError && (
+                              <span className="flex items-start gap-1 text-xs text-destructive">
+                                <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" /> {rowError}
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
+                        {canManage && (
+                          <TableCell>
+                            {existing && (
+                              <Button
+                                size="sm"
+                                title="Deactivate"
+                                onClick={() => setDeactivateTarget(existing)}
+                                className="h-6 w-6 p-0 bg-red-500 hover:bg-red-600 text-white rounded transition-colors"
+                              >
+                                <Ban className="h-3 w-3" />
+                              </Button>
+                            )}
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+
+              <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-4 py-3">
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-muted-foreground">Total planned hours for this Service PO:</span>
+                  <Badge variant={totalHours > MONTHLY_HOURS_CAP ? 'destructive' : 'secondary'} className="tabular-nums">
+                    {totalHours}h
+                  </Badge>
+                </div>
+                {canManage && (
+                  <Button size="sm" className="gap-1.5" onClick={handleSave} disabled={isSaving}>
+                    <Save className="h-4 w-4" /> {isSaving ? 'Saving…' : 'Save'}
+                  </Button>
+                )}
+              </div>
+            </>
+          )}
+
+          <div className="space-y-2">
+            <div>
+              <h2 className="text-sm font-semibold">History — all months for this Service PO</h2>
+              <p className="text-xs text-muted-foreground">Every resource budget entry saved so far, across every employee and month.</p>
+            </div>
+            <DataTable
+              columns={historyColumns}
+              data={historyRows}
+              isLoading={isBudgetsLoading}
+              toolbar={null}
+              rowClassName={(r) => (r.status !== 'active' ? 'opacity-50' : '')}
+              emptyState={
+                <EmptyState title="No resource budgets yet" description="No months have been added for this Service PO yet." />
+              }
+            />
           </div>
         </>
       )}
