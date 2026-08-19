@@ -16,7 +16,13 @@ const EmptyState = ({
     <h3 className="mb-1 text-sm font-semibold">{title}</h3>
     {description && <p className="mb-6 max-w-xs text-sm text-muted-foreground">{description}</p>}
     {action && (
-      <Button size="sm" onClick={action.onClick} variant={action.variant ?? 'default'}>
+      <Button
+        size="sm"
+        onClick={action.onClick}
+        variant={action.variant ?? 'default'}
+        disabled={action.disabled}
+        title={action.title}
+      >
         {action.icon && <action.icon className="mr-1.5 h-4 w-4" />}
         {action.label}
       </Button>

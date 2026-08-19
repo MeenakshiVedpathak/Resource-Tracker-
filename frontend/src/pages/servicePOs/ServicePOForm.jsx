@@ -28,12 +28,36 @@ import {
   SheetFooter,
 } from "@/components/ui/sheet";
 
-const poSchema = z
+// Matches the backend's create-time contract: required, 2-30 chars, uppercase alphanumeric plus
+// -, _, / — the server uppercases before validating/storing, so lowercase input is fine here too.
+const SERVICE_PO_CODE_PATTERN = /^[A-Z0-9_/-]{2,30}$/;
+const SERVICE_PO_CODE_MESSAGE =
+  'Must be 2–30 characters: letters, numbers, hyphens (-), underscores (_), or slashes (/) only.';
+
+// PUT still leaves service_po_code optional, so the field is only required on create — same
+// pattern check applies either way once something has actually been typed.
+const servicePoCodeField = (required) =>
+  z
+    .string()
+    .trim()
+    .transform((v) => v.toUpperCase())
+    .superRefine((v, ctx) => {
+      if (v === '') {
+        if (required) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Service PO Number is required' });
+        return;
+      }
+      if (!SERVICE_PO_CODE_PATTERN.test(v)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: SERVICE_PO_CODE_MESSAGE });
+      }
+    });
+
+const poSchema = (isEdit) => z
   .object({
     service_po_name: z
       .string()
       .min(3, 'Service PO name must be at least 3 characters')
       .max(200, 'Service PO name cannot exceed 200 characters'),
+    service_po_code: servicePoCodeField(!isEdit),
     client_id: z.coerce.number({ required_error: 'Client is required' }).positive('Client is required'),
     project_id: z.coerce.number({ required_error: 'Project is required' }).positive('Project is required'),
     delivery_head_employee_id: z.coerce
@@ -103,9 +127,10 @@ const ServicePOForm = () => {
   const [selectedCategory, setSelectedCategory] = useState('');
 
   const form = useForm({
-    resolver: zodResolver(poSchema),
+    resolver: zodResolver(poSchema(isEdit)),
     defaultValues: {
       service_po_name: '',
+      service_po_code: '',
       client_id: '',
       project_id: '',
       delivery_head_employee_id: '',
@@ -140,6 +165,7 @@ const ServicePOForm = () => {
       }
       form.reset({
         service_po_name: po.service_po_name ?? '',
+        service_po_code: po.service_po_code ?? '',
         client_id: po.client_id ?? '',
         project_id: po.project_id ?? po.project?.id ?? '',
         delivery_head_employee_id:
@@ -176,7 +202,16 @@ const ServicePOForm = () => {
         success(isEdit ? 'Service PO updated successfully.' : 'Service PO created successfully.');
         handleClose();
       },
-      onError: (err) => showError(extractApiError(err)),
+      onError: (err) => {
+        const message = extractApiError(err);
+        // Backend has no structured field-errors array for this one — a plain {message} 400 — so
+        // it's matched by its known prefix and pinned to the field instead of a generic toast.
+        if (/^Service PO code /i.test(message)) {
+          form.setError('service_po_code', { type: 'server', message });
+        } else {
+          showError(message);
+        }
+      },
     });
   };
 
@@ -221,6 +256,22 @@ const ServicePOForm = () => {
                     </FormLabel>
                     <FormControl>
                       <Input placeholder="e.g. Annual Support Services" className="h-8 text-sm" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="service_po_code"
+                render={({ field }) => (
+                  <FormItem className="space-y-1">
+                    <FormLabel className="text-[13px]">
+                      {!isEdit && <span className="text-destructive">*</span>} Service PO Number
+                    </FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g. PO-1001" className="h-8 text-sm uppercase" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

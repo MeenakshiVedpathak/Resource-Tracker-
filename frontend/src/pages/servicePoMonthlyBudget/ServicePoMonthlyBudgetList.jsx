@@ -1,22 +1,24 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo } from 'react';
 import * as XLSX from 'xlsx';
-import { createColumnHelper } from '@tanstack/react-table';
-import { ClipboardList, Pencil, Plus } from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import { ChevronRight, ClipboardList, Plus } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import DataTable from '@/components/common/DataTable';
+import { Separator } from '@/components/ui/separator';
 import EmptyState from '@/components/common/EmptyState';
+import { useServicePoMonthlyBudgetServicePOs } from '@/hooks/useServicePoMonthlyBudget';
 import { useNotification } from '@/hooks/useNotification';
-import { formatCurrency, formatDate, formatMonthYear } from '@/utils/formatters';
-
-const columnHelper = createColumnHelper();
+import { formatCurrency, formatDate, formatMonthYear, getStatusColor } from '@/utils/formatters';
 
 const ServicePoMonthlyBudgetList = forwardRef(({
   month, year, records, isLoading, search = '', clientFilter = 'all', poFilterIds = null,
-  onEdit, onAddEntry, onExportStateChange,
+  onEdit, onAddEntry, canAddEntry = true, addEntryDisabledReason, onExportStateChange,
 }, ref) => {
   const { success, error: showError } = useNotification();
+  const { data: servicePos = [] } = useServicePoMonthlyBudgetServicePOs();
+
+  const poMetaMap = useMemo(
+    () => new Map(servicePos.map((po) => [String(po.service_po_id), po])),
+    [servicePos]
+  );
 
   const filteredRecords = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -29,17 +31,6 @@ const ServicePoMonthlyBudgetList = forwardRef(({
         .some((v) => v.toLowerCase().includes(term));
     });
   }, [records, search, clientFilter, poFilterIds]);
-
-  const totals = useMemo(
-    () => filteredRecords.reduce(
-      (acc, r) => ({
-        invoice: acc.invoice + Number(r.invoice_amount ?? 0),
-        billed: acc.billed + Number(r.billed_amount ?? 0),
-      }),
-      { invoice: 0, billed: 0 }
-    ),
-    [filteredRecords]
-  );
 
   const handleExportExcel = () => {
     if (filteredRecords.length === 0) {
@@ -73,123 +64,131 @@ const ServicePoMonthlyBudgetList = forwardRef(({
 
   useImperativeHandle(ref, () => ({ exportExcel: handleExportExcel }));
 
-  const columns = [
-    columnHelper.display({
-      id: 'actions',
-      header: 'Actions',
-      size: 70,
-      meta: { sticky: true, left: 0 },
-      cell: ({ row }) => (
-        <Button
-          size="icon"
-          variant="outline"
-          className="h-7 w-7"
-          onClick={() => onEdit(row.original.service_po_id)}
-          aria-label="Edit"
-        >
-          <Pencil className="h-3.5 w-3.5" />
-        </Button>
-      ),
-    }),
-    columnHelper.accessor('service_po_name', {
-      header: 'Service PO',
-      size: 200,
-      cell: (info) => (
-        <div className="truncate font-medium max-w-[180px]" title={info.getValue()}>
-          {info.getValue() || '—'}
-        </div>
-      ),
-    }),
-    columnHelper.accessor('service_po_code', {
-      header: 'PO Code',
-      size: 160,
-      cell: (info) => (
-        <span className="block truncate font-mono text-xs text-muted-foreground" title={info.getValue() || ''}>
-          {info.getValue() || '—'}
-        </span>
-      ),
-    }),
-    columnHelper.accessor('client.client_name', {
-      header: 'Client',
-      size: 160,
-      cell: (info) => (
-        <div className="truncate max-w-[140px]" title={info.getValue()}>{info.getValue() || '—'}</div>
-      ),
-    }),
-    columnHelper.accessor('invoice_amount', {
-      header: () => <span className="whitespace-nowrap">Invoice Amount</span>,
-      size: 160,
-      meta: { align: 'right' },
-      cell: (info) => <span className="tabular-nums pr-2">{formatCurrency(info.getValue())}</span>,
-    }),
-    columnHelper.accessor('invoice_description', {
-      header: () => <span className="whitespace-nowrap">Invoice Description</span>,
-      size: 200,
-      cell: (info) => (
-        <div className="truncate max-w-[180px] text-muted-foreground" title={info.getValue()}>
-          {info.getValue() || '—'}
-        </div>
-      ),
-    }),
-    columnHelper.accessor('billed_amount', {
-      header: () => <span className="whitespace-nowrap">Billable Amount</span>,
-      size: 160,
-      meta: { align: 'right' },
-      cell: (info) => <span className="tabular-nums pr-2">{formatCurrency(info.getValue())}</span>,
-    }),
-    columnHelper.accessor('billed_remark', {
-      header: () => <span className="whitespace-nowrap">Billable Remark</span>,
-      size: 200,
-      cell: (info) => (
-        <div className="truncate max-w-[180px] text-muted-foreground" title={info.getValue()}>
-          {info.getValue() || '—'}
-        </div>
-      ),
-    }),
-  ];
+  if (records.length === 0 && !isLoading) {
+    return (
+      <div className="rounded-xl border bg-card">
+        <EmptyState
+          icon={ClipboardList}
+          title="No budgets saved yet"
+          description={`Nothing has been entered for ${formatMonthYear(month, year)} yet.`}
+          action={onAddEntry ? {
+            label: 'Add Entry',
+            icon: Plus,
+            onClick: onAddEntry,
+            disabled: !canAddEntry,
+            title: canAddEntry ? undefined : addEntryDisabledReason,
+          } : undefined}
+        />
+      </div>
+    );
+  }
+
+  if (!isLoading && filteredRecords.length === 0) {
+    return (
+      <div className="rounded-xl border bg-card">
+        <EmptyState title="No records found" description="Try adjusting your search or filters." />
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="h-[220px] animate-pulse rounded-xl border bg-muted/40" />
+        ))}
+      </div>
+    );
+  }
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
-        <div className="flex gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <ClipboardList className="h-4.5 w-4.5" />
-          </div>
-          <div>
-            <CardTitle>Saved Budgets</CardTitle>
-            <CardDescription>{formatMonthYear(month, year)}</CardDescription>
-          </div>
-        </div>
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {filteredRecords.map((r) => {
+          const poMeta = poMetaMap.get(String(r.service_po_id));
+          const statusLabel = poMeta?.is_billable ? 'Billable' : poMeta?.status || '—';
+          const statusVariant = poMeta?.is_billable ? 'success' : getStatusColor(poMeta?.status);
 
-        {!isLoading && records.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="secondary">{filteredRecords.length} {filteredRecords.length === 1 ? 'entry' : 'entries'}</Badge>
-            <Badge variant="muted" className="font-normal">Invoice {formatCurrency(totals.invoice)}</Badge>
-            <Badge variant="muted" className="font-normal">Billable {formatCurrency(totals.billed)}</Badge>
-          </div>
-        )}
-      </CardHeader>
+          return (
+            <button
+              key={r.service_po_id}
+              type="button"
+              onClick={() => onEdit(r.service_po_id)}
+              className="group flex flex-col rounded-xl border bg-card p-4 text-left shadow-card transition-colors hover:border-primary hover:shadow-md focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex min-w-0 gap-3">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <ClipboardList className="h-4.5 w-4.5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold" title={r.service_po_name}>
+                      {r.service_po_name || '—'}
+                    </p>
+                    <p className="truncate font-mono text-xs text-muted-foreground" title={r.service_po_code}>
+                      {r.service_po_code ? `(${r.service_po_code})` : ''}
+                    </p>
+                  </div>
+                </div>
+                <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+              </div>
 
-      <CardContent>
-        {records.length === 0 && !isLoading ? (
-          <EmptyState
-            icon={ClipboardList}
-            title="No budgets saved yet"
-            description={`Nothing has been entered for ${formatMonthYear(month, year)} yet.`}
-            action={onAddEntry ? { label: 'Add Entry', icon: Plus, onClick: onAddEntry } : undefined}
-          />
-        ) : !isLoading && filteredRecords.length === 0 ? (
-          <EmptyState title="No records found" description="Try adjusting your search or filters." />
-        ) : (
-          <DataTable
-            tableContainerClassName="max-h-[50vh]"
-            columns={columns}
-            data={filteredRecords}
-            isLoading={isLoading}
-          />
+              <Separator className="my-3" />
+
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs text-muted-foreground">Invoice Amount</p>
+                  <p className="font-semibold tabular-nums">{formatCurrency(r.invoice_amount)}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-muted-foreground">Billable Amount</p>
+                  <p className="font-semibold tabular-nums">{formatCurrency(r.billed_amount)}</p>
+                </div>
+              </div>
+
+              <div className="mt-3 flex items-end justify-between gap-3">
+                <div>
+                  <p className="text-xs text-muted-foreground">Status</p>
+                  <Badge variant={statusVariant} className="mt-1 font-normal">{statusLabel}</Badge>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-muted-foreground">Client</p>
+                  <p className="truncate text-sm font-medium" title={r.client?.client_name}>
+                    {r.client?.client_name || '—'}
+                  </p>
+                </div>
+              </div>
+
+              <Separator className="my-3" />
+
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>Updated on {formatDate(r.updated_at, 'DD-MMM-YYYY')}</span>
+                <ChevronRight className="h-3.5 w-3.5" />
+              </div>
+            </button>
+          );
+        })}
+
+        {onAddEntry && (
+          <button
+            type="button"
+            onClick={onAddEntry}
+            disabled={!canAddEntry}
+            title={canAddEntry ? undefined : addEntryDisabledReason}
+            className="flex min-h-[220px] flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-4 text-muted-foreground transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-border disabled:hover:text-muted-foreground"
+          >
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <Plus className="h-4.5 w-4.5" />
+            </div>
+            <span className="text-sm font-medium">Add Entry</span>
+          </button>
         )}
-      </CardContent>
-    </Card>
+      </div>
+
+      <p className="text-center text-sm text-muted-foreground">
+        Showing 1 to {filteredRecords.length} of {filteredRecords.length} entries
+      </p>
+    </div>
   );
 });
 

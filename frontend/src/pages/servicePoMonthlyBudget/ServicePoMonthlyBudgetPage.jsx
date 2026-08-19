@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { Download, Plus, RotateCcw, Search } from 'lucide-react';
+import { Download, RotateCcw, Search } from 'lucide-react';
 import PageHeader from '@/components/common/PageHeader';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
@@ -18,7 +18,7 @@ import { useActiveServicePOs } from '@/hooks/useServicePOs';
 import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
 import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
 import { useDebounce } from '@/hooks/useDebounce';
-import { isInvoiceMasterPeriodWritable, INVOICE_MASTER_LOCK_MESSAGE } from '@/utils/invoiceMasterWindow';
+import { isInvoiceMasterPeriodWritable, INVOICE_MASTER_WINDOW_MESSAGE } from '@/utils/invoiceMasterWindow';
 
 const now = new Date();
 const CURRENT_MONTH = now.getMonth() + 1;
@@ -163,18 +163,6 @@ const ServicePoMonthlyBudgetPage = () => {
               >
                 <Download className="h-4 w-4" /> Export Excel
               </Button>
-
-              {tab === 'monthly' && (
-                <Button
-                  size="sm"
-                  className="gap-1.5"
-                  disabled={!isPeriodWritable}
-                  title={isPeriodWritable ? undefined : INVOICE_MASTER_LOCK_MESSAGE}
-                  onClick={() => setEditSheet({ servicePoId: '', month: period.month, year: period.year })}
-                >
-                  <Plus className="h-4 w-4" /> Add Entry
-                </Button>
-              )}
             </div>
           }
         />
@@ -256,6 +244,8 @@ const ServicePoMonthlyBudgetPage = () => {
             poFilterIds={allowedPoIds}
             onEdit={(poId) => setEditSheet({ servicePoId: String(poId), month: period.month, year: period.year })}
             onAddEntry={() => setEditSheet({ servicePoId: '', month: period.month, year: period.year })}
+            canAddEntry={isPeriodWritable}
+            addEntryDisabledReason={INVOICE_MASTER_WINDOW_MESSAGE}
             onExportStateChange={handleExportStateChange}
           />
         </TabsContent>

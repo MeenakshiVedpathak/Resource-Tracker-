@@ -135,7 +135,7 @@ const ResourceBudgetPage = () => {
     <div className="space-y-4">
       <PageHeader
         title="Resource Budget"
-        description="Planned monthly hours per employee for a Service PO — capped at 176 hrs/employee/month across all Service POs"
+        // description="Planned monthly hours per employee for a Service PO — capped at 176 hrs/employee/month across all Service POs"
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <SearchableSelect

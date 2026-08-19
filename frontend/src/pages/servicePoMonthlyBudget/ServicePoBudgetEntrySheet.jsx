@@ -23,7 +23,9 @@ import {
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import { formatMonthYear, formatDateTime, getStatusColor } from '@/utils/formatters';
-import { isInvoiceMasterPeriodWritable, INVOICE_MASTER_LOCK_MESSAGE } from '@/utils/invoiceMasterWindow';
+import {
+  isInvoiceMasterPeriodWritable, INVOICE_MASTER_LOCK_MESSAGE, INVOICE_MASTER_WINDOW_MESSAGE,
+} from '@/utils/invoiceMasterWindow';
 
 const FORM_ID = 'service-po-budget-entry-form';
 
@@ -104,7 +106,7 @@ const ServicePoBudgetEntrySheet = ({ open, onOpenChange, month, year, initialSer
     // Save button is already disabled while the window is closed — this is a backstop against a
     // stale sheet left open across a date rollover (e.g. left open past midnight on the 7th).
     if (!isWindowOpen) {
-      setLockError(INVOICE_MASTER_LOCK_MESSAGE);
+      setLockError(INVOICE_MASTER_WINDOW_MESSAGE);
       return;
     }
 
@@ -154,7 +156,7 @@ const ServicePoBudgetEntrySheet = ({ open, onOpenChange, month, year, initialSer
         onInteractOutside={(e) => isSaving && e.preventDefault()}
       >
         <SheetHeader className="border-b px-5 py-4">
-          <SheetTitle>{isEdit ? 'Edit Budget Entry' : 'New Budget Entry'}</SheetTitle>
+          <SheetTitle>Invoice Details</SheetTitle>
           <SheetDescription>{formatMonthYear(month, year)}</SheetDescription>
         </SheetHeader>
 
@@ -162,7 +164,7 @@ const ServicePoBudgetEntrySheet = ({ open, onOpenChange, month, year, initialSer
           {(!isWindowOpen || lockError) && (
             <Alert variant="warning">
               <Lock className="h-4 w-4" />
-              <AlertDescription>{lockError || INVOICE_MASTER_LOCK_MESSAGE}</AlertDescription>
+              <AlertDescription>{lockError || INVOICE_MASTER_WINDOW_MESSAGE}</AlertDescription>
             </Alert>
           )}
 
