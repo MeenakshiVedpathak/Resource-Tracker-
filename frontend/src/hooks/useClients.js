@@ -42,6 +42,14 @@ export const useUpdateClient = (id) => {
   });
 };
 
+export const useToggleClientStatus = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, status }) => clientsApi.update(id, { status }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['clients'] }),
+  });
+};
+
 export const useDeleteClient = () => {
   const qc = useQueryClient();
   return useMutation({

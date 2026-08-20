@@ -42,6 +42,14 @@ export const useUpdateSubProject = (id) => {
   });
 };
 
+export const useToggleSubProjectStatus = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, status }) => subProjectsApi.update(id, { status }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['sub-projects'] }),
+  });
+};
+
 export const useDeleteSubProject = () => {
   const qc = useQueryClient();
   return useMutation({

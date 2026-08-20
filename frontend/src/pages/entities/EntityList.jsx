@@ -1,24 +1,21 @@
 import { useState } from 'react';
 import { useNavigate, Outlet } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Plus, Pencil, Trash2, Search, Building2 } from 'lucide-react';
-import { useEntities, useDeleteEntity } from '@/hooks/useEntities';
+import { Plus, Pencil, Search, Building2 } from 'lucide-react';
+import { useEntities, useToggleEntityStatus } from '@/hooks/useEntities';
 import { useAuth } from '@/hooks/useAuth';
-import { useNotification } from '@/hooks/useNotification';
 import { useDebounce } from '@/hooks/useDebounce';
-import { extractApiError } from '@/services/apiClient';
 import { buildPath, ROUTES } from '@/constants/routes';
 import { formatDate } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
 import EmptyState from '@/components/common/EmptyState';
-import StatusBadge from '@/components/common/StatusBadge';
-import ConfirmDialog from '@/components/common/ConfirmDialog';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { cn } from '@/utils/cn';
 
 const columnHelper = createColumnHelper();
@@ -32,9 +29,27 @@ const TruncatedCell = ({ value, maxWidth = '150px', className }) => {
   );
 };
 
+const StatusToggle = ({ entity }) => {
+  const { mutate, isPending } = useToggleEntityStatus();
+  const isActive = entity.status === 'active';
+  return (
+    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+      <Switch
+        checked={isActive}
+        disabled={isPending}
+        onCheckedChange={(checked) =>
+          mutate({ id: entity.id, status: checked ? 'active' : 'inactive' })
+        }
+      />
+      <span className={cn('text-xs font-medium', isActive ? 'text-green-600' : 'text-slate-400')}>
+        {isActive ? 'Active' : 'Inactive'}
+      </span>
+    </div>
+  );
+};
+
 const EntityList = () => {
   const navigate = useNavigate();
-  const { success, error: showError } = useNotification();
   const { hasRole } = useAuth();
   // Entity Admin can manage Entity Master the same as Admin (reverts the earlier "ownership
   // flip (§1)" that made Entity Admin read-only here).
@@ -44,7 +59,6 @@ const EntityList = () => {
   const [limit, setLimit] = useState(10);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [deleteTarget, setDeleteTarget] = useState(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const debouncedSearch = useDebounce(search, 400);
@@ -60,7 +74,6 @@ const EntityList = () => {
   };
 
   const { data, isPending } = useEntities(params);
-  const deleteMutation = useDeleteEntity();
 
   const entities = data?.data ?? [];
   const meta = data?.meta ?? {};
@@ -91,14 +104,6 @@ const EntityList = () => {
               >
                 <Pencil className="h-3 w-3" />
               </Button>
-              <Button
-                size="sm"
-                title="Delete"
-                className="h-6 w-6 p-0 bg-red-500 hover:bg-red-600 text-white rounded transition-colors"
-                onClick={() => setDeleteTarget(row.original)}
-              >
-                <Trash2 className="h-3 w-3" />
-              </Button>
             </>
           )}
         </div>
@@ -128,8 +133,8 @@ const EntityList = () => {
     }),
     columnHelper.accessor('status', {
       header: 'Status',
-      size: 120,
-      cell: (info) => <StatusBadge status={info.getValue()} />,
+      size: 140,
+      cell: (info) => <StatusToggle entity={info.row.original} />,
     }),
     columnHelper.accessor('created_at', {
       header: 'Created Date',
@@ -137,19 +142,6 @@ const EntityList = () => {
       cell: (info) => formatDate(info.getValue()),
     }),
   ];
-
-  const handleDelete = () => {
-    deleteMutation.mutate(deleteTarget.id, {
-      onSuccess: () => {
-        success(`${deleteTarget.entity_name} has been deleted.`);
-        setDeleteTarget(null);
-      },
-      onError: (err) => {
-        showError(extractApiError(err));
-        setDeleteTarget(null);
-      },
-    });
-  };
 
   return (
     <div className="space-y-4">
@@ -241,16 +233,6 @@ const EntityList = () => {
             />
           ) : undefined
         }
-      />
-
-      <ConfirmDialog
-        open={!!deleteTarget}
-        onOpenChange={(open) => !open && setDeleteTarget(null)}
-        title="Delete entity?"
-        description={`${deleteTarget?.entity_name} will be permanently deleted.`}
-        confirmLabel="Delete"
-        onConfirm={handleDelete}
-        isLoading={deleteMutation.isPending}
       />
 
       <Outlet />

@@ -1,23 +1,20 @@
 import { useState } from 'react';
 import { useNavigate, Outlet } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Plus, Pencil, Trash2, Search } from 'lucide-react';
-import { useProjects, useDeleteProject } from '@/hooks/useProjects';
+import { Plus, Pencil, Search } from 'lucide-react';
+import { useProjects, useToggleProjectStatus } from '@/hooks/useProjects';
 import { useCanWrite } from '@/hooks/usePermissions';
-import { useNotification } from '@/hooks/useNotification';
 import { useDebounce } from '@/hooks/useDebounce';
-import { extractApiError } from '@/services/apiClient';
 import { buildPath, ROUTES } from '@/constants/routes';
 import { formatDate } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
-import StatusBadge from '@/components/common/StatusBadge';
-import ConfirmDialog from '@/components/common/ConfirmDialog';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { cn } from '@/utils/cn';
 
 const columnHelper = createColumnHelper();
@@ -31,15 +28,32 @@ const TruncatedCell = ({ value, maxWidth = '150px', className }) => {
   );
 };
 
+const StatusToggle = ({ project }) => {
+  const { mutate, isPending } = useToggleProjectStatus();
+  const isActive = project.status === 'active';
+  return (
+    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+      <Switch
+        checked={isActive}
+        disabled={isPending}
+        onCheckedChange={(checked) =>
+          mutate({ id: project.id, status: checked ? 'active' : 'inactive' })
+        }
+      />
+      <span className={cn('text-xs font-medium', isActive ? 'text-green-600' : 'text-slate-400')}>
+        {isActive ? 'Active' : 'Inactive'}
+      </span>
+    </div>
+  );
+};
+
 const ProjectList = () => {
   const navigate = useNavigate();
-  const { success, error: showError } = useNotification();
 
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [deleteTarget, setDeleteTarget] = useState(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const debouncedSearch = useDebounce(search, 400);
@@ -56,7 +70,6 @@ const ProjectList = () => {
   };
 
   const { data, isPending } = useProjects(params);
-  const deleteMutation = useDeleteProject();
 
   const projects = data?.data ?? [];
   const meta = data?.meta ?? {};
@@ -67,39 +80,19 @@ const ProjectList = () => {
       header: 'Actions',
       size: 96,
       meta: { sticky: true, left: 0 },
-      cell: ({ row }) =>
-        canManage ? (
-          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-            <Button
-              size="sm"
-              title="Edit"
-              onClick={() => navigate(buildPath(ROUTES.PROJECT_EDIT, { id: row.original.id }))}
-              className="h-6 w-6 p-0 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
-            >
-              <Pencil className="h-3 w-3" />
-            </Button>
-            <Button
-              size="sm"
-              title="Delete"
-              className="h-6 w-6 p-0 bg-red-500 hover:bg-red-600 text-white rounded transition-colors"
-              onClick={() => setDeleteTarget(row.original)}
-            >
-              <Trash2 className="h-3 w-3" />
-            </Button>
-          </div>
-        ) : (
-          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => navigate(buildPath(ROUTES.PROJECT_EDIT, { id: row.original.id }))}
-              className="h-7 w-7 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded"
-              title="Edit"
-            >
-              <Pencil className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        ),
+      cell: ({ row }) => (
+        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate(buildPath(ROUTES.PROJECT_EDIT, { id: row.original.id }))}
+            className="h-7 w-7 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded"
+            title="Edit"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      ),
     }),
     columnHelper.accessor('project_name', {
       header: 'Project Name',
@@ -127,8 +120,8 @@ const ProjectList = () => {
     }),
     columnHelper.accessor('status', {
       header: 'Status',
-      size: 120,
-      cell: (info) => <StatusBadge status={info.getValue()} />,
+      size: 140,
+      cell: (info) => <StatusToggle project={info.row.original} />,
     }),
     columnHelper.accessor('total_service_pos', {
       header: 'Total Service POs',
@@ -141,19 +134,6 @@ const ProjectList = () => {
       cell: (info) => formatDate(info.getValue()),
     }),
   ];
-
-  const handleDelete = () => {
-    deleteMutation.mutate(deleteTarget.id, {
-      onSuccess: () => {
-        success(`${deleteTarget.project_name} has been deleted.`);
-        setDeleteTarget(null);
-      },
-      onError: (err) => {
-        showError(extractApiError(err));
-        setDeleteTarget(null);
-      },
-    });
-  };
 
   return (
     <div className="space-y-4">
@@ -230,16 +210,6 @@ const ProjectList = () => {
         onPageChange={setPage}
         onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
         onRowClick={(row) => navigate(buildPath(ROUTES.PROJECT_EDIT, { id: row.id }))}
-      />
-
-      <ConfirmDialog
-        open={!!deleteTarget}
-        onOpenChange={(open) => !open && setDeleteTarget(null)}
-        title="Delete project?"
-        description={`${deleteTarget?.project_name} will be permanently deleted.`}
-        confirmLabel="Delete"
-        onConfirm={handleDelete}
-        isLoading={deleteMutation.isPending}
       />
 
       <Outlet />

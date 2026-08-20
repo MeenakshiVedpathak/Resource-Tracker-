@@ -40,6 +40,14 @@ export const useActiveServiceCategories = () =>
     staleTime: 5 * 60 * 1000,
   });
 
+export const useToggleServiceCategoryStatus = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, status }) => serviceCategoriesApi.update(id, { status }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['service-categories'] }),
+  });
+};
+
 export const useDeleteServiceCategory = () => {
   const qc = useQueryClient();
   return useMutation({

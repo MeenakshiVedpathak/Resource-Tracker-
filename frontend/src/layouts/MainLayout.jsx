@@ -65,7 +65,8 @@ const MainLayout = () => {
           </footer>
         </main>
       </div>
-      {!isPlatformAdmin && <AICopilotWidget />}
+      {/* Chatbot hidden for now */}
+      {false && !isPlatformAdmin && <AICopilotWidget />}
     </div>
   );
 };

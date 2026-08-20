@@ -1,23 +1,20 @@
 import { useState } from 'react';
 import { useNavigate, Outlet } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Plus, Pencil, Trash2, Search } from 'lucide-react';
-import { useServiceCategories, useDeleteServiceCategory } from '@/hooks/useServiceCategories';
+import { Plus, Pencil, Search } from 'lucide-react';
+import { useServiceCategories, useToggleServiceCategoryStatus } from '@/hooks/useServiceCategories';
 import { useCanWrite } from '@/hooks/usePermissions';
 import { useDebounce } from '@/hooks/useDebounce';
 import { buildPath, ROUTES } from '@/constants/routes';
 import { formatDate } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
-import StatusBadge from '@/components/common/StatusBadge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import ConfirmDialog from '@/components/common/ConfirmDialog';
+import { Switch } from '@/components/ui/switch';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
-import { useNotification } from '@/hooks/useNotification';
-import { extractApiError } from '@/services/apiClient';
 import { cn } from '@/utils/cn';
 
 const columnHelper = createColumnHelper();
@@ -31,15 +28,32 @@ const TruncatedCell = ({ value, maxWidth = '150px', className }) => {
   );
 };
 
+const StatusToggle = ({ category }) => {
+  const { mutate, isPending } = useToggleServiceCategoryStatus();
+  const isActive = category.status === 'active';
+  return (
+    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+      <Switch
+        checked={isActive}
+        disabled={isPending}
+        onCheckedChange={(checked) =>
+          mutate({ id: category.id, status: checked ? 'active' : 'inactive' })
+        }
+      />
+      <span className={cn('text-xs font-medium', isActive ? 'text-green-600' : 'text-slate-400')}>
+        {isActive ? 'Active' : 'Inactive'}
+      </span>
+    </div>
+  );
+};
+
 const ServiceCategoryList = () => {
   const navigate = useNavigate();
-  const { success, showError } = useNotification();
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
-  const [deleteTarget, setDeleteTarget] = useState(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const debouncedSearch = useDebounce(search, 400);
@@ -56,21 +70,6 @@ const ServiceCategoryList = () => {
   };
 
   const { data, isPending } = useServiceCategories(params);
-  const deleteMutation = useDeleteServiceCategory();
-
-  const handleDelete = () => {
-    if (!deleteTarget) return;
-    deleteMutation.mutate(deleteTarget.id, {
-      onSuccess: () => {
-        success('Service category deleted successfully.');
-        setDeleteTarget(null);
-      },
-      onError: (err) => {
-        showError(extractApiError(err));
-        setDeleteTarget(null);
-      },
-    });
-  };
 
   const rows = Array.isArray(data?.data) ? data.data : [];
   const meta = data?.meta ?? {};
@@ -95,14 +94,6 @@ const ServiceCategoryList = () => {
             >
               <Pencil className="h-3 w-3" />
             </Button>
-            <Button
-              size="sm"
-              className="h-6 w-6 p-0 bg-red-500 hover:bg-red-600 text-white rounded transition-colors"
-              title="Delete"
-              onClick={() => setDeleteTarget(row.original)}
-            >
-              <Trash2 className="h-3 w-3" />
-            </Button>
           </div>
         ) : null,
     }),
@@ -114,8 +105,8 @@ const ServiceCategoryList = () => {
     }),
     columnHelper.accessor('status', {
       header: 'Status',
-      size: 110,
-      cell: (info) => <StatusBadge status={info.getValue()} />,
+      size: 140,
+      cell: (info) => <StatusToggle category={info.row.original} />,
     }),
     columnHelper.accessor('created_at', {
       header: 'Created',
@@ -196,17 +187,6 @@ const ServiceCategoryList = () => {
         onSortingChange={(s) => { setSorting(s); setPage(1); }}
         onPageChange={setPage}
         onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
-      />
-
-      <ConfirmDialog
-        open={!!deleteTarget}
-        onOpenChange={(open) => !open && setDeleteTarget(null)}
-        title="Delete Service Category"
-        description={`Are you sure you want to delete the category "${deleteTarget?.name}"? This action cannot be undone.`}
-        onConfirm={handleDelete}
-        isLoading={deleteMutation.isPending}
-        confirmLabel="Delete"
-        variant="destructive"
       />
 
       <Outlet />

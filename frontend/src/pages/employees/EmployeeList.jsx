@@ -5,11 +5,11 @@ import { useIsMutating } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus, Pencil, Trash2, KeyRound, Search, Download, Upload, CheckCircle2, AlertCircle, FileDown, FileText, Printer, FileSpreadsheet, ChevronDown, Lock } from 'lucide-react';
+import { Plus, Pencil, KeyRound, Search, Download, Upload, CheckCircle2, AlertCircle, FileDown, FileText, Printer, FileSpreadsheet, ChevronDown, Lock } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { useEmployees, useDeleteEmployee, useImportEmployees, useToggleEmployeeStatus } from '@/hooks/useEmployees';
+import { useEmployees, useImportEmployees, useToggleEmployeeStatus } from '@/hooks/useEmployees';
 import { useResetUserPassword, useUserByEmployeeId } from '@/hooks/useUsers';
 import { useRoles } from '@/hooks/useRoles';
 import { employeesApi } from '@/api/employees.api';
@@ -27,7 +27,6 @@ import { cn } from '@/utils/cn';
 import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
 import StatusBadge from '@/components/common/StatusBadge';
-import ConfirmDialog from '@/components/common/ConfirmDialog';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
 import {
@@ -194,7 +193,6 @@ const EmployeeList = () => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [roleFilter, setRoleFilter] = useState('all');
-  const [deleteTarget, setDeleteTarget] = useState(null);
   const [resetPasswordTarget, setResetPasswordTarget] = useState(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
@@ -213,7 +211,6 @@ const EmployeeList = () => {
 
   const { data, isPending, isFetching } = useEmployees(params);
   const { data: rolesData } = useRoles({ limit: 100 });
-  const deleteMutation = useDeleteEmployee();
   const importMutation = useImportEmployees();
   const isMutating = useIsMutating();
   const fileInputRef = useRef(null);
@@ -268,14 +265,6 @@ const EmployeeList = () => {
               onClick={() => setResetPasswordTarget(row.original)}
             >
               <KeyRound className="h-3 w-3" />
-            </Button>
-            <Button
-              size="sm"
-              className="h-6 w-6 p-0 bg-red-500 hover:bg-red-600 text-white rounded transition-colors"
-              title="Delete"
-              onClick={() => setDeleteTarget(row.original)}
-            >
-              <Trash2 className="h-3 w-3" />
             </Button>
           </div>
         ) : null;
@@ -368,19 +357,6 @@ const EmployeeList = () => {
       },
     }),
   ], [navigate, isHR]);
-
-  const handleDelete = () => {
-    deleteMutation.mutate(deleteTarget.id, {
-      onSuccess: () => {
-        success(`${deleteTarget.full_name} has been Deleted.`);
-        setDeleteTarget(null);
-      },
-      onError: (err) => {
-        showError(extractApiError(err));
-        setDeleteTarget(null);
-      },
-    });
-  };
 
   const handleSearch = (e) => {
     setSearch(e.target.value);
@@ -891,16 +867,6 @@ const EmployeeList = () => {
           onRowClick={(row) => navigate(buildPath(ROUTES.EMPLOYEE_EDIT, { id: row.id }))}
         />
       )}
-
-      <ConfirmDialog
-        open={!!deleteTarget}
-        onOpenChange={(open) => !open && setDeleteTarget(null)}
-        title="Delete employee?"
-        description={`${deleteTarget?.full_name} will be set to inactive. They won't be assignable to new Service POs.`}
-        confirmLabel="Delete"
-        onConfirm={handleDelete}
-        isLoading={deleteMutation.isPending}
-      />
 
       <ResetPasswordDialog
         employee={resetPasswordTarget}

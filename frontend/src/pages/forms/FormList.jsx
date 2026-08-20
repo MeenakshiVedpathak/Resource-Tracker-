@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, Outlet } from 'react-router-dom';
-import { Pencil, Trash2, Plus, Search, GripVertical, GripHorizontal, ChevronDown, ChevronRight, FolderTree } from 'lucide-react';
+import { Pencil, Plus, Search, GripVertical, GripHorizontal, ChevronDown, ChevronRight, FolderTree } from 'lucide-react';
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors,
 } from '@dnd-kit/core';
@@ -8,20 +8,19 @@ import {
   SortableContext, verticalListSortingStrategy, useSortable, arrayMove,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { useForms, useDeleteForm, useReorderModules, useReorderForms } from '@/hooks/useForms';
+import { useForms, useToggleFormStatus, useReorderModules, useReorderForms } from '@/hooks/useForms';
 import { useCanWrite } from '@/hooks/usePermissions';
 import { useNotification } from '@/hooks/useNotification';
 import { useDebounce } from '@/hooks/useDebounce';
 import { extractApiError } from '@/services/apiClient';
 import { buildPath, ROUTES } from '@/constants/routes';
 import PageHeader from '@/components/common/PageHeader';
-import StatusBadge from '@/components/common/StatusBadge';
-import ConfirmDialog from '@/components/common/ConfirmDialog';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { cn } from '@/utils/cn';
 
 const ROW_GRID = 'grid grid-cols-[40px_1fr_90px_110px_96px] items-center gap-2';
@@ -60,7 +59,21 @@ const buildTree = (rows) => {
   return [...modules.map((m) => ({ ...m, forms: childrenByModule[m.form_name] ?? [] })), ...orphanGroups];
 };
 
-const FormRow = ({ form, canWrite, onEdit, onDelete }) => {
+const FormStatusToggle = ({ id, status, disabled }) => {
+  const { mutate, isPending } = useToggleFormStatus();
+  const isActive = status === 'active';
+  return (
+    <div className="flex items-center" onClick={(e) => e.stopPropagation()}>
+      <Switch
+        checked={isActive}
+        disabled={isPending || disabled}
+        onCheckedChange={(checked) => mutate({ id, status: checked ? 'active' : 'inactive' })}
+      />
+    </div>
+  );
+};
+
+const FormRow = ({ form, canWrite, onEdit }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: form.id,
     disabled: !canWrite,
@@ -79,24 +92,19 @@ const FormRow = ({ form, canWrite, onEdit, onDelete }) => {
       </button>
       <span className="truncate pl-2 text-sm">{form.form_name}</span>
       <span className="text-sm text-muted-foreground">{form.seq ?? '—'}</span>
-      <StatusBadge status={form.status} />
+      <FormStatusToggle id={form.id} status={form.status} disabled={!canWrite} />
       <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
         {canWrite && (
-          <>
-            <Button size="sm" title="Edit" onClick={onEdit} className="h-6 w-6 p-0 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors">
-              <Pencil className="h-3 w-3" />
-            </Button>
-            <Button size="sm" title="Delete" onClick={onDelete} className="h-6 w-6 p-0 bg-red-500 hover:bg-red-600 text-white rounded transition-colors">
-              <Trash2 className="h-3 w-3" />
-            </Button>
-          </>
+          <Button size="sm" title="Edit" onClick={onEdit} className="h-6 w-6 p-0 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors">
+            <Pencil className="h-3 w-3" />
+          </Button>
         )}
       </div>
     </div>
   );
 };
 
-const ModuleBlock = ({ module, canWrite, expanded, onToggleExpand, onEditModule, onDeleteModule, onEditForm, onDeleteForm, onFormsReorder }) => {
+const ModuleBlock = ({ module, canWrite, expanded, onToggleExpand, onEditModule, onEditForm, onFormsReorder }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: module.id,
     disabled: module.isOrphan || !canWrite,
@@ -130,17 +138,12 @@ const ModuleBlock = ({ module, canWrite, expanded, onToggleExpand, onEditModule,
           <span className="truncate">{module.form_name}</span>
         </button>
         <span className="text-sm text-muted-foreground">{module.seq ?? '—'}</span>
-        <StatusBadge status={module.status} />
+        <FormStatusToggle id={module.id} status={module.status} disabled={!canWrite || module.isOrphan} />
         <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
           {canWrite && !module.isOrphan && (
-            <>
-              <Button size="sm" title="Edit module" onClick={onEditModule} className="h-6 w-6 p-0 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors">
-                <Pencil className="h-3 w-3" />
-              </Button>
-              <Button size="sm" title="Delete module" onClick={onDeleteModule} className="h-6 w-6 p-0 bg-red-500 hover:bg-red-600 text-white rounded transition-colors">
-                <Trash2 className="h-3 w-3" />
-              </Button>
-            </>
+            <Button size="sm" title="Edit module" onClick={onEditModule} className="h-6 w-6 p-0 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors">
+              <Pencil className="h-3 w-3" />
+            </Button>
           )}
         </div>
       </div>
@@ -157,7 +160,6 @@ const ModuleBlock = ({ module, canWrite, expanded, onToggleExpand, onEditModule,
                   form={form}
                   canWrite={canWrite}
                   onEdit={() => onEditForm(form)}
-                  onDelete={() => onDeleteForm(form)}
                 />
               ))}
             </SortableContext>
@@ -170,13 +172,12 @@ const ModuleBlock = ({ module, canWrite, expanded, onToggleExpand, onEditModule,
 
 const FormList = () => {
   const navigate = useNavigate();
-  const { success, error: showError } = useNotification();
+  const { error: showError } = useNotification();
   const canWrite = useCanWrite();
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState(null);
   const [collapsed, setCollapsed] = useState(() => new Set());
   const [tree, setTree] = useState(null);
 
@@ -187,7 +188,6 @@ const FormList = () => {
   };
 
   const { data, isPending } = useForms(params);
-  const deleteMutation = useDeleteForm();
   const reorderModulesMutation = useReorderModules();
   const reorderFormsMutation = useReorderForms();
 
@@ -237,21 +237,6 @@ const FormList = () => {
       onError: (err) => showError(extractApiError(err)),
     });
   };
-
-  const handleDelete = () => {
-    deleteMutation.mutate(deleteTarget.id, {
-      onSuccess: () => {
-        success(`${deleteTarget.form_name} has been deleted.`);
-        setDeleteTarget(null);
-      },
-      onError: (err) => {
-        showError(extractApiError(err));
-        setDeleteTarget(null);
-      },
-    });
-  };
-
-  const isDeletingModule = deleteTarget && deleteTarget.module_name == null;
 
   return (
     <div className="space-y-4">
@@ -354,9 +339,7 @@ const FormList = () => {
                   expanded={!collapsed.has(module.id)}
                   onToggleExpand={() => toggleExpand(module.id)}
                   onEditModule={() => navigate(buildPath(ROUTES.FORMS + '/' + module.id + '/edit'))}
-                  onDeleteModule={() => setDeleteTarget(module)}
                   onEditForm={(form) => navigate(buildPath(ROUTES.FORMS + '/' + form.id + '/edit'))}
-                  onDeleteForm={(form) => setDeleteTarget(form)}
                   onFormsReorder={handleFormsReorder}
                 />
               ))}
@@ -364,20 +347,6 @@ const FormList = () => {
           </DndContext>
         )}
       </div>
-
-      <ConfirmDialog
-        open={!!deleteTarget}
-        onOpenChange={(open) => !open && setDeleteTarget(null)}
-        title={isDeletingModule ? 'Delete module?' : 'Delete form?'}
-        description={
-          isDeletingModule
-            ? `"${deleteTarget?.form_name}" will be set to inactive. If it still has forms under it, this action will be blocked.`
-            : `"${deleteTarget?.form_name}" will be set to inactive and removed from any role's accessible forms.`
-        }
-        confirmLabel="Delete"
-        onConfirm={handleDelete}
-        isLoading={deleteMutation.isPending}
-      />
 
       <Outlet />
     </div>

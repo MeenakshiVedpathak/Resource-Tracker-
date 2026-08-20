@@ -1,23 +1,20 @@
 import { useState } from 'react';
 import { useNavigate, Outlet } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Plus, Pencil, Trash2, Search } from 'lucide-react';
-import { useSubProjects, useDeleteSubProject } from '@/hooks/useSubProjects';
+import { Plus, Pencil, Search } from 'lucide-react';
+import { useSubProjects, useToggleSubProjectStatus } from '@/hooks/useSubProjects';
 import { useActiveServicePOs } from '@/hooks/useServicePOs';
 import { useCanWrite } from '@/hooks/usePermissions';
-import { useNotification } from '@/hooks/useNotification';
 import { useDebounce } from '@/hooks/useDebounce';
-import { extractApiError } from '@/services/apiClient';
 import { buildPath, ROUTES } from '@/constants/routes';
 import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
-import StatusBadge from '@/components/common/StatusBadge';
-import ConfirmDialog from '@/components/common/ConfirmDialog';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { cn } from '@/utils/cn';
 
@@ -32,16 +29,33 @@ const TruncatedCell = ({ value, maxWidth = '150px', className }) => {
   );
 };
 
+const StatusToggle = ({ subProject }) => {
+  const { mutate, isPending } = useToggleSubProjectStatus();
+  const isActive = subProject.status === 'active';
+  return (
+    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+      <Switch
+        checked={isActive}
+        disabled={isPending}
+        onCheckedChange={(checked) =>
+          mutate({ id: subProject.id, status: checked ? 'active' : 'inactive' })
+        }
+      />
+      <span className={cn('text-xs font-medium', isActive ? 'text-green-600' : 'text-slate-400')}>
+        {isActive ? 'Active' : 'Inactive'}
+      </span>
+    </div>
+  );
+};
+
 const SubProjectList = () => {
   const navigate = useNavigate();
-  const { success, error: showError } = useNotification();
 
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [poFilter, setPoFilter] = useState('all');
-  const [deleteTarget, setDeleteTarget] = useState(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const debouncedSearch = useDebounce(search, 400);
@@ -60,7 +74,6 @@ const SubProjectList = () => {
 
   const { data, isPending } = useSubProjects(params);
   const { data: activePOs = [] } = useActiveServicePOs();
-  const deleteMutation = useDeleteSubProject();
 
   const subProjects = data?.data ?? [];
   const meta = data?.meta ?? {};
@@ -86,16 +99,6 @@ const SubProjectList = () => {
           >
             <Pencil className="h-3 w-3" />
           </Button>
-          {canManage && (
-            <Button
-              size="sm"
-              title="Delete"
-              className="h-6 w-6 p-0 bg-red-500 hover:bg-red-600 text-white rounded transition-colors"
-              onClick={() => setDeleteTarget(row.original)}
-            >
-              <Trash2 className="h-3 w-3" />
-            </Button>
-          )}
         </div>
       ),
     }),
@@ -117,23 +120,10 @@ const SubProjectList = () => {
     }),
     columnHelper.accessor('status', {
       header: 'Status',
-      size: 110,
-      cell: (info) => <StatusBadge status={info.getValue()} />,
+      size: 140,
+      cell: (info) => <StatusToggle subProject={info.row.original} />,
     }),
   ];
-
-  const handleDelete = () => {
-    deleteMutation.mutate(deleteTarget.id, {
-      onSuccess: () => {
-        success(`"${deleteTarget.sub_project_name}" has been Deleted.`);
-        setDeleteTarget(null);
-      },
-      onError: (err) => {
-        showError(extractApiError(err));
-        setDeleteTarget(null);
-      },
-    });
-  };
 
   return (
     <div className="space-y-4">
@@ -222,16 +212,6 @@ const SubProjectList = () => {
       />
 
       <Outlet />
-
-      <ConfirmDialog
-        open={!!deleteTarget}
-        onOpenChange={(open) => !open && setDeleteTarget(null)}
-        title="Delete sub-project?"
-        description={`"${deleteTarget?.sub_project_name}" will be set to inactive. This action cannot be undone if timesheets reference it.`}
-        confirmLabel="Delete"
-        onConfirm={handleDelete}
-        isLoading={deleteMutation.isPending}
-      />
     </div>
   );
 };

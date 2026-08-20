@@ -2,8 +2,8 @@ import { useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import { useNavigate, useSearchParams, Outlet } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Plus, Pencil, Eye, Trash2, Search, Download, Upload, Users, GitBranch } from 'lucide-react';
-import { useServicePOs, useDeleteServicePO } from '@/hooks/useServicePOs';
+import { Plus, Pencil, Eye, Search, Download, Upload, Users, GitBranch } from 'lucide-react';
+import { useServicePOs } from '@/hooks/useServicePOs';
 import { servicePOsApi } from '@/api/servicePOs.api';
 import { useActiveClients } from '@/hooks/useClients';
 import { useActiveServicePOs } from '@/hooks/useServicePOs';
@@ -11,14 +11,11 @@ import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
 import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
 import { useCanWrite } from '@/hooks/usePermissions';
 import { useDebounce } from '@/hooks/useDebounce';
-import { useNotification } from '@/hooks/useNotification';
-import { extractApiError } from '@/services/apiClient';
 import { buildPath, ROUTES } from '@/constants/routes';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
 import StatusBadge from '@/components/common/StatusBadge';
-import ConfirmDialog from '@/components/common/ConfirmDialog';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
 import ServicePOHierarchyDrawer from './ServicePOHierarchyDrawer';
@@ -126,9 +123,6 @@ const ServicePOList = () => {
   const debouncedSearch = useDebounce(search, 400);
 
   const canManage = useCanWrite();
-  const { success, error: showError } = useNotification();
-  const [deleteTarget, setDeleteTarget] = useState(null);
-  const deleteMutation = useDeleteServicePO();
 
   const [sorting, setSorting] = useState([]);
 
@@ -250,14 +244,6 @@ const ServicePOList = () => {
               >
                 <Pencil className="h-3 w-3" />
               </Button>
-              <Button
-                size="sm"
-                className="h-6 w-6 p-0 bg-red-500 hover:bg-red-600 text-white rounded transition-colors"
-                title="Delete"
-                onClick={() => setDeleteTarget(row.original)}
-              >
-                <Trash2 className="h-3 w-3" />
-              </Button>
             </>
           )}
         </div>
@@ -345,18 +331,6 @@ const ServicePOList = () => {
       cell: (info) => <StatusBadge status={info.getValue()} />,
     }),
   ];
-
-  const handleDelete = () => {
-    deleteMutation.mutate(deleteTarget.id, {
-      onSuccess: () => {
-        success('Service PO deleted successfully.');
-        setDeleteTarget(null);
-      },
-      onError: (err) => {
-        showError(extractApiError(err));
-      },
-    });
-  };
 
   return (
     <div className="space-y-4">
@@ -530,16 +504,6 @@ const ServicePOList = () => {
         onPageChange={setPage}
         onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
         onRowClick={(row) => navigate(buildPath(ROUTES.SERVICE_PO_DETAIL, { id: row.id }))}
-      />
-
-      <ConfirmDialog
-        open={!!deleteTarget}
-        onOpenChange={(open) => !open && setDeleteTarget(null)}
-        title="Delete Service PO?"
-        description={`Are you sure you want to delete ${deleteTarget?.service_po_code}? This action cannot be undone.`}
-        confirmLabel="Delete"
-        onConfirm={handleDelete}
-        isLoading={deleteMutation.isPending}
       />
 
       <ServicePOHierarchyDrawer

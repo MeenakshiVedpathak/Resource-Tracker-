@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { useNavigate, Outlet } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
 import * as XLSX from 'xlsx';
-import { Plus, Pencil, Trash2, Search, Download } from 'lucide-react';
-import { useServiceTypes, useDeleteServiceType } from '@/hooks/useServiceTypes';
+import { Plus, Pencil, Search, Download } from 'lucide-react';
+import { useServiceTypes } from '@/hooks/useServiceTypes';
 import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
 import { useCanWrite } from '@/hooks/usePermissions';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -15,11 +15,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SearchableSelect } from '@/components/ui/searchable-select';
-import ConfirmDialog from '@/components/common/ConfirmDialog';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
-import { useNotification } from '@/hooks/useNotification';
-import { extractApiError } from '@/services/apiClient';
 import { cn } from '@/utils/cn';
 
 const columnHelper = createColumnHelper();
@@ -48,13 +45,11 @@ const TruncatedCell = ({ value, maxWidth = '150px', className }) => {
 
 const ServiceTypeList = () => {
   const navigate = useNavigate();
-  const { success, showError } = useNotification();
 
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [categoryFilter, setCategoryFilter] = useState('all');
-  const [deleteTarget, setDeleteTarget] = useState(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const debouncedSearch = useDebounce(search, 400);
@@ -74,21 +69,6 @@ const ServiceTypeList = () => {
   };
 
   const { data, isPending } = useServiceTypes(params);
-  const deleteMutation = useDeleteServiceType();
-
-  const handleDelete = () => {
-    if (!deleteTarget) return;
-    deleteMutation.mutate(deleteTarget.id, {
-      onSuccess: () => {
-        success('Service type deleted successfully.');
-        setDeleteTarget(null);
-      },
-      onError: (err) => {
-        showError(extractApiError(err));
-        setDeleteTarget(null);
-      },
-    });
-  };
 
   const rows = Array.isArray(data?.data) ? data.data : [];
   const meta = data?.meta ?? {};
@@ -114,14 +94,6 @@ const ServiceTypeList = () => {
               className="h-6 w-6 p-0 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
             >
               <Pencil className="h-3 w-3" />
-            </Button>
-            <Button
-              size="sm"
-              className="h-6 w-6 p-0 bg-red-500 hover:bg-red-600 text-white rounded transition-colors"
-              title="Delete"
-              onClick={() => setDeleteTarget(row.original)}
-            >
-              <Trash2 className="h-3 w-3" />
             </Button>
           </div>
         ) : null,
@@ -220,17 +192,6 @@ const ServiceTypeList = () => {
         onSortingChange={(s) => { setSorting(s); setPage(1); }}
         onPageChange={setPage}
         onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
-      />
-
-      <ConfirmDialog
-        open={!!deleteTarget}
-        onOpenChange={(open) => !open && setDeleteTarget(null)}
-        title="Delete Service Type"
-        description={`Are you sure you want to delete the service type "${deleteTarget?.service_type_name}"? This action cannot be undone.`}
-        onConfirm={handleDelete}
-        isLoading={deleteMutation.isPending}
-        confirmLabel="Delete"
-        variant="destructive"
       />
 
       <Outlet />

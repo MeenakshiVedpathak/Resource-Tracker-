@@ -51,6 +51,14 @@ export const useUpdateEntity = (id) => {
   });
 };
 
+export const useToggleEntityStatus = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, status }) => entitiesApi.update(id, { status }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['entities'] }),
+  });
+};
+
 export const useDeleteEntity = () => {
   const qc = useQueryClient();
   return useMutation({

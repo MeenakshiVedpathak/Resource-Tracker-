@@ -53,6 +53,14 @@ export const useUpdateProject = (id) => {
   });
 };
 
+export const useToggleProjectStatus = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, status }) => projectsApi.update(id, { status }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['projects'] }),
+  });
+};
+
 export const useDeleteProject = () => {
   const qc = useQueryClient();
   return useMutation({

@@ -1,9 +1,9 @@
 import { useState, useRef } from 'react';
 import { useNavigate, Outlet } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Plus, Pencil, Trash2, Download, Upload, CheckCircle2, AlertCircle, Search } from 'lucide-react';
+import { Plus, Pencil, Download, Upload, CheckCircle2, AlertCircle, Search } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { useClients, useDeleteClient, useImportClients } from '@/hooks/useClients';
+import { useClients, useToggleClientStatus, useImportClients } from '@/hooks/useClients';
 import { clientsApi } from '@/api/clients.api';
 import { useCanWrite } from '@/hooks/usePermissions';
 import { useNotification } from '@/hooks/useNotification';
@@ -12,13 +12,12 @@ import { extractApiError } from '@/services/apiClient';
 import { buildPath, ROUTES } from '@/constants/routes';
 import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
-import StatusBadge from '@/components/common/StatusBadge';
-import ConfirmDialog from '@/components/common/ConfirmDialog';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -35,6 +34,25 @@ const TruncatedCell = ({ value, maxWidth = '150px', className }) => {
   );
 };
 
+const StatusToggle = ({ client }) => {
+  const { mutate, isPending } = useToggleClientStatus();
+  const isActive = client.status === 'active';
+  return (
+    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+      <Switch
+        checked={isActive}
+        disabled={isPending}
+        onCheckedChange={(checked) =>
+          mutate({ id: client.id, status: checked ? 'active' : 'inactive' })
+        }
+      />
+      <span className={cn('text-xs font-medium', isActive ? 'text-green-600' : 'text-slate-400')}>
+        {isActive ? 'Active' : 'Inactive'}
+      </span>
+    </div>
+  );
+};
+
 const ClientList = () => {
   const navigate = useNavigate();
   const { success, error: showError } = useNotification();
@@ -43,7 +61,6 @@ const ClientList = () => {
   const [limit, setLimit] = useState(10);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [deleteTarget, setDeleteTarget] = useState(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const debouncedSearch = useDebounce(search, 400);
@@ -60,7 +77,6 @@ const ClientList = () => {
   };
 
   const { data, isPending } = useClients(params);
-  const deleteMutation = useDeleteClient();
   const importMutation = useImportClients();
   const fileInputRef = useRef(null);
 
@@ -80,39 +96,19 @@ const ClientList = () => {
       header: 'Actions',
       size: 96,
       meta: { sticky: true, left: 0 },
-      cell: ({ row }) =>
-        canManage ? (
-          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-            <Button
-              size="sm"
-              title="Edit"
-              onClick={() => navigate(buildPath(ROUTES.CLIENT_EDIT, { id: row.original.id }))}
-              className="h-6 w-6 p-0 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
-            >
-              <Pencil className="h-3 w-3" />
-            </Button>
-            <Button
-              size="sm"
-              title="Delete"
-              className="h-6 w-6 p-0 bg-red-500 hover:bg-red-600 text-white rounded transition-colors"
-              onClick={() => setDeleteTarget(row.original)}
-            >
-              <Trash2 className="h-3 w-3" />
-            </Button>
-          </div>
-        ) : (
-          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => navigate(buildPath(ROUTES.CLIENT_EDIT, { id: row.original.id }))}
-              className="h-7 w-7 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded"
-              title="Edit"
-            >
-              <Pencil className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        ),
+      cell: ({ row }) => (
+        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate(buildPath(ROUTES.CLIENT_EDIT, { id: row.original.id }))}
+            className="h-7 w-7 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded"
+            title="Edit"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      ),
     }),
     columnHelper.accessor('client_name', {
       header: 'Client Name',
@@ -134,23 +130,10 @@ const ClientList = () => {
     }),
     columnHelper.accessor('status', {
       header: 'Status',
-      size: 120,
-      cell: (info) => <StatusBadge status={info.getValue()} />,
+      size: 140,
+      cell: (info) => <StatusToggle client={info.row.original} />,
     }),
   ];
-
-  const handleDelete = () => {
-    deleteMutation.mutate(deleteTarget.id, {
-      onSuccess: () => {
-        success(`${deleteTarget.client_name} has been deleted.`);
-        setDeleteTarget(null);
-      },
-      onError: (err) => {
-        showError(extractApiError(err));
-        setDeleteTarget(null);
-      },
-    });
-  };
 
   const handleDownloadSample = () => {
     const ws = XLSX.utils.json_to_sheet([{
@@ -505,16 +488,6 @@ const ClientList = () => {
           onRowClick={(row) => navigate(buildPath(ROUTES.CLIENT_EDIT, { id: row.id }))}
         />
       )}
-
-      <ConfirmDialog
-        open={!!deleteTarget}
-        onOpenChange={(open) => !open && setDeleteTarget(null)}
-        title="Delete client?"
-        description={`${deleteTarget?.client_name} will be permanently deleted.`}
-        confirmLabel="Delete"
-        onConfirm={handleDelete}
-        isLoading={deleteMutation.isPending}
-      />
 
       <Outlet />
     </div>

@@ -35,6 +35,14 @@ export const useUpdateRole = (id) => {
   });
 };
 
+export const useToggleRoleStatus = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, status }) => rolesApi.update(id, { status }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['roles'] }),
+  });
+};
+
 export const useDeleteRole = () => {
   const qc = useQueryClient();
   return useMutation({

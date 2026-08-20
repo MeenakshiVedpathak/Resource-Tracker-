@@ -43,6 +43,14 @@ export const useUpdateForm = (id) => {
   });
 };
 
+export const useToggleFormStatus = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, status }) => formsApi.update(id, { status }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['forms'] }),
+  });
+};
+
 export const useDeleteForm = () => {
   const qc = useQueryClient();
   return useMutation({
