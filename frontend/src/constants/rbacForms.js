@@ -18,7 +18,7 @@ import {
   FileBarChart2, PieChart, CalendarRange, UserCheck, Network, Receipt, Table2, Wallet, IndianRupee,
   ListTree, ListChecks, Banknote, CalendarClock,
   TrendingUp, LineChart, Target, Percent, Award, BatteryCharging, AlertTriangle, Crown,
-  ReceiptText, GitCompare,
+  ReceiptText, GitCompare, Scale, BarChart3, Building, Activity, Armchair,
 } from 'lucide-react';
 import { ROUTES } from '@/constants/routes';
 
@@ -105,6 +105,14 @@ export const FORM_NAMES = {
   REPORT_DELIVERY_HEAD_PERFORMANCE: 'Delivery Head Performance',
   REPORT_INVOICE_REALIZATION_TREND: 'Invoice Realization Trend',
   REPORT_SERVICE_LINE_BUSINESS_MIX: 'Service Line Business Mix',
+  // Guessed names — same caveat as the rest of this file: these five budget/cost analytics
+  // reports are brand new (no Form Master rows confirmed yet). Confirm against the real
+  // GET /roles/forms response once seeded.
+  REPORT_BUDGET_VS_BILLED: 'Budget vs Billed',
+  REPORT_CLIENT_COST_ANALYTICS: 'Client Cost Analytics',
+  REPORT_CLIENT_WISE_ANALYTICS: 'Client Wise Analytics',
+  REPORT_MONTHLY_HOURS_TREND: 'Monthly Hours Trend',
+  REPORT_EMPLOYEE_BENCH_PERCENTAGE: 'Employee Bench Percentage',
 };
 
 // form_name (lowercased/trimmed) -> { to, icon, exact }. Icons are used by the dynamic Sidebar.
@@ -153,6 +161,11 @@ export const FORM_ROUTE_CONFIG = {
   [FORM_NAMES.REPORT_DELIVERY_HEAD_PERFORMANCE]: { to: ROUTES.REPORT_DELIVERY_HEAD_PERFORMANCE, icon: Crown },
   [FORM_NAMES.REPORT_INVOICE_REALIZATION_TREND]: { to: ROUTES.REPORT_INVOICE_REALIZATION_TREND, icon: ReceiptText },
   [FORM_NAMES.REPORT_SERVICE_LINE_BUSINESS_MIX]: { to: ROUTES.REPORT_SERVICE_LINE_BUSINESS_MIX, icon: GitCompare },
+  [FORM_NAMES.REPORT_BUDGET_VS_BILLED]: { to: ROUTES.REPORT_BUDGET_VS_BILLED, icon: Scale },
+  [FORM_NAMES.REPORT_CLIENT_COST_ANALYTICS]: { to: ROUTES.REPORT_CLIENT_COST_ANALYTICS, icon: BarChart3 },
+  [FORM_NAMES.REPORT_CLIENT_WISE_ANALYTICS]: { to: ROUTES.REPORT_CLIENT_WISE_ANALYTICS, icon: Building },
+  [FORM_NAMES.REPORT_MONTHLY_HOURS_TREND]: { to: ROUTES.REPORT_MONTHLY_HOURS_TREND, icon: Activity },
+  [FORM_NAMES.REPORT_EMPLOYEE_BENCH_PERCENTAGE]: { to: ROUTES.REPORT_EMPLOYEE_BENCH_PERCENTAGE, icon: Armchair },
 };
 
 const NORMALIZED_CONFIG = Object.fromEntries(

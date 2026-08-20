@@ -129,6 +129,11 @@ export const ROUTES = {
   REPORT_DELIVERY_HEAD_PERFORMANCE: '/reports/delivery-head-performance',
   REPORT_INVOICE_REALIZATION_TREND: '/reports/invoice-realization-trend',
   REPORT_SERVICE_LINE_BUSINESS_MIX: '/reports/service-line-business-mix',
+  REPORT_BUDGET_VS_BILLED: '/reports/budget-vs-billed',
+  REPORT_CLIENT_COST_ANALYTICS: '/reports/client-cost-analytics',
+  REPORT_CLIENT_WISE_ANALYTICS: '/reports/client-wise-analytics',
+  REPORT_MONTHLY_HOURS_TREND: '/reports/monthly-hours-trend',
+  REPORT_EMPLOYEE_BENCH_PERCENTAGE: '/reports/employee-bench-percentage',
 
   // Team Mapping — Service PO Admin self-service (§7)
   TEAM_MAPPINGS: '/team-mappings',

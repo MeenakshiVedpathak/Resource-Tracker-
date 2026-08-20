@@ -247,3 +247,70 @@ export const useServiceLineBusinessMix = (params) =>
     staleTime: 0,
     placeholderData: (prev) => prev,
   });
+
+// Backend requires exactly one date mode: {month, year} XOR {startDate, endDate} — same
+// XOR-gated pattern as useClientServicePOHours above.
+export const useBudgetVsBilled = (params) => {
+  const hasMonthYear = !!(params?.month && params?.year);
+  const hasDateRange = !!(params?.startDate && params?.endDate);
+  return useQuery({
+    queryKey: QUERY_KEYS.REPORT_BUDGET_VS_BILLED(params),
+    queryFn: () => reportsApi.getBudgetVsBilled(params),
+    enabled: hasMonthYear !== hasDateRange,
+    staleTime: 0,
+    placeholderData: (prev) => prev,
+    retry: false,
+  });
+};
+
+// No period filter — always all-time, matching the Dashboard. Always enabled.
+export const useClientCostAnalytics = (params) =>
+  useQuery({
+    queryKey: QUERY_KEYS.REPORT_CLIENT_COST_ANALYTICS(params),
+    queryFn: () => reportsApi.getClientCostAnalytics(params),
+    staleTime: 0,
+    placeholderData: (prev) => prev,
+  });
+
+// Backend requires exactly one date mode: {month, year} XOR {startDate, endDate}.
+export const useClientWiseAnalytics = (params) => {
+  const hasMonthYear = !!(params?.month && params?.year);
+  const hasDateRange = !!(params?.startDate && params?.endDate);
+  return useQuery({
+    queryKey: QUERY_KEYS.REPORT_CLIENT_WISE_ANALYTICS(params),
+    queryFn: () => reportsApi.getClientWiseAnalytics(params),
+    enabled: hasMonthYear !== hasDateRange,
+    staleTime: 0,
+    placeholderData: (prev) => prev,
+    retry: false,
+  });
+};
+
+// Backend requires exactly one date mode: {month, year} XOR {startDate, endDate}. Not
+// paginated — a fixed-size, zero-filled series across the resolved month range.
+export const useMonthlyHoursTrend = (params) => {
+  const hasMonthYear = !!(params?.month && params?.year);
+  const hasDateRange = !!(params?.startDate && params?.endDate);
+  return useQuery({
+    queryKey: QUERY_KEYS.REPORT_MONTHLY_HOURS_TREND(params),
+    queryFn: () => reportsApi.getMonthlyHoursTrend(params),
+    enabled: hasMonthYear !== hasDateRange,
+    staleTime: 0,
+    placeholderData: (prev) => prev,
+    retry: false,
+  });
+};
+
+// Backend requires exactly one date mode: {month, year} XOR {startDate, endDate}.
+export const useEmployeeBenchPercentage = (params) => {
+  const hasMonthYear = !!(params?.month && params?.year);
+  const hasDateRange = !!(params?.startDate && params?.endDate);
+  return useQuery({
+    queryKey: QUERY_KEYS.REPORT_EMPLOYEE_BENCH_PERCENTAGE(params),
+    queryFn: () => reportsApi.getEmployeeBenchPercentage(params),
+    enabled: hasMonthYear !== hasDateRange,
+    staleTime: 0,
+    placeholderData: (prev) => prev,
+    retry: false,
+  });
+};

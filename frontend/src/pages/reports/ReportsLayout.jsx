@@ -20,6 +20,11 @@ const NAV = [
   { label: 'Delivery Head Performance', to: ROUTES.REPORT_DELIVERY_HEAD_PERFORMANCE },
   { label: 'Invoice Realization Trend', to: ROUTES.REPORT_INVOICE_REALIZATION_TREND },
   { label: 'Service Line Business Mix', to: ROUTES.REPORT_SERVICE_LINE_BUSINESS_MIX },
+  { label: 'Budget vs Billed', to: ROUTES.REPORT_BUDGET_VS_BILLED },
+  { label: 'Client Cost Analytics', to: ROUTES.REPORT_CLIENT_COST_ANALYTICS },
+  { label: 'Client Wise Analytics', to: ROUTES.REPORT_CLIENT_WISE_ANALYTICS },
+  { label: 'Monthly Hours Trend', to: ROUTES.REPORT_MONTHLY_HOURS_TREND },
+  { label: 'Employee Bench Percentage', to: ROUTES.REPORT_EMPLOYEE_BENCH_PERCENTAGE },
 ];
 
 const ReportsLayout = () => (

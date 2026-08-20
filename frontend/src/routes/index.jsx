@@ -101,6 +101,11 @@ const ServicePOTimelineRisk = lazy(() => import('@/pages/reports/ServicePOTimeli
 const DeliveryHeadPerformance = lazy(() => import('@/pages/reports/DeliveryHeadPerformance'));
 const InvoiceRealizationTrend = lazy(() => import('@/pages/reports/InvoiceRealizationTrend'));
 const ServiceLineBusinessMix = lazy(() => import('@/pages/reports/ServiceLineBusinessMix'));
+const BudgetVsBilled = lazy(() => import('@/pages/reports/BudgetVsBilled'));
+const ClientCostAnalytics = lazy(() => import('@/pages/reports/ClientCostAnalytics'));
+const ClientWiseAnalytics = lazy(() => import('@/pages/reports/ClientWiseAnalytics'));
+const MonthlyHoursTrend = lazy(() => import('@/pages/reports/MonthlyHoursTrend'));
+const EmployeeBenchPercentage = lazy(() => import('@/pages/reports/EmployeeBenchPercentage'));
 
 // ── AI Copilot (new pages, launched from the floating AI Copilot widget) ──
 const RootCauseView = lazy(() => import('@/pages/ai/RootCauseView'));
@@ -335,6 +340,11 @@ const AppRoutes = () => {
           <Route path={ROUTES.REPORT_DELIVERY_HEAD_PERFORMANCE} element={<ProtectedRoute formName={FORM_NAMES.REPORT_DELIVERY_HEAD_PERFORMANCE}><DeliveryHeadPerformance /></ProtectedRoute>} />
           <Route path={ROUTES.REPORT_INVOICE_REALIZATION_TREND} element={<ProtectedRoute formName={FORM_NAMES.REPORT_INVOICE_REALIZATION_TREND}><InvoiceRealizationTrend /></ProtectedRoute>} />
           <Route path={ROUTES.REPORT_SERVICE_LINE_BUSINESS_MIX} element={<ProtectedRoute formName={FORM_NAMES.REPORT_SERVICE_LINE_BUSINESS_MIX}><ServiceLineBusinessMix /></ProtectedRoute>} />
+          <Route path={ROUTES.REPORT_BUDGET_VS_BILLED} element={<ProtectedRoute formName={FORM_NAMES.REPORT_BUDGET_VS_BILLED}><BudgetVsBilled /></ProtectedRoute>} />
+          <Route path={ROUTES.REPORT_CLIENT_COST_ANALYTICS} element={<ProtectedRoute formName={FORM_NAMES.REPORT_CLIENT_COST_ANALYTICS}><ClientCostAnalytics /></ProtectedRoute>} />
+          <Route path={ROUTES.REPORT_CLIENT_WISE_ANALYTICS} element={<ProtectedRoute formName={FORM_NAMES.REPORT_CLIENT_WISE_ANALYTICS}><ClientWiseAnalytics /></ProtectedRoute>} />
+          <Route path={ROUTES.REPORT_MONTHLY_HOURS_TREND} element={<ProtectedRoute formName={FORM_NAMES.REPORT_MONTHLY_HOURS_TREND}><MonthlyHoursTrend /></ProtectedRoute>} />
+          <Route path={ROUTES.REPORT_EMPLOYEE_BENCH_PERCENTAGE} element={<ProtectedRoute formName={FORM_NAMES.REPORT_EMPLOYEE_BENCH_PERCENTAGE}><EmployeeBenchPercentage /></ProtectedRoute>} />
         </Route>
 
         {/* AI Copilot — new, additive pages. No RBAC form rows exist for these yet (they're

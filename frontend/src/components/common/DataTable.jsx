@@ -131,7 +131,7 @@ const DataTable = ({
                   return (
                     <TableHead
                       key={header.id}
-                      className={cn(isSticky && 'sticky-col', align === 'right' && 'text-right')}
+                      className={cn('whitespace-nowrap', isSticky && 'sticky-col', align === 'right' && 'text-right')}
                       style={{
                         ...(w ? { width: w, minWidth: w, maxWidth: w } : {}),
                         ...(isSticky ? { left } : {})

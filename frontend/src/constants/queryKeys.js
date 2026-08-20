@@ -141,6 +141,11 @@ export const QUERY_KEYS = {
   REPORT_DELIVERY_HEAD_PERFORMANCE: (params) => ['reports', 'delivery-head-performance', params],
   REPORT_INVOICE_REALIZATION_TREND: (params) => ['reports', 'invoice-realization-trend', params],
   REPORT_SERVICE_LINE_BUSINESS_MIX: (params) => ['reports', 'service-line-business-mix', params],
+  REPORT_BUDGET_VS_BILLED: (params) => ['reports', 'budget-vs-billed', params],
+  REPORT_CLIENT_COST_ANALYTICS: (params) => ['reports', 'client-cost-analytics', params],
+  REPORT_CLIENT_WISE_ANALYTICS: (params) => ['reports', 'client-wise-analytics', params],
+  REPORT_MONTHLY_HOURS_TREND: (params) => ['reports', 'monthly-hours-trend', params],
+  REPORT_EMPLOYEE_BENCH_PERCENTAGE: (params) => ['reports', 'employee-bench-percentage', params],
 
   // Notifications
   NOTIFICATIONS: (params) => ['notifications', params],

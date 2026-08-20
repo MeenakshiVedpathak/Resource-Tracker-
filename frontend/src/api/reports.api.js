@@ -37,4 +37,16 @@ export const reportsApi = {
     apiClient.get('/reports/invoice-realization-trend', { params }).then((r) => r.data),
   getServiceLineBusinessMix: (params) =>
     apiClient.get('/reports/service-line-business-mix', { params }).then((r) => r.data),
+
+  // Budget/cost analytics reports (§ new report suite 2)
+  getBudgetVsBilled: (params) =>
+    apiClient.get('/reports/budget-vs-billed', { params }).then((r) => r.data),
+  getClientCostAnalytics: (params) =>
+    apiClient.get('/reports/client-cost-analytics', { params }).then((r) => r.data),
+  getClientWiseAnalytics: (params) =>
+    apiClient.get('/reports/client-wise-analytics', { params }).then((r) => r.data),
+  getMonthlyHoursTrend: (params) =>
+    apiClient.get('/reports/monthly-hours-trend', { params }).then((r) => r.data),
+  getEmployeeBenchPercentage: (params) =>
+    apiClient.get('/reports/employee-bench-percentage', { params }).then((r) => r.data),
 };
