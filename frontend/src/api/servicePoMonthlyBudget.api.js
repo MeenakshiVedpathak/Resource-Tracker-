@@ -13,20 +13,6 @@ export const servicePoMonthlyBudgetApi = {
       .get('/service-po-monthly-budgets', { params: { month, year } })
       .then((r) => r.data?.data?.records ?? []),
 
-  // ⚠️ Year-only (no month) isn't in the documented contract — the spec says month+year are
-  // both required and 422s without month. Backend confirmation is pending, so a 422 here is left
-  // to throw (surfaced distinctly by the Yearly tab as "not supported yet" rather than "no data")
-  // instead of being swallowed into a misleading empty year.
-  getYearList: async (year) => {
-    try {
-      const res = await apiClient.get('/service-po-monthly-budgets', { params: { year } });
-      return res.data?.data?.records ?? [];
-    } catch (err) {
-      if (err?.response?.status === 404) return [];
-      throw err;
-    }
-  },
-
   // 404 means nothing has been saved yet for this PO+month+year (same response as "not yours"/
   // "doesn't exist") — not an error state, so it resolves to null instead of throwing.
   getRecord: async (servicePoId, month, year) => {

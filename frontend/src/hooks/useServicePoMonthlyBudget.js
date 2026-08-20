@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQueries, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { servicePoMonthlyBudgetApi } from '@/api/servicePoMonthlyBudget.api';
 import { QUERY_KEYS } from '@/constants/queryKeys';
 
@@ -16,15 +16,36 @@ export const useServicePoMonthlyBudgetList = (month, year) =>
     enabled: !!month && !!year,
   });
 
-// Backs the Yearly tab — only enabled once that tab is actually opened, since it's an
-// unconfirmed query shape (see api layer) and shouldn't fire on every Monthly-tab page load.
-export const useServicePoMonthlyBudgetYearList = (year, enabled) =>
-  useQuery({
-    queryKey: QUERY_KEYS.SERVICE_PO_MONTHLY_BUDGET_YEAR_LIST(year),
-    queryFn: () => servicePoMonthlyBudgetApi.getYearList(year),
-    enabled: !!year && enabled,
-    retry: false,
+// Backs the month-summary strip — fans out one getMonthList call per calendar month (the same
+// confirmed endpoint/query key the card grid below already uses) rather than a year-only param,
+// which isn't in the documented contract. Each month's cache entry is shared with
+// useServicePoMonthlyBudgetList when that exact month is selected, so picking a month never
+// re-fetches data this hook already has.
+export const useServicePoMonthlyBudgetYearSummary = (year) => {
+  const queries = useQueries({
+    queries: Array.from({ length: 12 }, (_, i) => {
+      const month = i + 1;
+      return {
+        queryKey: QUERY_KEYS.SERVICE_PO_MONTHLY_BUDGET_LIST(month, year),
+        queryFn: () => servicePoMonthlyBudgetApi.getMonthList(month, year),
+        enabled: !!year,
+        select: (records) => ({
+          invoiceTotal: records.reduce((sum, r) => sum + Number(r.invoice_amount ?? 0), 0),
+          billedTotal: records.reduce((sum, r) => sum + Number(r.billed_amount ?? 0), 0),
+          filledCount: records.length,
+        }),
+      };
+    }),
   });
+
+  return queries.map((q, i) => ({
+    month: i + 1,
+    invoiceTotal: q.data?.invoiceTotal ?? 0,
+    billedTotal: q.data?.billedTotal ?? 0,
+    filledCount: q.data?.filledCount ?? 0,
+    isLoading: q.isPending,
+  }));
+};
 
 // Prefills the entry form once a Service PO + month + year are all chosen; a null result (no
 // prior save for this combination) just means the form stays empty rather than an error.

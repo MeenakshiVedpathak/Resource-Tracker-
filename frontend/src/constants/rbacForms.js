@@ -81,7 +81,7 @@ export const FORM_NAMES = {
   // Business module, Service PO Admin login (confirmed via GET /roles/forms) — the Form Master
   // row now exists on the backend, so this is picked up automatically by Sidebar's RBAC-driven
   // buildNavGroups() instead of the Manager-only hardcoded injection below.
-  SERVICE_PO_MONTHLY_BUDGET: 'Invoice Master',
+  SERVICE_PO_MONTHLY_BUDGET: 'Monthly PO Reporting',
   // People module, Manager login (confirmed via GET /roles/forms) — the Form Master row now
   // exists on the backend, so this is picked up automatically by buildNavGroups() instead of
   // the MY_TEAM_ROLES hardcoded injection in Sidebar.jsx.

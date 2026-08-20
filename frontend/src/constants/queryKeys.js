@@ -98,10 +98,9 @@ export const QUERY_KEYS = {
   MONTHLY_COSTS: (params) => ['monthly-costs', params],
   MONTHLY_COST: (id) => ['monthly-costs', id],
 
-  // Service PO Monthly Budget (Invoice Master)
+  // Service PO Monthly Budget ("Monthly PO Reporting" in the UI, was "Invoice Master")
   SERVICE_PO_MONTHLY_BUDGET_SERVICE_POS: ['service-po-monthly-budget', 'service-pos'],
   SERVICE_PO_MONTHLY_BUDGET_LIST: (month, year) => ['service-po-monthly-budget', 'list', month, year],
-  SERVICE_PO_MONTHLY_BUDGET_YEAR_LIST: (year) => ['service-po-monthly-budget', 'year-list', year],
   SERVICE_PO_MONTHLY_BUDGET_RECORD: (servicePoId, month, year) =>
     ['service-po-monthly-budget', 'record', servicePoId, month, year],
 

@@ -26,4 +26,4 @@ export const INVOICE_MASTER_LOCK_MESSAGE =
 // Frontend-facing copy describing the wider client-side window above — deliberately a different
 // string from INVOICE_MASTER_LOCK_MESSAGE so it's never mistaken for the backend's own message.
 export const INVOICE_MASTER_WINDOW_MESSAGE =
-  'Invoice Master is editable for the current month, plus the previous month through the 7th day of this month.';
+  'Monthly PO Reporting is editable for the current month, plus the previous month through the 7th day of this month.';
