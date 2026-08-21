@@ -46,6 +46,11 @@ const BusinessUnitsTab = ({ businessUnits, search, isLoading }) => {
 
   const activeCount = [entityFilter, statusFilter].filter((v) => v !== ALL).length;
 
+  const clearFilters = () => {
+    setEntityFilter(ALL);
+    setStatusFilter(ALL);
+  };
+
   const columns = [
     columnHelper.accessor('name', {
       header: 'BU Name',
@@ -82,7 +87,7 @@ const BusinessUnitsTab = ({ businessUnits, search, isLoading }) => {
       <div className="flex justify-end">
         <FilterToggleButton isOpen={filtersOpen} onToggle={() => setFiltersOpen((o) => !o)} activeCount={activeCount} />
       </div>
-      <FilterPanel isOpen={filtersOpen} gridClassName="grid-cols-1 sm:grid-cols-2">
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[200px]" gridClassName="grid-cols-1 sm:grid-cols-2" onClear={clearFilters} showClear={activeCount > 0}>
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Entity</Label>
           <Select value={entityFilter} onValueChange={setEntityFilter}>

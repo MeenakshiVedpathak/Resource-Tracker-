@@ -304,6 +304,15 @@ const ResourceProjectUtilization = () => {
     poIds.length > 0 ? 1 : 0,
   ].reduce((a, b) => a + b, 0);
 
+  const clearFilters = () => {
+    setEmployeeIds([]);
+    setClientIds([]);
+    setCategory('all');
+    setTypeIds([]);
+    setPoIds([]);
+    setPage(1);
+  };
+
   const totalPages = meta.totalPages ?? 1;
   const currentPage = meta.page ?? page;
 
@@ -358,7 +367,7 @@ const ResourceProjectUtilization = () => {
       />
 
       {/* Collapsible filter panel */}
-      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[420px]">
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[460px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs font-medium">Month &amp; Year <span className="text-destructive">*</span></Label>
             <MonthYearPicker

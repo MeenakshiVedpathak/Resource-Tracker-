@@ -44,7 +44,7 @@ const Login = () => {
   });
 
   const completeLogin = (data) => {
-    const { user, employee, accessToken, refreshToken, roles, forms } = data;
+    const { user, employee, accessToken, refreshToken, roles, forms, mapped_bu: mappedBu } = data;
     const roleName = user?.role?.role_name;
     // Employee-only means Employee is the account's SOLE role — a multi-role account (e.g.
     // Employee + Manager) must land wherever `forms` sends it below, not always the Employee
@@ -55,7 +55,7 @@ const Login = () => {
     // (§0/§2.1) — reshape it into `{ id }` so the existing X-Company-Id request header (which
     // every company-scoped role must send) keys off it unchanged.
     const company = user?.company_id ? { id: user.company_id } : null;
-    setCredentials({ user, employee, accessToken, refreshToken, roles, company });
+    setCredentials({ user, employee, accessToken, refreshToken, roles, company, mapped_bu: mappedBu });
 
     // Paint immediately from whatever the login response embedded, if anything — avoids a
     // blank sidebar flash while the call below is in flight.

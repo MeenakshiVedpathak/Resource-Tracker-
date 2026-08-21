@@ -38,6 +38,13 @@ apiClient.interceptors.request.use(
     if (company?.id) {
       config.headers['X-Company-Id'] = company.id;
     }
+    // BU Head spec §13: a BU Head's currently-selected BU takes precedence over `company?.id`
+    // (BU Head never has a single `company.id` of its own — see authSlice.js's `mappedBus`).
+    // Same header BU-scoping already uses everywhere, since BU *is* Company in this app.
+    const selectedBuId = getStoredSelectedBuId();
+    if (selectedBuId) {
+      config.headers['X-Company-Id'] = selectedBuId;
+    }
     return config;
   },
   (error) => Promise.reject(error)
@@ -123,6 +130,8 @@ const TOKEN_KEYS = {
   COMPANY: 'rut_company',
   EMPLOYEE: 'rut_employee',
   AI_COPILOT_CONVERSATION: 'rut_ai_copilot_conversation',
+  MAPPED_BUS: 'rut_mapped_bus',
+  SELECTED_BU_ID: 'rut_selected_bu_id',
 };
 
 export const getAccessToken = () => localStorage.getItem(TOKEN_KEYS.ACCESS);
@@ -219,6 +228,34 @@ export const saveEmployee = (employee) => {
   }
 };
 
+// BU Head spec §9: login's `mapped_bu` — [{ id, name }], `[]`/absent for every other role.
+export const getStoredMappedBus = () => {
+  try {
+    const raw = localStorage.getItem(TOKEN_KEYS.MAPPED_BUS);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
+
+export const saveMappedBus = (mappedBus) => {
+  localStorage.setItem(TOKEN_KEYS.MAPPED_BUS, JSON.stringify(mappedBus ?? []));
+};
+
+// BU Head spec §10-§12: the BU Head's currently-selected BU, global across the whole app.
+export const getStoredSelectedBuId = () => {
+  const raw = localStorage.getItem(TOKEN_KEYS.SELECTED_BU_ID);
+  return raw ? Number(raw) : null;
+};
+
+export const saveSelectedBuId = (buId) => {
+  if (buId != null) {
+    localStorage.setItem(TOKEN_KEYS.SELECTED_BU_ID, String(buId));
+  } else {
+    localStorage.removeItem(TOKEN_KEYS.SELECTED_BU_ID);
+  }
+};
+
 export const clearAuth = () => {
   localStorage.removeItem(TOKEN_KEYS.ACCESS);
   localStorage.removeItem(TOKEN_KEYS.REFRESH);
@@ -229,6 +266,8 @@ export const clearAuth = () => {
   localStorage.removeItem(TOKEN_KEYS.COMPANY);
   localStorage.removeItem(TOKEN_KEYS.EMPLOYEE);
   localStorage.removeItem(TOKEN_KEYS.AI_COPILOT_CONVERSATION);
+  localStorage.removeItem(TOKEN_KEYS.MAPPED_BUS);
+  localStorage.removeItem(TOKEN_KEYS.SELECTED_BU_ID);
 };
 
 // ── Logout handler (avoids circular dependency with store) ──

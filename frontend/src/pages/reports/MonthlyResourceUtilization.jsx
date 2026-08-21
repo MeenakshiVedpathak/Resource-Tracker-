@@ -281,6 +281,13 @@ const MonthlyResourceUtilization = () => {
     serviceTypeId !== 'all' ? 1 : 0,
   ].reduce((a, b) => a + b, 0);
 
+  const clearFilters = () => {
+    setEmployeeId('all');
+    setServiceCategoryId('all');
+    setServiceTypeId('all');
+    setPage(1);
+  };
+
   return (
     <div>
       <PageHeader
@@ -333,7 +340,7 @@ const MonthlyResourceUtilization = () => {
       />
 
       {/* ── Collapsible Filters Panel ── */}
-      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[220px]">
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[260px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs font-medium">Month &amp; Year <span className="text-destructive">*</span></Label>
             <MonthYearPicker

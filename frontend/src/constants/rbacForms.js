@@ -16,9 +16,9 @@ import {
   FileText, FolderOpen, FolderKanban, Clock, DollarSign,
   Tag, Layers, Sparkles, ClipboardList, Landmark, ShieldCheck,
   FileBarChart2, PieChart, CalendarRange, UserCheck, Network, Receipt, Table2, Wallet, IndianRupee,
-  ListTree, ListChecks, Banknote, CalendarClock,
+  ListTree, ListChecks, Banknote, CalendarClock, Timer,
   TrendingUp, LineChart, Target, Percent, Award, BatteryCharging, AlertTriangle, Crown,
-  ReceiptText, GitCompare, Scale, BarChart3, Building, Activity, Armchair,
+  ReceiptText, GitCompare, Scale, BarChart3, Building, Activity, Armchair, Users2,
 } from 'lucide-react';
 import { ROUTES } from '@/constants/routes';
 
@@ -36,6 +36,10 @@ export const FORM_NAMES = {
   // reached via buttons on these two screens, not a sidebar item (see CompanyList/BuAdminList).
   ENTITY_MASTER: 'Entity Master',
   BU_ADMIN_MASTER: 'BU Admin Master',
+  // Guessed name — additive BU Head role (net-new, no Form Master row confirmed yet). Confirm
+  // against the real GET /roles/forms response once seeded; until then reached via Sidebar's
+  // hardcoded Admin/Entity Admin injection (see Sidebar.jsx).
+  BU_HEAD_MASTER: 'BU Head Master',
   CLIENTS: 'Client Master',
   // Matches the actual Form Master row name ("Project Master"), not the page's own title.
   PROJECTS: 'Project Master',
@@ -71,6 +75,11 @@ export const FORM_NAMES = {
   // Employee and Manager logins (single endpoint auto-resolves "own" vs "team" data), so whichever
   // role(s) this form gets mapped to will reach the same page/route.
   EMPLOYEE_TIMESHEET_APPROVAL_STATUS_REPORT: 'Timesheet Approval Status Report',
+  // Guessed name — same caveat as the rest of this file's Employee self-service entries; confirm
+  // against the actual Form Master row once one is seeded for this new report (backend spec
+  // dated 2026-08-20, GET /employee-reports/work-log-time). Shared by both Employee and Manager
+  // logins, same as EMPLOYEE_PROJECT_HOURS_REPORT above.
+  EMPLOYEE_WORK_LOG_TIME_REPORT: 'Work Log Time Report',
   // Manager Timesheet Access & Approval — the backend's Form Master grants Managers these two
   // Resources-module rows (distinct from the Employee Self-Service "My Work Log" row an Employee
   // gets). Both point at the same EmployeeTimesheet page/route as "My Work Log" — that page
@@ -124,6 +133,7 @@ export const FORM_ROUTE_CONFIG = {
   [FORM_NAMES.FORMS]: { to: ROUTES.FORMS, icon: ClipboardList },
   [FORM_NAMES.ENTITY_MASTER]: { to: ROUTES.ENTITIES, icon: Landmark },
   [FORM_NAMES.BU_ADMIN_MASTER]: { to: ROUTES.BU_ADMINS, icon: ShieldCheck },
+  [FORM_NAMES.BU_HEAD_MASTER]: { to: ROUTES.BU_HEADS, icon: Users2 },
   [FORM_NAMES.CLIENTS]: { to: ROUTES.CLIENTS, icon: Building2 },
   [FORM_NAMES.PROJECTS]: { to: ROUTES.PROJECTS, icon: FolderKanban },
   [FORM_NAMES.SERVICE_POS]: { to: ROUTES.SERVICE_POS, icon: FileText },
@@ -145,6 +155,7 @@ export const FORM_ROUTE_CONFIG = {
   [FORM_NAMES.EMPLOYEE_REPORTS]: { to: ROUTES.EMPLOYEE_REPORTS, icon: FileBarChart2 },
   [FORM_NAMES.EMPLOYEE_PROJECT_HOURS_REPORT]: { to: ROUTES.EMPLOYEE_PROJECT_HOURS_REPORT, icon: ListTree },
   [FORM_NAMES.EMPLOYEE_TIMESHEET_APPROVAL_STATUS_REPORT]: { to: ROUTES.EMPLOYEE_TIMESHEET_APPROVAL_STATUS_REPORT, icon: ListChecks },
+  [FORM_NAMES.EMPLOYEE_WORK_LOG_TIME_REPORT]: { to: ROUTES.EMPLOYEE_WORK_LOG_TIME_REPORT, icon: Timer },
   [FORM_NAMES.MANAGER_TIMESHEET]: { to: ROUTES.EMPLOYEE_TIMESHEET, icon: Clock },
   [FORM_NAMES.MANAGER_TIMESHEET_APPROVAL]: { to: ROUTES.EMPLOYEE_TIMESHEET, icon: Clock },
   [FORM_NAMES.SERVICE_PO_MONTHLY_BUDGET]: { to: ROUTES.SERVICE_PO_MONTHLY_BUDGET, icon: Wallet, exact: true },

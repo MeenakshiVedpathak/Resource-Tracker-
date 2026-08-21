@@ -286,6 +286,14 @@ const ClientServicePOHoursReport = () => {
     status !== 'all',
   ].filter(Boolean).length;
 
+  const clearFilters = () => {
+    setClientId('all');
+    setPoId('all');
+    setServiceTypeId('all');
+    setEmployeeId('all');
+    setStatus('all');
+  };
+
   const toggleClient = (clientKey) => {
     setCollapsedClientIds((prev) => {
       const next = new Set(prev);
@@ -355,7 +363,7 @@ const ClientServicePOHoursReport = () => {
       />
 
       {/* Collapsible filter panel */}
-      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[480px]">
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[520px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs">Month &amp; Year <span className="text-destructive">*</span></Label>
               <MonthYearPicker

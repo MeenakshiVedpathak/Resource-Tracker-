@@ -63,6 +63,12 @@ const TimesheetList = () => {
   const deleteMutation = useDeleteTimesheetImport();
   const bulkDeleteMutation = useDeleteTimesheetImports();
 
+  const clearFilters = () => {
+    setMonthYearFilter(null);
+    setPage(1);
+    setSelectedIds([]);
+  };
+
   const allRecords = Array.isArray(data?.data) ? data.data : [];
   const records    = allRecords.filter((r) => r.status === 'completed');
   const meta       = data?.meta ?? {};
@@ -289,8 +295,10 @@ const TimesheetList = () => {
 
       <FilterPanel
         isOpen={filtersOpen}
-        maxHeightClass="max-h-[100px]"
+        maxHeightClass="max-h-[140px]"
         gridClassName="grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 w-full"
+        onClear={clearFilters}
+        showClear={!!monthYearFilter}
       >
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Month &amp; Year</Label>

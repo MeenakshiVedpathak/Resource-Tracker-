@@ -6,6 +6,10 @@ export const ROLE_NAMES = {
   ADMIN: 'Admin',
   ENTITY_ADMIN: 'Entity Admin',
   BU_ADMIN: 'BU Admin',
+  // BU Head — additive, non-replacing peer of BU Admin (§1 of the BU Head spec): same
+  // form/permission tier, but scoped to MULTIPLE companies via a mapping table instead of one
+  // `company_id`. Never rename/remove BU Admin when touching this.
+  BU_HEAD: 'BU Head',
   PROJECT_ADMIN: 'Project Admin',
   SERVICE_PO_ADMIN: 'Service PO Admin',
   MANAGER: 'Manager',
@@ -18,6 +22,10 @@ export const ROLE_HIERARCHY = [
   { name: ROLE_NAMES.ADMIN, hierarchy_rank: 2, inherits_role_id: null },
   { name: ROLE_NAMES.ENTITY_ADMIN, hierarchy_rank: 3, inherits_role_id: null },
   { name: ROLE_NAMES.BU_ADMIN, hierarchy_rank: 4, inherits_role_id: null },
+  // Peer tier with BU Admin (frontend-only ordering aid — neither the real backend nor the mock
+  // has ever exposed a numeric hierarchy_rank for BU Admin either, so a tie here doesn't create
+  // any new ambiguity).
+  { name: ROLE_NAMES.BU_HEAD, hierarchy_rank: 4, inherits_role_id: null },
   { name: ROLE_NAMES.PROJECT_ADMIN, hierarchy_rank: 5, inherits_role_id: null },
   { name: ROLE_NAMES.SERVICE_PO_ADMIN, hierarchy_rank: 6, inherits_role_id: null },
   { name: ROLE_NAMES.MANAGER, hierarchy_rank: 7, inherits_role_id: null },
@@ -36,6 +44,15 @@ export const ROLE_CREATION_MATRIX = {
   // BU Admin can now also assign Employee and HR (backend contract update) — previously only
   // Project Admin / Service PO Admin / Manager.
   [ROLE_NAMES.BU_ADMIN]: [
+    ROLE_NAMES.PROJECT_ADMIN, ROLE_NAMES.SERVICE_PO_ADMIN, ROLE_NAMES.MANAGER,
+    ROLE_NAMES.EMPLOYEE, ROLE_NAMES.HR,
+  ],
+  // BU Head gets the same assignable set as BU Admin (§14 of the BU Head spec: same forms/
+  // permissions) so Employee Master's Roles picker works when a BU Head creates a regular
+  // employee. Deliberately NOT added to Admin's/Entity Admin's own entries above — BU Head must
+  // only ever be minted via the dedicated BU Head Master "Add BU Head" flow (§16/§19), never as
+  // a checkbox in the generic Employee Master role picker.
+  [ROLE_NAMES.BU_HEAD]: [
     ROLE_NAMES.PROJECT_ADMIN, ROLE_NAMES.SERVICE_PO_ADMIN, ROLE_NAMES.MANAGER,
     ROLE_NAMES.EMPLOYEE, ROLE_NAMES.HR,
   ],
@@ -61,6 +78,7 @@ export const ADDITIONAL_ROLE_NAMES = [
 // backend's role_ids[0]/role_ids[1:] split still needs exactly one of these, if any, to lead).
 export const SENIOR_ROLE_NAMES = [
   ROLE_NAMES.PLATFORM_ADMIN, ROLE_NAMES.ADMIN, ROLE_NAMES.ENTITY_ADMIN, ROLE_NAMES.BU_ADMIN,
+  ROLE_NAMES.BU_HEAD,
 ];
 
 // Roles that operate platform-wide / across Entities and never carry a company_id.

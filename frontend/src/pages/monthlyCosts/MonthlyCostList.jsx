@@ -84,6 +84,12 @@ const MonthlyCostList = () => {
 
   const clearSelection = () => setSelectedKeys([]);
 
+  const clearFilters = () => {
+    setMonthYearFilter(null);
+    setPage(1);
+    clearSelection();
+  };
+
   const handleCalculate = () => {
     calculateMutation.mutate(
       { month: calcMonthYear.month, year: calcMonthYear.year },
@@ -234,8 +240,10 @@ const MonthlyCostList = () => {
 
       <FilterPanel
         isOpen={filtersOpen}
-        maxHeightClass="max-h-[100px]"
+        maxHeightClass="max-h-[140px]"
         gridClassName="grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 w-full"
+        onClear={clearFilters}
+        showClear={!!monthYearFilter}
       >
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Month &amp; Year</Label>

@@ -5,6 +5,8 @@ import {
   getStoredOriginalDataVisible, saveOriginalDataVisible,
   getStoredCompany, saveCompany,
   getStoredEmployee, saveEmployee,
+  getStoredMappedBus, saveMappedBus,
+  getStoredSelectedBuId, saveSelectedBuId,
 } from '@/services/apiClient';
 import { ROLE_NAMES } from '@/constants/roleHierarchy';
 
@@ -31,6 +33,10 @@ const initialState = {
   // RBAC redesign: login's sibling `employee` object — null for any account with no linked
   // Employee (every Admin/Manager-tier account that isn't also staff).
   employee: getStoredEmployee(),
+  // BU Head spec §8/§9: BUs mapped to a BU Head login — [] for every other role.
+  mappedBus: getStoredMappedBus(),
+  // BU Head spec §10-§12: the currently-selected BU, global across the app.
+  selectedBuId: getStoredSelectedBuId(),
 };
 
 const authSlice = createSlice({
@@ -38,7 +44,7 @@ const authSlice = createSlice({
   initialState,
   reducers: {
     setCredentials: (state, action) => {
-      const { user, employee, accessToken, refreshToken, roles, company } = action.payload;
+      const { user, employee, accessToken, refreshToken, roles, company, mapped_bu: mappedBu } = action.payload;
       state.user = user;
       state.accessToken = accessToken;
       state.refreshToken = refreshToken;
@@ -62,6 +68,15 @@ const authSlice = createSlice({
       const nextRoles = roles ?? [];
       state.roles = nextRoles;
       saveRoles(nextRoles);
+
+      // BU Head spec §8-§10: `mapped_bu` is absent/[] for every non-BU-Head login. Auto-select
+      // the first mapped BU on login — the user must not need to pick one manually every time.
+      const nextMappedBus = mappedBu ?? [];
+      state.mappedBus = nextMappedBus;
+      saveMappedBus(nextMappedBus);
+      const nextSelectedBuId = nextMappedBus[0]?.id ?? null;
+      state.selectedBuId = nextSelectedBuId;
+      saveSelectedBuId(nextSelectedBuId);
 
       // Accessible forms are role-derived — clear the previous user's cache until the
       // post-login fetch (Step 3) repopulates it for the new roles.
@@ -104,6 +119,16 @@ const authSlice = createSlice({
       state.company = company;
       saveCompany(company);
     },
+    // BU Head spec §12: switching BU updates the global selection — no re-login, no full page
+    // reload. Client-side belt-and-suspenders (§18): only accepts an id that's actually one of
+    // this BU Head's mapped BUs; real enforcement still lives server-side (§13 — the backend
+    // 403s an unmapped BU regardless of what the frontend sends).
+    setSelectedBu: (state, action) => {
+      const buId = action.payload;
+      if (!state.mappedBus.some((bu) => bu.id === buId)) return;
+      state.selectedBuId = buId;
+      saveSelectedBuId(buId);
+    },
     logout: (state) => {
       state.user = null;
       state.accessToken = null;
@@ -115,6 +140,8 @@ const authSlice = createSlice({
       state.isOriginalDataVisible = false;
       state.company = null;
       state.employee = null;
+      state.mappedBus = [];
+      state.selectedBuId = null;
       clearAuth();
     },
   },
@@ -122,12 +149,13 @@ const authSlice = createSlice({
 
 export const {
   setCredentials, setTokens, setUser, setRoles, setAccessibleForms, setIsOriginalDataVisible,
-  setCompany, logout,
+  setCompany, setSelectedBu, logout,
 } = authSlice.actions;
 
 const EMPTY_PERMISSIONS = [];
 const EMPTY_ROLES = [];
 const EMPTY_FORMS = {};
+const EMPTY_MAPPED_BUS = [];
 
 export const selectCurrentUser = (state) => state.auth.user;
 export const selectAccessToken = (state) => state.auth.accessToken;
@@ -151,6 +179,10 @@ export const selectCompanyId = (state) => state.auth.company?.id ?? null;
 // RBAC redesign: login's sibling `employee` object — null for any account with no linked
 // Employee.
 export const selectCurrentEmployee = (state) => state.auth.employee ?? null;
+
+// BU Head spec §9-§12: [] / null for every non-BU-Head login.
+export const selectMappedBus = (state) => state.auth.mappedBus ?? EMPTY_MAPPED_BUS;
+export const selectSelectedBuId = (state) => state.auth.selectedBuId ?? null;
 
 // A user's single role now carries `hierarchy_rank` directly (see selectAuthRoles) — this is
 // the RBAC redesign's replacement for role-name arrays where a numeric comparison is more useful

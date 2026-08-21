@@ -138,8 +138,24 @@ const columns = [
   }),
   columnHelper.accessor('available_hours', {
     header: 'Available Hours',
-    size: 150,
-    cell: (info) => <ValueCell value={info.getValue()} format="hours" />,
+    size: 160,
+    // Negative means hours delivered before this month already exceed the PO's expected hours —
+    // a real over-allocation signal, not a sign bug, so it's kept (not floored at 0) but flagged.
+    cell: (info) => {
+      const value = info.getValue();
+      if (value == null || value === '') return <span className="text-muted-foreground">—</span>;
+      const isOverAllocated = Number(value) < 0;
+      return (
+        <div className="flex flex-col gap-0.5">
+          <span className={`tabular-nums ${isOverAllocated ? 'font-semibold text-destructive' : ''}`}>
+            {formatHours(value)}
+          </span>
+          {isOverAllocated && (
+            <span className="text-[10px] font-medium uppercase tracking-wide text-destructive">Over-allocated</span>
+          )}
+        </div>
+      );
+    },
   }),
   columnHelper.accessor('monthly_billable_amount', {
     header: 'Billable Amount',
@@ -271,6 +287,16 @@ const ServicePOSummary = () => {
     status !== 'all',
   ].filter(Boolean).length;
 
+  const clearFilters = () => {
+    setDateRange(null);
+    setClientId('all');
+    setCategoryId('all');
+    setServiceTypeId('all');
+    setPoId('all');
+    setStatus('all');
+    setPage(1);
+  };
+
   // Export pulls every matching record (not just the current page) with one extra request.
   const handleExport = async () => {
     setExporting(true);
@@ -335,7 +361,7 @@ const ServicePOSummary = () => {
       />
 
       {/* Collapsible filter panel */}
-      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[420px]">
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[460px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs">Month &amp; Year <span className="text-destructive">*</span></Label>
             <MonthYearPicker
@@ -466,7 +492,11 @@ const ServicePOSummary = () => {
             <SummaryItem label="PO Value" value={formatCurrency(summary.total_po_value)} />
             <SummaryItem label="Exp. Hours" value={formatHours(summary.total_expected_man_hours)} />
             <SummaryItem label="Delivered Before Month" value={formatHours(summary.total_hours_delivered_before_month)} />
-            <SummaryItem label="Available Hours" value={formatHours(summary.total_available_hours)} />
+            <SummaryItem
+              label="Available Hours"
+              value={formatHours(summary.total_available_hours)}
+              negative={summary.total_available_hours < 0}
+            />
             <SummaryItem label="Billable Amount" value={formatCurrency(summary.total_monthly_billable_amount)} highlight />
             <SummaryItem label="Invoiced Amount" value={formatCurrency(summary.total_invoiced_amount)} highlight />
             <SummaryItem label="Billed Amount" value={formatCurrency(summary.total_billed_amount)} highlight />

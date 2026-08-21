@@ -3,7 +3,6 @@ import * as XLSX from 'xlsx';
 import { createColumnHelper } from '@tanstack/react-table';
 import { Download } from 'lucide-react';
 import { useDeliveryHeadPerformance } from '@/hooks/useReports';
-import { reportsApi } from '@/api/reports.api';
 import { formatCurrency, formatHours } from '@/utils/formatters';
 import PageHeader from '@/components/common/PageHeader';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
@@ -15,6 +14,11 @@ import { Label } from '@/components/ui/label';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
 
 const columnHelper = createColumnHelper();
+
+// Totals must reflect the WHOLE matching month's data, not one server page, so the whole
+// matching set is fetched once (capped well above any realistic Delivery Head headcount for a
+// single month) and paginated client-side from there.
+const MAX_RECORDS_FETCH = 5000;
 
 const exportToExcel = (rows) => {
   const header = [
@@ -121,30 +125,32 @@ const DeliveryHeadPerformance = () => {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
-  const [exporting, setExporting] = useState(false);
 
+  // page/limit above are for client-side pagination only, never sent to the API — the whole
+  // matching month's data is fetched in one shot so totals and pagination both work off it.
   const params = {
     ...(monthYear && { month: monthYear.month, year: monthYear.year }),
-    page,
-    limit,
+    page: 1,
+    limit: MAX_RECORDS_FETCH,
   };
 
   const { data, isPending } = useDeliveryHeadPerformance(params);
 
   const records = data?.data?.records ?? [];
-  const meta = data?.meta ?? {};
+  const pagedRecords = records.slice((page - 1) * limit, page * limit);
 
-  const handleExport = async () => {
-    setExporting(true);
-    try {
-      const total = meta.total > 0 ? meta.total : 1000;
-      const res = await reportsApi.getDeliveryHeadPerformance({ ...params, page: 1, limit: total });
-      const allRecords = res?.data?.records ?? [];
-      exportToExcel(allRecords);
-    } finally {
-      setExporting(false);
-    }
-  };
+  // Recomputed client-side from the full record set rather than trusted from the backend's own
+  // `summary` — its field names don't even match this report's own row-level fields (it reads
+  // `total_invoiced_amount` while rows use `total_invoiced`), and it only reflected one page.
+  const summary = records.length > 0 ? {
+    total_invoiced: records.reduce((sum, r) => sum + (Number(r.total_invoiced) || 0), 0),
+    total_delivery_cost: records.reduce((sum, r) => sum + (Number(r.total_delivery_cost) || 0), 0),
+    total_margin: records.reduce((sum, r) => sum + (Number(r.total_margin) || 0), 0),
+    total_at_risk_po_count: records.reduce((sum, r) => sum + (Number(r.at_risk_po_count) || 0), 0),
+  } : null;
+
+  // Already have the full record set in memory — no need for a second network round-trip.
+  const handleExport = () => exportToExcel(records);
 
   return (
     <div>
@@ -160,8 +166,8 @@ const DeliveryHeadPerformance = () => {
               className="h-9"
             />
             {records.length > 0 && (
-              <Button variant="outline" size="sm" className="h-9" onClick={handleExport} disabled={exporting}>
-                <Download className="mr-1.5 h-4 w-4" />{exporting ? 'Exporting…' : 'Export Excel'}
+              <Button variant="outline" size="sm" className="h-9" onClick={handleExport}>
+                <Download className="mr-1.5 h-4 w-4" />Export Excel
               </Button>
             )}
           </div>
@@ -185,29 +191,25 @@ const DeliveryHeadPerformance = () => {
       <DataTable
         tableContainerClassName="max-h-[50vh]"
         columns={columns}
-        data={records}
+        data={pagedRecords}
         isLoading={isPending}
-        pagination={meta.total != null ? {
-          page: meta.page ?? page,
-          limit: meta.limit ?? limit,
-          total: meta.total,
-        } : undefined}
+        pagination={{ page, limit, total: records.length }}
         onPageChange={setPage}
         onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
       />
 
-      {records.length > 0 && (
+      {summary && (
         <div className="mt-4 rounded-lg border bg-muted/40 px-4 py-3">
           <p className="mb-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Totals (all pages)</p>
           <div className="flex flex-wrap gap-x-6 gap-y-2">
-            <SummaryItem label="Total Invoiced" value={formatCurrency(data?.data?.total_invoiced_amount)} />
-            <SummaryItem label="Total Delivery Cost" value={formatCurrency(data?.data?.total_delivery_cost)} />
+            <SummaryItem label="Total Invoiced" value={formatCurrency(summary.total_invoiced)} />
+            <SummaryItem label="Total Delivery Cost" value={formatCurrency(summary.total_delivery_cost)} />
             <SummaryItem
               label="Total Margin"
-              value={formatCurrency(data?.data?.total_margin)}
-              negative={Number(data?.data?.total_margin) < 0}
+              value={formatCurrency(summary.total_margin)}
+              negative={Number(summary.total_margin) < 0}
             />
-            <SummaryItem label="Total At-Risk POs" value={data?.data?.total_at_risk_po_count ?? 0} />
+            <SummaryItem label="Total At-Risk POs" value={summary.total_at_risk_po_count ?? 0} />
           </div>
         </div>
       )}

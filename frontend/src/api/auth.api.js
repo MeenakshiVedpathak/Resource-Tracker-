@@ -3,7 +3,9 @@ import { RBAC_MOCK_ENABLED } from '@/mocks/rbacMockConfig';
 import {
   delay, getDb, persist, findUserById, findRoleById, serializeUser, serializeEmployee,
   rolesForLoginResponse, formsForRoleName, issueTokenFor, getCurrentMockUser, mockError, MOCK_OTP,
+  mappedBusForUser,
 } from '@/mocks/rbacMockDb';
+import { ROLE_NAMES } from '@/constants/roleHierarchy';
 
 const mockLogin = async (email, password) => {
   await delay();
@@ -31,6 +33,10 @@ const mockLogin = async (email, password) => {
       employee,
       roles: rolesForLoginResponse(user.id),
       forms: formsForRoleName(roleName),
+      // BU Head spec §8/§9 — only ever populated for a BU Head login; absent (undefined) for
+      // every other role, same as `company`/`employee` already are for accounts that don't
+      // carry them.
+      ...(roleName === ROLE_NAMES.BU_HEAD ? { mapped_bu: mappedBusForUser(user.id) } : {}),
     },
   };
 };

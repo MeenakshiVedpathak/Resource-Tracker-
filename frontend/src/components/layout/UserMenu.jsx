@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { useNotification } from '@/hooks/useNotification';
 import { authApi } from '@/api/auth.api';
@@ -14,16 +15,31 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
+} from '@/components/ui/select';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import ChangePasswordDialog from '@/components/profile/ChangePasswordDialog';
 import { cn } from '@/utils/cn';
 
 const UserMenu = () => {
-  const { user, employee, company, logout } = useAuth();
+  const { user, employee, company, logout, hasRole, mappedBus, selectedBuId, setSelectedBu } = useAuth();
   const navigate = useNavigate();
   const { error } = useNotification();
+  const queryClient = useQueryClient();
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  // BU Head spec §9-§12: global BU switcher, shown only for a BU Head login. Switching BU
+  // updates the global selection immediately (no re-login, no full page reload) and invalidates
+  // React Query so every BU-scoped screen refetches against the newly-selected BU rather than
+  // showing stale data from the prior one (§17) — same fix already used for the analogous
+  // stale-data bug on logout (see useAuth's handleLogout).
+  const isBuHead = hasRole('BU Head');
+  const handleBuChange = (value) => {
+    setSelectedBu(Number(value));
+    queryClient.invalidateQueries();
+  };
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
@@ -45,6 +61,19 @@ const UserMenu = () => {
 
   return (
     <>
+    <div className="flex items-center gap-2">
+      {isBuHead && mappedBus.length > 0 && (
+        <Select value={selectedBuId != null ? String(selectedBuId) : ''} onValueChange={handleBuChange}>
+          <SelectTrigger className="h-8 w-[160px] text-xs bg-muted/40 border-border/60">
+            <SelectValue placeholder="Select BU" />
+          </SelectTrigger>
+          <SelectContent>
+            {mappedBus.map((bu) => (
+              <SelectItem key={bu.id} value={String(bu.id)}>{bu.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button className="flex items-center gap-2.5 rounded-xl border border-border/60 bg-muted/40 px-2.5 py-1.5 hover:bg-accent hover:border-border transition-all outline-none shadow-sm">
@@ -92,6 +121,7 @@ const UserMenu = () => {
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+    </div>
 
     <ChangePasswordDialog open={isChangePasswordOpen} onOpenChange={setIsChangePasswordOpen} />
     </>

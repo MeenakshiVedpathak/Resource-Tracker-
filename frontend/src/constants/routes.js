@@ -18,6 +18,7 @@ export const ROUTES = {
   EMPLOYEE_REPORTS: '/employee/reports',
   EMPLOYEE_PROJECT_HOURS_REPORT: '/employee/project-hours-report',
   EMPLOYEE_TIMESHEET_APPROVAL_STATUS_REPORT: '/employee/timesheet-approval-status-report',
+  EMPLOYEE_WORK_LOG_TIME_REPORT: '/employee/work-log-time-report',
 
   // AI Copilot — new pages added on top of the existing app, reachable from the
   // floating AI Copilot widget's launcher rather than the RBAC-driven sidebar
@@ -65,6 +66,9 @@ export const ROUTES = {
 
   // BU Admin Master (Admin / Entity Admin)
   BU_ADMINS: '/bu-admins',
+
+  // BU Head Master (Admin / Entity Admin) — additive peer of BU Admin Master, §24
+  BU_HEADS: '/bu-heads',
 
   // Company Management — Admin (platform-wide) or Entity Admin (own Entities), §6.3
   COMPANIES: '/companies',

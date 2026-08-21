@@ -90,6 +90,13 @@ const ClientList = () => {
   const clients = data?.data ?? [];
   const meta = data?.meta ?? {};
 
+  const activeFilterCount = statusFilter !== 'all' ? 1 : 0;
+
+  const clearFilters = () => {
+    setStatusFilter('all');
+    setPage(1);
+  };
+
   const columns = [
     columnHelper.display({
       id: 'actions',
@@ -335,7 +342,7 @@ const ClientList = () => {
             <FilterToggleButton
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((prev) => !prev)}
-              activeCount={statusFilter !== 'all' ? 1 : 0}
+              activeCount={activeFilterCount}
             />
             {clients.length > 0 && (
               <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={handleExportExcel}>
@@ -375,7 +382,7 @@ const ClientList = () => {
         }
       />
 
-      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[160px]">
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[200px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Status</Label>
           <div className="flex items-center rounded-md border overflow-hidden h-9 text-sm bg-white">

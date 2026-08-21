@@ -270,6 +270,17 @@ const InvoicePOSummary = () => {
     billable !== 'all',
   ].filter(Boolean).length;
 
+  const clearFilters = () => {
+    setDateRange(null);
+    setClientId('all');
+    setCategoryId('all');
+    setServiceTypeId('all');
+    setPoId('all');
+    setStatus('all');
+    setBillable('all');
+    setPage(1);
+  };
+
   // Export pulls every matching record (not just the current page) with one extra request.
   const handleExport = async () => {
     setExporting(true);
@@ -315,7 +326,7 @@ const InvoicePOSummary = () => {
       />
 
       {/* Collapsible filter panel */}
-      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[420px]">
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[460px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Month &amp; Year <span className="text-destructive">*</span></Label>
           <MonthYearPicker

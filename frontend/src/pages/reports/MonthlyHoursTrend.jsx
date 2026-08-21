@@ -244,6 +244,13 @@ const MonthlyHoursTrend = () => {
     serviceTypeId !== 'all',
   ].filter(Boolean).length;
 
+  const clearFilters = () => {
+    setEmployeeId('all');
+    setClientId('all');
+    setPoId('all');
+    setServiceTypeId('all');
+  };
+
   const handleExport = () => exportToExcel(hoursByCategory);
 
   return (
@@ -287,7 +294,7 @@ const MonthlyHoursTrend = () => {
         }
       />
 
-      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[280px]">
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[320px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
         <div className="flex flex-col gap-1.5 md:col-span-2">
           <div className="flex items-center justify-between">
             <Label className="text-xs">Period <span className="text-destructive">*</span></Label>

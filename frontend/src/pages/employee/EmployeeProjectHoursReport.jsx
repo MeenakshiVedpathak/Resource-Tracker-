@@ -183,6 +183,10 @@ const EmployeeProjectHoursReport = () => {
 
   const activeFilterCount = filterValue !== 'all' ? 1 : 0;
 
+  const clearFilters = () => {
+    setFilterValue('all');
+  };
+
   return (
     <div className="space-y-4">
       <PageHeader
@@ -197,7 +201,7 @@ const EmployeeProjectHoursReport = () => {
         }
       />
 
-      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[220px]">
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[260px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Report Type</Label>
           <div className="flex items-center rounded-md border overflow-hidden h-9 text-sm bg-white">

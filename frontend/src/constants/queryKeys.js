@@ -74,6 +74,11 @@ export const QUERY_KEYS = {
   BU_ADMINS: (params) => ['bu-admins', params],
   BU_ADMIN: (id) => ['bu-admins', id],
 
+  // BU Heads (Admin / Entity Admin tier) — additive peer of BU Admin
+  BU_HEADS: (params) => ['bu-heads', params],
+  BU_HEAD: (id) => ['bu-heads', id],
+  BU_HEAD_MAPPED_BUS: (id) => ['bu-heads', id, 'mapped-bus'],
+
   // Service POs
   SERVICE_POS: (params) => ['service-pos', params],
   SERVICE_POS_ACTIVE: ['service-pos', 'active'],
@@ -165,6 +170,7 @@ export const QUERY_KEYS = {
   EMPLOYEE_REPORT_DAILY: (date) => ['employee-report', 'daily', date],
   EMPLOYEE_REPORT_MONTHLY: (month, year) => ['employee-report', 'monthly', month, year],
   EMPLOYEE_REPORT_RANGE: (startDate, endDate) => ['employee-report', 'range', startDate, endDate],
+  EMPLOYEE_REPORT_WORK_LOG_TIME: (params) => ['employee-report', 'work-log-time', params],
 
   // Employee Project Hours Report
   EMPLOYEE_PROJECT_HOURS_FILTER_TREE: ['employee-project-hours-report', 'filter-tree'],

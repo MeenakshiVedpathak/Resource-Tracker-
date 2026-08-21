@@ -76,23 +76,34 @@ export const buildMonthlySummaryRows = (dayEntries = []) => {
 // row that should survive — edited cells overlaid on top of each row's already-loaded
 // `hoursByDay[day]` — not just the cells the user touched this session. Rows at 0 hours are
 // left out entirely; omitting a row has the same clearing effect as sending it with hours: 0.
-export const buildDayEntries = (rows, day, edits) =>
+//
+// `timeEdits` (optional) is `{ [rowKey]: { [day]: { start_time, end_time } } }` — a row with a
+// start_time/end_time pair set there gets those attached to its entry, and the backend
+// recalculates/overrides `hours` server-side (see employeeWorkLog.api.js). A row is kept even at
+// 0 hours if it carries a partial time pair, so validateDayEntries below can still surface the
+// "provide both" error instead of the partial input silently vanishing.
+export const buildDayEntries = (rows, day, edits, timeEdits) =>
   rows
     .map((row) => {
       const edited = edits?.[row.rowKey]?.[day];
       const hours = edited !== undefined ? Number(edited || 0) : Number(row.hoursByDay?.[day] ?? 0);
-      return { row, hours };
+      const time = timeEdits?.[row.rowKey]?.[day];
+      return { row, hours, time };
     })
-    .filter(({ hours }) => hours > 0)
-    .map(({ row, hours }) => ({
+    .filter(({ hours, time }) => hours > 0 || time?.start_time || time?.end_time)
+    .map(({ row, hours, time }) => ({
       service_po_id: row.servicePOId,
       hierarchy_node_id: row.hierarchyId ?? null,
       hours,
       description: row.label ?? 'Logged via Monthly Summary',
+      ...(time?.start_time ? { start_time: time.start_time } : {}),
+      ...(time?.end_time ? { end_time: time.end_time } : {}),
     }));
 
-// Mirrors the two 400s the server enforces on a whole-day save, so the user sees the same
-// wording without a round trip. Returns the error string, or null if the day is valid.
+// Mirrors the 400s the server enforces on a whole-day save, so the user sees the same wording
+// without a round trip. Returns the error string, or null if the day is valid. start_time/
+// end_time are "HH:MM" (zero-padded 24-hour, as <input type="time"> always emits), which sort
+// and compare correctly as plain strings — no need to parse them into minutes here.
 export const validateDayEntries = (entries, dateLabel, dailyHoursCap) => {
   const seen = new Set();
   for (const entry of entries) {
@@ -102,6 +113,16 @@ export const validateDayEntries = (entries, dateLabel, dailyHoursCap) => {
       return `Duplicate entry for Service PO #${entry.service_po_id}${nodePart} in the same request.`;
     }
     seen.add(key);
+
+    if (entry.start_time && !entry.end_time) {
+      return 'end_time is required when start_time is provided.';
+    }
+    if (entry.end_time && !entry.start_time) {
+      return 'start_time is required when end_time is provided.';
+    }
+    if (entry.start_time && entry.end_time && entry.end_time <= entry.start_time) {
+      return 'End time must be greater than start time.';
+    }
   }
 
   const total = entries.reduce((sum, entry) => sum + Number(entry.hours || 0), 0);

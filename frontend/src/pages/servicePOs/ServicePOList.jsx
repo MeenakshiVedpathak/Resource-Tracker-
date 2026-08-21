@@ -197,6 +197,15 @@ const ServicePOList = () => {
     statusFilter !== 'all' ? 1 : 0,
   ].reduce((a, b) => a + b, 0);
 
+  const clearFilters = () => {
+    setClientFilter('all');
+    setCategoryFilter('all');
+    setTypeFilter('all');
+    setPoFilter('all');
+    setStatusFilter('all');
+    setPage(1);
+  };
+
   // Export pulls every matching record (not just the current page) with one extra request.
   const handleExport = async () => {
     setExporting(true);
@@ -377,7 +386,7 @@ const ServicePOList = () => {
         }
       />
 
-      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[420px]">
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[460px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs">Client</Label>
             <SearchableSelect

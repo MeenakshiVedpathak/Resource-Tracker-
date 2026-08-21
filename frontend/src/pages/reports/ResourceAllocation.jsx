@@ -328,6 +328,16 @@ const ResourceAllocation = () => {
     poStatus !== 'all' ? 1 : 0,
   ].reduce((a, b) => a + b, 0);
 
+  const clearFilters = () => {
+    setEmployeeId('all');
+    setPoId('all');
+    setClientId('all');
+    setCategoryId('all');
+    setServiceTypeId('all');
+    setPoStatus('all');
+    setPage(1);
+  };
+
   return (
     <div>
       <PageHeader
@@ -379,7 +389,7 @@ const ResourceAllocation = () => {
       />
 
       {/* Collapsible filter panel */}
-      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[420px]">
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[460px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs">Month &amp; Year</Label>
             <MonthYearPicker

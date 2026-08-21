@@ -162,6 +162,13 @@ const BudgetVsBilled = () => {
     poId !== 'all',
   ].filter(Boolean).length;
 
+  const clearFilters = () => {
+    setClientId('all');
+    setServiceTypeId('all');
+    setPoId('all');
+    setPage(1);
+  };
+
   const columns = useMemo(() => [
     columnHelper.accessor('service_po_code', {
       header: 'PO Code',
@@ -269,7 +276,7 @@ const BudgetVsBilled = () => {
         }
       />
 
-      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[320px]">
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[360px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Period <span className="text-destructive">*</span></Label>
           <div className="flex items-center gap-0.5 p-0.5 rounded-xl bg-muted border w-fit shrink-0">

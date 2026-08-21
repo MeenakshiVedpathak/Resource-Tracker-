@@ -21,7 +21,7 @@ const buildSeed = () => {
     status: 'active',
     hierarchy_rank: r.hierarchy_rank,
     inherits_role_id: null,
-    is_original_data_visible: [ROLE_NAMES.HR, ROLE_NAMES.BU_ADMIN].includes(r.name),
+    is_original_data_visible: [ROLE_NAMES.HR, ROLE_NAMES.BU_ADMIN, ROLE_NAMES.BU_HEAD].includes(r.name),
     is_system: true,
     created_at: '2026-01-01T00:00:00.000Z',
   }));
@@ -42,6 +42,10 @@ const buildSeed = () => {
     { id: 8, company_id: 1, employee_id: null, email: 'hr@mock.test', password: MOCK_PASSWORD, role_id: roleId(ROLE_NAMES.HR), status: 'active', last_login: null },
     { id: 9, company_id: 1, employee_id: 1, email: 'employee@mock.test', password: MOCK_PASSWORD, role_id: roleId(ROLE_NAMES.EMPLOYEE), status: 'active', last_login: null },
     { id: 10, company_id: 1, employee_id: null, email: 'manager2@mock.test', password: MOCK_PASSWORD, role_id: roleId(ROLE_NAMES.MANAGER), status: 'active', last_login: null },
+    // BU Head — additive role (see roleHierarchy.js). Carries the plain Employee role as an
+    // additional role (§4 of the BU Head spec: "Roles automatically assigned: BU Head + Employee")
+    // and is linked to its own Employee record below, same as the plain Employee seed above.
+    { id: 11, company_id: null, employee_id: 3, email: 'buhead@mock.test', password: MOCK_PASSWORD, role_id: roleId(ROLE_NAMES.BU_HEAD), additional_role_ids: [roleId(ROLE_NAMES.EMPLOYEE)], status: 'active', last_login: null },
   ];
 
   const employees = [
@@ -57,10 +61,16 @@ const buildSeed = () => {
       resource_description: '', date_of_joining: '2024-06-01', date_of_leaving: null,
       status: 'active', primary_manager_user_id: 10, secondary_manager_user_id: null, linked_user_id: null,
     },
+    {
+      id: 3, company_id: null, employee_code: 'EMP-0003', full_name: 'Morgan BU Head',
+      designation: 'BU Head', total_experience: 8.0, company_experience: 4.0,
+      resource_description: '', date_of_joining: '2023-03-01', date_of_leaving: null,
+      status: 'active', primary_manager_user_id: null, secondary_manager_user_id: null, linked_user_id: 11,
+    },
   ];
 
   return {
-    meta: { nextIds: { users: 11, employees: 3, roles: roles.length + 1, teamMappings: 2, managerServicePoGrants: 1, employeeServicePoGrants: 1 } },
+    meta: { nextIds: { users: 12, employees: 4, roles: roles.length + 1, teamMappings: 2, managerServicePoGrants: 1, employeeServicePoGrants: 1, buHeadBuMappings: 3 } },
     roles,
     users,
     employees,
@@ -69,6 +79,14 @@ const buildSeed = () => {
     ],
     managerServicePoGrants: [],
     employeeServicePoGrants: [],
+    // BU Head <-> BU (Company) mapping — a genuinely new many-to-many relationship with no
+    // existing precedent (BU Admin is single-company via user.company_id). Company name is
+    // denormalized here (not joined from a mock Companies table) since Companies are real-
+    // backend-only in this app (never mocked) — see companies.api.js.
+    buHeadBuMappings: [
+      { id: 1, bu_head_user_id: 11, company_id: 1, company_name: 'Mock BU Alpha' },
+      { id: 2, bu_head_user_id: 11, company_id: 2, company_name: 'Mock BU Beta' },
+    ],
     otpStore: {},
   };
 };
@@ -188,9 +206,18 @@ export const rolesForLoginResponse = (userId) => {
 // buildNavGroups already consumes — see constants/rbacForms.js FORM_NAMES for the exact strings.
 const FORMS_BY_ROLE = {
   [ROLE_NAMES.PLATFORM_ADMIN]: {},
+  // 'BU Head Master' deliberately NOT seeded here — Sidebar.jsx injects it via a hardcoded
+  // Admin/Entity Admin check (mirroring Entity Admins), same as the real-backend-mode fallback,
+  // so it isn't duplicated once a real Form Master row for it eventually exists too.
   [ROLE_NAMES.ADMIN]: { 'Entity Management': [{ id: 101, name: 'Entity Master' }, { id: 102, name: 'BU Admin Master' }] },
   [ROLE_NAMES.ENTITY_ADMIN]: { 'Entity Management': [{ id: 101, name: 'Entity Master' }, { id: 102, name: 'BU Admin Master' }] },
   [ROLE_NAMES.BU_ADMIN]: {
+    Administration: [{ id: 103, name: 'Roles' }, { id: 104, name: 'Forms' }],
+    People: [{ id: 105, name: 'Employees' }],
+  },
+  // BU Head gets the identical form set as BU Admin (§14 of the BU Head spec) — never diverge
+  // this from BU_ADMIN's own entry above.
+  [ROLE_NAMES.BU_HEAD]: {
     Administration: [{ id: 103, name: 'Roles' }, { id: 104, name: 'Forms' }],
     People: [{ id: 105, name: 'Employees' }],
   },
@@ -210,6 +237,14 @@ const FORMS_BY_ROLE = {
 export const formsForRoleName = (roleName) => FORMS_BY_ROLE[roleName] ?? {};
 
 export const isNoCompanyRole = (roleName) => NO_COMPANY_ROLES.includes(roleName);
+
+// BU Head <-> BU (Company) mapping lookups (§8/§9 of the BU Head spec: login's `mapped_bu`
+// list). `{ id, name }` shape matches the real backend contract this feature is designed
+// against — see buHeads.api.js's header comment for the caveat that the contract is unconfirmed.
+export const mappedBusForUser = (userId) =>
+  getDb().buHeadBuMappings
+    .filter((m) => m.bu_head_user_id === userId)
+    .map((m) => ({ id: m.company_id, name: m.company_name }));
 
 export const roleMatrixError = (actorRoleName, targetRoleName) => {
   const allowed = ROLE_CREATION_MATRIX[actorRoleName] ?? [];

@@ -3,7 +3,6 @@ import * as XLSX from 'xlsx';
 import { createColumnHelper } from '@tanstack/react-table';
 import { Download } from 'lucide-react';
 import { useResourceStaffingPlanAccuracy } from '@/hooks/useReports';
-import { reportsApi } from '@/api/reports.api';
 import { useDebounce } from '@/hooks/useDebounce';
 import { formatHours, formatPercentage } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
@@ -15,10 +14,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 
 const columnHelper = createColumnHelper();
 
 const DEFAULT_THRESHOLD_PCT = 20;
+// Risk filtering/totals only make sense across the WHOLE month's data, not one server page, so
+// the whole matching set is fetched once (capped well above any realistic employee×PO headcount
+// for a single month) and paginated client-side from there.
+const MAX_RECORDS_FETCH = 5000;
 
 const exportToExcel = (rows) => {
   const header = [
@@ -111,41 +115,78 @@ const ResourceStaffingPlanAccuracy = () => {
     year: prevMonth.getFullYear(),
   });
   const [varianceThresholdPct, setVarianceThresholdPct] = useState(String(DEFAULT_THRESHOLD_PCT));
+  const [riskFilter, setRiskFilter] = useState('all');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
-  const [exporting, setExporting] = useState(false);
 
   const debouncedThresholdPct = useDebounce(varianceThresholdPct, 400);
 
+  // Risk is computed client-side (see effectiveThresholdPct below) and must filter across every
+  // matching row, not just whatever page the server would have returned — so the whole month's
+  // matching set is fetched in one shot (page/limit below are for client-side pagination only,
+  // never sent to the API) and everything downstream (filtering, pagination, totals) works off it.
   const params = {
     ...(monthYear && { month: monthYear.month, year: monthYear.year }),
     ...(debouncedThresholdPct !== '' && { varianceThresholdPct: Number(debouncedThresholdPct) }),
-    page,
-    limit,
+    page: 1,
+    limit: MAX_RECORDS_FETCH,
   };
 
   const { data, isPending } = useResourceStaffingPlanAccuracy(params);
 
   const records = data?.data?.records ?? [];
-  const summary = data?.data ?? null;
-  const meta = data?.meta ?? {};
+
+  // The backend is sent `varianceThresholdPct` too, but the "At Risk" flag it returns doesn't
+  // reliably reflect it — recompute client-side from variance_pct so the badge always matches
+  // what's currently typed, using the live (non-debounced) value for instant feedback. Falls
+  // back to the server's own flag only when variance_pct is null (planned_hours = 0).
+  const effectiveThresholdPct = (() => {
+    if (varianceThresholdPct === '') return DEFAULT_THRESHOLD_PCT;
+    const n = Number(varianceThresholdPct);
+    return Number.isFinite(n) ? n : DEFAULT_THRESHOLD_PCT;
+  })();
+
+  const withComputedAtRisk = (rows, thresholdPct) =>
+    rows.map((r) => ({
+      ...r,
+      at_risk: r.variance_pct != null ? Math.abs(r.variance_pct) > thresholdPct : r.at_risk,
+    }));
+
+  const displayRecords = withComputedAtRisk(records, effectiveThresholdPct);
+
+  const matchesRiskFilter = (r) => {
+    if (riskFilter === 'all') return true;
+    return riskFilter === 'at_risk' ? !!r.at_risk : !r.at_risk;
+  };
+
+  // Full, risk-filtered set the whole page/pagination/totals below are derived from.
+  const filteredRecords = displayRecords.filter(matchesRiskFilter);
+  const pagedRecords = filteredRecords.slice((page - 1) * limit, page * limit);
+
+  // Recomputed client-side from the full filtered set rather than trusted from the backend's own
+  // `summary` — it has no notion of the risk filter, and would double-count when narrowed to
+  // "At Risk"/"OK" only. Mirrors the same reasoning as effectiveThresholdPct above.
+  const summary = filteredRecords.length > 0 ? {
+    total_planned_hours: filteredRecords.reduce((sum, r) => sum + (Number(r.planned_hours) || 0), 0),
+    total_actual_hours: filteredRecords.reduce((sum, r) => sum + (Number(r.actual_hours) || 0), 0),
+    total_variance_hours: filteredRecords.reduce((sum, r) => sum + (Number(r.variance) || 0), 0),
+    variance_threshold_pct_used: effectiveThresholdPct,
+  } : null;
 
   const activeFilterCount = [
     varianceThresholdPct !== String(DEFAULT_THRESHOLD_PCT),
+    riskFilter !== 'all',
   ].filter(Boolean).length;
 
-  const handleExport = async () => {
-    setExporting(true);
-    try {
-      const total = meta.total > 0 ? meta.total : 1000;
-      const res = await reportsApi.getResourceStaffingPlanAccuracy({ ...params, page: 1, limit: total });
-      const allRecords = res?.data?.records ?? [];
-      exportToExcel(allRecords);
-    } finally {
-      setExporting(false);
-    }
+  const clearFilters = () => {
+    setVarianceThresholdPct(String(DEFAULT_THRESHOLD_PCT));
+    setRiskFilter('all');
+    setPage(1);
   };
+
+  // Already have the full filtered set in memory — no need for a second network round-trip.
+  const handleExport = () => exportToExcel(filteredRecords);
 
   return (
     <div>
@@ -160,16 +201,16 @@ const ResourceStaffingPlanAccuracy = () => {
               activeCount={activeFilterCount}
               className="h-9"
             />
-            {records.length > 0 && (
-              <Button variant="outline" size="sm" className="h-9" onClick={handleExport} disabled={exporting}>
-                <Download className="mr-1.5 h-4 w-4" />{exporting ? 'Exporting…' : 'Export Excel'}
+            {filteredRecords.length > 0 && (
+              <Button variant="outline" size="sm" className="h-9" onClick={handleExport}>
+                <Download className="mr-1.5 h-4 w-4" />Export Excel
               </Button>
             )}
           </div>
         }
       />
 
-      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[160px]">
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[240px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Month &amp; Year <span className="text-destructive">*</span></Label>
           <MonthYearPicker
@@ -191,18 +232,30 @@ const ResourceStaffingPlanAccuracy = () => {
             className="h-9 w-full text-sm"
           />
         </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Risk</Label>
+          <SearchableSelect
+            showSearch={false}
+            options={[
+              { label: 'All', value: 'all' },
+              { label: 'At Risk', value: 'at_risk' },
+              { label: 'OK', value: 'ok' },
+            ]}
+            value={riskFilter}
+            onValueChange={(v) => { setRiskFilter(v); setPage(1); }}
+            placeholder="All"
+            className="h-9 w-full text-sm"
+          />
+        </div>
       </FilterPanel>
 
       <DataTable
         tableContainerClassName="max-h-[50vh]"
         columns={columns}
-        data={records}
+        data={pagedRecords}
         isLoading={isPending}
-        pagination={meta.total != null ? {
-          page: meta.page ?? page,
-          limit: meta.limit ?? limit,
-          total: meta.total,
-        } : undefined}
+        pagination={{ page, limit, total: filteredRecords.length }}
         onPageChange={setPage}
         onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
       />

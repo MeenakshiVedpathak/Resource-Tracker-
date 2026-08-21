@@ -25,3 +25,13 @@ export const useEmployeeRangeReport = (startDate, endDate) =>
     queryFn: () => employeeReportsApi.getRange({ startDate, endDate, format: 'json' }),
     enabled: !!startDate && !!endDate,
   });
+
+// `params` carries whichever period shape the caller built (startDate/endDate or month/year)
+// plus optional employee_id/service_po_id/project_id filters — `enabled` gates the fetch until
+// the period is actually complete (e.g. a Range picker with only one side chosen).
+export const useEmployeeWorkLogTimeReport = (params, enabled) =>
+  useQuery({
+    queryKey: QUERY_KEYS.EMPLOYEE_REPORT_WORK_LOG_TIME(params),
+    queryFn: () => employeeReportsApi.getWorkLogTime({ ...params, format: 'json' }),
+    enabled,
+  });

@@ -3,7 +3,6 @@ import * as XLSX from 'xlsx';
 import { createColumnHelper } from '@tanstack/react-table';
 import { Download } from 'lucide-react';
 import { useServicePOProfitability } from '@/hooks/useReports';
-import { reportsApi } from '@/api/reports.api';
 import { useActiveClients } from '@/hooks/useClients';
 import { formatCurrency, formatHours, formatPercentage } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
@@ -17,6 +16,11 @@ import { SearchableSelect } from '@/components/ui/searchable-select';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
 
 const columnHelper = createColumnHelper();
+
+// The Totals section must reflect every matching PO, not just the current server page, so
+// the whole matching set is fetched once (capped well above any realistic monthly PO count) and
+// paginated client-side from there.
+const MAX_RECORDS_FETCH = 5000;
 
 const exportToExcel = (rows) => {
   const header = [
@@ -141,38 +145,48 @@ const ServicePOProfitability = () => {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
-  const [exporting, setExporting] = useState(false);
 
   const { data: activeClients = [] } = useActiveClients();
 
   const params = {
     ...(monthYear && { month: monthYear.month, year: monthYear.year }),
     ...(clientId && clientId !== 'all' && { clientId }),
-    page,
-    limit,
+    page: 1,
+    limit: MAX_RECORDS_FETCH,
   };
 
   const { data, isPending } = useServicePOProfitability(params);
 
   const records = data?.data?.records ?? [];
-  const summary = data?.data ?? null;
-  const meta = data?.meta ?? {};
+  const pagedRecords = records.slice((page - 1) * limit, page * limit);
+
+  // Recomputed client-side from the full matching set rather than trusted from the backend's own
+  // `summary` — that object only reflects the current server page, and would understate totals
+  // once there's more than one page of POs.
+  const summary = records.length > 0 ? (() => {
+    const total_invoiced_amount = records.reduce((sum, r) => sum + (Number(r.invoiced_amount) || 0), 0);
+    const total_delivery_cost = records.reduce((sum, r) => sum + (Number(r.delivery_cost) || 0), 0);
+    const total_margin = records.reduce((sum, r) => sum + (Number(r.margin) || 0), 0);
+    return {
+      total_invoiced_amount,
+      total_delivery_cost,
+      total_margin,
+      // Derived ratio, not a per-row average — recomputed from the summed totals.
+      overall_margin_pct: total_invoiced_amount !== 0 ? (total_margin / total_invoiced_amount) * 100 : null,
+    };
+  })() : null;
 
   const activeFilterCount = [
     clientId !== 'all',
   ].filter(Boolean).length;
 
-  const handleExport = async () => {
-    setExporting(true);
-    try {
-      const total = meta.total > 0 ? meta.total : 1000;
-      const res = await reportsApi.getServicePOProfitability({ ...params, page: 1, limit: total });
-      const allRecords = res?.data?.records ?? [];
-      exportToExcel(allRecords);
-    } finally {
-      setExporting(false);
-    }
+  const clearFilters = () => {
+    setClientId('all');
+    setPage(1);
   };
+
+  // Already have the full matching set in memory — no need for a second network round-trip.
+  const handleExport = () => exportToExcel(records);
 
   return (
     <div>
@@ -188,15 +202,15 @@ const ServicePOProfitability = () => {
               className="h-9"
             />
             {records.length > 0 && (
-              <Button variant="outline" size="sm" className="h-9" onClick={handleExport} disabled={exporting}>
-                <Download className="mr-1.5 h-4 w-4" />{exporting ? 'Exporting…' : 'Export Excel'}
+              <Button variant="outline" size="sm" className="h-9" onClick={handleExport}>
+                <Download className="mr-1.5 h-4 w-4" />Export Excel
               </Button>
             )}
           </div>
         }
       />
 
-      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[240px]">
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[280px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Month &amp; Year <span className="text-destructive">*</span></Label>
           <MonthYearPicker
@@ -229,13 +243,9 @@ const ServicePOProfitability = () => {
       <DataTable
         tableContainerClassName="max-h-[50vh]"
         columns={columns}
-        data={records}
+        data={pagedRecords}
         isLoading={isPending}
-        pagination={meta.total != null ? {
-          page: meta.page ?? page,
-          limit: meta.limit ?? limit,
-          total: meta.total,
-        } : undefined}
+        pagination={{ page, limit, total: records.length }}
         onPageChange={setPage}
         onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
       />

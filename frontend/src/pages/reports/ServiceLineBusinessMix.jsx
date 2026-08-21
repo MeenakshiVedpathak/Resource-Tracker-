@@ -137,6 +137,10 @@ const ServiceLineBusinessMix = () => {
 
   const activeFilterCount = [compareMonthYear !== null].filter(Boolean).length;
 
+  const clearFilters = () => {
+    setCompareMonthYear(null);
+  };
+
   const handleExport = () => exportToExcel(records);
 
   return (
@@ -161,7 +165,7 @@ const ServiceLineBusinessMix = () => {
         }
       />
 
-      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[160px]">
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[200px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Month &amp; Year <span className="text-destructive">*</span></Label>
           <MonthYearPicker
@@ -203,17 +207,17 @@ const ServiceLineBusinessMix = () => {
         }
       />
 
-      {data?.data && (
+      {data?.data?.summary && (
         <div className="mt-4 rounded-lg border bg-muted/40 px-4 py-3">
           <p className="mb-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Totals</p>
           <div className="flex flex-wrap gap-x-6 gap-y-2">
-            <SummaryItem label="Total Hours Delivered" value={formatHours(data.data.total_hours_delivered)} />
-            <SummaryItem label="Total Delivery Cost" value={formatCurrency(data.data.total_delivery_cost)} />
-            <SummaryItem label="Total Invoiced Amount" value={formatCurrency(data.data.total_invoiced_amount)} />
+            <SummaryItem label="Total Hours Delivered" value={formatHours(data.data.summary.total_hours_delivered)} />
+            <SummaryItem label="Total Delivery Cost" value={formatCurrency(data.data.summary.total_delivery_cost)} />
+            <SummaryItem label="Total Invoiced Amount" value={formatCurrency(data.data.summary.total_invoiced_amount)} />
             <SummaryItem
               label="Total Margin"
-              value={formatCurrency(data.data.total_margin)}
-              negative={data.data.total_margin < 0}
+              value={formatCurrency(data.data.summary.total_margin)}
+              negative={data.data.summary.total_margin < 0}
             />
           </div>
         </div>

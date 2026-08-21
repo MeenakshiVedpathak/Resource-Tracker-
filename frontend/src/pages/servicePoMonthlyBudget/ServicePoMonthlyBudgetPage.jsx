@@ -101,6 +101,13 @@ const ServicePoMonthlyBudgetPage = () => {
   const activeFilterCount = [clientFilter, categoryFilter, typeFilter, poFilter]
     .filter((v) => v !== 'all').length;
 
+  const clearFilters = () => {
+    setClientFilter('all');
+    setCategoryFilter('all');
+    setTypeFilter('all');
+    setPoFilter('all');
+  };
+
   const handleYearChange = (next) => {
     setYear(next);
     // Jumping years keeps the same calendar month selected — only "This month" resets both.
@@ -166,7 +173,7 @@ const ServicePoMonthlyBudgetPage = () => {
         }
       />
 
-      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[420px]">
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[460px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Client</Label>
           <SearchableSelect

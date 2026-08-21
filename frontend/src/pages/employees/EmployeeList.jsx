@@ -234,6 +234,14 @@ const EmployeeList = () => {
       : rolesData?.data ?? [];
   const isHR = useCanWrite();
 
+  const activeFilterCount = (statusFilter !== 'all' ? 1 : 0) + (roleFilter !== 'all' ? 1 : 0);
+
+  const clearFilters = () => {
+    setStatusFilter('all');
+    setRoleFilter('all');
+    setPage(1);
+  };
+
   const columns = useMemo(() => [
     columnHelper.display({
       id: 'actions',
@@ -681,7 +689,7 @@ const EmployeeList = () => {
             <FilterToggleButton
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((prev) => !prev)}
-              activeCount={(statusFilter !== 'all' ? 1 : 0) + (roleFilter !== 'all' ? 1 : 0)}
+              activeCount={activeFilterCount}
             />
             {isHR && (
               <DropdownMenu>
@@ -741,7 +749,7 @@ const EmployeeList = () => {
         }
       />
 
-      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[160px]">
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[200px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Status</Label>
           <div className="flex items-center rounded-md border overflow-hidden h-9 text-sm bg-white">

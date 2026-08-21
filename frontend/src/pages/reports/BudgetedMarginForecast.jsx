@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import * as XLSX from 'xlsx';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Download, Info } from 'lucide-react';
+import { Download } from 'lucide-react';
 import { useBudgetedMarginForecast } from '@/hooks/useReports';
-import { reportsApi } from '@/api/reports.api';
 import { formatCurrency, formatHours, formatPercentage } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
 import EmptyState from '@/components/common/EmptyState';
@@ -16,6 +15,11 @@ import { Label } from '@/components/ui/label';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
 
 const columnHelper = createColumnHelper();
+
+// Totals must reflect the WHOLE matching month's data, not one server page, so the whole
+// matching set is fetched once (capped well above any realistic Service PO count for a single
+// month) and paginated client-side from there.
+const MAX_RECORDS_FETCH = 5000;
 
 const exportToExcel = (rows) => {
   const header = [
@@ -124,35 +128,41 @@ const BudgetedMarginForecast = () => {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
-  const [exporting, setExporting] = useState(false);
 
+  // page/limit above are for client-side pagination only, never sent to the API — the whole
+  // matching month's data is fetched in one shot so totals and pagination both work off it.
   const params = {
     ...(monthYear && { month: monthYear.month, year: monthYear.year }),
-    page,
-    limit,
+    page: 1,
+    limit: MAX_RECORDS_FETCH,
   };
 
   const { data, isPending } = useBudgetedMarginForecast(params);
 
   const records = data?.data?.records ?? [];
-  const note = data?.data?.note ?? null;
-  const meta = data?.meta ?? {};
+  const pagedRecords = records.slice((page - 1) * limit, page * limit);
+
+  // Recomputed client-side from the full record set — the backend's own `summary` only ever
+  // reflected one page. Overall margin % is a derived ratio (total margin ÷ total revenue), not
+  // a per-row average, matching how "overall margin %" is defined elsewhere in this app.
+  const summary = records.length > 0 ? (() => {
+    const total_budgeted_revenue = records.reduce((sum, r) => sum + (Number(r.budgeted_revenue) || 0), 0);
+    const total_budgeted_cost = records.reduce((sum, r) => sum + (Number(r.budgeted_cost) || 0), 0);
+    const total_forecasted_margin = records.reduce((sum, r) => sum + (Number(r.forecasted_margin) || 0), 0);
+    return {
+      total_budgeted_revenue,
+      total_budgeted_cost,
+      total_forecasted_margin,
+      overall_forecasted_margin_pct: total_budgeted_revenue !== 0 ? (total_forecasted_margin / total_budgeted_revenue) * 100 : null,
+    };
+  })() : null;
 
   const activeFilterCount = [
     monthYear?.month !== defaultMonthYear.month || monthYear?.year !== defaultMonthYear.year,
   ].filter(Boolean).length;
 
-  const handleExport = async () => {
-    setExporting(true);
-    try {
-      const total = meta.total > 0 ? meta.total : 1000;
-      const res = await reportsApi.getBudgetedMarginForecast({ ...params, page: 1, limit: total });
-      const allRecords = res?.data?.records ?? [];
-      exportToExcel(allRecords);
-    } finally {
-      setExporting(false);
-    }
-  };
+  // Already have the full record set in memory — no need for a second network round-trip.
+  const handleExport = () => exportToExcel(records);
 
   return (
     <div>
@@ -168,8 +178,8 @@ const BudgetedMarginForecast = () => {
               className="h-9"
             />
             {records.length > 0 && (
-              <Button variant="outline" size="sm" className="h-9" onClick={handleExport} disabled={exporting}>
-                <Download className="mr-1.5 h-4 w-4" />{exporting ? 'Exporting…' : 'Export Excel'}
+              <Button variant="outline" size="sm" className="h-9" onClick={handleExport}>
+                <Download className="mr-1.5 h-4 w-4" />Export Excel
               </Button>
             )}
           </div>
@@ -190,23 +200,12 @@ const BudgetedMarginForecast = () => {
         </div>
       </FilterPanel>
 
-      {note && (
-        <div className="mb-4 flex items-start gap-2 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
-          <Info className="h-4 w-4 mt-0.5 shrink-0" />
-          <span>{note}</span>
-        </div>
-      )}
-
       <DataTable
         tableContainerClassName="max-h-[50vh]"
         columns={columns}
-        data={records}
+        data={pagedRecords}
         isLoading={isPending}
-        pagination={meta.total != null ? {
-          page: meta.page ?? page,
-          limit: meta.limit ?? limit,
-          total: meta.total,
-        } : undefined}
+        pagination={{ page, limit, total: records.length }}
         onPageChange={setPage}
         onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
         emptyState={
@@ -217,21 +216,21 @@ const BudgetedMarginForecast = () => {
         }
       />
 
-      {records.length > 0 && (
+      {summary && (
         <div className="mt-4 rounded-lg border bg-muted/40 px-4 py-3">
           <p className="mb-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Totals (all pages)</p>
           <div className="flex flex-wrap gap-x-6 gap-y-2">
-            <SummaryItem label="Total Budgeted Revenue" value={formatCurrency(data?.data?.total_budgeted_revenue)} />
-            <SummaryItem label="Total Budgeted Cost" value={formatCurrency(data?.data?.total_budgeted_cost)} />
+            <SummaryItem label="Total Budgeted Revenue" value={formatCurrency(summary.total_budgeted_revenue)} />
+            <SummaryItem label="Total Budgeted Cost" value={formatCurrency(summary.total_budgeted_cost)} />
             <SummaryItem
               label="Total Forecasted Margin"
-              value={formatCurrency(data?.data?.total_forecasted_margin)}
-              negative={Number(data?.data?.total_forecasted_margin) < 0}
+              value={formatCurrency(summary.total_forecasted_margin)}
+              negative={Number(summary.total_forecasted_margin) < 0}
             />
             <SummaryItem
               label="Overall Forecasted Margin %"
-              value={formatPercentage(data?.data?.overall_forecasted_margin_pct)}
-              negative={Number(data?.data?.overall_forecasted_margin_pct) < 0}
+              value={formatPercentage(summary.overall_forecasted_margin_pct)}
+              negative={Number(summary.overall_forecasted_margin_pct) < 0}
             />
           </div>
         </div>

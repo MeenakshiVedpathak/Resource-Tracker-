@@ -3,7 +3,6 @@ import * as XLSX from 'xlsx';
 import { createColumnHelper } from '@tanstack/react-table';
 import { Download } from 'lucide-react';
 import { useEmployeeCapacityForecast } from '@/hooks/useReports';
-import { reportsApi } from '@/api/reports.api';
 import { useDebounce } from '@/hooks/useDebounce';
 import { formatHours, formatPercentage } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
@@ -19,6 +18,10 @@ import { MonthYearPicker } from '@/components/ui/month-year-picker';
 const columnHelper = createColumnHelper();
 
 const DEFAULT_BENCH_THRESHOLD_HOURS = 40;
+// The Summary counts must reflect every matching employee, not just the current server page, so
+// the whole matching set is fetched once (capped well above any realistic monthly headcount) and
+// paginated client-side from there.
+const MAX_RECORDS_FETCH = 5000;
 
 const exportToExcel = (rows) => {
   const header = [
@@ -121,37 +124,32 @@ const EmployeeCapacityForecast = () => {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
-  const [exporting, setExporting] = useState(false);
 
   const debouncedBenchThresholdHours = useDebounce(benchThresholdHours, 400);
 
   const params = {
     ...(monthYear && { month: monthYear.month, year: monthYear.year }),
     benchThresholdHours: debouncedBenchThresholdHours !== '' ? Number(debouncedBenchThresholdHours) : DEFAULT_BENCH_THRESHOLD_HOURS,
-    page,
-    limit,
+    page: 1,
+    limit: MAX_RECORDS_FETCH,
   };
 
   const { data, isPending } = useEmployeeCapacityForecast(params);
 
   const records = data?.data?.records ?? [];
-  const meta = data?.meta ?? {};
+  const pagedRecords = records.slice((page - 1) * limit, page * limit);
 
   const activeFilterCount = [
     Number(benchThresholdHours) !== DEFAULT_BENCH_THRESHOLD_HOURS,
   ].filter(Boolean).length;
 
-  const handleExport = async () => {
-    setExporting(true);
-    try {
-      const total = meta.total > 0 ? meta.total : 1000;
-      const res = await reportsApi.getEmployeeCapacityForecast({ ...params, page: 1, limit: total });
-      const allRecords = res?.data?.records ?? [];
-      exportToExcel(allRecords);
-    } finally {
-      setExporting(false);
-    }
+  const clearFilters = () => {
+    setBenchThresholdHours(String(DEFAULT_BENCH_THRESHOLD_HOURS));
+    setPage(1);
   };
+
+  // Already have the full matching set in memory — no need for a second network round-trip.
+  const handleExport = () => exportToExcel(records);
 
   return (
     <div>
@@ -167,15 +165,15 @@ const EmployeeCapacityForecast = () => {
               className="h-9"
             />
             {records.length > 0 && (
-              <Button variant="outline" size="sm" className="h-9" onClick={handleExport} disabled={exporting}>
-                <Download className="mr-1.5 h-4 w-4" />{exporting ? 'Exporting…' : 'Export Excel'}
+              <Button variant="outline" size="sm" className="h-9" onClick={handleExport}>
+                <Download className="mr-1.5 h-4 w-4" />Export Excel
               </Button>
             )}
           </div>
         }
       />
 
-      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[240px]">
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[280px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Month &amp; Year <span className="text-destructive">*</span></Label>
           <MonthYearPicker
@@ -201,24 +199,26 @@ const EmployeeCapacityForecast = () => {
       <DataTable
         tableContainerClassName="max-h-[50vh]"
         columns={columns}
-        data={records}
+        data={pagedRecords}
         isLoading={isPending}
-        pagination={meta.total != null ? {
-          page: meta.page ?? page,
-          limit: meta.limit ?? limit,
-          total: meta.total,
-        } : undefined}
+        pagination={{ page, limit, total: records.length }}
         onPageChange={setPage}
         onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
       />
 
       {data?.data && (
         <div className="mt-4 rounded-lg border bg-muted/40 px-4 py-3">
-          <p className="mb-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Summary</p>
+          <p className="mb-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Summary (all pages)</p>
           <div className="flex flex-wrap gap-x-6 gap-y-2">
-            {/* `_on_page` counts are page-scoped, not grand totals — labeled explicitly to avoid misreading. */}
-            <SummaryItem label="Bench Risk (this page)" value={data.data.bench_risk_count_on_page ?? 0} />
-            <SummaryItem label="Overallocated (this page)" value={data.data.overallocated_count_on_page ?? 0} />
+            {/*
+              Counted from the full matching set (all pages), not just what's currently displayed
+              — the backend's own aggregate fields always came back 0 regardless of how many rows
+              actually had bench_flag/overallocation_flag set, so these are counted directly from
+              records (the same flags the table columns already render as Yes/No) instead of
+              trusted from the backend.
+            */}
+            <SummaryItem label="Bench Risk (all pages)" value={records.filter((r) => r.bench_flag).length} />
+            <SummaryItem label="Overallocated (all pages)" value={records.filter((r) => r.overallocation_flag).length} />
           </div>
         </div>
       )}

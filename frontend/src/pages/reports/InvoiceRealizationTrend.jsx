@@ -3,7 +3,6 @@ import * as XLSX from 'xlsx';
 import { createColumnHelper } from '@tanstack/react-table';
 import { Download, AlertCircle } from 'lucide-react';
 import { useInvoiceRealizationTrend } from '@/hooks/useReports';
-import { reportsApi } from '@/api/reports.api';
 import { formatCurrency, formatMonthYear } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
@@ -16,12 +15,16 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 
 const columnHelper = createColumnHelper();
 
-// Positive unbilled = amount not yet billed (needs attention); negative = over-billed vs.
-// invoiced, which is not a problem, so the two are colored oppositely.
-const unbilledColorClass = (value) => {
-  if (value == null) return 'text-foreground';
-  return value > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400';
-};
+// The Totals section must reflect every matching Service PO, not just the current server page,
+// so the whole matching set is fetched once (capped well above any realistic PO count for a
+// 6-month range) and paginated client-side from there.
+const MAX_RECORDS_FETCH = 5000;
+
+// Matches how every other amount figure in this report suite treats negative values (e.g.
+// Service PO Summary's Unbilled Amount, every report's Total Margin) — negative is flagged red,
+// zero/positive stays neutral. A positive unbilled balance is routine (not yet billed, not a
+// problem), so it doesn't get a "warning" color of its own.
+const negativeColorClass = (value) => (value != null && value < 0 ? 'text-destructive' : 'text-foreground');
 
 const exportToExcel = (rows) => {
   const header = ['PO Code', 'PO Name', 'Client', 'Total Invoiced', 'Total Billed', 'Total Unbilled', 'Months Outstanding'];
@@ -80,7 +83,7 @@ const columns = [
     header: 'Total Unbilled',
     size: 160,
     cell: (info) => (
-      <span className={`tabular-nums font-medium ${unbilledColorClass(info.getValue())}`}>
+      <span className={`tabular-nums font-medium ${negativeColorClass(info.getValue())}`}>
         {formatCurrency(info.getValue())}
       </span>
     ),
@@ -112,32 +115,31 @@ const InvoiceRealizationTrend = () => {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [selectedRow, setSelectedRow] = useState(null);
-  const [exporting, setExporting] = useState(false);
 
   const params = {
     ...(fromMonthYear && { startMonth: fromMonthYear.month, startYear: fromMonthYear.year }),
     ...(toMonthYear && { endMonth: toMonthYear.month, endYear: toMonthYear.year }),
-    page,
-    limit,
+    page: 1,
+    limit: MAX_RECORDS_FETCH,
   };
 
   const { data, isPending } = useInvoiceRealizationTrend(params);
 
   const records = data?.data?.records ?? [];
-  const meta = data?.meta ?? {};
-  const note = data?.data?.note;
+  const pagedRecords = records.slice((page - 1) * limit, page * limit);
 
-  const handleExport = async () => {
-    setExporting(true);
-    try {
-      const total = meta.total > 0 ? meta.total : 1000;
-      const res = await reportsApi.getInvoiceRealizationTrend({ ...params, page: 1, limit: total });
-      const allRecords = res?.data?.records ?? [];
-      exportToExcel(allRecords);
-    } finally {
-      setExporting(false);
-    }
-  };
+  // Recomputed client-side from the full matching set rather than trusted from the backend's
+  // direct `total_invoiced_amount`/`total_billed_amount`/`total_unbilled_amount` fields — those
+  // names don't even match the row-level fields (`total_invoiced`/`total_billed`/`total_unbilled`)
+  // the table columns render, a copy-paste mismatch from another report.
+  const summary = records.length > 0 ? {
+    total_invoiced: records.reduce((sum, r) => sum + (Number(r.total_invoiced) || 0), 0),
+    total_billed: records.reduce((sum, r) => sum + (Number(r.total_billed) || 0), 0),
+    total_unbilled: records.reduce((sum, r) => sum + (Number(r.total_unbilled) || 0), 0),
+  } : null;
+
+  // Already have the full matching set in memory — no need for a second network round-trip.
+  const handleExport = () => exportToExcel(records);
 
   return (
     <div>
@@ -153,8 +155,8 @@ const InvoiceRealizationTrend = () => {
               className="h-9"
             />
             {records.length > 0 && (
-              <Button variant="outline" size="sm" className="h-9" onClick={handleExport} disabled={exporting}>
-                <Download className="mr-1.5 h-4 w-4" />{exporting ? 'Exporting…' : 'Export Excel'}
+              <Button variant="outline" size="sm" className="h-9" onClick={handleExport}>
+                <Download className="mr-1.5 h-4 w-4" />Export Excel
               </Button>
             )}
           </div>
@@ -183,38 +185,38 @@ const InvoiceRealizationTrend = () => {
         </div>
       </FilterPanel>
 
-      {note && (
+      {records.length > 0 && (
         <div className="mb-4 flex items-start gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2.5 text-xs text-sky-800">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-          <p>{note}</p>
+          {/*
+            Fixed, business-friendly wording — deliberately not sourced from the backend's own
+            `note` field, which described this in raw schema/table terms (see the bug this fixed).
+          */}
+          <p>"Months Outstanding" is an estimate — it counts how many months in this range had an unbilled balance for the Service PO. It isn't based on actual invoice due dates.</p>
         </div>
       )}
 
       <DataTable
         tableContainerClassName="max-h-[50vh]"
         columns={columns}
-        data={records}
+        data={pagedRecords}
         isLoading={isPending}
-        pagination={meta.total != null ? {
-          page: meta.page ?? page,
-          limit: meta.limit ?? limit,
-          total: meta.total,
-        } : undefined}
+        pagination={{ page, limit, total: records.length }}
         onPageChange={setPage}
         onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
         onRowClick={(row) => setSelectedRow(row)}
       />
 
-      {data?.data && (
+      {summary && (
         <div className="mt-4 rounded-lg border bg-muted/40 px-4 py-3">
           <p className="mb-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Totals (all pages)</p>
           <div className="flex flex-wrap gap-x-6 gap-y-2">
-            <SummaryItem label="Total Invoiced" value={formatCurrency(data.data.total_invoiced_amount)} />
-            <SummaryItem label="Total Billed" value={formatCurrency(data.data.total_billed_amount)} />
+            <SummaryItem label="Total Invoiced" value={formatCurrency(summary.total_invoiced)} />
+            <SummaryItem label="Total Billed" value={formatCurrency(summary.total_billed)} />
             <SummaryItem
               label="Total Unbilled"
-              value={formatCurrency(data.data.total_unbilled_amount)}
-              colorClass={unbilledColorClass(data.data.total_unbilled_amount)}
+              value={formatCurrency(summary.total_unbilled)}
+              colorClass={negativeColorClass(summary.total_unbilled)}
             />
           </div>
         </div>
@@ -251,7 +253,7 @@ const InvoiceRealizationTrend = () => {
                           </div>
                           <div>
                             <p className="text-muted-foreground">Unbilled</p>
-                            <p className={`font-medium tabular-nums ${unbilledColorClass(m.unbilled)}`}>
+                            <p className={`font-medium tabular-nums ${negativeColorClass(m.unbilled)}`}>
                               {formatCurrency(m.unbilled)}
                             </p>
                           </div>

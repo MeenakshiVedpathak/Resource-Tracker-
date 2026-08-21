@@ -218,6 +218,15 @@ const ServicePOResource = () => {
     clientId !== 'all' ? 1 : 0,
   ].reduce((a, b) => a + b, 0);
 
+  const clearFilters = () => {
+    setEmployeeId('all');
+    setCategoryId('all');
+    setTypeId('all');
+    setPoId('all');
+    setClientId('all');
+    setPage(1);
+  };
+
   return (
     <div>
       <PageHeader
@@ -260,7 +269,7 @@ const ServicePOResource = () => {
       />
 
       {/* ── Collapsible Filter Panel ── */}
-      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[420px]">
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[460px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs font-medium">Month &amp; Year</Label>
             <MonthYearPicker

@@ -134,6 +134,14 @@ const ClientWiseAnalytics = () => {
     poId !== 'all',
   ].filter(Boolean).length;
 
+  const clearFilters = () => {
+    setEmployeeId('all');
+    setClientId('all');
+    setServiceTypeId('all');
+    setPoId('all');
+    setPage(1);
+  };
+
   const handleSort = (column) => {
     if (sortBy === column) {
       setSortOrder((o) => (o === 'asc' ? 'desc' : 'asc'));
@@ -235,7 +243,7 @@ const ClientWiseAnalytics = () => {
         }
       />
 
-      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[320px]">
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[360px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
         <div className="col-span-2 md:col-span-4 flex flex-col gap-1.5">
           <Label className="text-xs">Period <span className="text-destructive">*</span></Label>
           <div className="flex flex-wrap items-center gap-2">

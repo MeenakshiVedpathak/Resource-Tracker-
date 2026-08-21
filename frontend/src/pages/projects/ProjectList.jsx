@@ -74,6 +74,13 @@ const ProjectList = () => {
   const projects = data?.data ?? [];
   const meta = data?.meta ?? {};
 
+  const activeFilterCount = statusFilter !== 'all' ? 1 : 0;
+
+  const clearFilters = () => {
+    setStatusFilter('all');
+    setPage(1);
+  };
+
   const columns = [
     columnHelper.display({
       id: 'actions',
@@ -154,7 +161,7 @@ const ProjectList = () => {
             <FilterToggleButton
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((prev) => !prev)}
-              activeCount={statusFilter !== 'all' ? 1 : 0}
+              activeCount={activeFilterCount}
             />
             {canManage && (
               <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => navigate(ROUTES.PROJECT_NEW)}>
@@ -165,7 +172,7 @@ const ProjectList = () => {
         }
       />
 
-      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[160px]">
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[200px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Status</Label>
           <div className="flex items-center rounded-md border overflow-hidden h-9 text-sm bg-white">

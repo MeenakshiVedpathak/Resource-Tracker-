@@ -76,6 +76,13 @@ const ServiceTypeList = () => {
   const total = meta.total ?? rows.length;
   const paginatedRows = rows.slice((page - 1) * limit, page * limit);
 
+  const activeFilterCount = categoryFilter !== 'all' ? 1 : 0;
+
+  const clearFilters = () => {
+    setCategoryFilter('all');
+    setPage(1);
+  };
+
   const handleExport = () => exportToExcel(rows, categoryMap);
 
   const columns = [
@@ -142,7 +149,7 @@ const ServiceTypeList = () => {
             <FilterToggleButton
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((prev) => !prev)}
-              activeCount={categoryFilter !== 'all' ? 1 : 0}
+              activeCount={activeFilterCount}
             />
             {rows.length > 0 && (
               <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={handleExport}>
@@ -158,7 +165,7 @@ const ServiceTypeList = () => {
         }
       />
 
-      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[160px]">
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[200px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Service Category</Label>
           <SearchableSelect

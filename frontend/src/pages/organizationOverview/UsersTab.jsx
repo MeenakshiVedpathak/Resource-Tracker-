@@ -50,6 +50,13 @@ const UsersTab = ({ users, search, isLoading }) => {
 
   const activeCount = [entityFilter, buFilter, roleFilter, statusFilter].filter((v) => v !== ALL).length;
 
+  const clearFilters = () => {
+    setEntityFilter(ALL);
+    setBuFilter(ALL);
+    setRoleFilter(ALL);
+    setStatusFilter(ALL);
+  };
+
   const columns = [
     columnHelper.accessor('name', {
       header: 'Name',
@@ -105,7 +112,7 @@ const UsersTab = ({ users, search, isLoading }) => {
       <div className="flex justify-end">
         <FilterToggleButton isOpen={filtersOpen} onToggle={() => setFiltersOpen((o) => !o)} activeCount={activeCount} />
       </div>
-      <FilterPanel isOpen={filtersOpen} gridClassName="grid-cols-2 sm:grid-cols-4">
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[200px]" gridClassName="grid-cols-2 sm:grid-cols-4" onClear={clearFilters} showClear={activeCount > 0}>
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Entity</Label>
           <Select value={entityFilter} onValueChange={setEntityFilter}>

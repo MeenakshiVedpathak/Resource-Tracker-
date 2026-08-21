@@ -215,6 +215,11 @@ const TimesheetApprovalStatusReport = () => {
 
   const activeFilterCount = (isManager && employeeId !== 'all' ? 1 : 0) + (reportType === 'range' && aggregateMonthly ? 1 : 0);
 
+  const clearFilters = () => {
+    setEmployeeId('all');
+    setAggregateMonthly(false);
+  };
+
   return (
     <div className="space-y-4">
       <PageHeader
@@ -229,7 +234,7 @@ const TimesheetApprovalStatusReport = () => {
         }
       />
 
-      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[260px]">
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[300px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Report Type</Label>
           <div className="flex items-center rounded-md border overflow-hidden h-9 text-sm bg-white">

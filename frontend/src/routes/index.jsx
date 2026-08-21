@@ -23,6 +23,7 @@ const EmployeeMonthlySummary = lazy(() => import('@/pages/employee/EmployeeMonth
 const EmployeeReports = lazy(() => import('@/pages/employee/EmployeeReports'));
 const EmployeeProjectHoursReport = lazy(() => import('@/pages/employee/EmployeeProjectHoursReport'));
 const TimesheetApprovalStatusReport = lazy(() => import('@/pages/employee/TimesheetApprovalStatusReport'));
+const EmployeeWorkLogTimeReport = lazy(() => import('@/pages/employee/EmployeeWorkLogTimeReport'));
 
 // ── Core ──
 const DashboardGate = lazy(() => import('@/pages/DashboardGate'));
@@ -50,6 +51,7 @@ const EntityAdminCreate = lazy(() => import('@/pages/entityAdmins/EntityAdminCre
 const EntityList = lazy(() => import('@/pages/entities/EntityList'));
 const EntityForm = lazy(() => import('@/pages/entities/EntityForm'));
 const BuAdminList = lazy(() => import('@/pages/buAdmins/BuAdminList'));
+const BuHeadList = lazy(() => import('@/pages/buHeads/BuHeadList'));
 
 // ── Company Management — Entity Admin scoped (no Form Master row of its own; reached via
 // buttons on Entity Master / BU Admin Master, see those pages) ──
@@ -154,6 +156,7 @@ const employeeSelfServiceRoutes = () => (
     <Route path={ROUTES.EMPLOYEE_REPORTS} element={<ProtectedRoute formName={FORM_NAMES.EMPLOYEE_REPORTS}><EmployeeReports /></ProtectedRoute>} />
     <Route path={ROUTES.EMPLOYEE_PROJECT_HOURS_REPORT} element={<ProtectedRoute formName={FORM_NAMES.EMPLOYEE_PROJECT_HOURS_REPORT}><EmployeeProjectHoursReport /></ProtectedRoute>} />
     <Route path={ROUTES.EMPLOYEE_TIMESHEET_APPROVAL_STATUS_REPORT} element={<ProtectedRoute formName={FORM_NAMES.EMPLOYEE_TIMESHEET_APPROVAL_STATUS_REPORT}><TimesheetApprovalStatusReport /></ProtectedRoute>} />
+    <Route path={ROUTES.EMPLOYEE_WORK_LOG_TIME_REPORT} element={<ProtectedRoute formName={FORM_NAMES.EMPLOYEE_WORK_LOG_TIME_REPORT}><EmployeeWorkLogTimeReport /></ProtectedRoute>} />
   </>
 );
 
@@ -262,6 +265,13 @@ const AppRoutes = () => {
 
         {/* BU Admin Master */}
         <Route path={ROUTES.BU_ADMINS} element={<ProtectedRoute formName={FORM_NAMES.BU_ADMIN_MASTER}><BuAdminList /></ProtectedRoute>} />
+        {/* BU Head Master — additive peer of BU Admin Master (§2/§24 of the BU Head spec).
+            allowedRoles (not formName) — same as Entity Admins/Companies below — since there's
+            no real Form Master row for this yet and ProtectedRoute ANDs formName with
+            allowedRoles when both are given (a formName check would 403 every Admin/Entity
+            Admin whose accessible-forms map doesn't have this row). Switch to formName once a
+            real "BU Head Master" Form Master row + Role-Form-Mapping exists. */}
+        <Route path={ROUTES.BU_HEADS} element={<ProtectedRoute allowedRoles={['Admin', 'Entity Admin']}><BuHeadList /></ProtectedRoute>} />
 
         {/* Company Management — Admin (platform-wide) and Entity Admin (own Entities) both reach
             this, per §6.3. No Form Master row of its own, so it's gated by role name directly

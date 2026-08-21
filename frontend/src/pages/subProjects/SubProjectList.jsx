@@ -83,6 +83,12 @@ const SubProjectList = () => {
     statusFilter !== 'all' ? 1 : 0,
   ].reduce((a, b) => a + b, 0);
 
+  const clearFilters = () => {
+    setPoFilter('all');
+    setStatusFilter('all');
+    setPage(1);
+  };
+
   const columns = [
     columnHelper.display({
       id: 'actions',
@@ -155,7 +161,7 @@ const SubProjectList = () => {
         }
       />
 
-      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[160px]">
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[200px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Service PO</Label>
           <SearchableSelect

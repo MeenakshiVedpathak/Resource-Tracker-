@@ -297,6 +297,10 @@ const AIInsights = () => {
     if (activeCategory !== 'all' && !categoryCounts[activeCategory]) setActiveCategory('all');
   }, [activeCategory, categoryCounts]);
 
+  const clearFilters = () => {
+    setAudience('all');
+  };
+
   const hasActiveFilters = audience !== 'all' || activeCategory !== 'all' || !!severityFilter;
   const clearAllFilters = () => {
     setAudience('all');
@@ -406,7 +410,7 @@ const AIInsights = () => {
 
         {audienceOptions.length > 0 && (
           <div className="relative px-5 sm:px-6 pb-5">
-            <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[100px]" gridClassName="grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 w-full">
+            <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[140px]" gridClassName="grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 w-full" onClear={clearFilters} showClear={audience !== 'all'}>
               <div className="flex flex-col gap-1.5">
                 <Label className="text-xs">Audience</Label>
                 <Select value={audience} onValueChange={setAudience}>

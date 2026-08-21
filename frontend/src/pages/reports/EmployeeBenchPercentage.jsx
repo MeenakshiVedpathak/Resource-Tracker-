@@ -3,7 +3,6 @@ import * as XLSX from 'xlsx';
 import { createColumnHelper } from '@tanstack/react-table';
 import { ChevronDown, ChevronUp, ChevronsUpDown, Download } from 'lucide-react';
 import { useEmployeeBenchPercentage } from '@/hooks/useReports';
-import { reportsApi } from '@/api/reports.api';
 import { useActiveEmployees } from '@/hooks/useEmployees';
 import { useActiveClients } from '@/hooks/useClients';
 import { useActiveServicePOs } from '@/hooks/useServicePOs';
@@ -22,6 +21,11 @@ import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { cn } from '@/utils/cn';
 
 const columnHelper = createColumnHelper();
+
+// The Summary average must reflect every matching employee, not just the current server page, so
+// the whole matching set is fetched once (capped well above any realistic monthly headcount) and
+// paginated client-side from there.
+const MAX_RECORDS_FETCH = 5000;
 
 const now = new Date();
 const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -152,7 +156,6 @@ const EmployeeBenchPercentage = () => {
   const [limit, setLimit] = useState(10);
   const [sortBy, setSortBy] = useState('bench_pct');
   const [sortOrder, setSortOrder] = useState('desc');
-  const [exporting, setExporting] = useState(false);
 
   const { data: activeEmployees = [] } = useActiveEmployees();
   const { data: activeClients = [] } = useActiveClients();
@@ -172,17 +175,17 @@ const EmployeeBenchPercentage = () => {
     ...(poId !== 'all' && { poId }),
     sortBy,
     sortOrder,
-    page,
-    limit,
+    page: 1,
+    limit: MAX_RECORDS_FETCH,
   };
 
   const { data, isPending } = useEmployeeBenchPercentage(params);
 
   const records = Array.isArray(data?.data) ? data.data : [];
-  const meta = data?.meta ?? {};
+  const pagedRecords = records.slice((page - 1) * limit, page * limit);
   const showLoading = periodReady && isPending;
 
-  const avgBenchPctOnPage =
+  const avgBenchPct =
     records.length > 0
       ? records.reduce((sum, r) => sum + (Number(r.bench_pct) || 0), 0) / records.length
       : null;
@@ -192,6 +195,13 @@ const EmployeeBenchPercentage = () => {
     clientId !== 'all',
     poId !== 'all',
   ].filter(Boolean).length;
+
+  const clearFilters = () => {
+    setEmployeeId('all');
+    setClientId('all');
+    setPoId('all');
+    setPage(1);
+  };
 
   const handleSort = (column) => {
     if (sortBy === column) {
@@ -208,17 +218,8 @@ const EmployeeBenchPercentage = () => {
     setPage(1);
   };
 
-  const handleExport = async () => {
-    setExporting(true);
-    try {
-      const total = meta.total > 0 ? meta.total : 1000;
-      const res = await reportsApi.getEmployeeBenchPercentage({ ...params, page: 1, limit: total });
-      const allRows = Array.isArray(res?.data) ? res.data : [];
-      exportToExcel(allRows);
-    } finally {
-      setExporting(false);
-    }
-  };
+  // Already have the full matching set in memory — no need for a second network round-trip.
+  const handleExport = () => exportToExcel(records);
 
   const columns = getColumns(sortBy, sortOrder, handleSort);
 
@@ -236,15 +237,15 @@ const EmployeeBenchPercentage = () => {
               className="h-9"
             />
             {records.length > 0 && (
-              <Button variant="outline" size="sm" className="h-9" onClick={handleExport} disabled={exporting}>
-                <Download className="mr-1.5 h-4 w-4" />{exporting ? 'Exporting…' : 'Export Excel'}
+              <Button variant="outline" size="sm" className="h-9" onClick={handleExport}>
+                <Download className="mr-1.5 h-4 w-4" />Export Excel
               </Button>
             )}
           </div>
         }
       />
 
-      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[300px]">
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[340px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
         <div className="flex flex-col gap-1.5 md:col-span-2">
           <Label className="text-xs">Period <span className="text-destructive">*</span></Label>
           <div className="flex items-center gap-2">
@@ -333,18 +334,14 @@ const EmployeeBenchPercentage = () => {
       <DataTable
         tableContainerClassName="max-h-[50vh]"
         columns={columns}
-        data={records}
+        data={pagedRecords}
         isLoading={showLoading}
         emptyState={
           !periodReady ? (
             <EmptyState title="Select a period" description="Choose a month or a date range to load the bench percentage report." />
           ) : undefined
         }
-        pagination={periodReady && meta.total != null ? {
-          page: meta.page ?? page,
-          limit: meta.limit ?? limit,
-          total: meta.total,
-        } : undefined}
+        pagination={periodReady ? { page, limit, total: records.length } : undefined}
         onPageChange={setPage}
         onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
       />
@@ -353,7 +350,7 @@ const EmployeeBenchPercentage = () => {
         <div className="mt-4 rounded-lg border bg-muted/40 px-4 py-3">
           <p className="mb-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Summary</p>
           <div className="flex flex-wrap gap-x-6 gap-y-2">
-            <SummaryItem label="Avg Bench % (this page)" value={formatPercentage(avgBenchPctOnPage)} />
+            <SummaryItem label="Avg Bench %" value={formatPercentage(avgBenchPct)} />
           </div>
         </div>
       )}

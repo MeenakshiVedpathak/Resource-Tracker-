@@ -3,7 +3,6 @@ import * as XLSX from 'xlsx';
 import { createColumnHelper } from '@tanstack/react-table';
 import { Download } from 'lucide-react';
 import { useServicePOTimelineRisk } from '@/hooks/useReports';
-import { reportsApi } from '@/api/reports.api';
 import { formatCurrency, formatHours, formatPercentage, formatDate } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
@@ -16,6 +15,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 const columnHelper = createColumnHelper();
+
+// The "This Page" counts must reflect every matching PO, not just the current server page, so
+// the whole matching set is fetched once (capped well above any realistic monthly PO count) and
+// paginated client-side from there.
+const MAX_RECORDS_FETCH = 5000;
 
 const RISK_LEVEL_CONFIG = {
   on_track: { label: 'On Track', variant: 'success' },
@@ -154,32 +158,27 @@ const ServicePOTimelineRisk = () => {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
-  const [exporting, setExporting] = useState(false);
 
   const params = {
     ...(asOfDate && { asOfDate }),
-    page,
-    limit,
+    page: 1,
+    limit: MAX_RECORDS_FETCH,
   };
 
   const { data, isPending } = useServicePOTimelineRisk(params);
 
   const records = data?.data?.records ?? [];
-  const meta = data?.meta ?? {};
+  const pagedRecords = records.slice((page - 1) * limit, page * limit);
 
   const activeFilterCount = asOfDate ? 1 : 0;
 
-  const handleExport = async () => {
-    setExporting(true);
-    try {
-      const total = meta.total > 0 ? meta.total : 1000;
-      const res = await reportsApi.getServicePOTimelineRisk({ ...params, page: 1, limit: total });
-      const allRecords = res?.data?.records ?? [];
-      exportToExcel(allRecords);
-    } finally {
-      setExporting(false);
-    }
+  const clearFilters = () => {
+    setAsOfDate('');
+    setPage(1);
   };
+
+  // Already have the full matching set in memory — no need for a second network round-trip.
+  const handleExport = () => exportToExcel(records);
 
   return (
     <div>
@@ -195,8 +194,8 @@ const ServicePOTimelineRisk = () => {
               className="h-9"
             />
             {records.length > 0 && (
-              <Button variant="outline" size="sm" className="h-9" onClick={handleExport} disabled={exporting}>
-                <Download className="mr-1.5 h-4 w-4" />{exporting ? 'Exporting…' : 'Export Excel'}
+              <Button variant="outline" size="sm" className="h-9" onClick={handleExport}>
+                <Download className="mr-1.5 h-4 w-4" />Export Excel
               </Button>
             )}
           </div>
@@ -207,7 +206,7 @@ const ServicePOTimelineRisk = () => {
         )}
       </PageHeader>
 
-      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[200px]">
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[240px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">As Of Date</Label>
           <Input
@@ -222,24 +221,26 @@ const ServicePOTimelineRisk = () => {
       <DataTable
         tableContainerClassName="max-h-[50vh]"
         columns={columns}
-        data={records}
+        data={pagedRecords}
         isLoading={isPending}
-        pagination={meta.total != null ? {
-          page: meta.page ?? page,
-          limit: meta.limit ?? limit,
-          total: meta.total,
-        } : undefined}
+        pagination={{ page, limit, total: records.length }}
         onPageChange={setPage}
         onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
       />
 
       {data?.data && (
         <div className="mt-4 rounded-lg border bg-muted/40 px-4 py-3">
-          <p className="mb-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">This Page</p>
+          <p className="mb-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">All Pages</p>
           <div className="flex flex-wrap gap-x-6 gap-y-2">
-            <SummaryItem label="Overdue (this page)" value={data.data.overdue_count_on_page ?? 0} />
-            <SummaryItem label="Critical (this page)" value={data.data.critical_count_on_page ?? 0} />
-            <SummaryItem label="At Risk (this page)" value={data.data.at_risk_count_on_page ?? 0} />
+            {/*
+              Counted from the full matching set (all pages), not just what's currently displayed
+              — the same risk_level the table column already renders — rather than trusted from
+              the backend's own _on_page aggregates, which came back 0 regardless of how many rows
+              actually had each risk_level.
+            */}
+            <SummaryItem label="Overdue" value={records.filter((r) => r.risk_level === 'overdue').length} />
+            <SummaryItem label="Critical" value={records.filter((r) => r.risk_level === 'critical').length} />
+            <SummaryItem label="At Risk" value={records.filter((r) => r.risk_level === 'at_risk').length} />
           </div>
         </div>
       )}

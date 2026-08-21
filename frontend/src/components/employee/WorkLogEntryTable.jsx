@@ -1,12 +1,28 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronUp, ChevronDown, Folder, Minus, Plus } from 'lucide-react';
+import { ChevronUp, ChevronDown, Clock, Folder, Minus, Plus } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { TimePicker } from '@/components/ui/time-picker';
 import EmptyState from '@/components/common/EmptyState';
 import { cn } from '@/utils/cn';
 import { DAILY_HOURS_CAP } from './WorkLogEntryModal';
 
 const STEP = 0.5;
+
+const timeToMinutes = (t) => {
+  const [h, m] = t.split(':').map(Number);
+  return h * 60 + m;
+};
+
+// null when either side is blank or the interval isn't a valid same-day span (end <= start) —
+// mirrors the backend's own "end must be after start, no overnight spans" rule (see
+// employeeWorkLog.api.js) so the displayed hours never show a value the save would reject.
+const computeHoursFromTimes = (start, end) => {
+  if (!start || !end) return null;
+  const diffMinutes = timeToMinutes(end) - timeToMinutes(start);
+  if (diffMinutes <= 0) return null;
+  return Math.round((diffMinutes / 60) * 100) / 100;
+};
 
 const buildChildrenByParent = (rows) => {
   const map = new Map();
@@ -84,7 +100,10 @@ const HourStepper = ({ value, onChange, disabled, hoursCap = DAILY_HOURS_CAP }) 
 // indented, "Task / Feature" being the node's name since our data has no separate module
 // concept). Defaults collapsed so every mapped project's total hrs is visible in one glance
 // as a single line; expand only the one(s) you want to edit.
-const ProjectGroup = ({ poRow, childrenByParent, day, edits, onCellChange, isPastOrToday, hoursCap, defaultOpen }) => {
+const ProjectGroup = ({
+  poRow, childrenByParent, day, edits, onCellChange, isPastOrToday, hoursCap, defaultOpen,
+  timeEdits, onTimeEntryChange, allowTimeEntry, alwaysTimeEntry,
+}) => {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const [collapsedKeys, setCollapsedKeys] = useState(() => new Set());
 
@@ -131,33 +150,97 @@ const ProjectGroup = ({ poRow, childrenByParent, day, edits, onCellChange, isPas
             const isDirty = edits?.[row.rowKey]?.[day] !== undefined;
             const hasChildren = (childrenByParent.get(row.rowKey)?.length ?? 0) > 0;
             const isRowCollapsed = collapsedKeys.has(row.rowKey);
+            const canEditRow = row.editable && isPastOrToday;
+            const canUseTimeEntry = canEditRow && allowTimeEntry && typeof onTimeEntryChange === 'function';
+            const timeEntry = timeEdits?.[row.rowKey]?.[day];
+            // With `alwaysTimeEntry`, exact time is the only way to log hours — no stepper, no
+            // toggle — so every editable row counts as "in time mode" whether or not it has a
+            // timeEdits entry yet (a row with no start/end typed still submits as a plain-hours
+            // entry unchanged, see buildDayEntries).
+            const isTimeMode = alwaysTimeEntry ? canUseTimeEntry : timeEntry !== undefined;
+
+            const toggleTimeMode = () => {
+              if (isTimeMode) onTimeEntryChange(row.rowKey, day, null);
+              else onTimeEntryChange(row.rowKey, day, { start_time: '', end_time: '', hours: null });
+            };
+            const changeStartTime = (v) => {
+              const end = timeEntry?.end_time ?? '';
+              onTimeEntryChange(row.rowKey, day, { start_time: v, end_time: end, hours: computeHoursFromTimes(v, end) });
+            };
+            const changeEndTime = (v) => {
+              const start = timeEntry?.start_time ?? '';
+              onTimeEntryChange(row.rowKey, day, { start_time: start, end_time: v, hours: computeHoursFromTimes(start, v) });
+            };
+
             return (
-              <div
-                key={row.rowKey}
-                className={cn('grid grid-cols-[1.5rem_1fr_6.5rem] items-center gap-1.5 px-3 py-0.5 leading-tight', i > 0 && 'border-t border-dashed')}
-              >
-                <span className="text-[11px] text-muted-foreground">{i + 1}</span>
-                <span className={cn('flex items-center truncate text-xs', row.relDepth > 0 && 'text-muted-foreground')} style={{ paddingLeft: row.relDepth * 12 }}>
-                  {row.relDepth > 0 && <span className="mr-1 text-muted-foreground">{'└'}</span>}
-                  {hasChildren && (
+              <div key={row.rowKey} className={cn(i > 0 && 'border-t border-dashed')}>
+                <div className="grid grid-cols-[1.5rem_1fr_1.25rem_6.5rem] items-center gap-1.5 px-3 py-0.5 leading-tight">
+                  <span className="text-[11px] text-muted-foreground">{i + 1}</span>
+                  <span className={cn('flex items-center truncate text-xs', row.relDepth > 0 && 'text-muted-foreground')} style={{ paddingLeft: row.relDepth * 12 }}>
+                    {row.relDepth > 0 && <span className="mr-1 text-muted-foreground">{'└'}</span>}
+                    {hasChildren && (
+                      <button
+                        type="button"
+                        onClick={() => toggleRowCollapse(row.rowKey)}
+                        className="mr-1 flex h-3.5 w-3.5 shrink-0 items-center justify-center text-muted-foreground hover:text-foreground"
+                      >
+                        {isRowCollapsed ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
+                      </button>
+                    )}
+                    <span className="truncate">{row.label}</span>
+                    {isDirty && <span className="ml-1.5 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" title="Unsaved change" />}
+                  </span>
+                  {canUseTimeEntry && !alwaysTimeEntry ? (
                     <button
                       type="button"
-                      onClick={() => toggleRowCollapse(row.rowKey)}
-                      className="mr-1 flex h-3.5 w-3.5 shrink-0 items-center justify-center text-muted-foreground hover:text-foreground"
+                      onClick={toggleTimeMode}
+                      title={isTimeMode ? 'Switch back to entering hours directly' : 'Log exact start/end time instead'}
+                      className={cn(
+                        'flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
+                        isTimeMode && 'bg-primary/10 text-primary'
+                      )}
                     >
-                      {isRowCollapsed ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
+                      <Clock className="h-3 w-3" />
                     </button>
-                  )}
-                  <span className="truncate">{row.label}</span>
-                  {isDirty && <span className="ml-1.5 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" title="Unsaved change" />}
-                </span>
-                <div className="flex justify-end">
-                  {row.editable && isPastOrToday ? (
-                    <HourStepper value={value} onChange={(v) => onCellChange(row.rowKey, day, String(v))} hoursCap={hoursCap} />
-                  ) : (
-                    <span className="text-xs font-medium tabular-nums text-muted-foreground">{value} hrs</span>
-                  )}
+                  ) : <span />}
+                  <div className="flex justify-end">
+                    {isTimeMode ? (
+                      <span className="text-xs font-medium tabular-nums text-muted-foreground">
+                        {value} {value === 1 ? 'hr' : 'hrs'}
+                      </span>
+                    ) : canEditRow ? (
+                      <HourStepper value={value} onChange={(v) => onCellChange(row.rowKey, day, String(v))} hoursCap={hoursCap} />
+                    ) : (
+                      <span className="text-xs font-medium tabular-nums text-muted-foreground">{value} hrs</span>
+                    )}
+                  </div>
                 </div>
+
+                {isTimeMode && (
+                  <div className="flex flex-wrap items-center gap-3 px-3 pb-2" style={{ paddingLeft: `${row.relDepth * 12 + 12}px` }}>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] text-muted-foreground">Start</span>
+                      <TimePicker
+                        value={timeEntry?.start_time ?? ''}
+                        onChange={changeStartTime}
+                        placeholder="Start time"
+                        className="h-7 w-32 text-xs"
+                      />
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] text-muted-foreground">End</span>
+                      <TimePicker
+                        value={timeEntry?.end_time ?? ''}
+                        onChange={changeEndTime}
+                        placeholder="End time"
+                        className="h-7 w-32 text-xs"
+                      />
+                    </div>
+                    {!timeEntry?.start_time !== !timeEntry?.end_time && (
+                      <span className="text-[11px] text-destructive">Both start and end time are required.</span>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -175,6 +258,7 @@ const ProjectGroup = ({ poRow, childrenByParent, day, edits, onCellChange, isPas
 const WorkLogEntryTable = ({
   rows, day, isLoading, isPastOrToday, edits, onCellChange, hoursCap = DAILY_HOURS_CAP,
   emptyMessage = 'No Service POs mapped.',
+  timeEdits, onTimeEntryChange, allowTimeEntry = true, alwaysTimeEntry = false,
 }) => {
   const childrenByParent = useMemo(() => buildChildrenByParent(rows), [rows]);
   const topLevelRows = useMemo(() => rows.filter((r) => (r.depth ?? 0) === 0), [rows]);
@@ -207,6 +291,10 @@ const WorkLogEntryTable = ({
             isPastOrToday={isPastOrToday}
             hoursCap={hoursCap}
             defaultOpen={topLevelRows.length === 1}
+            timeEdits={timeEdits}
+            onTimeEntryChange={onTimeEntryChange}
+            allowTimeEntry={allowTimeEntry}
+            alwaysTimeEntry={alwaysTimeEntry}
           />
         ))}
       </div>

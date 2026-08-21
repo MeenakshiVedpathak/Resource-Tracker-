@@ -19,12 +19,15 @@ import {
   selectIsPlatformAdmin,
   selectIsEmployee,
   selectIsEmployeeOnly,
+  selectMappedBus,
+  selectSelectedBuId,
   logout,
   setCredentials,
   setUser,
   setAccessibleForms,
   setIsOriginalDataVisible,
   setCompany,
+  setSelectedBu,
 } from '@/store/slices/authSlice';
 import { ROUTES } from '@/constants/routes';
 import { computeHomeRoute, FORM_NAMES } from '@/constants/rbacForms';
@@ -49,6 +52,8 @@ export const useAuth = () => {
   const isPlatformAdmin = useSelector(selectIsPlatformAdmin); // derived from the single held role
   const isEmployee = useSelector(selectIsEmployee); // true if Employee is ANY held role
   const isEmployeeOnly = useSelector(selectIsEmployeeOnly); // true only if Employee is the SOLE held role
+  const mappedBus = useSelector(selectMappedBus); // BU Head spec — [] for every non-BU-Head login
+  const selectedBuId = useSelector(selectSelectedBuId); // the currently-selected BU, global across the app
 
   // true if the user has ANY of the specified roles
   const hasRole = (...requiredRoles) => roles.some((r) => requiredRoles.includes(r));
@@ -82,6 +87,11 @@ export const useAuth = () => {
 
   const updateCompany = (company) => dispatch(setCompany(company));
 
+  // BU Head spec §12: switching BU updates the global selection only — no re-login, no full
+  // page reload. Callers (UserMenu's BU dropdown) are responsible for invalidating React Query
+  // so BU-scoped screens refetch (§17), same as handleLogout's queryClient.clear() above.
+  const selectBu = (buId) => dispatch(setSelectedBu(buId));
+
   return {
     user,
     isAuthenticated,
@@ -101,6 +111,8 @@ export const useAuth = () => {
     isPlatformAdmin,
     isEmployee,
     isEmployeeOnly,
+    mappedBus,
+    selectedBuId,
     homeRoute,
     hasRole,
     hasPermission,
@@ -110,6 +122,7 @@ export const useAuth = () => {
     setAccessibleForms: updateAccessibleForms,
     setIsOriginalDataVisible: updateIsOriginalDataVisible,
     setCompany: updateCompany,
+    setSelectedBu: selectBu,
   };
 };
 

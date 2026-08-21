@@ -59,6 +59,7 @@ const EmployeeTimesheet = () => {
   const [year, setYear] = useState(today.year());
   const [selectedDate, setSelectedDate] = useState(today);
   const [edits, setEdits] = useState({});
+  const [timeEdits, setTimeEdits] = useState({});
   const [isSaving, setIsSaving] = useState(false);
 
   const [monthlyYear, setMonthlyYear] = useState(today.year());
@@ -114,7 +115,19 @@ const EmployeeTimesheet = () => {
   }, [rows, edits, day]);
 
   const isSelectedPastOrToday = !selectedDate.isAfter(today, 'day');
-  const editedCount = Object.values(edits).reduce((n, byDay) => n + Object.keys(byDay).length, 0);
+  // Counts rows dirtied via either the hour stepper or the time-block inputs (even a
+  // half-filled start/end pair counts as dirty) so Save stays enabled and its validation can
+  // surface the "both times required" error instead of leaving the user stuck with a disabled
+  // button and no feedback.
+  const editedCount = useMemo(() => {
+    const keys = new Set();
+    Object.entries(edits).forEach(([rowKey, byDay]) => { if (byDay?.[day] !== undefined) keys.add(rowKey); });
+    Object.entries(timeEdits).forEach(([rowKey, byDay]) => {
+      const t = byDay?.[day];
+      if (t && (t.start_time || t.end_time)) keys.add(rowKey);
+    });
+    return keys.size;
+  }, [edits, timeEdits, day]);
 
   const handleMonthChange = (nextMonth, nextYear) => {
     setMonth(nextMonth);
@@ -124,6 +137,7 @@ const EmployeeTimesheet = () => {
   const handleSelectDate = (nextDay) => {
     setSelectedDate(nextDay);
     setEdits({});
+    setTimeEdits({});
   };
 
   const handleCellChange = (rowKey, cellDay, value) => {
@@ -134,7 +148,36 @@ const EmployeeTimesheet = () => {
     }));
   };
 
-  const handleDiscard = () => setEdits({});
+  // `patch` is either `null` (row switched back to plain-hours mode — drop its time pair,
+  // leaving whatever hours value was already there for the stepper to keep editing) or
+  // `{ start_time, end_time, hours }` from WorkLogEntryTable's per-row time inputs. `hours` is
+  // the client-computed duration for display/total purposes only — the backend recalculates it
+  // from start_time/end_time server-side and ignores what's sent (see employeeWorkLog.api.js) —
+  // so it's only pushed into `edits` once both times are valid; a partial pair leaves the
+  // existing hours value untouched but still records the partial time so handleSave's
+  // validation can catch and explain it rather than silently dropping it.
+  const handleTimeEntryChange = (rowKey, cellDay, patch) => {
+    if (!rowKey) return;
+    setTimeEdits((prev) => {
+      if (patch === null) {
+        const rowTimes = { ...prev[rowKey] };
+        delete rowTimes[cellDay];
+        return { ...prev, [rowKey]: rowTimes };
+      }
+      return {
+        ...prev,
+        [rowKey]: { ...prev[rowKey], [cellDay]: { start_time: patch.start_time, end_time: patch.end_time } },
+      };
+    });
+    if (patch?.hours != null) {
+      handleCellChange(rowKey, cellDay, String(patch.hours));
+    }
+  };
+
+  const handleDiscard = () => {
+    setEdits({});
+    setTimeEdits({});
+  };
 
   const handleSave = async () => {
     const flatEdits = Object.entries(edits).flatMap(([rowKey, byDay]) =>
@@ -149,7 +192,7 @@ const EmployeeTimesheet = () => {
 
     // Whole-day replace: send every row that should survive for this date, not just the ones
     // edited this session — anything left out is deleted server-side.
-    const entries = buildDayEntries(rows, day, edits);
+    const entries = buildDayEntries(rows, day, edits, timeEdits);
     const validationError = validateDayEntries(entries, selectedKey, DAILY_HOURS_CAP);
     if (validationError) {
       showError(validationError);
@@ -161,6 +204,7 @@ const EmployeeTimesheet = () => {
       await saveDayMutation.mutateAsync({ timesheet_date: selectedKey, entries });
       success('Work log saved.');
       setEdits({});
+      setTimeEdits({});
       qc.invalidateQueries({ queryKey: ['employee-worklog'] });
     } catch (err) {
       showError(extractApiError(err));
@@ -352,6 +396,9 @@ const EmployeeTimesheet = () => {
                 isPastOrToday={isSelectedPastOrToday}
                 edits={edits}
                 onCellChange={handleCellChange}
+                timeEdits={timeEdits}
+                onTimeEntryChange={handleTimeEntryChange}
+                alwaysTimeEntry
               />
             </div>
           </div>
@@ -426,6 +473,7 @@ const EmployeeTimesheet = () => {
                 onCellChange={handleMonthlyCellChange}
                 hoursCap={MONTHLY_HOURS_CAP}
                 emptyMessage="No Service POs mapped."
+                allowTimeEntry={false}
               />
             </div>
           </div>

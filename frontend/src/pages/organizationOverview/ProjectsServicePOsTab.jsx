@@ -48,6 +48,10 @@ const ProjectsServicePOsTab = ({ servicePOs, search, isLoading }) => {
 
   const activeCount = Object.values(filters).filter((v) => v !== ALL).length;
 
+  const clearFilters = () => {
+    setFilters({ entityName: ALL, buName: ALL, projectName: ALL, clientName: ALL, servicePOName: ALL });
+  };
+
   const toggleExpanded = (id) =>
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -61,7 +65,7 @@ const ProjectsServicePOsTab = ({ servicePOs, search, isLoading }) => {
       <div className="flex justify-end">
         <FilterToggleButton isOpen={filtersOpen} onToggle={() => setFiltersOpen((o) => !o)} activeCount={activeCount} />
       </div>
-      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[220px]" gridClassName="grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[260px]" gridClassName="grid-cols-2 sm:grid-cols-3 lg:grid-cols-5" onClear={clearFilters} showClear={activeCount > 0}>
         {FILTER_FIELDS.map(({ label, key }) => (
           <div key={key} className="flex flex-col gap-1.5">
             <Label className="text-xs">{label}</Label>
