@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ChevronUp, ChevronDown, Clock, Folder, Minus, Plus } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { TimePicker } from '@/components/ui/time-picker';
+import { TimeRangePicker } from '@/components/ui/time-range-picker';
 import EmptyState from '@/components/common/EmptyState';
 import { cn } from '@/utils/cn';
 import { DAILY_HOURS_CAP } from './WorkLogEntryModal';
@@ -163,13 +163,8 @@ const ProjectGroup = ({
               if (isTimeMode) onTimeEntryChange(row.rowKey, day, null);
               else onTimeEntryChange(row.rowKey, day, { start_time: '', end_time: '', hours: null });
             };
-            const changeStartTime = (v) => {
-              const end = timeEntry?.end_time ?? '';
-              onTimeEntryChange(row.rowKey, day, { start_time: v, end_time: end, hours: computeHoursFromTimes(v, end) });
-            };
-            const changeEndTime = (v) => {
-              const start = timeEntry?.start_time ?? '';
-              onTimeEntryChange(row.rowKey, day, { start_time: start, end_time: v, hours: computeHoursFromTimes(start, v) });
+            const changeTimeRange = (start, end) => {
+              onTimeEntryChange(row.rowKey, day, { start_time: start, end_time: end, hours: computeHoursFromTimes(start, end) });
             };
 
             return (
@@ -218,24 +213,12 @@ const ProjectGroup = ({
 
                 {isTimeMode && (
                   <div className="flex flex-wrap items-center gap-3 px-3 pb-2" style={{ paddingLeft: `${row.relDepth * 12 + 12}px` }}>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[11px] text-muted-foreground">Start</span>
-                      <TimePicker
-                        value={timeEntry?.start_time ?? ''}
-                        onChange={changeStartTime}
-                        placeholder="Start time"
-                        className="h-7 w-32 text-xs"
-                      />
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[11px] text-muted-foreground">End</span>
-                      <TimePicker
-                        value={timeEntry?.end_time ?? ''}
-                        onChange={changeEndTime}
-                        placeholder="End time"
-                        className="h-7 w-32 text-xs"
-                      />
-                    </div>
+                    <TimeRangePicker
+                      startValue={timeEntry?.start_time ?? ''}
+                      endValue={timeEntry?.end_time ?? ''}
+                      onChange={changeTimeRange}
+                      className="w-64 text-xs"
+                    />
                     {!timeEntry?.start_time !== !timeEntry?.end_time && (
                       <span className="text-[11px] text-destructive">Both start and end time are required.</span>
                     )}

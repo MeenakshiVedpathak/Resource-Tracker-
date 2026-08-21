@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useEffect, useState } from 'react';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Eye, EyeOff, UserPlus, Copy, Check } from 'lucide-react';
@@ -75,6 +75,22 @@ const BuHeadForm = ({ open, onOpenChange }) => {
       confirmPassword: '',
     },
   });
+
+  const dateOfJoining = useWatch({ control: form.control, name: 'date_of_joining' });
+
+  // Mirrors Employee Master's auto-calc (EmployeeForm.jsx) — Company Experience is derived from
+  // Date of Joining, not manually entered, so it stays in sync here too.
+  useEffect(() => {
+    if (!dateOfJoining) {
+      form.setValue('company_experience', '');
+      return;
+    }
+    const start = new Date(dateOfJoining);
+    if (isNaN(start.getTime())) return;
+    const diffMs = Date.now() - start.getTime();
+    const years = diffMs / (1000 * 60 * 60 * 24 * 365.25);
+    form.setValue('company_experience', Math.max(0, parseFloat(years.toFixed(1))));
+  }, [dateOfJoining, form]);
 
   const handleClose = () => {
     form.reset();
@@ -344,10 +360,13 @@ const BuHeadForm = ({ open, onOpenChange }) => {
                         <FormLabel className="text-[11px] text-muted-foreground font-medium">Company Experience (yrs)</FormLabel>
                         <FormControl>
                           <Input
-                            type="number" step="0.1" min="0" max="60" placeholder="e.g. 3.0"
+                            type="number" step="0.1"
+                            placeholder="Auto-calculated"
+                            readOnly
+                            tabIndex={-1}
+                            className="h-8 text-sm bg-muted cursor-not-allowed border-gray-200"
                             {...field}
                             value={field.value ?? ''}
-                            className="h-8 text-sm border-gray-200"
                           />
                         </FormControl>
                         <FormMessage className="text-[10px]" />
