@@ -7,6 +7,17 @@ const pad = (n) => String(n).padStart(2, '0');
 const HOURS = Array.from({ length: 24 }, (_, i) => pad(i));
 const MINUTES = Array.from({ length: 60 }, (_, i) => pad(i));
 
+// Selection/storage stays 24-hour "HH:MM" (what the backend/rest of the Work Log flow expects) —
+// only the display box formats it as 12-hour + AM/PM, derived from whatever was picked.
+const formatDisplay = (value) => {
+  const [hh, mm] = (value || '').split(':');
+  if (!hh || mm === undefined) return '--:-- --';
+  const h24 = Number(hh);
+  const period = h24 >= 12 ? 'PM' : 'AM';
+  const hour12 = h24 % 12 === 0 ? 12 : h24 % 12;
+  return `${hour12}:${mm} ${period}`;
+};
+
 // One scrollable Hour or Minute column, styled to match the app (accent-highlighted selection,
 // hover states, rounded) instead of the browser's own unstyled native spinner. Auto-scrolls the
 // current value to the middle whenever the popover opens.
@@ -43,15 +54,16 @@ const TimeColumn = ({ items, value, onSelect, label, open }) => {
   );
 };
 
-// Displays "HH:MM" (or a placeholder) in a plain, non-interactive box — only the trailing clock
-// icon opens the picker, so clicking anywhere else in the box does nothing. The popover itself is
-// two custom Hour/Minute columns (any minute, not a fixed-step list) rather than the OS's native
-// time-input spinner.
+// Displays "h:mm AM/PM" (or a placeholder) in a plain, non-interactive box — only the trailing
+// clock icon opens the picker, so clicking anywhere else in the box does nothing. The popover
+// itself is two custom 24-hour Hour(00-23)/Minute(00-59) columns (any minute, not a fixed-step
+// list) rather than the OS's native time-input spinner; the value stored/emitted is always
+// 24-hour "HH:MM".
 //
 // `open`/`onOpenChange` let a parent (TimeRangePicker) control this picker's visibility so it can
 // auto-open the next field; omit both for standalone/uncontrolled use. `onComplete` fires once
 // per open session, the moment the user has clicked both an hour AND a minute (not just whenever
-// the value happens to look like "HH:MM" — picking only the hour leaves minute defaulted to "00",
+// the value happens to look complete — picking only the hour leaves minute defaulted to "00",
 // which would otherwise look "complete" without the user ever touching the minute column).
 export const TimeInput = ({
   value, onChange, disabled, className, label, open: openProp, onOpenChange, onComplete,
@@ -71,21 +83,22 @@ export const TimeInput = ({
     if (open) pickedRef.current = { hour: false, minute: false };
   }, [open]);
 
-  const setHour = (h) => {
-    onChange(`${h}:${mm ?? '00'}`);
-    pickedRef.current = { ...pickedRef.current, hour: true };
+  const checkComplete = () => {
     if (pickedRef.current.hour && pickedRef.current.minute) {
       setOpen(false);
       onComplete?.();
     }
   };
+
+  const setHour = (h) => {
+    onChange(`${h}:${mm ?? '00'}`);
+    pickedRef.current = { ...pickedRef.current, hour: true };
+    checkComplete();
+  };
   const setMinute = (m) => {
     onChange(`${hh ?? '00'}:${m}`);
     pickedRef.current = { ...pickedRef.current, minute: true };
-    if (pickedRef.current.hour && pickedRef.current.minute) {
-      setOpen(false);
-      onComplete?.();
-    }
+    checkComplete();
   };
 
   return (
@@ -98,8 +111,8 @@ export const TimeInput = ({
             className,
           )}
         >
-          <span className={cn('flex-1 text-xs tabular-nums', !value && 'text-muted-foreground')}>
-            {value || '--:--'}
+          <span className={cn('flex-1 text-xs tabular-nums', !(hh && mm !== undefined) && 'text-muted-foreground')}>
+            {formatDisplay(value)}
           </span>
           <PopoverTrigger asChild>
             <button

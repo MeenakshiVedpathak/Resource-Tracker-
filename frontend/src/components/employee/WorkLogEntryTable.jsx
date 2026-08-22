@@ -217,7 +217,7 @@ const ProjectGroup = ({
                       startValue={timeEntry?.start_time ?? ''}
                       endValue={timeEntry?.end_time ?? ''}
                       onChange={changeTimeRange}
-                      className="w-64 text-xs"
+                      className="w-72 text-xs"
                     />
                     {!timeEntry?.start_time !== !timeEntry?.end_time && (
                       <span className="text-[11px] text-destructive">Both start and end time are required.</span>
