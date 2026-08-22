@@ -26,6 +26,19 @@ export const useServicePOResourceReport = (params) =>
     placeholderData: (prev) => prev,
   });
 
+// Every matching record for the current filters, not just one page — used for on-screen
+// totals and Excel export, which both need the full filtered dataset. Same page-walking
+// workaround as useServicePOSummaryTotals below (backend caps `limit` at 100).
+export const useResourceAllocationAllRows = (filterParams) => {
+  const { page: _page, limit: _limit, ...baseParams } = filterParams ?? {};
+  return useQuery({
+    queryKey: QUERY_KEYS.REPORT_RESOURCE_ALLOCATION_ALL_ROWS(baseParams),
+    queryFn: () => reportsApi.fetchAllResourceAllocationRows(baseParams),
+    staleTime: 0,
+    placeholderData: (prev) => prev,
+  });
+};
+
 export const useServicePOSummary = (params) =>
   useQuery({
     queryKey: QUERY_KEYS.REPORT_SERVICE_PO_SUMMARY(params),

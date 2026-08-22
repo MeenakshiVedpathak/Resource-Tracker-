@@ -1,10 +1,30 @@
 import apiClient from '@/services/apiClient';
 
+// The backend hard-caps `limit` at 100 (bakend/src/utils/pagination.js MAX_LIMIT), silently
+// truncating any request for more — so "export all" / "sum all" callers must page through
+// results instead of requesting one large limit.
+const RESOURCE_ALLOCATION_PAGE_LIMIT = 100;
+const MAX_RESOURCE_ALLOCATION_PAGES = 100; // safety cap: 10,000 records, far beyond any realistic dataset
+
 export const reportsApi = {
   getMonthlyCostSummary: (params) =>
     apiClient.get('/reports/monthly-cost-summary', { params }).then((r) => r.data),
   getResourceAllocation: (params) =>
     apiClient.get('/reports/resource-allocation', { params }).then((r) => r.data),
+  fetchAllResourceAllocationRows: async (filterParams) => {
+    const { page: _page, limit: _limit, ...baseParams } = filterParams ?? {};
+    const first = await reportsApi.getResourceAllocation({ ...baseParams, page: 1, limit: RESOURCE_ALLOCATION_PAGE_LIMIT });
+    const total = first?.meta?.total ?? 0;
+    const totalPages = Math.min(MAX_RESOURCE_ALLOCATION_PAGES, Math.max(1, Math.ceil(total / RESOURCE_ALLOCATION_PAGE_LIMIT)));
+    const rows = Array.isArray(first?.data) ? [...first.data] : [];
+
+    for (let p = 2; p <= totalPages; p++) {
+      const res = await reportsApi.getResourceAllocation({ ...baseParams, page: p, limit: RESOURCE_ALLOCATION_PAGE_LIMIT });
+      if (Array.isArray(res?.data)) rows.push(...res.data);
+    }
+
+    return rows;
+  },
   getServicePOSummary: (params) =>
     apiClient.get('/reports/service-po-summary', { params }).then((r) => r.data),
   getInvoicePOSummary: (params) =>

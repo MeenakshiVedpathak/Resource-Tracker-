@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { createColumnHelper } from '@tanstack/react-table';
 import { Download, Search } from 'lucide-react';
-import { useResourceAllocationReport } from '@/hooks/useReports';
+import { useResourceAllocationReport, useResourceAllocationAllRows } from '@/hooks/useReports';
 import { useCanViewOriginalData } from '@/hooks/usePermissions';
 import { reportsApi } from '@/api/reports.api';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -273,10 +273,9 @@ const ResourceAllocation = () => {
   const meta = data?.meta ?? {};
 
   // Summary chips must reflect every matching record (respecting whatever filters are
-  // active), not just the current page — fetch the full filtered dataset in parallel.
-  const allDataParams = { ...params, page: 1, limit: 1000 };
-  const { data: fullData } = useResourceAllocationReport(allDataParams);
-  const fullRows = Array.isArray(fullData?.data) ? fullData.data : null;
+  // active), not just the current page — page through the full filtered dataset
+  // (backend caps `limit` at 100, so a single large-limit request silently truncates).
+  const { data: fullRows } = useResourceAllocationAllRows(params);
   const summaryRows = fullRows ?? rows;
 
   // This report is a flat allocation list (one row per employee × PO × service
@@ -306,13 +305,12 @@ const ResourceAllocation = () => {
 
   const totalUtilization = reportSummary.billable_total + reportSummary.non_billable_total - reportSummary.leaves_hours;
 
-  // Export pulls every matching record (not just the current page) with one extra request.
+  // Export pulls every matching record (not just the current page); reuses the
+  // already-fetched full dataset above when available instead of firing a new request.
   const handleExport = async () => {
     setExporting(true);
     try {
-      const total = meta.total > 0 ? meta.total : 1000;
-      const res = await reportsApi.getResourceAllocation({ ...params, page: 1, limit: total });
-      const all = Array.isArray(res?.data) ? res.data : [];
+      const all = fullRows ?? await reportsApi.fetchAllResourceAllocationRows(params);
       exportToExcel(all);
     } finally {
       setExporting(false);

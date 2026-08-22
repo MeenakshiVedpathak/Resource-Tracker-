@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { Download } from 'lucide-react';
-import { useServicePOResourceReport } from '@/hooks/useReports';
+import { useServicePOResourceReport, useResourceAllocationAllRows } from '@/hooks/useReports';
 import { useCanViewOriginalData } from '@/hooks/usePermissions';
 import { reportsApi } from '@/api/reports.api';
 import { useActiveEmployees } from '@/hooks/useEmployees';
@@ -182,22 +182,20 @@ const ServicePOResource = () => {
   const { data, isPending } = useServicePOResourceReport(params);
 
   // Total Hours must reflect every matching record (respecting whatever filters are
-  // active), not just the current page — fetch the full filtered dataset in parallel.
-  const allDataParams = { ...params, page: 1, limit: 1000 };
-  const { data: fullData } = useServicePOResourceReport(allDataParams);
-  const fullRows = Array.isArray(fullData?.data) ? fullData.data : null;
+  // active), not just the current page — page through the full filtered dataset
+  // (backend caps `limit` at 100, so a single large-limit request silently truncates).
+  const { data: fullRows } = useResourceAllocationAllRows(params);
 
   const rows   = data?.data ?? [];
   const meta   = data?.meta ?? {};
   const groups = useMemo(() => groupRows(rows), [rows]);
 
-  // Export pulls every matching record (not just the current page) with one extra request.
+  // Export pulls every matching record (not just the current page); reuses the
+  // already-fetched full dataset above when available instead of firing a new request.
   const handleExport = async () => {
     setExporting(true);
     try {
-      const total = meta.total > 0 ? meta.total : 1000;
-      const res = await reportsApi.getResourceAllocation({ ...params, page: 1, limit: total });
-      const all = Array.isArray(res?.data) ? res.data : [];
+      const all = fullRows ?? await reportsApi.fetchAllResourceAllocationRows(params);
       exportToExcel(all, monthYear?.month, monthYear?.year);
     } finally {
       setExporting(false);

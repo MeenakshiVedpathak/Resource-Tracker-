@@ -128,6 +128,7 @@ export const QUERY_KEYS = {
   // Reports
   REPORT_MONTHLY_COST_SUMMARY: (params) => ['reports', 'monthly-cost-summary', params],
   REPORT_RESOURCE_ALLOCATION: (params) => ['reports', 'resource-allocation', params],
+  REPORT_RESOURCE_ALLOCATION_ALL_ROWS: (params) => ['reports', 'resource-allocation-all-rows', params],
   REPORT_SERVICE_PO_RESOURCE: (params) => ['reports', 'service-po-resource', params],
   REPORT_SERVICE_PO_SUMMARY: (params) => ['reports', 'service-po-summary', params],
   REPORT_SERVICE_PO_SUMMARY_TOTALS: (params) => ['reports', 'service-po-summary-totals', params],
