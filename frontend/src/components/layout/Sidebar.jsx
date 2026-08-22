@@ -9,7 +9,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useFormModules, useForms } from '@/hooks/useForms';
 import { resolveFormRoute } from '@/constants/rbacForms';
 import { ROUTES } from '@/constants/routes';
-import { ChevronLeft, ChevronRight, UserPlus, Shield, ClipboardList, UserCog, Landmark, Network, Users2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, UserPlus, Shield, ClipboardList, UserCog, Landmark, Network } from 'lucide-react';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 
 // A Platform Admin (top of the RBAC hierarchy, §0) sees ONLY these nav items — everything else
@@ -37,10 +37,6 @@ const RESTRICTED_MODULES = ['administration'];
 // resolved from accessibleForms, same pattern as the BU Admin bypass above.
 const ENTITY_ADMIN_MANAGEMENT_ROLES = ['Admin'];
 const TEAM_MAPPING_ROLES = ['Service PO Admin'];
-// BU Head Master — additive peer of BU Admin Master, reachable by whoever manages BU Admins
-// today (Admin/Entity Admin). No real Form Master row confirmed yet (see rbacForms.js), so this
-// stays a hardcoded injection like Entity Admins above until one exists.
-const BU_HEAD_MANAGEMENT_ROLES = ['Admin', 'Entity Admin'];
 
 // Builds one nav group per module, one item per form — driven entirely by the RBAC
 // accessible-forms map (module -> [{ id, name }]) so a user only ever sees what their
@@ -204,7 +200,6 @@ const Sidebar = () => {
   const isSuperAdmin = hasRole('BU Admin', 'BU Head');
   const canViewEntityAdmins = hasRole(...ENTITY_ADMIN_MANAGEMENT_ROLES);
   const canViewTeamMapping = hasRole(...TEAM_MAPPING_ROLES);
-  const canViewBuHeads = hasRole(...BU_HEAD_MANAGEMENT_ROLES);
   const { moduleRank, formRank } = useMenuRank();
   // isPlatformAdmin is derived from the single role every login returns (§0) — overrides the
   // normal accessible-forms-driven nav entirely.
@@ -215,9 +210,6 @@ const Sidebar = () => {
     const injected = [];
     if (canViewEntityAdmins) {
       injected.push({ group: 'Entity Management', item: { label: 'Entity Admins', icon: Landmark, to: ROUTES.ENTITY_ADMINS, exact: false } });
-    }
-    if (canViewBuHeads) {
-      injected.push({ group: 'Entity Management', item: { label: 'BU Head Master', icon: Users2, to: ROUTES.BU_HEADS, exact: false } });
     }
     if (canViewTeamMapping) {
       injected.push({ group: 'People', item: { label: 'Team Mapping', icon: UserCog, to: ROUTES.TEAM_MAPPINGS, exact: true } });
@@ -231,7 +223,7 @@ const Sidebar = () => {
       const prepend = groupLabel === 'Entity Management';
       return groups.map((g, i) => (i === idx ? { ...g, items: prepend ? [item, ...g.items] : [...g.items, item] } : g));
     }, base);
-  }, [accessibleForms, isSuperAdmin, isPlatformAdmin, canViewEntityAdmins, canViewBuHeads, canViewTeamMapping, moduleRank, formRank]);
+  }, [accessibleForms, isSuperAdmin, isPlatformAdmin, canViewEntityAdmins, canViewTeamMapping, moduleRank, formRank]);
 
   // Guards navigation away from a page with unsaved changes (e.g. Timesheet
   // Import Detail's Modified Hours edits) — any page can opt in via the

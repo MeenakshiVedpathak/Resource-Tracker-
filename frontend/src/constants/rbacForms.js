@@ -36,9 +36,8 @@ export const FORM_NAMES = {
   // reached via buttons on these two screens, not a sidebar item (see CompanyList/BuAdminList).
   ENTITY_MASTER: 'Entity Master',
   BU_ADMIN_MASTER: 'BU Admin Master',
-  // Guessed name — additive BU Head role (net-new, no Form Master row confirmed yet). Confirm
-  // against the real GET /roles/forms response once seeded; until then reached via Sidebar's
-  // hardcoded Admin/Entity Admin injection (see Sidebar.jsx).
+  // Additive BU Head role form — real Form Master row confirmed seeded under "Entity
+  // Management"; nav item now comes entirely from accessibleForms (no Sidebar.jsx injection).
   BU_HEAD_MASTER: 'BU Head Master',
   CLIENTS: 'Client Master',
   // Matches the actual Form Master row name ("Project Master"), not the page's own title.

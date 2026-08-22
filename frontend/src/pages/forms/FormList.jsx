@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, Outlet } from 'react-router-dom';
 import { Pencil, Plus, Search, GripVertical, GripHorizontal, ChevronDown, ChevronRight, FolderTree } from 'lucide-react';
 import {
@@ -180,6 +180,7 @@ const FormList = () => {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(() => new Set());
   const [tree, setTree] = useState(null);
+  const collapsedInitialized = useRef(false);
 
   const debouncedSearch = useDebounce(search, 400);
   const params = {
@@ -192,7 +193,12 @@ const FormList = () => {
   const reorderFormsMutation = useReorderForms();
 
   useEffect(() => {
-    setTree(buildTree(data?.data ?? []));
+    const nextTree = buildTree(data?.data ?? []);
+    setTree(nextTree);
+    if (!collapsedInitialized.current && nextTree.length > 0) {
+      collapsedInitialized.current = true;
+      setCollapsed(new Set(nextTree.map((m) => m.id)));
+    }
   }, [data]);
 
   const activeFilterCount = statusFilter !== 'all' ? 1 : 0;
