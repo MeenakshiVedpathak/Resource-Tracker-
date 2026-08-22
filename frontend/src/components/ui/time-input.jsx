@@ -20,8 +20,9 @@ const formatDisplay = (value) => {
 
 // One scrollable Hour or Minute column, styled to match the app (accent-highlighted selection,
 // hover states, rounded) instead of the browser's own unstyled native spinner. Auto-scrolls the
-// current value to the middle whenever the popover opens.
-const TimeColumn = ({ items, value, onSelect, label, open }) => {
+// current value to the middle whenever the popover opens. `isItemDisabled` grays out and blocks
+// clicking items that would produce an invalid time (e.g. an End time at/before Start).
+const TimeColumn = ({ items, value, onSelect, label, open, isItemDisabled }) => {
   const selectedRef = React.useRef(null);
 
   React.useEffect(() => {
@@ -34,15 +35,18 @@ const TimeColumn = ({ items, value, onSelect, label, open }) => {
       <div className="h-48 w-14 overflow-y-auto rounded-md border bg-muted/30">
         {items.map((item) => {
           const isSelected = item === value;
+          const isDisabled = isItemDisabled?.(item) ?? false;
           return (
             <button
               key={item}
               type="button"
               ref={isSelected ? selectedRef : undefined}
               onClick={() => onSelect(item)}
+              disabled={isDisabled}
               className={cn(
                 'block w-full px-2 py-1 text-center text-sm tabular-nums transition-colors hover:bg-accent hover:text-accent-foreground',
                 isSelected && 'bg-primary font-semibold text-primary-foreground hover:bg-primary',
+                isDisabled && 'pointer-events-none text-muted-foreground/40 hover:bg-transparent',
               )}
             >
               {item}
@@ -65,8 +69,11 @@ const TimeColumn = ({ items, value, onSelect, label, open }) => {
 // per open session, the moment the user has clicked both an hour AND a minute (not just whenever
 // the value happens to look complete — picking only the hour leaves minute defaulted to "00",
 // which would otherwise look "complete" without the user ever touching the minute column).
+// `minExclusive` (a 24-hour "HH:MM", e.g. the paired Start time on an End picker) disables every
+// hour before it and, within that same hour, every minute at or before it — "HH:MM" strings
+// zero-padded to the same length compare correctly with plain `<`/`<=`, no need to parse minutes.
 export const TimeInput = ({
-  value, onChange, disabled, className, label, open: openProp, onOpenChange, onComplete,
+  value, onChange, disabled, className, label, open: openProp, onOpenChange, onComplete, minExclusive,
 }) => {
   const [internalOpen, setInternalOpen] = React.useState(false);
   const isControlled = openProp !== undefined;
@@ -90,8 +97,18 @@ export const TimeInput = ({
     }
   };
 
+  const [minHH, minMM] = (minExclusive || '').split(':');
+  // The default minute for a freshly-picked hour is normally "00", but if that hour is the same
+  // as minExclusive's hour, "00" is itself a disabled minute — defaulting to it would show an
+  // invalid combination as the "current" value. Default to the first valid minute instead.
+  const defaultMinuteFor = (h) => (
+    minHH !== undefined && h === minHH && minMM !== undefined
+      ? pad(Math.min(59, Number(minMM) + 1))
+      : '00'
+  );
+
   const setHour = (h) => {
-    onChange(`${h}:${mm ?? '00'}`);
+    onChange(`${h}:${mm ?? defaultMinuteFor(h)}`);
     pickedRef.current = { ...pickedRef.current, hour: true };
     checkComplete();
   };
@@ -100,6 +117,9 @@ export const TimeInput = ({
     pickedRef.current = { ...pickedRef.current, minute: true };
     checkComplete();
   };
+
+  const isHourDisabled = (h) => minHH !== undefined && h < minHH;
+  const isMinuteDisabled = (m) => minHH !== undefined && hh === minHH && minMM !== undefined && m <= minMM;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -128,8 +148,8 @@ export const TimeInput = ({
       </PopoverAnchor>
       <PopoverContent className="w-auto p-2" align="start">
         <div className="flex gap-2">
-          <TimeColumn items={HOURS} value={hh} onSelect={setHour} label="HH" open={open} />
-          <TimeColumn items={MINUTES} value={mm} onSelect={setMinute} label="MM" open={open} />
+          <TimeColumn items={HOURS} value={hh} onSelect={setHour} label="HH" open={open} isItemDisabled={isHourDisabled} />
+          <TimeColumn items={MINUTES} value={mm} onSelect={setMinute} label="MM" open={open} isItemDisabled={isMinuteDisabled} />
         </div>
       </PopoverContent>
     </Popover>
