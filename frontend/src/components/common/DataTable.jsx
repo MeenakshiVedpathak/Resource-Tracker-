@@ -46,6 +46,11 @@ const DataTable = ({
   tableContainerClassName,
   rowClassName,
   onRowClick,
+  // Arbitrary data/handlers exposed to every cell/header via `table.options.meta` — the
+  // TanStack-recommended way to reach fast-changing state (e.g. inline-edit drafts) from a
+  // column's `cell`/`header` without rebuilding the `columns` array on every keystroke, which
+  // would give each cell a new function identity and remount it (losing input focus).
+  meta,
 }) => {
   const [internalSorting, setInternalSorting] = useState([]);
 
@@ -79,6 +84,7 @@ const DataTable = ({
   const table = useReactTable({
     data,
     columns,
+    meta,
     state: { sorting },
     onSortingChange: handleSortingChange,
     getCoreRowModel: getCoreRowModel(),

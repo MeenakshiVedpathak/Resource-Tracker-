@@ -24,7 +24,8 @@ import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import { formatMonthYear, formatDateTime, getStatusColor } from '@/utils/formatters';
 import {
-  isInvoiceMasterPeriodWritable, INVOICE_MASTER_LOCK_MESSAGE, INVOICE_MASTER_WINDOW_MESSAGE,
+  isInvoiceMasterPeriodWritable, getInvoiceMasterCountdown,
+  INVOICE_MASTER_LOCK_MESSAGE, INVOICE_MASTER_WINDOW_MESSAGE,
 } from '@/utils/invoiceMasterWindow';
 
 const FORM_ID = 'service-po-budget-entry-form';
@@ -71,6 +72,9 @@ const ServicePoBudgetEntrySheet = ({ open, onOpenChange, month, year, initialSer
   const [lockError, setLockError] = useState('');
   const isEdit = !!initialServicePoId;
   const isWindowOpen = isInvoiceMasterPeriodWritable(month, year);
+  // Recomputed each time the sheet opens rather than memoized, so the countdown reflects "now"
+  // instead of whatever moment the page first rendered.
+  const countdown = open ? getInvoiceMasterCountdown(month, year) : null;
   const { success, error: showError } = useNotification();
 
   const { data: servicePos = [], isPending: isServicePosLoading } = useServicePoMonthlyBudgetServicePOs();
@@ -156,7 +160,7 @@ const ServicePoBudgetEntrySheet = ({ open, onOpenChange, month, year, initialSer
         onInteractOutside={(e) => isSaving && e.preventDefault()}
       >
         <SheetHeader className="border-b px-5 py-4">
-          <SheetTitle>Invoice Details</SheetTitle>
+          <SheetTitle>Monthly PO Reporting</SheetTitle>
           <SheetDescription>{formatMonthYear(month, year)}</SheetDescription>
         </SheetHeader>
 
@@ -165,6 +169,21 @@ const ServicePoBudgetEntrySheet = ({ open, onOpenChange, month, year, initialSer
             <Alert variant="warning">
               <Lock className="h-4 w-4" />
               <AlertDescription>{lockError || INVOICE_MASTER_WINDOW_MESSAGE}</AlertDescription>
+            </Alert>
+          )}
+
+          {isWindowOpen && !lockError && countdown?.writable && (
+            <Alert
+              variant={
+                countdown.severity === 'critical' ? 'destructive'
+                  : countdown.severity === 'warning' ? 'warning'
+                  : 'info'
+              }
+            >
+              <Clock className="h-4 w-4" />
+              <AlertDescription>
+                {countdown.label} to fill or edit {formatMonthYear(month, year)}'s Invoice Details.
+              </AlertDescription>
             </Alert>
           )}
 

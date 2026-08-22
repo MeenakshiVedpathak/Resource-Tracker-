@@ -1,28 +1,54 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo } from 'react';
 import * as XLSX from 'xlsx';
-import { ChevronRight, ClipboardList, Plus } from 'lucide-react';
+import { ChevronRight, Clock, ClipboardList } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import EmptyState from '@/components/common/EmptyState';
 import { useServicePoMonthlyBudgetServicePOs } from '@/hooks/useServicePoMonthlyBudget';
 import { useNotification } from '@/hooks/useNotification';
 import { formatCurrency, formatDate, formatMonthYear, getStatusColor } from '@/utils/formatters';
+import { cn } from '@/utils/cn';
+
+const COUNTDOWN_STYLES = {
+  critical: 'text-destructive',
+  warning: 'text-amber-600 dark:text-amber-400',
+  normal: 'text-muted-foreground',
+  locked: 'text-muted-foreground',
+};
 
 const ServicePoMonthlyBudgetList = forwardRef(({
   month, year, records, isLoading, search = '', clientFilter = 'all', poFilterIds = null,
-  onEdit, onAddEntry, canAddEntry = true, addEntryDisabledReason, onExportStateChange,
+  onEdit, onExportStateChange, countdown,
 }, ref) => {
   const { success, error: showError } = useNotification();
-  const { data: servicePos = [] } = useServicePoMonthlyBudgetServicePOs();
+  const { data: servicePos = [], isPending: isServicePosLoading } = useServicePoMonthlyBudgetServicePOs();
 
-  const poMetaMap = useMemo(
-    () => new Map(servicePos.map((po) => [String(po.service_po_id), po])),
-    [servicePos]
-  );
+  // Every PO the caller can see gets a card, filled or not — `getMonthList` only returns rows
+  // that were actually saved, so a PO with nothing entered yet would otherwise never appear.
+  const allRecords = useMemo(() => {
+    const savedByPoId = new Map(records.map((r) => [String(r.service_po_id), r]));
+    return servicePos.map((po) => {
+      const saved = savedByPoId.get(String(po.service_po_id));
+      return saved
+        ? { ...saved, filled: true, is_billable: po.is_billable, status: po.status }
+        : {
+            service_po_id: po.service_po_id,
+            service_po_name: po.service_po_name,
+            service_po_code: po.service_po_code,
+            client: po.client,
+            is_billable: po.is_billable,
+            status: po.status,
+            invoice_amount: null,
+            billed_amount: null,
+            updated_at: null,
+            filled: false,
+          };
+    });
+  }, [servicePos, records]);
 
   const filteredRecords = useMemo(() => {
     const term = search.trim().toLowerCase();
-    return records.filter((r) => {
+    return allRecords.filter((r) => {
       if (clientFilter !== 'all' && String(r.client?.id) !== clientFilter) return false;
       if (poFilterIds && !poFilterIds.has(r.service_po_id)) return false;
       if (!term) return true;
@@ -30,7 +56,7 @@ const ServicePoMonthlyBudgetList = forwardRef(({
         .filter(Boolean)
         .some((v) => v.toLowerCase().includes(term));
     });
-  }, [records, search, clientFilter, poFilterIds]);
+  }, [allRecords, search, clientFilter, poFilterIds]);
 
   const handleExportExcel = () => {
     if (filteredRecords.length === 0) {
@@ -54,7 +80,8 @@ const ServicePoMonthlyBudgetList = forwardRef(({
     success('Exported to Excel successfully');
   };
 
-  const canExport = !isLoading && records.length > 0;
+  const loading = isLoading || isServicePosLoading;
+  const canExport = !loading && filteredRecords.length > 0;
 
   useEffect(() => {
     onExportStateChange?.(canExport);
@@ -64,26 +91,19 @@ const ServicePoMonthlyBudgetList = forwardRef(({
 
   useImperativeHandle(ref, () => ({ exportExcel: handleExportExcel }));
 
-  if (records.length === 0 && !isLoading) {
+  if (allRecords.length === 0 && !loading) {
     return (
       <div className="rounded-xl border bg-card">
         <EmptyState
           icon={ClipboardList}
-          title="No budgets saved yet"
-          description={`Nothing has been entered for ${formatMonthYear(month, year)} yet.`}
-          action={onAddEntry ? {
-            label: 'Add Entry',
-            icon: Plus,
-            onClick: onAddEntry,
-            disabled: !canAddEntry,
-            title: canAddEntry ? undefined : addEntryDisabledReason,
-          } : undefined}
+          title="No Service POs available"
+          description="No Service POs are assigned to you yet."
         />
       </div>
     );
   }
 
-  if (!isLoading && filteredRecords.length === 0) {
+  if (!loading && filteredRecords.length === 0) {
     return (
       <div className="rounded-xl border bg-card">
         <EmptyState title="No records found" description="Try adjusting your search or filters." />
@@ -91,7 +111,7 @@ const ServicePoMonthlyBudgetList = forwardRef(({
     );
   }
 
-  if (isLoading) {
+  if (loading) {
     return (
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (
@@ -105,16 +125,25 @@ const ServicePoMonthlyBudgetList = forwardRef(({
     <div className="space-y-4">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
         {filteredRecords.map((r) => {
-          const poMeta = poMetaMap.get(String(r.service_po_id));
-          const statusLabel = poMeta?.is_billable ? 'Billable' : poMeta?.status || '—';
-          const statusVariant = poMeta?.is_billable ? 'success' : getStatusColor(poMeta?.status);
+          const statusLabel = r.is_billable ? 'Billable' : r.status || '—';
+          const statusVariant = r.is_billable ? 'success' : getStatusColor(r.status);
+          // A filled PO stays clickable (view/edit) even after its window locks — but an unfilled
+          // one that's locked has nothing to view and can no longer be added, so the card is inert.
+          const isClickable = r.filled || countdown?.writable;
 
           return (
             <button
               key={r.service_po_id}
               type="button"
-              onClick={() => onEdit(r.service_po_id)}
-              className="group flex flex-col rounded-xl border bg-card p-3 text-left text-sm shadow-card transition-colors hover:border-primary hover:shadow-md focus:outline-none focus:ring-2 focus:ring-ring"
+              onClick={isClickable ? () => onEdit(r.service_po_id) : undefined}
+              disabled={!isClickable}
+              className={cn(
+                'group flex flex-col rounded-xl border bg-card p-3 text-left text-sm shadow-card transition-colors focus:outline-none focus:ring-2 focus:ring-ring',
+                !r.filled && 'border-dashed',
+                isClickable
+                  ? 'hover:border-primary hover:shadow-md'
+                  : 'cursor-not-allowed opacity-70'
+              )}
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="flex min-w-0 gap-2">
@@ -135,16 +164,26 @@ const ServicePoMonthlyBudgetList = forwardRef(({
 
               <Separator className="my-2.5" />
 
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <p className="text-[11px] text-muted-foreground">Invoice Amount</p>
-                  <p className="text-xs font-semibold tabular-nums">{formatCurrency(r.invoice_amount)}</p>
+              {r.filled ? (
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="text-[11px] text-muted-foreground">Invoice Amount</p>
+                    <p className="text-xs font-semibold tabular-nums">{formatCurrency(r.invoice_amount)}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[11px] text-muted-foreground">Billable Amount</p>
+                    <p className="text-xs font-semibold tabular-nums">{formatCurrency(r.billed_amount)}</p>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-[11px] text-muted-foreground">Billable Amount</p>
-                  <p className="text-xs font-semibold tabular-nums">{formatCurrency(r.billed_amount)}</p>
+              ) : countdown?.writable ? (
+                <div className="rounded-lg border border-dashed border-amber-300 bg-amber-50 px-2 py-2 text-center dark:border-amber-900 dark:bg-amber-950/30">
+                  <p className="text-[11px] font-medium text-amber-700 dark:text-amber-400">Not filled yet — click to add</p>
                 </div>
-              </div>
+              ) : (
+                <div className="rounded-lg border border-dashed bg-muted/40 px-2 py-2 text-center">
+                  <p className="text-[11px] font-medium text-muted-foreground">Not filled — period locked</p>
+                </div>
+              )}
 
               <div className="mt-2.5 flex items-end justify-between gap-2">
                 <div>
@@ -161,28 +200,21 @@ const ServicePoMonthlyBudgetList = forwardRef(({
 
               <Separator className="my-2.5" />
 
-              <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                <span>Updated {formatDate(r.updated_at, 'DD-MMM-YYYY')}</span>
-                <ChevronRight className="h-3 w-3" />
+              <div className="flex items-center justify-between text-[11px]">
+                {r.filled ? (
+                  <span className="text-muted-foreground">Updated {formatDate(r.updated_at, 'DD-MMM-YYYY')}</span>
+                ) : countdown?.writable ? (
+                  <span className={cn('flex items-center gap-1 font-medium', COUNTDOWN_STYLES[countdown.severity])}>
+                    <Clock className="h-3 w-3" /> {countdown.label} to fill
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">Locked</span>
+                )}
+                <ChevronRight className="h-3 w-3 text-muted-foreground" />
               </div>
             </button>
           );
         })}
-
-        {onAddEntry && (
-          <button
-            type="button"
-            onClick={onAddEntry}
-            disabled={!canAddEntry}
-            title={canAddEntry ? undefined : addEntryDisabledReason}
-            className="flex min-h-[170px] flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-3 text-muted-foreground transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-border disabled:hover:text-muted-foreground"
-          >
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <Plus className="h-4 w-4" />
-            </div>
-            <span className="text-xs font-medium">Add Entry</span>
-          </button>
-        )}
       </div>
 
       <p className="text-center text-sm text-muted-foreground">

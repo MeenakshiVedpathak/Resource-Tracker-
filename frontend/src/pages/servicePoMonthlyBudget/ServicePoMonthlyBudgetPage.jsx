@@ -1,8 +1,9 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, Download, RotateCcw, Search } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clock, Download, RotateCcw, Search } from 'lucide-react';
 import PageHeader from '@/components/common/PageHeader';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,7 +17,7 @@ import { useActiveServicePOs } from '@/hooks/useServicePOs';
 import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
 import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
 import { useDebounce } from '@/hooks/useDebounce';
-import { isInvoiceMasterPeriodWritable, INVOICE_MASTER_WINDOW_MESSAGE } from '@/utils/invoiceMasterWindow';
+import { getInvoiceMasterCountdown } from '@/utils/invoiceMasterWindow';
 
 const now = new Date();
 const CURRENT_MONTH = now.getMonth() + 1;
@@ -25,7 +26,7 @@ const CURRENT_YEAR = now.getFullYear();
 const ServicePoMonthlyBudgetPage = () => {
   const [year, setYear] = useState(CURRENT_YEAR);
   const [selectedMonth, setSelectedMonth] = useState(CURRENT_MONTH);
-  // null = sheet closed, otherwise { servicePoId, month, year } — servicePoId '' means "adding new".
+  // null = sheet closed, otherwise { servicePoId, month, year } for the PO card that was clicked.
   const [editSheet, setEditSheet] = useState(null);
 
   const monthlyListRef = useRef(null);
@@ -48,7 +49,7 @@ const ServicePoMonthlyBudgetPage = () => {
   const { data: records = [], isPending: isListLoading } = useServicePoMonthlyBudgetList(selectedMonth, year);
 
   const isCurrentPeriod = selectedMonth === CURRENT_MONTH && year === CURRENT_YEAR;
-  const isPeriodWritable = isInvoiceMasterPeriodWritable(selectedMonth, year);
+  const countdown = useMemo(() => getInvoiceMasterCountdown(selectedMonth, year), [selectedMonth, year]);
 
   // Type → Category, so a PO can be matched against a selected Category via its own Type.
   const typeCategoryMap = useMemo(() => {
@@ -142,6 +143,20 @@ const ServicePoMonthlyBudgetPage = () => {
               >
                 <RotateCcw className="h-3.5 w-3.5" /> This month
               </Button>
+            )}
+
+            {countdown.writable && (
+              <Badge
+                variant={
+                  countdown.severity === 'critical' ? 'destructive'
+                    : countdown.severity === 'warning' ? 'warning'
+                    : 'info'
+                }
+                className="gap-1 font-medium"
+                title="Time left to fill/edit this period's Monthly PO Reporting"
+              >
+                <Clock className="h-3 w-3" /> {countdown.label} to fill
+              </Badge>
             )}
 
             <div className="relative w-full sm:w-64">
@@ -258,10 +273,8 @@ const ServicePoMonthlyBudgetPage = () => {
         clientFilter={clientFilter}
         poFilterIds={allowedPoIds}
         onEdit={(poId) => setEditSheet({ servicePoId: String(poId), month: selectedMonth, year })}
-        onAddEntry={() => setEditSheet({ servicePoId: '', month: selectedMonth, year })}
-        canAddEntry={isPeriodWritable}
-        addEntryDisabledReason={INVOICE_MASTER_WINDOW_MESSAGE}
         onExportStateChange={handleExportStateChange}
+        countdown={countdown}
       />
 
       <ServicePoBudgetEntrySheet

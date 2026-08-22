@@ -1,32 +1,121 @@
 import { useMemo, useState } from 'react';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Plus, Pencil, Ban, Building2 } from 'lucide-react';
+import { Plus, Building2, Check, X } from 'lucide-react';
 import PageHeader from '@/components/common/PageHeader';
 import EmptyState from '@/components/common/EmptyState';
 import DataTable from '@/components/common/DataTable';
-import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { SearchableSelect } from '@/components/ui/searchable-select';
-import CostBudgetEntrySheet from './CostBudgetEntrySheet';
+import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import { useActiveServicePOs } from '@/hooks/useServicePOs';
-import { useCostBudgetsByServicePo, useDeactivateCostBudget } from '@/hooks/useCostBudgets';
+import { useCostBudgetsByServicePo, useCreateCostBudget } from '@/hooks/useCostBudgets';
 import { useCanWrite } from '@/hooks/usePermissions';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
-import { formatCurrency, formatMonthYear, formatDate, getStatusColor } from '@/utils/formatters';
-import { fromApiMonth } from '@/utils/monthApi';
+import { formatCurrency, formatMonthYear, formatDate } from '@/utils/formatters';
+import { fromApiMonth, toApiMonth } from '@/utils/monthApi';
 
 const columnHelper = createColumnHelper();
 
+// Column widths mirror the DataTable `size`s below so this inline row lines up with the real rows.
+const InlineAddRow = ({ servicePoId, nextPeriod, onDone }) => {
+  const [period, setPeriod] = useState(nextPeriod);
+  const [amount, setAmount] = useState('');
+  const [description, setDescription] = useState('');
+  const { success, error: showError } = useNotification();
+  const createMutation = useCreateCostBudget();
+
+  const canSave = !!period && amount !== '' && !Number.isNaN(Number(amount)) && Number(amount) >= 0;
+
+  const handleSave = () => {
+    if (!canSave) return;
+    createMutation.mutate(
+      {
+        service_po_id: servicePoId,
+        month: toApiMonth(period),
+        invoice_amount: Number(amount),
+        description: description || '',
+      },
+      {
+        onSuccess: () => {
+          success('Cost budget created successfully.');
+          onDone();
+        },
+        onError: (err) => showError(extractApiError(err)),
+      }
+    );
+  };
+
+  return (
+    <div className="flex items-stretch rounded-lg border border-primary/40 bg-primary/5">
+      <div className="flex w-[150px] shrink-0 items-center px-3 py-2">
+        {nextPeriod ? (
+          <span className="text-sm font-medium whitespace-nowrap">{formatMonthYear(period?.month, period?.year)}</span>
+        ) : (
+          <MonthYearPicker
+            value={period}
+            onChange={setPeriod}
+            placeholder="Select month"
+            clearable={false}
+            className="h-8 w-full bg-white"
+          />
+        )}
+      </div>
+      <div className="flex w-[160px] shrink-0 items-center px-3 py-2">
+        <div className="relative w-full">
+          <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2.5 text-sm text-muted-foreground">₹</span>
+          <Input
+            type="number"
+            min="0"
+            step="0.01"
+            autoFocus
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            placeholder="5,00,000"
+            className="h-8 pl-6"
+          />
+        </div>
+      </div>
+      <div className="flex w-[240px] shrink-0 items-center px-3 py-2">
+        <Input
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="Description (optional)"
+          className="h-8"
+        />
+      </div>
+      <div className="flex shrink-0 items-center gap-1 px-3 py-2">
+        <Button
+          size="sm"
+          title="Save"
+          disabled={!canSave || createMutation.isPending}
+          onClick={handleSave}
+          className="h-6 w-6 p-0 bg-emerald-500 hover:bg-emerald-600 text-white rounded transition-colors"
+        >
+          <Check className="h-3 w-3" />
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          title="Cancel"
+          disabled={createMutation.isPending}
+          onClick={onDone}
+          className="h-6 w-6 p-0 rounded"
+        >
+          <X className="h-3 w-3" />
+        </Button>
+      </div>
+      <div className="flex-1" aria-hidden="true" />
+    </div>
+  );
+};
+
 const CostBudgetList = () => {
   const [servicePoId, setServicePoId] = useState('');
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const [editTarget, setEditTarget] = useState(null);
-  const [deactivateTarget, setDeactivateTarget] = useState(null);
+  const [addingInline, setAddingInline] = useState(false);
 
   const canManage = useCanWrite();
-  const { success, error: showError } = useNotification();
 
   const { data: servicePos = [] } = useActiveServicePOs();
   const selectedPo = servicePos.find((po) => String(po.id) === servicePoId);
@@ -34,7 +123,6 @@ const CostBudgetList = () => {
   // Every month ever saved for this PO (active + inactive) — the whole point of this screen is
   // to show all added months at once, not force picking one month at a time.
   const { data: records = [], isPending } = useCostBudgetsByServicePo(servicePoId);
-  const deactivateMutation = useDeactivateCostBudget();
 
   // "YYYY-MM" sorts correctly as a plain string — most recent month first.
   const sortedRecords = useMemo(
@@ -42,68 +130,23 @@ const CostBudgetList = () => {
     [records]
   );
 
+  // Months must be added in strict sequence — the next entry is always latest existing month + 1,
+  // never a gap or a jump. `null` (no records yet) means the very first month is still free to pick.
+  const nextPeriod = useMemo(() => {
+    if (sortedRecords.length === 0) return null;
+    const latest = fromApiMonth(sortedRecords[0].month);
+    const month = latest.month === 12 ? 1 : latest.month + 1;
+    const year = latest.month === 12 ? latest.year + 1 : latest.year;
+    return { month, year };
+  }, [sortedRecords]);
+
   const servicePoOptions = servicePos.map((po) => ({
     value: String(po.id),
     label: `${po.service_po_name}${po.service_po_code ? ` (${po.service_po_code})` : ''}`,
     searchValue: `${po.service_po_name} ${po.service_po_code ?? ''} ${po.client?.client_name ?? ''}`,
   }));
 
-  const openCreate = () => {
-    setEditTarget(null);
-    setSheetOpen(true);
-  };
-
-  const openEdit = (record) => {
-    setEditTarget(record);
-    setSheetOpen(true);
-  };
-
-  const handleDeactivate = () => {
-    if (!deactivateTarget) return;
-    deactivateMutation.mutate(deactivateTarget.id, {
-      onSuccess: () => {
-        success('Cost budget deactivated.');
-        setDeactivateTarget(null);
-      },
-      onError: (err) => {
-        showError(extractApiError(err));
-        setDeactivateTarget(null);
-      },
-    });
-  };
-
   const columns = [
-    columnHelper.display({
-      id: 'actions',
-      header: 'Actions',
-      size: 90,
-      cell: ({ row }) => {
-        if (!canManage) return null;
-        const record = row.original;
-        return (
-          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-            <Button
-              size="sm"
-              title="Edit"
-              onClick={() => openEdit(record)}
-              className="h-6 w-6 p-0 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
-            >
-              <Pencil className="h-3 w-3" />
-            </Button>
-            {record.status === 'active' && (
-              <Button
-                size="sm"
-                title="Deactivate"
-                onClick={() => setDeactivateTarget(record)}
-                className="h-6 w-6 p-0 bg-red-500 hover:bg-red-600 text-white rounded transition-colors"
-              >
-                <Ban className="h-3 w-3" />
-              </Button>
-            )}
-          </div>
-        );
-      },
-    }),
     columnHelper.accessor((row) => fromApiMonth(row.month), {
       id: 'month',
       header: 'Month',
@@ -127,11 +170,6 @@ const CostBudgetList = () => {
         </div>
       ),
     }),
-    columnHelper.accessor('status', {
-      header: 'Status',
-      size: 100,
-      cell: (info) => <Badge variant={getStatusColor(info.getValue())}>{info.getValue()}</Badge>,
-    }),
     // columnHelper.accessor('updated_at', {
     //   header: 'Updated',
     //   size: 140,
@@ -148,17 +186,16 @@ const CostBudgetList = () => {
             <SearchableSelect
               options={servicePoOptions}
               value={servicePoId}
-              onValueChange={(v) => v && setServicePoId(v)}
+              onValueChange={(v) => {
+                if (!v) return;
+                setServicePoId(v);
+                setAddingInline(false);
+              }}
               placeholder="Select a Service PO"
               searchPlaceholder="Search Service PO…"
               emptyMessage="No Service POs available."
               className="w-72 bg-white"
             />
-            {canManage && servicePoId && (
-              <Button size="sm" className="gap-1.5" onClick={openCreate}>
-                <Plus className="h-4 w-4" /> Add Cost Budget
-              </Button>
-            )}
           </div>
         }
       >
@@ -175,33 +212,43 @@ const CostBudgetList = () => {
           description="Choose a Service PO above to see every month a cost budget has been added for it."
         />
       ) : (
-        <DataTable
-          columns={columns}
-          data={sortedRecords}
-          isLoading={isPending}
-          toolbar={null}
-          rowClassName={(r) => (r.status !== 'active' ? 'opacity-50' : '')}
-          emptyState={
-            <EmptyState
-              title="No cost budgets yet"
-              description="No months have been added for this Service PO yet."
-              action={canManage ? { label: 'Add Cost Budget', icon: Plus, onClick: openCreate } : undefined}
-            />
-          }
-        />
+        <>
+          <DataTable
+            columns={columns}
+            data={sortedRecords}
+            isLoading={isPending}
+            toolbar={null}
+            rowClassName={(r) => (r.status !== 'active' ? 'opacity-50' : '')}
+            emptyState={
+              <EmptyState
+                title="No cost budgets yet"
+                description="No months have been added for this Service PO yet."
+                action={canManage && !addingInline ? { label: 'Add Cost Budget', icon: Plus, onClick: () => setAddingInline(true) } : undefined}
+              />
+            }
+          />
+          {canManage && (
+            addingInline ? (
+              <InlineAddRow
+                servicePoId={servicePoId}
+                nextPeriod={nextPeriod}
+                onDone={() => setAddingInline(false)}
+              />
+            ) : sortedRecords.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setAddingInline(true)}
+                className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed py-2 text-sm text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+              >
+                <Plus className="h-4 w-4" /> Add Cost Budget
+                {nextPeriod && (
+                  <span className="text-xs">({formatMonthYear(nextPeriod.month, nextPeriod.year)})</span>
+                )}
+              </button>
+            )
+          )}
+        </>
       )}
-
-      <CostBudgetEntrySheet open={sheetOpen} onOpenChange={setSheetOpen} initialData={editTarget} servicePo={selectedPo} />
-
-      <ConfirmDialog
-        open={!!deactivateTarget}
-        onOpenChange={(open) => !open && setDeactivateTarget(null)}
-        title="Deactivate Cost Budget"
-        description={`Deactivate the ${deactivateTarget ? formatMonthYear(fromApiMonth(deactivateTarget.month)?.month, fromApiMonth(deactivateTarget.month)?.year) : ''} cost budget for "${selectedPo?.service_po_name ?? ''}"? It will be hidden from active views.`}
-        confirmLabel="Deactivate"
-        onConfirm={handleDeactivate}
-        isLoading={deactivateMutation.isPending}
-      />
     </div>
   );
 };
