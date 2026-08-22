@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useDispatch, useSelector } from 'react-redux';
@@ -8,6 +8,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useFormModules, useForms } from '@/hooks/useForms';
 import { resolveFormRoute } from '@/constants/rbacForms';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import ScrollOnHoverText from '@/components/common/ScrollOnHoverText';
 
 // Real module/form ordering, sourced from the same Form Master data the /forms screen
 // manages (GET /forms/modules for module seq, GET /forms for per-module form seq) — see the
@@ -66,6 +67,30 @@ const buildNavGroups = (accessibleForms, { moduleRank, formRank }) =>
 const isActive = (to, pathname, exact) =>
   exact ? pathname === to : pathname === to || pathname.startsWith(to + '/');
 
+const EmployeeNavItem = ({ item, active, collapsed }) => {
+  const [hovered, setHovered] = useState(false);
+
+  return (
+    <Link
+      to={item.to}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className={cn(
+        'nav-item group relative flex items-center gap-3 transition-all',
+        active && 'active',
+        collapsed && 'justify-center px-2'
+      )}
+      title={collapsed ? item.label : undefined}
+    >
+      {active && (
+        <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.5 rounded-r-full bg-primary" />
+      )}
+      <item.icon className={cn('shrink-0', collapsed ? 'h-5 w-5' : 'h-4 w-4')} />
+      {!collapsed && <ScrollOnHoverText text={item.label} hovered={hovered} />}
+    </Link>
+  );
+};
+
 const EmployeeSidebar = () => {
   const dispatch = useDispatch();
   const collapsed = useSelector(selectSidebarCollapsed);
@@ -109,35 +134,22 @@ const EmployeeSidebar = () => {
           )}
         </div>
 
-        <nav className="flex-1 overflow-y-auto overflow-x-hidden py-3 px-2 space-y-4 scrollbar-thin">
+        <nav className="flex-1 overflow-y-auto overflow-x-hidden py-2 px-2 space-y-2 scrollbar-thin">
           {navGroups.map((group) => (
-            <div key={group.label} className="space-y-0.5">
+            <div key={group.label} className="space-y-px">
               {!collapsed && (
-                <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/30 whitespace-nowrap">
+                <p className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/30 whitespace-nowrap">
                   {group.label}
                 </p>
               )}
-              {group.items.map((item) => {
-                const active = isActive(item.to, pathname, item.exact);
-                return (
-                  <Link
-                    key={item.to}
-                    to={item.to}
-                    className={cn(
-                      'nav-item group relative flex items-center gap-3 transition-all',
-                      active && 'active',
-                      collapsed && 'justify-center px-2'
-                    )}
-                    title={collapsed ? item.label : undefined}
-                  >
-                    {active && (
-                      <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.5 rounded-r-full bg-primary" />
-                    )}
-                    <item.icon className={cn('shrink-0', collapsed ? 'h-5 w-5' : 'h-4 w-4')} />
-                    {!collapsed && <span className="overflow-hidden whitespace-nowrap">{item.label}</span>}
-                  </Link>
-                );
-              })}
+              {group.items.map((item) => (
+                <EmployeeNavItem
+                  key={item.to}
+                  item={item}
+                  active={isActive(item.to, pathname, item.exact)}
+                  collapsed={collapsed}
+                />
+              ))}
             </div>
           ))}
         </nav>

@@ -241,7 +241,7 @@
 
   /* ── Sidebar nav item ── */
   .nav-item {
-    @apply flex items-center gap-3 px-4 py-3 text-sm font-medium text-sidebar-muted transition-all duration-150 cursor-pointer hover:bg-sidebar-hover hover:text-sidebar-foreground;
+    @apply flex items-center gap-2.5 rounded-md px-3 py-[7px] text-[13px] font-medium text-sidebar-muted transition-all duration-150 cursor-pointer hover:bg-sidebar-hover hover:text-sidebar-foreground;
   }
 
   .nav-item.active {

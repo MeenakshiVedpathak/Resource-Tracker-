@@ -11,6 +11,7 @@ import { resolveFormRoute } from '@/constants/rbacForms';
 import { ROUTES } from '@/constants/routes';
 import { ChevronLeft, ChevronRight, UserPlus, Shield, ClipboardList, UserCog, Landmark, Network } from 'lucide-react';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
+import ScrollOnHoverText from '@/components/common/ScrollOnHoverText';
 
 // A Platform Admin (top of the RBAC hierarchy, §0) sees ONLY these nav items — everything else
 // the RBAC-driven buildNavGroups() would otherwise show is skipped for them. Platform Admin
@@ -109,13 +110,16 @@ const isActive = (to, pathname, exact) => {
 const SubNavItem = ({ item, onNavAttempt }) => {
   const { pathname } = useLocation();
   const active = pathname === item.to;
+  const [hovered, setHovered] = useState(false);
 
   return (
     <Link
       to={item.to}
       onClick={(e) => onNavAttempt(e, item.to)}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       className={cn(
-        'relative flex items-center rounded-md py-1.5 pl-9 pr-3 text-xs transition-colors min-w-0',
+        'relative flex items-center rounded-md py-1 pl-8 pr-3 text-xs transition-colors min-w-0',
         active
           ? 'text-sidebar-foreground font-medium bg-sidebar-hover/70'
           : 'text-sidebar-foreground/55 hover:text-sidebar-foreground hover:bg-sidebar-hover/40'
@@ -125,7 +129,7 @@ const SubNavItem = ({ item, onNavAttempt }) => {
       {active && (
         <span className="absolute left-[18px] top-1/2 -translate-y-1/2 h-3.5 w-0.5 rounded-full bg-primary/70" />
       )}
-      <span className="truncate min-w-0">{item.label}</span>
+      <ScrollOnHoverText text={item.label} hovered={hovered} className="min-w-0" />
     </Link>
   );
 };
@@ -134,12 +138,15 @@ const NavItem = ({ item, collapsed, onNavAttempt }) => {
   const { pathname } = useLocation();
   const active = isActive(item.to, pathname, item.exact);
   const hasChildren = !collapsed && Array.isArray(item.children) && item.children.length > 0;
+  const [hovered, setHovered] = useState(false);
 
   return (
     <div>
       <Link
         to={item.to}
         onClick={(e) => onNavAttempt(e, item.to)}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
         className={cn(
           'nav-item group relative flex items-center gap-3 transition-all min-w-0',
           active && 'active',
@@ -158,9 +165,9 @@ const NavItem = ({ item, collapsed, onNavAttempt }) => {
               animate={{ opacity: 1, width: 'auto' }}
               exit={{ opacity: 0, width: 0 }}
               transition={{ duration: 0.15 }}
-              className="min-w-0 truncate"
+              className="min-w-0"
             >
-              {item.label}
+              <ScrollOnHoverText text={item.label} hovered={hovered} />
             </motion.span>
           )}
         </AnimatePresence>
@@ -308,16 +315,16 @@ const Sidebar = () => {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto overflow-x-hidden py-3 px-2 space-y-4 scrollbar-thin">
+      <nav className="flex-1 overflow-y-auto overflow-x-hidden py-2 px-2 space-y-2 scrollbar-thin">
         {navGroups.map((group) => (
-          <div key={group.label} className="space-y-0.5">
+          <div key={group.label} className="space-y-px">
             <AnimatePresence initial={false}>
               {!collapsed && (
                 <motion.p
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  className="px-3 py-1 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/30 whitespace-nowrap"
+                  className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/30 whitespace-nowrap"
                 >
                   {group.label}
                 </motion.p>
