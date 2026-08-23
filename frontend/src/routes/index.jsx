@@ -52,7 +52,6 @@ const EntityAdminList = lazy(() => import('@/pages/entityAdmins/EntityAdminList'
 const EntityAdminCreate = lazy(() => import('@/pages/entityAdmins/EntityAdminCreate'));
 const EntityList = lazy(() => import('@/pages/entities/EntityList'));
 const EntityForm = lazy(() => import('@/pages/entities/EntityForm'));
-const BuAdminList = lazy(() => import('@/pages/buAdmins/BuAdminList'));
 const BuHeadList = lazy(() => import('@/pages/buHeads/BuHeadList'));
 
 // ── Company Management — Entity Admin scoped (no Form Master row of its own; reached via
@@ -88,6 +87,7 @@ const MonthlyCostImport = lazy(() => import('@/pages/monthlyCosts/MonthlyCostImp
 
 // ── Reports ──
 const ReportsLayout = lazy(() => import('@/pages/reports/ReportsLayout'));
+const ReportsCenter = lazy(() => import('@/pages/reports/ReportsCenter'));
 const ResourceAllocation = lazy(() => import('@/pages/reports/ResourceAllocation'));
 const ServicePOResource = lazy(() => import('@/pages/reports/ServicePOResource'));
 const ServicePOSummary = lazy(() => import('@/pages/reports/ServicePOSummary'));
@@ -279,8 +279,6 @@ const AppRoutes = () => {
           <Route path=":id/edit" element={<ProtectedRoute allowedRoles={['Admin', 'Entity Admin']}><EntityForm /></ProtectedRoute>} />
         </Route>
 
-        {/* BU Admin Master — kept fully live (staged migration: stays until backend cutover) */}
-        <Route path={ROUTES.BU_ADMINS} element={<ProtectedRoute formName={FORM_NAMES.BU_ADMIN_MASTER}><BuAdminList /></ProtectedRoute>} />
         {/* BU Head Master — additive peer of BU Admin Master, also kept fully live.
             allowedRoles (not formName) — same as Entity Admins/Companies below — since there's
             no real Form Master row for this yet and ProtectedRoute ANDs formName with
@@ -349,6 +347,7 @@ const AppRoutes = () => {
 
         {/* Reports */}
         <Route path={ROUTES.REPORTS} element={<ReportsLayout />}>
+          <Route index element={<ReportsCenter />} />
           <Route path={ROUTES.REPORT_RESOURCE_ALLOCATION} element={<ProtectedRoute formName={FORM_NAMES.REPORT_RESOURCE_ALLOCATION}><ResourceAllocation /></ProtectedRoute>} />
           <Route path={ROUTES.REPORT_SERVICE_PO_RESOURCE} element={<ProtectedRoute formName={FORM_NAMES.REPORT_PO_VS_RESOURCE}><ServicePOResource /></ProtectedRoute>} />
           <Route path={ROUTES.REPORT_SERVICE_PO_SUMMARY} element={<ProtectedRoute formName={FORM_NAMES.REPORT_SERVICE_PO_SUMMARY}><ServicePOSummary /></ProtectedRoute>} />

@@ -26,8 +26,8 @@ const initialState = {
   // usable immediately; MainLayout's useSyncAccessibleForms silently refreshes it regardless.
   accessibleFormsLoaded: true,
   // Employee Identity Migration: every employee now carries `businessUnits[]` — [] for an
-  // account with none (Platform Admin/Admin/Entity Admin never had one either). No longer
-  // BU-Head-only, or split into a separate single-`company` concept.
+  // account with none (Platform Admin/Entity Admin never had one either; Admin can be mapped
+  // now). No longer BU-Head-only, or split into a separate single-`company` concept.
   businessUnits: getStoredBusinessUnits(),
   // The currently-active BU, global across the app — drives the X-Company-Id header. Required
   // once an employee has more than one BU; auto-selected to the first on login otherwise.
@@ -39,7 +39,7 @@ const authSlice = createSlice({
   initialState,
   reducers: {
     setCredentials: (state, action) => {
-      const { employee, accessToken, refreshToken, roles, businessUnits } = action.payload;
+      const { employee, accessToken, refreshToken, roles } = action.payload;
       state.accessToken = accessToken;
       state.refreshToken = refreshToken;
       state.isAuthenticated = true;
@@ -54,20 +54,32 @@ const authSlice = createSlice({
       state.roles = nextRoles;
       saveRoles(nextRoles);
 
-      // Always present, possibly [] — auto-select the first BU so the employee never has to
-      // pick one manually just to get past login when there's exactly one (or none).
-      const nextBusinessUnits = businessUnits ?? [];
-      state.businessUnits = nextBusinessUnits;
-      saveBusinessUnits(nextBusinessUnits);
-      const nextActiveBuId = nextBusinessUnits[0]?.id ?? null;
-      state.activeBuId = nextActiveBuId;
-      saveActiveBuId(nextActiveBuId);
+      // Role-Based Login: the login/refresh-token response no longer carries `businessUnits` —
+      // reset to empty here and let the caller populate it via setBusinessUnits right after,
+      // from a separate GET /employees/:id/business-units call. Stale BUs from a prior
+      // session/role must not survive into this one even for the brief window before that fetch
+      // resolves.
+      state.businessUnits = [];
+      saveBusinessUnits([]);
+      state.activeBuId = null;
+      saveActiveBuId(null);
 
       // Accessible forms are role-derived — clear the previous session's cache until the
       // post-login fetch (Step 3) repopulates it for the new roles.
       state.accessibleForms = {};
       saveAccessibleForms({});
       state.accessibleFormsLoaded = false;
+    },
+    // Role-Based Login: populates businessUnits from the dedicated GET
+    // /employees/:id/business-units call made right after login/select-role — auto-selects the
+    // first BU so the employee never has to pick one manually when there's exactly one (or none).
+    setBusinessUnits: (state, action) => {
+      const nextBusinessUnits = action.payload ?? [];
+      state.businessUnits = nextBusinessUnits;
+      saveBusinessUnits(nextBusinessUnits);
+      const nextActiveBuId = nextBusinessUnits[0]?.id ?? null;
+      state.activeBuId = nextActiveBuId;
+      saveActiveBuId(nextActiveBuId);
     },
     setTokens: (state, action) => {
       const { accessToken, refreshToken } = action.payload;
@@ -113,7 +125,7 @@ const authSlice = createSlice({
 });
 
 export const {
-  setCredentials, setTokens, setRoles, setAccessibleForms, setActiveBu, logout,
+  setCredentials, setTokens, setRoles, setAccessibleForms, setBusinessUnits, setActiveBu, logout,
 } = authSlice.actions;
 
 const EMPTY_PERMISSIONS = [];
@@ -134,7 +146,7 @@ export const selectAuthRoleIds = createSelector([selectAuthRoles], (roles) => ro
 export const selectAccessibleForms = (state) => state.auth.accessibleForms ?? EMPTY_FORMS;
 export const selectAccessibleFormsLoaded = (state) => state.auth.accessibleFormsLoaded ?? true;
 
-// Employee Identity Migration: [] for an account with no BU (Platform Admin/Admin/Entity Admin).
+// Employee Identity Migration: [] for an account with no BU (Platform Admin/Entity Admin; Admin can be mapped now).
 export const selectBusinessUnits = (state) => state.auth.businessUnits ?? EMPTY_BUS;
 export const selectActiveBuId = (state) => state.auth.activeBuId ?? null;
 

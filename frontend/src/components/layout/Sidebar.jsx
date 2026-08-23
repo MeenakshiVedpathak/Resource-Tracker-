@@ -7,9 +7,10 @@ import { selectIsDirty, selectDirtyMessage, clearDirty } from '@/store/slices/na
 import { cn } from '@/utils/cn';
 import { useAuth } from '@/hooks/useAuth';
 import { useFormModules, useForms } from '@/hooks/useForms';
+import { useFormCategories } from '@/hooks/useFormCategories';
 import { resolveFormRoute } from '@/constants/rbacForms';
 import { ROUTES } from '@/constants/routes';
-import { ChevronLeft, ChevronRight, UserPlus, Shield, ClipboardList, UserCog, Landmark, Network } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, UserPlus, Shield, ClipboardList, UserCog, Landmark, Network, Folder } from 'lucide-react';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import ScrollOnHoverText from '@/components/common/ScrollOnHoverText';
 
@@ -39,6 +40,10 @@ const RESTRICTED_MODULES = ['administration'];
 const ENTITY_ADMIN_MANAGEMENT_ROLES = ['Admin'];
 const TEAM_MAPPING_ROLES = ['Service PO Admin'];
 
+// Modules with a dedicated category-browser landing page (Zoho-style folder list + report
+// list) — their group label becomes a link into that hub instead of plain text.
+const MODULE_OVERVIEW_ROUTES = { reports: ROUTES.REPORTS };
+
 // Builds one nav group per module, one item per form — driven entirely by the RBAC
 // accessible-forms map (module -> [{ id, name }]) so a user only ever sees what their
 // roles actually grant. Section AND item order follow each row's real Form Master `seq`
@@ -47,14 +52,20 @@ const TEAM_MAPPING_ROLES = ['Service PO Admin'];
 // here, so a re-sequence on the Form Master screen is reflected with no frontend change.
 // A form with no known route mapping is dropped (and logged) rather than rendered as a
 // dead link — see constants/rbacForms.js.
-const buildNavGroups = (accessibleForms, { isSuperAdmin, moduleRank, formRank }) =>
+//
+// A form that Form Master has placed under a Category is grouped under a synthetic
+// { isCategory: true, items: [...] } node instead of a plain leaf item, so the sidebar
+// mirrors the same Module -> Category -> Form hierarchy the Form Master screen shows.
+// accessibleForms itself (POST /roles/forms) doesn't carry category_id, so the category
+// assignment is looked up from the separate GET /forms data useMenuRank already fetches
+// for sequencing (categoryOf/categoryInfo) — see below.
+const buildNavGroups = (accessibleForms, { isSuperAdmin, moduleRank, formRank, categoryOf, categoryInfo }) =>
   Object.entries(accessibleForms ?? {})
     .filter(
       ([moduleName]) => isSuperAdmin || !RESTRICTED_MODULES.includes(moduleName.trim().toLowerCase())
     )
-    .map(([moduleName, forms]) => ({
-      label: moduleName,
-      items: (forms ?? [])
+    .map(([moduleName, forms]) => {
+      const resolved = (forms ?? [])
         .map((form) => {
           const cfg = resolveFormRoute(form.name);
           if (!cfg) {
@@ -64,13 +75,47 @@ const buildNavGroups = (accessibleForms, { isSuperAdmin, moduleRank, formRank })
             );
             return null;
           }
-          return { label: form.name, icon: cfg.icon, to: cfg.to, exact: cfg.exact };
+          return {
+            label: form.name,
+            icon: cfg.icon,
+            to: cfg.to,
+            exact: cfg.exact,
+            categoryId: categoryOf(moduleName, form.name),
+          };
         })
-        .filter(Boolean)
-        .sort((a, b) => formRank(moduleName, a.label) - formRank(moduleName, b.label)),
-    }))
+        .filter(Boolean);
+
+      const byRank = (a, b) => formRank(moduleName, a.label) - formRank(moduleName, b.label);
+
+      const uncategorized = resolved.filter((i) => i.categoryId == null).sort(byRank);
+
+      const byCategory = new Map();
+      resolved.forEach((i) => {
+        if (i.categoryId == null) return;
+        if (!byCategory.has(i.categoryId)) byCategory.set(i.categoryId, []);
+        byCategory.get(i.categoryId).push(i);
+      });
+      const categoryGroups = Array.from(byCategory.entries())
+        .map(([categoryId, items]) => {
+          const info = categoryInfo(categoryId);
+          return {
+            isCategory: true,
+            id: categoryId,
+            label: info?.name ?? `Category #${categoryId}`,
+            seq: info?.seq ?? 0,
+            items: items.sort(byRank),
+          };
+        })
+        .sort((a, b) => a.seq - b.seq);
+
+      return { label: moduleName, items: [...categoryGroups, ...uncategorized] };
+    })
     .filter((group) => group.items.length > 0)
     .sort((a, b) => moduleRank(a.label) - moduleRank(b.label));
+
+// Collapsed (icon-only) sidebar has no room for category sub-headers — flatten each
+// module back down to a plain list of leaf items so every form still gets its icon.
+const flattenNavItems = (items) => items.flatMap((item) => (item.isCategory ? item.items : [item]));
 
 // Real module/form ordering, sourced from the same Form Master data the /forms screen
 // manages (GET /forms/modules for module seq, GET /forms for per-module form seq) —
@@ -81,24 +126,34 @@ const buildNavGroups = (accessibleForms, { isSuperAdmin, moduleRank, formRank })
 const useMenuRank = () => {
   const { data: moduleRows } = useFormModules({ status: 'active' });
   const { data: formsList } = useForms({ status: 'active' });
+  // Unscoped, same as FormList's admin screen — only used to label category groups by name.
+  const { data: allCategories = [] } = useFormCategories({});
 
   return useMemo(() => {
     const moduleSeq = new Map();
     (moduleRows ?? []).forEach((m) => moduleSeq.set(m.form_name.trim().toLowerCase(), m.seq));
 
     const formSeq = new Map();
+    const formCategoryId = new Map();
     (formsList?.data ?? []).forEach((f) => {
       if (f.module_name != null) {
-        formSeq.set(`${f.module_name.trim().toLowerCase()}::${f.form_name.trim().toLowerCase()}`, f.seq);
+        const key = `${f.module_name.trim().toLowerCase()}::${f.form_name.trim().toLowerCase()}`;
+        formSeq.set(key, f.seq);
+        if (f.category_id != null) formCategoryId.set(key, f.category_id);
       }
     });
+
+    const categoryLookup = new Map(allCategories.map((c) => [c.id, c]));
 
     return {
       moduleRank: (moduleName) => moduleSeq.get(moduleName.trim().toLowerCase()) ?? Number.MAX_SAFE_INTEGER,
       formRank: (moduleName, formName) =>
         formSeq.get(`${moduleName.trim().toLowerCase()}::${formName.trim().toLowerCase()}`) ?? Number.MAX_SAFE_INTEGER,
+      categoryOf: (moduleName, formName) =>
+        formCategoryId.get(`${moduleName.trim().toLowerCase()}::${formName.trim().toLowerCase()}`) ?? null,
+      categoryInfo: (categoryId) => categoryLookup.get(categoryId),
     };
-  }, [moduleRows, formsList]);
+  }, [moduleRows, formsList, allCategories]);
 };
 
 const isActive = (to, pathname, exact) => {
@@ -133,6 +188,24 @@ const SubNavItem = ({ item, onNavAttempt }) => {
     </Link>
   );
 };
+
+// Category sub-header rendered between a module label and its forms — same indent/connector
+// styling as NavItem's own children, but this one isn't a link itself.
+const CategoryNavGroup = ({ category, onNavAttempt }) => (
+  <div className="mt-0.5">
+    <p
+      className="px-3 pt-1 pb-0.5 text-[10px] font-medium uppercase tracking-wide text-sidebar-foreground/40 truncate"
+      title={category.label}
+    >
+      {category.label}
+    </p>
+    <div className="relative ml-[22px] border-l border-sidebar-border/60">
+      {category.items.map((item) => (
+        <SubNavItem key={item.to} item={item} onNavAttempt={onNavAttempt} />
+      ))}
+    </div>
+  </div>
+);
 
 const NavItem = ({ item, collapsed, onNavAttempt }) => {
   const { pathname } = useLocation();
@@ -207,12 +280,12 @@ const Sidebar = () => {
   const isSuperAdmin = hasRole('BU Admin', 'BU Head');
   const canViewEntityAdmins = hasRole(...ENTITY_ADMIN_MANAGEMENT_ROLES);
   const canViewTeamMapping = hasRole(...TEAM_MAPPING_ROLES);
-  const { moduleRank, formRank } = useMenuRank();
+  const { moduleRank, formRank, categoryOf, categoryInfo } = useMenuRank();
   // isPlatformAdmin is derived from the held roles (§0) — overrides the normal
   // accessible-forms-driven nav entirely.
   const navGroups = useMemo(() => {
     if (isPlatformAdmin) return SUPER_ADMIN_NAV_GROUPS;
-    const base = buildNavGroups(accessibleForms, { isSuperAdmin, moduleRank, formRank });
+    const base = buildNavGroups(accessibleForms, { isSuperAdmin, moduleRank, formRank, categoryOf, categoryInfo });
 
     const injected = [];
     if (canViewEntityAdmins) {
@@ -230,7 +303,7 @@ const Sidebar = () => {
       const prepend = groupLabel === 'Entity Management';
       return groups.map((g, i) => (i === idx ? { ...g, items: prepend ? [item, ...g.items] : [...g.items, item] } : g));
     }, base);
-  }, [accessibleForms, isSuperAdmin, isPlatformAdmin, canViewEntityAdmins, canViewTeamMapping, moduleRank, formRank]);
+  }, [accessibleForms, isSuperAdmin, isPlatformAdmin, canViewEntityAdmins, canViewTeamMapping, moduleRank, formRank, categoryOf, categoryInfo]);
 
   // Guards navigation away from a page with unsaved changes (e.g. Timesheet
   // Import Detail's Modified Hours edits) — any page can opt in via the
@@ -238,6 +311,18 @@ const Sidebar = () => {
   const isDirty = useSelector(selectIsDirty);
   const dirtyMessage = useSelector(selectDirtyMessage);
   const [pendingTo, setPendingTo] = useState(null);
+
+  // Per-module collapse in the expanded drawer — purely a UI convenience (not persisted), so
+  // reopening the drawer always starts with every module expanded, same as before this existed.
+  const [collapsedModules, setCollapsedModules] = useState(() => new Set());
+  const toggleModule = (label) => {
+    setCollapsedModules((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
+  };
 
   const handleNavAttempt = (e, to) => {
     if (!isDirty) return;
@@ -262,7 +347,7 @@ const Sidebar = () => {
       )}
 
       <motion.aside
-        animate={{ width: collapsed ? 64 : 260 }}
+        animate={{ width: collapsed ? 64 : 224 }}
         transition={{ duration: 0.2, ease: 'easeInOut' }}
         className={cn(
           'fixed inset-y-0 left-0 z-50 flex h-full shrink-0 flex-col bg-sidebar border-r border-sidebar-border overflow-hidden transition-transform duration-200',
@@ -316,25 +401,67 @@ const Sidebar = () => {
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto overflow-x-hidden py-2 px-2 space-y-2 scrollbar-thin">
-        {navGroups.map((group) => (
+        {navGroups.map((group) => {
+          const overviewRoute = MODULE_OVERVIEW_ROUTES[group.label.trim().toLowerCase()];
+          const hasCategories = group.items.some((item) => item.isCategory);
+          // A module with categories and its own hub page (e.g. Reports -> Reports Center)
+          // shows only its module link in the drawer — no nested Category>Form tree —
+          // since browsing by category now happens on that hub page instead.
+          const onlyModuleLink = hasCategories && !!overviewRoute;
+          // Collapse toggle only makes sense when the drawer itself is expanded and there's
+          // actually a Category/Form list under this module to hide (onlyModuleLink modules
+          // already show nothing below their label).
+          const moduleCollapsed = !onlyModuleLink && collapsedModules.has(group.label);
+          return (
           <div key={group.label} className="space-y-px">
             <AnimatePresence initial={false}>
               {!collapsed && (
-                <motion.p
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/30 whitespace-nowrap"
-                >
-                  {group.label}
-                </motion.p>
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                  {overviewRoute ? (
+                    <Link
+                      to={overviewRoute}
+                      onClick={(e) => handleNavAttempt(e, overviewRoute)}
+                      className="block px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/30 whitespace-nowrap hover:text-sidebar-foreground/60 transition-colors"
+                    >
+                      {group.label}
+                    </Link>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => toggleModule(group.label)}
+                      className="flex w-full items-center gap-1 px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/30 whitespace-nowrap hover:text-sidebar-foreground/60 transition-colors"
+                    >
+                      {moduleCollapsed
+                        ? <ChevronRight className="h-3 w-3 shrink-0" />
+                        : <ChevronDown className="h-3 w-3 shrink-0" />}
+                      <span className="truncate">{group.label}</span>
+                    </button>
+                  )}
+                </motion.div>
               )}
             </AnimatePresence>
-            {group.items.map((item) => (
-              <NavItem key={item.to} item={item} collapsed={collapsed} onNavAttempt={handleNavAttempt} />
-            ))}
+            {onlyModuleLink ? (
+              collapsed && (
+                <NavItem
+                  item={{ label: group.label, icon: Folder, to: overviewRoute, exact: true }}
+                  collapsed={collapsed}
+                  onNavAttempt={handleNavAttempt}
+                />
+              )
+            ) : collapsed ? (
+              flattenNavItems(group.items).map((item) => (
+                <NavItem key={item.to} item={item} collapsed={collapsed} onNavAttempt={handleNavAttempt} />
+              ))
+            ) : moduleCollapsed ? null : (
+              group.items.map((item) => (
+                item.isCategory
+                  ? <CategoryNavGroup key={`cat-${item.id}`} category={item} onNavAttempt={handleNavAttempt} />
+                  : <NavItem key={item.to} item={item} collapsed={collapsed} onNavAttempt={handleNavAttempt} />
+              ))
+            )}
           </div>
-        ))}
+          );
+        })}
       </nav>
 
       {/* Collapse toggle */}

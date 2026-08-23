@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { motion } from 'framer-motion';
 import { Eye, EyeOff, LogIn } from 'lucide-react';
 import { authApi } from '@/api/auth.api';
+import { employeesApi } from '@/api/employees.api';
 import { rolesApi } from '@/api/roles.api';
 import { useAuth } from '@/hooks/useAuth';
 import { useNotification } from '@/hooks/useNotification';
@@ -28,10 +29,15 @@ const loginSchema = z.object({
 const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { setCredentials, setAccessibleForms } = useAuth();
+  const { setCredentials, setAccessibleForms, setBusinessUnits } = useAuth();
   const { error: showError } = useNotification();
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  // Role-Based Login: set only when /auth/login returns `requiresRoleSelection: true` — no
+  // tokens exist yet at that point, so `loginTicket` lives here in component state only (never
+  // localStorage) until the user picks a role and /auth/select-role exchanges it for real tokens.
+  const [roleSelection, setRoleSelection] = useState(null); // { loginTicket, roles } | null
+  const [isSelectingRole, setIsSelectingRole] = useState(false);
 
   // null (not ROUTES.DASHBOARD) when there's no explicit deep-link target — Dashboard is no
   // longer guaranteed to be reachable by everyone, so falling back to it unconditionally here
@@ -44,13 +50,22 @@ const Login = () => {
   });
 
   const completeLogin = (data) => {
-    const { employee, accessToken, refreshToken, roles, businessUnits, forms } = data;
+    const { employee, accessToken, refreshToken, roles, forms } = data;
     // Employee-only means Employee is the account's SOLE role — a multi-role account (e.g.
     // Employee + Manager) must land wherever `forms` sends it below, not always the Employee
     // dashboard, so this checks the full `roles[]` array rather than a singular role.
     const isEmployeeOnly = (roles ?? []).length > 0 && (roles ?? []).every((r) => r.name === 'Employee');
 
-    setCredentials({ employee, accessToken, refreshToken, roles, businessUnits });
+    setCredentials({ employee, accessToken, refreshToken, roles });
+
+    // Role-Based Login: businessUnits no longer rides along on the login/select-role response —
+    // fetch it separately now that we have `employee.id`. Backgrounded (not awaited) same as the
+    // forms fetch below: it only feeds the BU switcher, nothing here needs to block on it.
+    if (employee?.id != null) {
+      employeesApi.getBusinessUnits(employee.id)
+        .then((res) => setBusinessUnits(res?.data?.businessUnits))
+        .catch(() => {});
+    }
 
     // Paint immediately from whatever the login response embedded, if anything — avoids a
     // blank sidebar flash while the call below is in flight.
@@ -102,7 +117,13 @@ const Login = () => {
     setIsLoading(true);
     try {
       const res = await authApi.login(values.email, values.password);
-      completeLogin(res.data);
+      if (res.data?.requiresRoleSelection) {
+        // No tokens issued yet — hold the ticket + role list in memory and show the picker
+        // instead of proceeding as a completed login.
+        setRoleSelection({ loginTicket: res.data.loginTicket, roles: res.data.roles ?? [] });
+      } else {
+        completeLogin(res.data);
+      }
     } catch (err) {
       const status = err?.response?.status;
       if (status === 404) {
@@ -121,6 +142,69 @@ const Login = () => {
       setIsLoading(false);
     }
   };
+
+  const handleSelectRole = async (roleId) => {
+    setIsSelectingRole(true);
+    try {
+      const res = await authApi.selectRole(roleSelection.loginTicket, roleId);
+      completeLogin(res.data);
+    } catch (err) {
+      const status = err?.response?.status;
+      showError(extractApiError(err));
+      // INVALID_LOGIN_TICKET (expired/malformed), ACCOUNT_INACTIVE (deactivated between login and
+      // role pick), and ROLE_NOT_AVAILABLE (rare race — role no longer valid) all mean this ticket
+      // can't complete a login — only a fresh login can recover, so send the user back to the form.
+      // A 422 (malformed body) shouldn't happen since the ticket/roleId are passed through
+      // untouched — leave the picker up for a retry in that case.
+      if (status === 401 || status === 403) {
+        setRoleSelection(null);
+      }
+    } finally {
+      setIsSelectingRole(false);
+    }
+  };
+
+  if (roleSelection) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+      >
+        <div className="mb-8">
+          <h2 className="text-2xl font-bold tracking-tight">Choose a role</h2>
+          <p className="mt-1.5 text-sm text-muted-foreground">
+            Your account has more than one role. Pick which one to sign in as — you'll only have
+            that role's access for this session.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          {roleSelection.roles.map((r) => (
+            <button
+              key={r.id}
+              type="button"
+              disabled={isSelectingRole}
+              onClick={() => handleSelectRole(r.id)}
+              className="w-full rounded-md border border-border/60 bg-muted/20 px-4 py-3 text-left text-sm font-medium transition-colors hover:bg-muted/40 disabled:pointer-events-none disabled:opacity-60"
+            >
+              {r.name}
+            </button>
+          ))}
+        </div>
+
+        <Button
+          type="button"
+          variant="ghost"
+          className="mt-4 w-full"
+          disabled={isSelectingRole}
+          onClick={() => setRoleSelection(null)}
+        >
+          Back to sign in
+        </Button>
+      </motion.div>
+    );
+  }
 
   return (
     <motion.div

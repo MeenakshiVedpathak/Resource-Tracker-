@@ -21,6 +21,7 @@ import {
   logout,
   setCredentials,
   setAccessibleForms,
+  setBusinessUnits,
   setActiveBu,
 } from '@/store/slices/authSlice';
 import { ROUTES } from '@/constants/routes';
@@ -43,7 +44,7 @@ export const useAuth = () => {
   const isPlatformAdmin = useSelector(selectIsPlatformAdmin); // true if ANY held role is Platform Admin
   const isEmployee = useSelector(selectIsEmployee); // true if Employee is ANY held role
   const isEmployeeOnly = useSelector(selectIsEmployeeOnly); // true only if Employee is the SOLE held role
-  const businessUnits = useSelector(selectBusinessUnits); // [] for an employee with no BU (Platform Admin/Admin/Entity Admin)
+  const businessUnits = useSelector(selectBusinessUnits); // [] for an employee with no BU (Platform Admin/Entity Admin; Admin can be mapped now)
   const activeBuId = useSelector(selectActiveBuId); // the currently-active BU, global across the app
 
   // true if the user has ANY of the specified roles
@@ -71,6 +72,8 @@ export const useAuth = () => {
   const updateCredentials = (payload) => dispatch(setCredentials(payload));
 
   const updateAccessibleForms = (forms) => dispatch(setAccessibleForms(forms));
+
+  const updateBusinessUnits = (bus) => dispatch(setBusinessUnits(bus));
 
   // Switching BU updates the global selection only — no re-login, no full page reload. Callers
   // (UserMenu's BU switcher) are responsible for invalidating React Query so BU-scoped screens
@@ -101,6 +104,7 @@ export const useAuth = () => {
     logout: handleLogout,
     setCredentials: updateCredentials,
     setAccessibleForms: updateAccessibleForms,
+    setBusinessUnits: updateBusinessUnits,
     setActiveBu: selectBu,
   };
 };

@@ -75,7 +75,7 @@ const FormStatusToggle = ({ id, status, disabled }) => {
   );
 };
 
-const FormRow = ({ form, canWrite, onEdit, onMove, sortable = true }) => {
+const FormRow = ({ form, canWrite, onEdit, onMove, sortable = true, indent = false }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: form.id,
     disabled: !canWrite || !sortable,
@@ -96,7 +96,7 @@ const FormRow = ({ form, canWrite, onEdit, onMove, sortable = true }) => {
       ) : (
         <span />
       )}
-      <span className="truncate pl-2 text-sm">{form.form_name}</span>
+      <span className={cn('truncate text-sm', indent ? 'pl-8' : 'pl-2')}>{form.form_name}</span>
       <span className="text-sm text-muted-foreground">{form.seq ?? '—'}</span>
       <FormStatusToggle id={form.id} status={form.status} disabled={!canWrite} />
       <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
@@ -115,7 +115,7 @@ const FormRow = ({ form, canWrite, onEdit, onMove, sortable = true }) => {
   );
 };
 
-const ModuleBlock = ({ module, canWrite, expanded, onToggleExpand, onEditModule, onEditForm, onFormsReorder, onMoveForm, onAddCategory, categoryLookup }) => {
+const ModuleBlock = ({ module, canWrite, expanded, onToggleExpand, onEditModule, onEditForm, onFormsReorder, onMoveForm, onAddCategory, categoryLookup, collapsedCategories, onToggleCategory }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: module.id,
     disabled: module.isOrphan || !canWrite,
@@ -190,23 +190,33 @@ const ModuleBlock = ({ module, canWrite, expanded, onToggleExpand, onEditModule,
           <div className="pl-12 pr-3 py-2 text-xs text-muted-foreground bg-white">No forms in this module yet.</div>
         ) : (
           <>
-            {categorizedGroups.map((group) => (
-              <div key={group.id}>
-                <div className="pl-9 pr-3 py-1.5 border-t bg-slate-50/40 text-[11px] font-semibold text-muted-foreground flex items-center gap-1.5">
-                  <FolderCog className="h-3 w-3" /> {group.name}
+            {categorizedGroups.map((group) => {
+              const categoryKey = `${module.id}-${group.id}`;
+              const categoryExpanded = !collapsedCategories.has(categoryKey);
+              return (
+                <div key={group.id}>
+                  <button
+                    type="button"
+                    onClick={() => onToggleCategory(categoryKey)}
+                    className="w-full pl-9 pr-3 py-1.5 border-t bg-slate-50/40 text-[11px] font-semibold text-muted-foreground flex items-center gap-1.5 text-left"
+                  >
+                    {categoryExpanded ? <ChevronDown className="h-3 w-3 shrink-0" /> : <ChevronRight className="h-3 w-3 shrink-0" />}
+                    <FolderCog className="h-3 w-3 shrink-0" /> {group.name}
+                  </button>
+                  {categoryExpanded && group.forms.map((form) => (
+                    <FormRow
+                      key={form.id}
+                      form={form}
+                      canWrite={canWrite}
+                      sortable={false}
+                      indent
+                      onEdit={() => onEditForm(form)}
+                      onMove={onMoveForm}
+                    />
+                  ))}
                 </div>
-                {group.forms.map((form) => (
-                  <FormRow
-                    key={form.id}
-                    form={form}
-                    canWrite={canWrite}
-                    sortable={false}
-                    onEdit={() => onEditForm(form)}
-                    onMove={onMoveForm}
-                  />
-                ))}
-              </div>
-            ))}
+              );
+            })}
 
             {uncategorizedForms.length > 0 && (
               <DndContext sensors={formSensors} collisionDetection={closestCenter} onDragEnd={handleFormsDragEnd}>
@@ -239,6 +249,7 @@ const FormList = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(() => new Set());
+  const [collapsedCategories, setCollapsedCategories] = useState(() => new Set());
   const [tree, setTree] = useState(null);
   const [moveDialogForm, setMoveDialogForm] = useState(null);
   const collapsedInitialized = useRef(false);
@@ -279,6 +290,15 @@ const FormList = () => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleCategoryExpand = (categoryKey) => {
+    setCollapsedCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(categoryKey)) next.delete(categoryKey);
+      else next.add(categoryKey);
       return next;
     });
   };
@@ -429,6 +449,8 @@ const FormList = () => {
                   onMoveForm={setMoveDialogForm}
                   onAddCategory={(moduleId) => navigate(`${ROUTES.FORM_CATEGORY_NEW}?module_id=${moduleId}`)}
                   categoryLookup={categoryLookup}
+                  collapsedCategories={collapsedCategories}
+                  onToggleCategory={toggleCategoryExpand}
                 />
               ))}
             </SortableContext>

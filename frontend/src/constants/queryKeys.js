@@ -71,10 +71,6 @@ export const QUERY_KEYS = {
   ENTITIES_ACTIVE: ['entities', 'active'],
   ENTITY: (id) => ['entities', id],
 
-  // BU Admins (Entity Admin tier)
-  BU_ADMINS: (params) => ['bu-admins', params],
-  BU_ADMIN: (id) => ['bu-admins', id],
-
   // BU Heads (Admin / Entity Admin tier) — additive peer of BU Admin
   BU_HEADS: (params) => ['bu-heads', params],
   BU_HEAD: (id) => ['bu-heads', id],

@@ -69,9 +69,6 @@ export const ROUTES = {
   ENTITY_NEW: '/entities/new',
   ENTITY_EDIT: '/entities/:id/edit',
 
-  // BU Admin Master (Admin / Entity Admin)
-  BU_ADMINS: '/bu-admins',
-
   // BU Head Master (Admin / Entity Admin) — additive peer of BU Admin Master, §24
   BU_HEADS: '/bu-heads',
 

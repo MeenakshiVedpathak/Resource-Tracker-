@@ -64,6 +64,18 @@ apiClient.interceptors.response.use(
     // (e.g. Login.jsx's showError) ever gets to render the real message.
     const isPublicAuthRequest = original?.url?.startsWith('/auth/') && original.url !== '/auth/profile' && original.url !== '/auth/change-password';
 
+    // Role-Based Login: these mean the access token itself is structurally broken for this
+    // session (a loginTicket sent as a Bearer token, or the role this session was scoped to got
+    // deactivated mid-session) — retrying the refresh dance can't fix either, so skip straight to
+    // logout instead of burning a refresh call that would just 401 again.
+    const errorCode = error.response?.data?.code;
+    const isRoleScopingError = errorCode === 'ROLE_SELECTION_REQUIRED' || errorCode === 'ROLE_NO_LONGER_ACTIVE';
+
+    if (error.response?.status === 401 && isRoleScopingError && !isMockSession) {
+      handleLogout();
+      return Promise.reject(error);
+    }
+
     if (error.response?.status === 401 && !original._retry && !isMockSession && !isPublicAuthRequest) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {

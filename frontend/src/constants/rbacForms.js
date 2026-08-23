@@ -131,7 +131,8 @@ export const FORM_ROUTE_CONFIG = {
   [FORM_NAMES.ROLES]: { to: ROUTES.ROLES, icon: Shield },
   [FORM_NAMES.FORMS]: { to: ROUTES.FORMS, icon: ClipboardList },
   [FORM_NAMES.ENTITY_MASTER]: { to: ROUTES.ENTITIES, icon: Landmark },
-  [FORM_NAMES.BU_ADMIN_MASTER]: { to: ROUTES.BU_ADMINS, icon: ShieldCheck },
+  // Points at the Companies screen, not a dedicated BU Admin Master page — see routes/index.jsx.
+  [FORM_NAMES.BU_ADMIN_MASTER]: { to: ROUTES.COMPANIES, icon: ShieldCheck },
   [FORM_NAMES.BU_HEAD_MASTER]: { to: ROUTES.BU_HEADS, icon: Users2 },
   [FORM_NAMES.CLIENTS]: { to: ROUTES.CLIENTS, icon: Building2 },
   [FORM_NAMES.PROJECTS]: { to: ROUTES.PROJECTS, icon: FolderKanban },

@@ -3,7 +3,7 @@ import { RBAC_MOCK_ENABLED } from '@/mocks/rbacMockConfig';
 import {
   delay, getDb, persist, nextId, paginate, findEmployeeById, findRoleById, findRoleByName,
   getCurrentMockEmployee, assertCanAssignRole, assertValidAdditionalRole, assertAtMostOneSeniorRole,
-  mockError, serializeEmployeeFull,
+  mockError, serializeEmployeeFull, businessUnitsForLoginResponse,
 } from '@/mocks/rbacMockDb';
 import { ROLE_NAMES, SENIOR_ROLE_NAMES } from '@/constants/roleHierarchy';
 
@@ -167,7 +167,9 @@ const realGetAllByRole = async (roleId, employeeParams) => {
     .get('/employees', { params: { page: 1, limit: REAL_ROLE_FILTER_SCAN_LIMIT, status, search } })
     .then((r) => r.data);
   const targetId = Number(roleId);
-  const matches = (batchRes?.data ?? []).filter((e) => (e.roles ?? []).some((r) => r.id === targetId));
+  // Strict `===` previously missed matches whenever the backend serializes role ids as strings —
+  // coerce both sides so a real numeric id always matches regardless of wire type.
+  const matches = (batchRes?.data ?? []).filter((e) => (e.roles ?? []).some((r) => Number(r.id) === targetId));
 
   const page = Number(employeeParams.page) || 1;
   const limit = Number(employeeParams.limit) || 10;
@@ -197,6 +199,21 @@ export const employeesApi = {
   getById: async (id) => {
     if (RBAC_MOCK_ENABLED) return mockGetById(id);
     return apiClient.get(`/employees/${id}`).then((r) => r.data?.data);
+  },
+
+  // Role-Based Login: businessUnits no longer rides along on the login/refresh-token response —
+  // fetched here instead, right after login/select-role completes, keyed off `employee.id` from
+  // that response. Powers the BU switcher (UserMenu) the same way the old login-embedded array did.
+  getBusinessUnits: async (employeeId) => {
+    if (RBAC_MOCK_ENABLED) {
+      await delay();
+      return {
+        success: true,
+        message: 'Employee business units fetched successfully.',
+        data: { employee_id: Number(employeeId), businessUnits: businessUnitsForLoginResponse(Number(employeeId)) },
+      };
+    }
+    return apiClient.get(`/employees/${employeeId}/business-units`).then((r) => r.data);
   },
 
   // Powers the Employee List row action's "Map Roles & Business Units" dialog. GET /employees

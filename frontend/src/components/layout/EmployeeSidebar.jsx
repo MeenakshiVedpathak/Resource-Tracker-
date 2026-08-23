@@ -114,7 +114,7 @@ const EmployeeSidebar = () => {
       )}
 
       <motion.aside
-        animate={{ width: collapsed ? 64 : 260 }}
+        animate={{ width: collapsed ? 64 : 224 }}
         transition={{ duration: 0.2, ease: 'easeInOut' }}
         className={cn(
           'fixed inset-y-0 left-0 z-50 flex h-full shrink-0 flex-col bg-sidebar border-r border-sidebar-border overflow-hidden transition-transform duration-200',

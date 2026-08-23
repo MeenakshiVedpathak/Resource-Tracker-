@@ -62,7 +62,9 @@ const buildSeed = () => {
   // replacing the old BU-Head-only multi-BU seed to exercise the now-universal BU switcher.
   const employees = [
     { id: 1, employee_code: 'EMP-PLAT', full_name: 'Priya PlatformAdmin', designation: 'Platform Admin', total_experience: 12, company_experience: 5, resource_description: '', date_of_joining: '2020-01-01', date_of_leaving: null, status: 'active', email: 'platformadmin@mock.test', password: MOCK_PASSWORD, role_ids: [roleId(ROLE_NAMES.PLATFORM_ADMIN)], business_unit_ids: [], primary_manager_employee_id: null, secondary_manager_employee_id: null, is_timesheet_approval_required: false },
-    { id: 2, employee_code: 'EMP-ADMIN', full_name: 'Amit Admin', designation: 'Admin', total_experience: 10, company_experience: 4, resource_description: '', date_of_joining: '2020-06-01', date_of_leaving: null, status: 'active', email: 'admin@mock.test', password: MOCK_PASSWORD, role_ids: [roleId(ROLE_NAMES.ADMIN)], business_unit_ids: [], primary_manager_employee_id: null, secondary_manager_employee_id: null, is_timesheet_approval_required: false },
+    // Admin can now carry mapped BUs (unlike Platform Admin/Entity Admin, which stay BU-less) —
+    // seeded with both mock BUs so the switcher exercises for this role too.
+    { id: 2, employee_code: 'EMP-ADMIN', full_name: 'Amit Admin', designation: 'Admin', total_experience: 10, company_experience: 4, resource_description: '', date_of_joining: '2020-06-01', date_of_leaving: null, status: 'active', email: 'admin@mock.test', password: MOCK_PASSWORD, role_ids: [roleId(ROLE_NAMES.ADMIN)], business_unit_ids: [1, 2], primary_manager_employee_id: null, secondary_manager_employee_id: null, is_timesheet_approval_required: false },
     { id: 3, employee_code: 'EMP-EADMIN', full_name: 'Elena EntityAdmin', designation: 'Entity Admin', total_experience: 9, company_experience: 3, resource_description: '', date_of_joining: '2021-02-01', date_of_leaving: null, status: 'active', email: 'entityadmin@mock.test', password: MOCK_PASSWORD, role_ids: [roleId(ROLE_NAMES.ENTITY_ADMIN)], business_unit_ids: [], primary_manager_employee_id: null, secondary_manager_employee_id: null, is_timesheet_approval_required: false },
     { id: 4, employee_code: 'EMP-BUADM', full_name: 'Baldev BuAdmin', designation: 'BU Admin', total_experience: 8, company_experience: 3, resource_description: '', date_of_joining: '2021-06-01', date_of_leaving: null, status: 'active', email: 'buadmin@mock.test', password: MOCK_PASSWORD, role_ids: [roleId(ROLE_NAMES.BU_ADMIN), roleId(ROLE_NAMES.EMPLOYEE)], business_unit_ids: [1], primary_manager_employee_id: null, secondary_manager_employee_id: null, is_timesheet_approval_required: true },
     // Exercises the universal (no-longer-BU-Head-only) multi-BU switcher and a senior role held
@@ -197,7 +199,7 @@ export const rolesForLoginResponse = (employeeId) => {
 };
 
 // Login response's `businessUnits[]` — always present, `[]` for an employee with none (e.g.
-// Platform Admin/Admin/Entity Admin).
+// Platform Admin/Entity Admin; Admin can be mapped to BUs now).
 export const businessUnitsForLoginResponse = (employeeId) => {
   const employee = findEmployeeById(employeeId);
   return (employee.business_unit_ids ?? []).map(findBusinessUnitById).filter(Boolean);

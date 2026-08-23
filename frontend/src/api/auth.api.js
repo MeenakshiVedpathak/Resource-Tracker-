@@ -2,7 +2,7 @@ import apiClient from '@/services/apiClient';
 import { RBAC_MOCK_ENABLED } from '@/mocks/rbacMockConfig';
 import {
   delay, persist, findEmployeeByEmail, findEmployeeById,
-  rolesForLoginResponse, businessUnitsForLoginResponse, formsForRoleNames, issueTokenFor,
+  rolesForLoginResponse, formsForRoleNames, issueTokenFor,
   getCurrentMockEmployee, mockError, MOCK_OTP, serializeEmployeeFull,
 } from '@/mocks/rbacMockDb';
 
@@ -18,6 +18,10 @@ const mockLogin = async (email, password) => {
 
   const roles = rolesForLoginResponse(employee.id);
 
+  // Real backend: no `businessUnits` on the login response anymore (fetched separately via
+  // GET /employees/:id/business-units) — the mock mirrors that shape. The mock also never models
+  // the real backend's multi-active-role `requiresRoleSelection` interstitial: mock employees'
+  // `role_ids` are already treated as one flat simultaneous set, not a pick-one choice.
   return {
     success: true,
     message: 'Login successful.',
@@ -27,7 +31,6 @@ const mockLogin = async (email, password) => {
       expiresIn: '15m',
       employee: serializeEmployeeFull(employee),
       roles,
-      businessUnits: businessUnitsForLoginResponse(employee.id),
       forms: formsForRoleNames(roles.map((r) => r.name)),
     },
   };
@@ -48,7 +51,6 @@ const mockRefresh = async (refreshToken) => {
       refreshToken: `refresh.${issueTokenFor(employee.id)}`,
       expiresIn: '15m',
       roles,
-      businessUnits: businessUnitsForLoginResponse(employee.id),
       forms: formsForRoleNames(roles.map((r) => r.name)),
     },
   };
@@ -106,6 +108,12 @@ export const authApi = {
     if (RBAC_MOCK_ENABLED) return mockRefresh(refreshToken);
     return apiClient.post('/auth/refresh-token', { refresh_token: refreshToken }).then((r) => r.data);
   },
+
+  // Second step of login when an account has more than one active role — /auth/login returns
+  // `requiresRoleSelection: true` + a short-lived `loginTicket` instead of tokens in that case.
+  // Not reachable in RBAC_MOCK_ENABLED mode: mockLogin never returns requiresRoleSelection.
+  selectRole: (loginTicket, roleId) =>
+    apiClient.post('/auth/select-role', { loginTicket, roleId }).then((r) => r.data),
 
   getProfile: () =>
     apiClient.get('/auth/profile').then((r) => r.data),
