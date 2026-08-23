@@ -116,6 +116,17 @@ export const myTeamApi = {
       employee_id: Number(employeeId),
       ...(dates ? { dates } : { months }),
     }).then((r) => r.data),
+  // Work Log Rejection Workflow (2026-08-23 spec) — entry-level, unlike the date/month-level
+  // bulk endpoint above. Only a `pending` entry can be rejected; a 409 means someone else
+  // already acted on it (caller should refetch). `remark` is mandatory server-side (1-1000
+  // chars, trimmed) but the UI must also block submit on empty remark, not rely on the 422 alone.
+  rejectTimesheetEntry: (id, remark) =>
+    apiClient.put(`/my-team/timesheets/${id}/reject`, { remark }).then((r) => r.data),
+  // Single-row approve — exists alongside the bulk date/month endpoint above so a Manager can
+  // approve one still-pending entry inside a bucket that also has rejected entries (bulk approve
+  // would otherwise be the only option and doesn't distinguish per-entry status).
+  approveTimesheetEntry: (id) =>
+    apiClient.put(`/my-team/timesheets/${id}/approve`).then((r) => r.data),
   getServicePos: () => {
     if (RBAC_MOCK_ENABLED) return mockGetServicePos();
     return apiClient.get('/my-team/service-pos').then((r) => r.data?.data ?? []);

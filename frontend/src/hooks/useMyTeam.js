@@ -69,3 +69,22 @@ export const useApproveMyTeamTimesheets = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['my-team', 'approval-summary'] }),
   });
 };
+
+// Entry-level reject/approve (Work Log Rejection Workflow) — same broad invalidation as the
+// bulk mutation above, since a single entry's status change also flips its parent bucket's
+// aggregated approval_status.
+export const useRejectMyTeamTimesheetEntry = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, remark }) => myTeamApi.rejectTimesheetEntry(id, remark),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['my-team', 'approval-summary'] }),
+  });
+};
+
+export const useApproveMyTeamTimesheetEntry = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id) => myTeamApi.approveTimesheetEntry(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['my-team', 'approval-summary'] }),
+  });
+};

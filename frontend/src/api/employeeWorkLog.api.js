@@ -30,6 +30,12 @@ import apiClient from '@/services/apiClient';
 //   PUT/DELETE /employee-timesheets/entries/:id — still available for single-row edits. PUT
 //     with `time_entries` replaces that row's whole segment breakdown and recalculates hours;
 //     omit `time_entries` to leave an existing breakdown untouched.
+//   GET /employee-timesheets/entries?status=&page=&limit= — flat, individually-id'd list (unlike
+//     /daily's aggregated tree), used by the Work Log Rejection Workflow (2026-08-23) to list a
+//     rejected entry: status stays 'rejected' after a PUT edit (by design — editing alone doesn't
+//     resolve it); rejection_remark/rejected_by_name/rejected_at are preserved through the edit.
+//   PUT /employee-timesheets/entries/:id/resubmit — the only way a rejected entry goes back to
+//     'pending'; no body. 409 if it wasn't currently 'rejected' (already resubmitted elsewhere).
 //
 //   GET /employee-timesheets/monthly?month=&year=
 //     -> { eligible, service_pos: [{ service_po_id, service_po_name, hours, po_total_hrs, children }] }
@@ -56,6 +62,9 @@ export const employeeWorkLogApi = {
     apiClient.post('/employee-timesheets/entries', { timesheet_date, entries }).then((r) => r.data),
   update: (id, payload) => apiClient.put(`/employee-timesheets/entries/${id}`, payload).then((r) => r.data),
   delete: (id) => apiClient.delete(`/employee-timesheets/entries/${id}`).then((r) => r.data),
+  getEntries: ({ status, page, limit } = {}) =>
+    apiClient.get('/employee-timesheets/entries', { params: { status, page, limit } }).then((r) => r.data),
+  resubmit: (id) => apiClient.put(`/employee-timesheets/entries/${id}/resubmit`).then((r) => r.data),
   getMonthly: ({ month, year }) =>
     apiClient.get('/employee-timesheets/monthly', { params: { month, year } }).then((r) => r.data?.data ?? null),
   saveMonthly: ({ month, year, entries }) =>

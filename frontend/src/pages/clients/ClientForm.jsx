@@ -6,8 +6,6 @@ import { z } from 'zod';
 import { motion } from 'framer-motion';
 import { Save } from 'lucide-react';
 import { useClient, useCreateClient, useUpdateClient } from '@/hooks/useClients';
-import { useCompanies } from '@/hooks/useCompanies';
-import { useAuth } from '@/hooks/useAuth';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import { ROUTES } from '@/constants/routes';
@@ -17,7 +15,6 @@ import {
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { SearchableSelect } from '@/components/ui/searchable-select';
 import { cn } from '@/utils/cn';
 import {
   Sheet,
@@ -27,19 +24,13 @@ import {
   SheetFooter,
 } from "@/components/ui/sheet";
 
-// `company_id` on create is only shown/required for a company-less actor (Admin/Entity Admin —
-// they have no `businessUnits` of their own to derive it from). A BU-scoped actor never sees
-// this field; the backend derives company_id from their own active BU and ignores anything sent.
-const buildClientSchema = (requireCompany) => z.object({
+const clientSchema = z.object({
   client_name: z
     .string()
     .min(1, 'Client name is required')
     .max(100, 'Client name cannot exceed 100 characters'),
   industry: z.string().max(100).optional().or(z.literal('')),
   status: z.enum(['active', 'inactive']).default('active'),
-  company_id: requireCompany
-    ? z.string().min(1, 'Business Unit is required')
-    : z.string().optional().or(z.literal('')),
 });
 
 const FormSkeleton = () => (
@@ -60,26 +51,12 @@ const ClientForm = () => {
   const createMutation = useCreateClient();
   const updateMutation = useUpdateClient(id);
 
-  // Only a company-less actor (Admin/Entity Admin) needs to pick a BU on create — a BU-scoped
-  // actor's businessUnits[] is non-empty and the backend derives company_id on its own for them.
-  const { businessUnits } = useAuth();
-  const needsCompanyPicker = !isEdit && businessUnits.length === 0;
-  const { data: companiesData, isLoading: isLoadingCompanies } = useCompanies(
-    { limit: 200 },
-    { enabled: needsCompanyPicker }
-  );
-  const companyOptions = (companiesData?.data ?? []).map((c) => ({
-    value: String(c.id),
-    label: c.company_name,
-  }));
-
   const form = useForm({
-    resolver: zodResolver(buildClientSchema(needsCompanyPicker)),
+    resolver: zodResolver(clientSchema),
     defaultValues: {
       client_name: '',
       industry: '',
       status: 'active',
-      company_id: '',
     },
   });
 
@@ -89,7 +66,6 @@ const ClientForm = () => {
         client_name: client.client_name ?? '',
         industry: client.industry ?? '',
         status: client.status ?? 'active',
-        company_id: '',
       });
     }
   }, [client, isEdit, form]);
@@ -98,9 +74,6 @@ const ClientForm = () => {
     const clean = Object.fromEntries(
       Object.entries(values).filter(([, v]) => v !== '' && v != null)
     );
-    if (clean.company_id != null) {
-      clean.company_id = Number(clean.company_id);
-    }
 
     const mutation = isEdit ? updateMutation : createMutation;
     mutation.mutate(clean, {
@@ -150,27 +123,6 @@ const ClientForm = () => {
                         </FormItem>
                       )}
                     />
-
-                    {needsCompanyPicker && (
-                      <FormField
-                        control={form.control}
-                        name="company_id"
-                        render={({ field }) => (
-                          <FormItem className="space-y-1">
-                            <FormLabel className="text-[11px] text-muted-foreground font-medium"><span className="text-destructive mr-0.5">*</span> Business Unit</FormLabel>
-                            <SearchableSelect
-                              options={companyOptions}
-                              value={field.value ?? ''}
-                              onValueChange={(v) => field.onChange(v ?? '')}
-                              placeholder={isLoadingCompanies ? 'Loading…' : 'Select a Business Unit'}
-                              searchPlaceholder="Search Business Unit..."
-                              className="h-8 text-sm border-gray-200"
-                            />
-                            <FormMessage className="text-[10px]" />
-                          </FormItem>
-                        )}
-                      />
-                    )}
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <FormField

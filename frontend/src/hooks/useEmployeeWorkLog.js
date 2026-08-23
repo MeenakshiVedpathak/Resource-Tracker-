@@ -58,6 +58,26 @@ export const useDeleteWorkLogEntry = () => {
   });
 };
 
+// Work Log Rejection Workflow (2026-08-23) — flat, filterable list (status=rejected), separate
+// from the aggregated /daily and /monthly trees above.
+export const useEmployeeEntries = (params, enabled = true) =>
+  useQuery({
+    queryKey: QUERY_KEYS.EMPLOYEE_WORKLOG_ENTRIES(params),
+    queryFn: () => employeeWorkLogApi.getEntries(params),
+    placeholderData: (prev) => prev,
+    enabled,
+  });
+
+// The only way a 'rejected' entry goes back to 'pending' — a distinct, deliberate action from
+// editing (see useUpdateWorkLogEntry above, which leaves status as 'rejected').
+export const useResubmitWorkLogEntry = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: employeeWorkLogApi.resubmit,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['employee-worklog'] }),
+  });
+};
+
 // Monthly mode — one month's Service PO -> hierarchy tree, total hours per node instead of
 // per-day. `eligible` comes straight from the backend and is never recomputed here. `enabled`
 // lets a caller that only sometimes needs this (e.g. a tab that isn't always active) skip the

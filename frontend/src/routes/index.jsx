@@ -25,6 +25,7 @@ const EmployeeReports = lazy(() => import('@/pages/employee/EmployeeReports'));
 const EmployeeProjectHoursReport = lazy(() => import('@/pages/employee/EmployeeProjectHoursReport'));
 const TimesheetApprovalStatusReport = lazy(() => import('@/pages/employee/TimesheetApprovalStatusReport'));
 const EmployeeWorkLogTimeReport = lazy(() => import('@/pages/employee/EmployeeWorkLogTimeReport'));
+const EmployeeRejectedEntries = lazy(() => import('@/pages/employee/EmployeeRejectedEntries'));
 
 // ── Core ──
 const DashboardGate = lazy(() => import('@/pages/DashboardGate'));
@@ -131,6 +132,9 @@ const MyTeamList = lazy(() => import('@/pages/myTeam/MyTeamList'));
 // ── Service PO Monthly Budget (Manager self-service, net-new — same allowedRoles gating) ──
 const ServicePoMonthlyBudgetPage = lazy(() => import('@/pages/servicePoMonthlyBudget/ServicePoMonthlyBudgetPage'));
 
+// ── Timesheet Approval (Manager self-service, net-new — split off from My Work Log) ──
+const ManagerTimesheetApproval = lazy(() => import('@/pages/managerTimesheet/ManagerTimesheetApproval'));
+
 // ── Cost Budget / Resource Budget (net-new, per Service PO + month) ──
 const CostBudgetList = lazy(() => import('@/pages/costBudgets/CostBudgetList'));
 const ResourceBudgetPage = lazy(() => import('@/pages/resourceBudgets/ResourceBudgetPage'));
@@ -161,6 +165,7 @@ const employeeSelfServiceRoutes = () => (
     <Route path={ROUTES.EMPLOYEE_PROJECT_HOURS_REPORT} element={<ProtectedRoute formName={FORM_NAMES.EMPLOYEE_PROJECT_HOURS_REPORT}><EmployeeProjectHoursReport /></ProtectedRoute>} />
     <Route path={ROUTES.EMPLOYEE_TIMESHEET_APPROVAL_STATUS_REPORT} element={<ProtectedRoute formName={FORM_NAMES.EMPLOYEE_TIMESHEET_APPROVAL_STATUS_REPORT}><TimesheetApprovalStatusReport /></ProtectedRoute>} />
     <Route path={ROUTES.EMPLOYEE_WORK_LOG_TIME_REPORT} element={<ProtectedRoute formName={FORM_NAMES.EMPLOYEE_WORK_LOG_TIME_REPORT}><EmployeeWorkLogTimeReport /></ProtectedRoute>} />
+    <Route path={ROUTES.EMPLOYEE_REJECTED_ENTRIES} element={<ProtectedRoute formName={FORM_NAMES.EMPLOYEE_REJECTED_ENTRIES}><EmployeeRejectedEntries /></ProtectedRoute>} />
   </>
 );
 
@@ -401,6 +406,10 @@ const AppRoutes = () => {
             screen instead of a hardcoded allowedRoles whitelist, so any role the admin maps
             this form to (Manager, Service PO Admin, BU Admin, etc.) gets access automatically. */}
         <Route path={ROUTES.SERVICE_PO_MONTHLY_BUDGET} element={<ProtectedRoute formName={FORM_NAMES.SERVICE_PO_MONTHLY_BUDGET}><ServicePoMonthlyBudgetPage /></ProtectedRoute>} />
+
+        {/* Timesheet Approval — Resources module Form Master row ("Timesheet Approval"), split
+            off (2026-08-23) from the employee selector that used to live inside My Work Log. */}
+        <Route path={ROUTES.MANAGER_TIMESHEET_APPROVAL} element={<ProtectedRoute formName={FORM_NAMES.MANAGER_TIMESHEET_APPROVAL}><ManagerTimesheetApproval /></ProtectedRoute>} />
 
         {/* Cost Budget / Resource Budget — net-new, gated by formName like every other
             RBAC-driven screen (see rbacForms.js for the guessed Form Master names). */}

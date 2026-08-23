@@ -19,6 +19,7 @@ import {
   ListTree, ListChecks, Banknote, CalendarClock, Timer, Hourglass,
   TrendingUp, LineChart, Target, Percent, Award, BatteryCharging, AlertTriangle, Crown,
   ReceiptText, GitCompare, Scale, BarChart3, Building, Activity, Armchair, Users2,
+  ClipboardCheck, XCircle,
 } from 'lucide-react';
 import { ROUTES } from '@/constants/routes';
 
@@ -84,11 +85,15 @@ export const FORM_NAMES = {
   // dated 2026-08-20, GET /employee-reports/work-log-time). Shared by both Employee and Manager
   // logins, same as EMPLOYEE_PROJECT_HOURS_REPORT above.
   EMPLOYEE_WORK_LOG_TIME_REPORT: 'Work Log Time Report',
+  // Guessed name — same caveat as the rest of this file's Employee self-service entries; confirm
+  // against the actual Form Master row once one is seeded. Work Log Rejection Workflow
+  // (2026-08-23) — entries a Manager rejected, awaiting Employee edit+resubmit or delete.
+  EMPLOYEE_REJECTED_ENTRIES: 'Rejected Entries',
   // Manager Timesheet Access & Approval — the backend's Form Master grants Managers these two
   // Resources-module rows (distinct from the Employee Self-Service "My Work Log" row an Employee
-  // gets). Both point at the same EmployeeTimesheet page/route as "My Work Log" — that page
-  // already renders the Manager-only selector + approval view on top of the self-service UI, and
-  // the spec forbids a separate screen for this.
+  // gets). "Timesheet" still points at the same EmployeeTimesheet page as "My Work Log" (a
+  // Manager logs their own hours the same way an Employee does). "Timesheet Approval" moved
+  // (2026-08-23) to its own dedicated screen — see pages/managerTimesheet/ManagerTimesheetApproval.jsx.
   MANAGER_TIMESHEET: 'Timesheet',
   MANAGER_TIMESHEET_APPROVAL: 'Timesheet Approval',
   // Business module, Service PO Admin login (confirmed via GET /roles/forms) — the Form Master
@@ -162,8 +167,9 @@ export const FORM_ROUTE_CONFIG = {
   [FORM_NAMES.EMPLOYEE_PROJECT_HOURS_REPORT]: { to: ROUTES.EMPLOYEE_PROJECT_HOURS_REPORT, icon: ListTree },
   [FORM_NAMES.EMPLOYEE_TIMESHEET_APPROVAL_STATUS_REPORT]: { to: ROUTES.EMPLOYEE_TIMESHEET_APPROVAL_STATUS_REPORT, icon: ListChecks },
   [FORM_NAMES.EMPLOYEE_WORK_LOG_TIME_REPORT]: { to: ROUTES.EMPLOYEE_WORK_LOG_TIME_REPORT, icon: Timer },
+  [FORM_NAMES.EMPLOYEE_REJECTED_ENTRIES]: { to: ROUTES.EMPLOYEE_REJECTED_ENTRIES, icon: XCircle, exact: true },
   [FORM_NAMES.MANAGER_TIMESHEET]: { to: ROUTES.EMPLOYEE_TIMESHEET, icon: Clock },
-  [FORM_NAMES.MANAGER_TIMESHEET_APPROVAL]: { to: ROUTES.EMPLOYEE_TIMESHEET, icon: Clock },
+  [FORM_NAMES.MANAGER_TIMESHEET_APPROVAL]: { to: ROUTES.MANAGER_TIMESHEET_APPROVAL, icon: ClipboardCheck, exact: true },
   [FORM_NAMES.SERVICE_PO_MONTHLY_BUDGET]: { to: ROUTES.SERVICE_PO_MONTHLY_BUDGET, icon: Wallet, exact: true },
   [FORM_NAMES.MY_TEAM]: { to: ROUTES.MY_TEAM, icon: Network, exact: true },
   [FORM_NAMES.COST_BUDGET]: { to: ROUTES.COST_BUDGETS, icon: Banknote, exact: true },

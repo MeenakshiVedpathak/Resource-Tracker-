@@ -20,6 +20,8 @@ export const ROUTES = {
   EMPLOYEE_PROJECT_HOURS_REPORT: '/employee/project-hours-report',
   EMPLOYEE_TIMESHEET_APPROVAL_STATUS_REPORT: '/employee/timesheet-approval-status-report',
   EMPLOYEE_WORK_LOG_TIME_REPORT: '/employee/work-log-time-report',
+  // Work Log Rejection Workflow (2026-08-23), Employee side — entries a Manager rejected.
+  EMPLOYEE_REJECTED_ENTRIES: '/employee/rejected-entries',
 
   // AI Copilot — new pages added on top of the existing app, reachable from the
   // floating AI Copilot widget's launcher rather than the RBAC-driven sidebar
@@ -150,6 +152,11 @@ export const ROUTES = {
 
   // Service PO Monthly Budget — Manager self-service, net-new (Service PO Manager screen)
   SERVICE_PO_MONTHLY_BUDGET: '/service-po-monthly-budget',
+
+  // Timesheet Approval — Manager self-service, net-new; split off from My Work Log into its
+  // own screen (2026-08-23) so approving a team's timesheets no longer lives behind the
+  // employee selector on the work-log page.
+  MANAGER_TIMESHEET_APPROVAL: '/manager/timesheet-approval',
 
   // Cost Budget / Resource Budget — net-new, per Service PO + month
   COST_BUDGETS: '/cost-budgets',

@@ -8,6 +8,7 @@ import { Eye, EyeOff, LogIn } from 'lucide-react';
 import { authApi } from '@/api/auth.api';
 import { employeesApi } from '@/api/employees.api';
 import { rolesApi } from '@/api/roles.api';
+import { store } from '@/store';
 import { useAuth } from '@/hooks/useAuth';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
@@ -63,7 +64,15 @@ const Login = () => {
     // forms fetch below: it only feeds the BU switcher, nothing here needs to block on it.
     if (employee?.id != null) {
       employeesApi.getBusinessUnits(employee.id)
-        .then((res) => setBusinessUnits(res?.data?.businessUnits))
+        .then((res) => {
+          // Guard against a stale response landing after a subsequent logout/login on the same
+          // tab (e.g. a slow request from a prior session resolving late) — only apply it if
+          // this is still the active session's employee, else it silently overwrites the new
+          // session's businessUnits with the previous one's.
+          if (store.getState().auth.employee?.id === employee.id) {
+            setBusinessUnits(res?.data?.businessUnits);
+          }
+        })
         .catch(() => {});
     }
 

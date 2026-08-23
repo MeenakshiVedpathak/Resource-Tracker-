@@ -6,7 +6,9 @@ import { selectSidebarCollapsed, toggleSidebar, setSidebarCollapsed } from '@/st
 import { cn } from '@/utils/cn';
 import { useAuth } from '@/hooks/useAuth';
 import { useFormModules, useForms } from '@/hooks/useForms';
+import { useEmployeeEntries } from '@/hooks/useEmployeeWorkLog';
 import { resolveFormRoute } from '@/constants/rbacForms';
+import { ROUTES } from '@/constants/routes';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import ScrollOnHoverText from '@/components/common/ScrollOnHoverText';
 
@@ -67,8 +69,9 @@ const buildNavGroups = (accessibleForms, { moduleRank, formRank }) =>
 const isActive = (to, pathname, exact) =>
   exact ? pathname === to : pathname === to || pathname.startsWith(to + '/');
 
-const EmployeeNavItem = ({ item, active, collapsed }) => {
+const EmployeeNavItem = ({ item, active, collapsed, badgeCount }) => {
   const [hovered, setHovered] = useState(false);
+  const hasBadge = badgeCount > 0;
 
   return (
     <Link
@@ -80,13 +83,27 @@ const EmployeeNavItem = ({ item, active, collapsed }) => {
         active && 'active',
         collapsed && 'justify-center px-2'
       )}
-      title={collapsed ? item.label : undefined}
+      title={collapsed ? `${item.label}${hasBadge ? ` (${badgeCount})` : ''}` : undefined}
     >
       {active && (
         <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.5 rounded-r-full bg-primary" />
       )}
-      <item.icon className={cn('shrink-0', collapsed ? 'h-5 w-5' : 'h-4 w-4')} />
-      {!collapsed && <ScrollOnHoverText text={item.label} hovered={hovered} />}
+      <span className="relative shrink-0">
+        <item.icon className={cn('shrink-0', collapsed ? 'h-5 w-5' : 'h-4 w-4')} />
+        {hasBadge && collapsed && (
+          <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-destructive" />
+        )}
+      </span>
+      {!collapsed && (
+        <span className="flex flex-1 items-center justify-between gap-2 overflow-hidden">
+          <ScrollOnHoverText text={item.label} hovered={hovered} />
+          {hasBadge && (
+            <span className="shrink-0 rounded-full bg-destructive px-1.5 py-0.5 text-[10px] font-semibold leading-none text-destructive-foreground">
+              {badgeCount > 99 ? '99+' : badgeCount}
+            </span>
+          )}
+        </span>
+      )}
     </Link>
   );
 };
@@ -98,6 +115,13 @@ const EmployeeSidebar = () => {
   const { accessibleForms } = useAuth();
   const { moduleRank, formRank } = useMenuRank();
   const navGroups = useMemo(() => buildNavGroups(accessibleForms, { moduleRank, formRank }), [accessibleForms, moduleRank, formRank]);
+
+  const hasRejectedEntriesTab = useMemo(
+    () => navGroups.some((g) => g.items.some((i) => i.to === ROUTES.EMPLOYEE_REJECTED_ENTRIES)),
+    [navGroups]
+  );
+  const { data: rejectedEntries } = useEmployeeEntries({ status: 'rejected', page: 1, limit: 1 }, hasRejectedEntriesTab);
+  const rejectedCount = rejectedEntries?.meta?.total ?? 0;
 
   useEffect(() => {
     if (window.innerWidth < 768) dispatch(setSidebarCollapsed(true));
@@ -148,6 +172,7 @@ const EmployeeSidebar = () => {
                   item={item}
                   active={isActive(item.to, pathname, item.exact)}
                   collapsed={collapsed}
+                  badgeCount={item.to === ROUTES.EMPLOYEE_REJECTED_ENTRIES ? rejectedCount : 0}
                 />
               ))}
             </div>

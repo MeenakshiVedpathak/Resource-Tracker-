@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -6,6 +6,7 @@ import dayjs from 'dayjs';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   Save, RotateCcw, FolderKanban, CalendarDays, FileText, AlertCircle, Hourglass,
+  Lightbulb, ListPlus, CircleCheck,
 } from 'lucide-react';
 import {
   Form, FormField, FormItem, FormLabel, FormControl, FormMessage, FormDescription,
@@ -24,9 +25,10 @@ import TimeSegmentsInput, { BLANK_SEGMENT } from '@/components/employee/TimeSegm
 import PageHeader from '@/components/common/PageHeader';
 import { employeeWorkLogApi } from '@/api/employeeWorkLog.api';
 import { useEmployeeMappedProjects } from '@/hooks/useEmployeeProjects';
-import { useSaveWorkLogDay, useUpdateWorkLogEntry } from '@/hooks/useEmployeeWorkLog';
+import { useEmployeeDailyWorkLog, useSaveWorkLogDay, useUpdateWorkLogEntry } from '@/hooks/useEmployeeWorkLog';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError, extractFieldErrors } from '@/services/apiClient';
+import { cn } from '@/utils/cn';
 import { flattenHierarchyTree } from '@/utils/servicePOHierarchy';
 import { findExistingLine, buildOtherDayEntries, validateSegments, sumSegmentHours } from '@/utils/employeeTimeEntry';
 import { DAILY_HOURS_CAP } from '@/components/employee/WorkLogEntryModal';
@@ -80,12 +82,27 @@ const EmployeeTimeEntry = () => {
   });
 
   const selectedServicePOId = form.watch('service_po_id');
+  const selectedHierarchyNodeId = form.watch('hierarchy_node_id');
+  const selectedDate = form.watch('timesheet_date');
   const selectedProject = projects.find((p) => String(p.id) === String(selectedServicePOId));
   const hierarchyOptions = flattenHierarchyTree(selectedProject?.hierarchy ?? []);
 
   const filledSegments = segments.filter((s) => s.start_time || s.end_time);
   const totalHours = sumSegmentHours(filledSegments);
   const tone = totalHoursTone(totalHours);
+
+  // Live preview of the day this entry would land on, purely informational — the actual
+  // GET /daily used at save time (below) is always re-fetched fresh right before writing, since
+  // this cached copy could be stale by then. Reuses the exact same merge helpers the real save
+  // uses, so what the side panel shows is never out of step with what submitting will do.
+  const { data: dayPreview } = useEmployeeDailyWorkLog(selectedDate);
+  const otherHoursToday = useMemo(() => {
+    if (!dayPreview) return 0;
+    const otherEntries = buildOtherDayEntries(dayPreview, selectedDate, selectedServicePOId, selectedHierarchyNodeId || null);
+    return otherEntries.reduce((sum, e) => sum + Number(e.hours || 0), 0);
+  }, [dayPreview, selectedDate, selectedServicePOId, selectedHierarchyNodeId]);
+  const newDayTotal = Math.round((otherHoursToday + totalHours) * 100) / 100;
+  const dayTone = totalHoursTone(newDayTotal);
 
   const handleSegmentsChange = (next) => {
     setSegments(next);
@@ -162,163 +179,203 @@ const EmployeeTimeEntry = () => {
   };
 
   return (
-    <div className="mx-auto max-w-2xl space-y-4">
+    <div className="space-y-4">
       <PageHeader
         title="Time Entry"
         description="Log exact start/end time segments against a Module/Task — hours are computed automatically."
       />
 
-      <Card>
-        <CardHeader className="flex-row items-center gap-3 space-y-0">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <Hourglass className="h-5 w-5" />
-          </span>
-          <div>
-            <CardTitle>Log a Time Entry</CardTitle>
-            <CardDescription>Pick what you worked on, then add each time block you logged.</CardDescription>
-          </div>
-        </CardHeader>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
+        <Card className="overflow-hidden">
+          <CardHeader className="flex-row items-center gap-3 space-y-0 border-b bg-muted/30">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <Hourglass className="h-5 w-5" />
+            </span>
+            <div>
+              <CardTitle>Log a Time Entry</CardTitle>
+              <CardDescription>Pick what you worked on, then add each time block you logged.</CardDescription>
+            </div>
+          </CardHeader>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(submit)}>
-            <CardContent className="space-y-5">
-              {formError && (
-                <Alert variant="destructive">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{formError}</AlertDescription>
-                </Alert>
-              )}
-
-              <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                <FolderKanban className="h-3.5 w-3.5" /> What did you work on?
-              </div>
-
-              <FormField
-                control={form.control}
-                name="service_po_id"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Project</FormLabel>
-                    <FormControl>
-                      <ProjectSelect
-                        value={field.value}
-                        onChange={(v) => {
-                          if (v !== field.value) form.setValue('hierarchy_node_id', '');
-                          field.onChange(v);
-                        }}
-                        disabled={isSaving}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(submit)}>
+              <CardContent className="space-y-5 pt-5">
+                {formError && (
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>{formError}</AlertDescription>
+                  </Alert>
                 )}
-              />
 
-              {hierarchyOptions.length > 0 && (
+                <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  <FolderKanban className="h-3.5 w-3.5" /> What did you work on?
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="service_po_id"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="flex items-center gap-1">
+                          <FolderKanban className="h-3.5 w-3.5 text-muted-foreground" /> Project
+                        </FormLabel>
+                        <FormControl>
+                          <ProjectSelect
+                            value={field.value}
+                            onChange={(v) => {
+                              if (v !== field.value) form.setValue('hierarchy_node_id', '');
+                              field.onChange(v);
+                            }}
+                            disabled={isSaving}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="timesheet_date"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="flex items-center gap-1">
+                          <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" /> Date
+                        </FormLabel>
+                        <FormControl>
+                          <Input type="date" max={today} disabled={isSaving} {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                {hierarchyOptions.length > 0 && (
+                  <FormField
+                    control={form.control}
+                    name="hierarchy_node_id"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Module / Task</FormLabel>
+                        <FormControl>
+                          <SearchableSelect
+                            options={[
+                              { label: 'None — log against the Service PO itself', value: '' },
+                              ...hierarchyOptions.map((n) => ({
+                                value: String(n.id),
+                                searchValue: [n.parentName, n.name].filter(Boolean).join(' '),
+                                label: (
+                                  <span className="flex items-baseline gap-1.5" style={{ paddingLeft: `${n.depth * 16}px` }}>
+                                    {n.depth > 0 && <span className="text-muted-foreground">{'└'}</span>}
+                                    <span>{n.name}</span>
+                                  </span>
+                                ),
+                              })),
+                            ]}
+                            value={field.value || ''}
+                            onValueChange={(v) => field.onChange(v)}
+                            disabled={isSaving}
+                            placeholder="None — log against the Service PO itself"
+                            searchPlaceholder="Search…"
+                          />
+                        </FormControl>
+                        <FormDescription>Optional — leave blank to log time against the Service PO itself.</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+
+                <Separator />
+
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    <Hourglass className="h-3.5 w-3.5" /> Time Segments
+                  </div>
+                  <Badge variant={tone.badge} className="tabular-nums">{totalHours} {totalHours === 1 ? 'hr' : 'hrs'} total</Badge>
+                </div>
+
+                <TimeSegmentsInput segments={segments} onChange={handleSegmentsChange} disabled={isSaving} />
+
+                <Separator />
+
+                <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  <FileText className="h-3.5 w-3.5" /> Notes
+                </div>
+
                 <FormField
                   control={form.control}
-                  name="hierarchy_node_id"
+                  name="description"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Module / Task</FormLabel>
+                      <FormLabel>Description</FormLabel>
                       <FormControl>
-                        <SearchableSelect
-                          options={[
-                            { label: 'None — log against the Service PO itself', value: '' },
-                            ...hierarchyOptions.map((n) => ({
-                              value: String(n.id),
-                              searchValue: [n.parentName, n.name].filter(Boolean).join(' '),
-                              label: (
-                                <span className="flex items-baseline gap-1.5" style={{ paddingLeft: `${n.depth * 16}px` }}>
-                                  {n.depth > 0 && <span className="text-muted-foreground">{'└'}</span>}
-                                  <span>{n.name}</span>
-                                </span>
-                              ),
-                            })),
-                          ]}
-                          value={field.value || ''}
-                          onValueChange={(v) => field.onChange(v)}
-                          disabled={isSaving}
-                          placeholder="None — log against the Service PO itself"
-                          searchPlaceholder="Search…"
-                        />
+                        <Textarea placeholder="What did you work on?" rows={3} disabled={isSaving} {...field} />
                       </FormControl>
-                      <FormDescription>Optional — leave blank to log time against the Service PO itself.</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-              )}
+              </CardContent>
 
-              <Separator />
+              <CardFooter className="justify-end gap-2 border-t bg-muted/20">
+                <Button type="button" variant="outline" size="sm" onClick={handleReset} disabled={isSaving}>
+                  <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Reset
+                </Button>
+                <Button type="submit" size="sm" disabled={isSaving}>
+                  <Save className="mr-1.5 h-4 w-4" />
+                  {isSaving ? 'Saving…' : 'Save Time Entry'}
+                </Button>
+              </CardFooter>
+            </form>
+          </Form>
+        </Card>
 
-              <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                <CalendarDays className="h-3.5 w-3.5" /> When?
+        <div className="space-y-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm">Day Summary</CardTitle>
+              <CardDescription>{dayjs(selectedDate).format('dddd, DD MMM YYYY')}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 pt-0">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Already logged</span>
+                <span className="font-medium tabular-nums">{otherHoursToday} hrs</span>
               </div>
-
-              <FormField
-                control={form.control}
-                name="timesheet_date"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Date</FormLabel>
-                    <FormControl>
-                      <Input type="date" max={today} disabled={isSaving} className="max-w-xs" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <Separator />
-
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  <Hourglass className="h-3.5 w-3.5" /> Time Segments
-                </div>
-                <Badge variant={tone.badge} className="tabular-nums">{totalHours} {totalHours === 1 ? 'hr' : 'hrs'} total</Badge>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">This entry</span>
+                <span className="font-medium tabular-nums">{totalHours} hrs</span>
               </div>
-
-              <TimeSegmentsInput segments={segments} onChange={handleSegmentsChange} disabled={isSaving} />
-
+              <Separator />
+              <div className="flex items-center justify-between text-sm">
+                <span className="font-semibold">Day total</span>
+                <Badge variant={dayTone.badge} className="tabular-nums">{newDayTotal} hrs</Badge>
+              </div>
               <div className="space-y-1">
-                <Progress value={Math.min(100, (totalHours / DAILY_HOURS_CAP) * 100)} indicatorClassName={tone.bar} />
-                <p className="text-right text-[11px] text-muted-foreground">{totalHours} of {DAILY_HOURS_CAP} hrs/day</p>
+                <Progress value={Math.min(100, (newDayTotal / DAILY_HOURS_CAP) * 100)} indicatorClassName={dayTone.bar} />
+                <p className="text-right text-[11px] text-muted-foreground">Cap: {DAILY_HOURS_CAP} hrs/day</p>
               </div>
-
-              <Separator />
-
-              <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                <FileText className="h-3.5 w-3.5" /> Notes
-              </div>
-
-              <FormField
-                control={form.control}
-                name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Description</FormLabel>
-                    <FormControl>
-                      <Textarea placeholder="What did you work on?" disabled={isSaving} {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
             </CardContent>
+          </Card>
 
-            <CardFooter className="justify-end gap-2 border-t">
-              <Button type="button" variant="outline" size="sm" onClick={handleReset} disabled={isSaving}>
-                <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Reset
-              </Button>
-              <Button type="submit" size="sm" disabled={isSaving}>
-                <Save className="mr-1.5 h-4 w-4" />
-                {isSaving ? 'Saving…' : 'Save Time Entry'}
-              </Button>
-            </CardFooter>
-          </form>
-        </Form>
-      </Card>
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-1.5 text-sm">
+                <Lightbulb className="h-4 w-4 text-warning" /> Tips
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2.5 pt-0 text-xs text-muted-foreground">
+              <p className="flex gap-1.5"><ListPlus className="h-3.5 w-3.5 shrink-0 translate-y-0.5" /> Worked on the same task in more than one block today? Add a segment for each — hours add up automatically.</p>
+              <p className="flex gap-1.5"><CircleCheck className="h-3.5 w-3.5 shrink-0 translate-y-0.5" /> No need to enter hours — they're always calculated from your start/end times.</p>
+              <p className={cn('flex gap-1.5', newDayTotal > DAILY_HOURS_CAP && 'font-medium text-destructive')}>
+                <AlertCircle className="h-3.5 w-3.5 shrink-0 translate-y-0.5" /> Logging plain hours instead? Use the separate "Work Log" screen.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 };

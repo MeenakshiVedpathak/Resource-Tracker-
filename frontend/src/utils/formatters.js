@@ -101,6 +101,7 @@ export const getStatusColor = (status) => {
     'on-hold': 'warning',
     pending_approval: 'warning',
     approved: 'success',
+    rejected: 'destructive',
   };
   return map[status?.toLowerCase()] ?? 'secondary';
 };

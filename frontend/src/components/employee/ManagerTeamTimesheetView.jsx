@@ -1,14 +1,19 @@
 import { useMemo, useState } from 'react';
 import dayjs from 'dayjs';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Check, ChevronRight } from 'lucide-react';
-import { useMyTeamApprovalSummary, useApproveMyTeamTimesheets } from '@/hooks/useMyTeam';
+import { Check, X, ChevronRight } from 'lucide-react';
+import {
+  useMyTeamApprovalSummary, useApproveMyTeamTimesheets,
+  useRejectMyTeamTimesheetEntry, useApproveMyTeamTimesheetEntry,
+} from '@/hooks/useMyTeam';
+import { useAuth } from '@/hooks/useAuth';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
-import { formatDate, formatMonthYear } from '@/utils/formatters';
+import { formatDate, formatDateTime, formatMonthYear } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
 import StatusBadge from '@/components/common/StatusBadge';
 import EmptyState from '@/components/common/EmptyState';
+import RejectEntryDialog from '@/components/employee/RejectEntryDialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -34,7 +39,19 @@ const rowKeyOf = (logType, row) => (logType === 'daily' ? row.date : `${row.year
 // but ships `approval_status` instead. Backend already forces this to 'approved' whenever
 // approval_required is false for the Employee, so checking it alone is sufficient —
 // approval_required is checked too only to mirror the spec's rule literally.
+//
+// Since the Work Log Rejection Workflow (2026-08-23), a bucket's `approval_status` can also be
+// 'rejected' — any pending entry makes the whole bucket 'pending' first; a bucket only reads as
+// 'rejected' once every entry in it has been individually rejected (never 'approved' in that
+// case). Bulk/bucket-level Approve stays gated on 'pending' only, same as before — a 'rejected'
+// bucket needs the Employee to edit+resubmit before a Manager can act on it again.
 const isApprovable = (row) => row.approval_status === 'pending' && row.approval_required !== false;
+
+// Individual entries inside a bucket's `entries[]` carry their own `status` — this is the
+// granularity Approve/Reject actually operate at inside the drill-down drawer (PUT
+// .../timesheets/:id/approve|reject), distinct from the bucket-level bulk endpoint above.
+const isEntryPending = (entry) => entry.status === 'pending';
+const isEntryRejected = (entry) => entry.status === 'rejected';
 
 const buildYearOptions = () => {
   const current = dayjs().year();
@@ -47,10 +64,22 @@ const buildYearOptions = () => {
 // A mapped Employee's aggregated, approval-eligible timesheet — never the raw per-PO hierarchy
 // rows (those live behind the drill-down drawer) and never the `drafts` array (an Employee's own
 // unsynced work, not approval-eligible by definition). Daily mode shows one row per date, Monthly
-// one row per month, both pre-aggregated server-side by GET .../approval-summary; approval always
-// targets a whole date or whole month via POST .../approve, never an individual PO/hierarchy row.
+// one row per month, both pre-aggregated server-side by GET .../approval-summary; bulk approval
+// targets a whole date or whole month via POST .../approve, while individual entries inside the
+// drill-down drawer can be approved/rejected one at a time via PUT .../:id/approve|reject.
+// Resolves a rejected entry's `rejected_by` (a raw employee id — the backend doesn't send
+// `rejected_by_name` on this endpoint) to a display name. Reject only ever happens as the
+// currently logged-in Manager, so a match against their own id is the only case worth handling —
+// anything else (an id with no name available) is hidden rather than shown as a bare number.
+const rejectedByLabel = (entry, currentEmployee) => {
+  if (entry.rejected_by_name) return entry.rejected_by_name;
+  if (currentEmployee && String(entry.rejected_by) === String(currentEmployee.id)) return currentEmployee.full_name;
+  return null;
+};
+
 const ManagerTeamTimesheetView = ({ employeeId, employeeName }) => {
   const { success, error: showError } = useNotification();
+  const { employee: currentEmployee } = useAuth();
 
   const [logType, setLogType] = useState('daily');
   const [dateRange, setDateRange] = useState(null);
@@ -59,6 +88,11 @@ const ManagerTeamTimesheetView = ({ employeeId, employeeName }) => {
   const [limit, setLimit] = useState(20);
   const [selected, setSelected] = useState(new Set());
   const [drillDownRow, setDrillDownRow] = useState(null);
+  const [rejectTarget, setRejectTarget] = useState(null); // { entries: [...] } being rejected, or null
+  // Tracked separately from rejectEntryMutation.isPending — a row-level reject fires one PUT per
+  // entry via Promise.all/mutateAsync, and the shared mutation's isPending can flip false as soon
+  // as the FIRST of several concurrent calls settles, prematurely re-enabling the dialog's Submit.
+  const [isRejecting, setIsRejecting] = useState(false);
 
   const resetSelection = () => setSelected(new Set());
 
@@ -72,8 +106,10 @@ const ManagerTeamTimesheetView = ({ employeeId, employeeName }) => {
       : { startDate: `${year}-01-01`, endDate: `${year}-12-31` }),
   }), [employeeId, logType, page, limit, dateRange, year]);
 
-  const { data, isLoading, isError, error } = useMyTeamApprovalSummary(summaryParams);
+  const { data, isLoading, isError, error, refetch } = useMyTeamApprovalSummary(summaryParams);
   const approveMutation = useApproveMyTeamTimesheets();
+  const rejectEntryMutation = useRejectMyTeamTimesheetEntry();
+  const approveEntryMutation = useApproveMyTeamTimesheetEntry();
 
   const rows = data?.data ?? [];
   const meta = data?.meta;
@@ -152,6 +188,17 @@ const ManagerTeamTimesheetView = ({ employeeId, employeeName }) => {
 
   const handleApproveRow = (row) => runApprove([row], `${periodLabel(row)} approved.`);
 
+  // Table-level Reject — the row is a whole date/month bucket, but reject is entry-level (no
+  // bulk-reject endpoint), so this targets every still-pending entry embedded in the bucket.
+  const handleRejectRow = (row) => {
+    const pendingEntries = (row.entries ?? []).filter(isEntryPending);
+    if (pendingEntries.length === 0) {
+      showError('No pending entries to reject — open the row to see current status.');
+      return;
+    }
+    setRejectTarget({ entries: pendingEntries });
+  };
+
   const handleApproveSelected = () => {
     const targetRows = rows.filter((r) => selected.has(rowKeyOf(logType, r)));
     if (targetRows.length === 0) return;
@@ -159,9 +206,58 @@ const ManagerTeamTimesheetView = ({ employeeId, employeeName }) => {
     runApprove(targetRows, `${targetRows.length} ${unit}${targetRows.length === 1 ? '' : 's'} approved.`);
   };
 
+  // A 409 means someone else (another Manager session, or a bulk action) already acted on this
+  // entry — the spec's suggested handling is to surface a fixed message and refetch rather than
+  // showing whatever the backend's generic conflict message says.
+  const isConflict = (err) => err?.response?.status === 409;
+
+  const handleApproveEntry = (entry) => {
+    approveEntryMutation.mutate(entry.id, {
+      onSuccess: () => success('Entry approved.'),
+      onError: (err) => {
+        if (isConflict(err)) {
+          showError('This entry was already updated.');
+          refetch();
+        } else {
+          showError(extractApiError(err));
+        }
+      },
+    });
+  };
+
+  // `rejectTarget` is always `{ entries: [...] }` — a single entry from the drill-down's
+  // per-entry Reject button, or every still-pending entry in a bucket from the main table's
+  // row-level Reject button (there's no bulk reject endpoint, so this fires one PUT per entry).
+  const handleRejectSubmit = async (remark) => {
+    const targets = rejectTarget?.entries ?? [];
+    if (targets.length === 0) return;
+    setIsRejecting(true);
+    try {
+      await Promise.all(targets.map((e) => rejectEntryMutation.mutateAsync({ id: e.id, remark })));
+      success(targets.length === 1 ? 'Entry rejected.' : `${targets.length} entries rejected.`);
+      setRejectTarget(null);
+    } catch (err) {
+      if (isConflict(err)) {
+        showError('This entry was already updated.');
+        setRejectTarget(null);
+        refetch();
+      } else {
+        showError(extractApiError(err));
+      }
+    } finally {
+      setIsRejecting(false);
+    }
+  };
+
   // The summary row already embeds every underlying entry inline (confirmed live) — no separate
   // fetch needed for the drill-down, which also means expanding a row costs zero extra requests.
-  const detailRows = drillDownRow?.entries ?? [];
+  // Re-derived from the live `rows` (not the `drillDownRow` snapshot) on every render so an
+  // entry-level approve/reject inside the open drawer reflects its new status immediately once
+  // the approval-summary query refetches, without closing the drawer.
+  const resolvedDrillDownRow = drillDownRow
+    ? rows.find((r) => rowKeyOf(logType, r) === rowKeyOf(logType, drillDownRow)) ?? drillDownRow
+    : null;
+  const detailRows = resolvedDrillDownRow?.entries ?? [];
 
   const columns = [
     columnHelper.display({
@@ -214,18 +310,30 @@ const ManagerTeamTimesheetView = ({ employeeId, employeeName }) => {
     columnHelper.display({
       id: 'actions',
       header: 'Action',
-      size: 110,
+      size: 170,
       cell: ({ row }) =>
         isApprovable(row.original) ? (
-          <Button
-            size="sm"
-            className="h-7 gap-1"
-            onClick={(e) => { e.stopPropagation(); handleApproveRow(row.original); }}
-            disabled={approveMutation.isPending}
-          >
-            <Check className="h-3.5 w-3.5" />
-            Approve
-          </Button>
+          <div className="flex items-center gap-1.5">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 gap-1 text-destructive hover:text-destructive"
+              onClick={(e) => { e.stopPropagation(); handleRejectRow(row.original); }}
+              disabled={approveMutation.isPending || isRejecting}
+            >
+              <X className="h-3.5 w-3.5" />
+              Reject
+            </Button>
+            <Button
+              size="sm"
+              className="h-7 gap-1"
+              onClick={(e) => { e.stopPropagation(); handleApproveRow(row.original); }}
+              disabled={approveMutation.isPending || isRejecting}
+            >
+              <Check className="h-3.5 w-3.5" />
+              Approve
+            </Button>
+          </div>
         ) : (
           <span className="text-sm text-muted-foreground">—</span>
         ),
@@ -305,17 +413,17 @@ const ManagerTeamTimesheetView = ({ employeeId, employeeName }) => {
 
       <Sheet open={!!drillDownRow} onOpenChange={(open) => !open && setDrillDownRow(null)}>
         <SheetContent className="w-full overflow-y-auto sm:max-w-lg">
-          {drillDownRow && (
+          {resolvedDrillDownRow && (
             <>
               <SheetHeader>
                 <SheetTitle>
                   {logType === 'daily'
-                    ? formatDate(drillDownRow.date, 'dddd, DD MMMM YYYY')
-                    : formatMonthYear(drillDownRow.month, drillDownRow.year)}
+                    ? formatDate(resolvedDrillDownRow.date, 'dddd, DD MMMM YYYY')
+                    : formatMonthYear(resolvedDrillDownRow.month, resolvedDrillDownRow.year)}
                 </SheetTitle>
                 <SheetDescription>
-                  Total {Number(drillDownRow.total_hours ?? 0).toFixed(2)} hrs across {drillDownRow.entry_count}{' '}
-                  entr{drillDownRow.entry_count === 1 ? 'y' : 'ies'}
+                  Total {Number(resolvedDrillDownRow.total_hours ?? 0).toFixed(2)} hrs across {resolvedDrillDownRow.entry_count}{' '}
+                  entr{resolvedDrillDownRow.entry_count === 1 ? 'y' : 'ies'}
                 </SheetDescription>
               </SheetHeader>
 
@@ -328,7 +436,10 @@ const ManagerTeamTimesheetView = ({ employeeId, employeeName }) => {
                       <div key={r.id} className="rounded-lg border p-3 text-sm">
                         <div className="flex items-center justify-between font-medium">
                           <span>{r.servicePO?.service_po_name ?? r.servicePO?.service_po_code ?? '—'}</span>
-                          <span className="tabular-nums">{Number(effectiveHours(r) ?? 0).toFixed(2)} hrs</span>
+                          <span className="flex items-center gap-2">
+                            <span className="tabular-nums">{Number(effectiveHours(r) ?? 0).toFixed(2)} hrs</span>
+                            {r.status && <StatusBadge status={r.status} />}
+                          </span>
                         </div>
                         {r.subProject?.sub_project_name && (
                           <p className="mt-0.5 text-xs text-muted-foreground">{r.subProject.sub_project_name}</p>
@@ -337,6 +448,40 @@ const ManagerTeamTimesheetView = ({ employeeId, employeeName }) => {
                         {logType === 'monthly' && (
                           <p className="mt-1 text-xs text-muted-foreground">{formatDate(r.work_date)}</p>
                         )}
+
+                        {isEntryRejected(r) && (
+                          <div className="mt-2 rounded-md border border-destructive/30 bg-destructive/5 p-2 text-xs text-destructive">
+                            <p className="font-medium">
+                              Rejected{rejectedByLabel(r, currentEmployee) ? ` by ${rejectedByLabel(r, currentEmployee)}` : ''}
+                              {r.rejected_at ? ` on ${formatDateTime(r.rejected_at)}` : ''}
+                            </p>
+                            {r.rejection_remark && <p className="mt-0.5">{r.rejection_remark}</p>}
+                          </div>
+                        )}
+
+                        {isEntryPending(r) && (
+                          <div className="mt-2 flex justify-end gap-1.5">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 gap-1 text-destructive hover:text-destructive"
+                              onClick={() => setRejectTarget({ entries: [r] })}
+                              disabled={isRejecting || approveEntryMutation.isPending}
+                            >
+                              <X className="h-3.5 w-3.5" />
+                              Reject
+                            </Button>
+                            <Button
+                              size="sm"
+                              className="h-7 gap-1"
+                              onClick={() => handleApproveEntry(r)}
+                              disabled={isRejecting || approveEntryMutation.isPending}
+                            >
+                              <Check className="h-3.5 w-3.5" />
+                              Approve
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     ))
                   )}
@@ -344,19 +489,27 @@ const ManagerTeamTimesheetView = ({ employeeId, employeeName }) => {
               </ScrollArea>
 
               <SheetFooter className="mt-4">
-                {isApprovable(drillDownRow) ? (
-                  <Button onClick={() => handleApproveRow(drillDownRow)} disabled={approveMutation.isPending} className="gap-1.5">
+                {isApprovable(resolvedDrillDownRow) ? (
+                  <Button onClick={() => handleApproveRow(resolvedDrillDownRow)} disabled={approveMutation.isPending} className="gap-1.5">
                     <Check className="h-4 w-4" />
-                    Approve {periodLabel(drillDownRow)}
+                    Approve {periodLabel(resolvedDrillDownRow)}
                   </Button>
                 ) : (
-                  <StatusBadge status={drillDownRow.approval_status} />
+                  <StatusBadge status={resolvedDrillDownRow.approval_status} />
                 )}
               </SheetFooter>
             </>
           )}
         </SheetContent>
       </Sheet>
+
+      <RejectEntryDialog
+        open={!!rejectTarget}
+        onOpenChange={(open) => !open && setRejectTarget(null)}
+        onConfirm={handleRejectSubmit}
+        isSubmitting={isRejecting}
+        count={rejectTarget?.entries?.length ?? 1}
+      />
     </div>
   );
 };

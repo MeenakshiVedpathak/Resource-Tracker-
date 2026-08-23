@@ -10,8 +10,6 @@ import {
   useSaveWorkLogMonth,
   useDeleteWorkLogMonth,
 } from '@/hooks/useEmployeeWorkLog';
-import { useAuth } from '@/hooks/useAuth';
-import { useMyTeamEmployees } from '@/hooks/useMyTeam';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import { buildMonthlySummaryRows, buildDayEntries, validateDayEntries } from '@/utils/employeeMonthlySummary';
@@ -20,7 +18,6 @@ import MonthlyHoursCard from '@/components/employee/MonthlyHoursCard';
 import MonthSelector from '@/components/employee/MonthSelector';
 import WorkLogDaySummary from '@/components/employee/WorkLogDaySummary';
 import WorkLogEntryTable from '@/components/employee/WorkLogEntryTable';
-import ManagerTeamTimesheetView from '@/components/employee/ManagerTeamTimesheetView';
 import { DAILY_HOURS_CAP, MONTHLY_HOURS_CAP } from '@/components/employee/WorkLogEntryModal';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -44,16 +41,6 @@ const pseudoMonthDate = (year, month) => `${year}-${String(month).padStart(2, '0
 // entry table itself never disagree on totals.
 const EmployeeTimesheet = () => {
   const today = dayjs().startOf('day');
-  const { hasRole } = useAuth();
-  const isManager = hasRole('Manager');
-  const { data: mappedEmployees = [] } = useMyTeamEmployees({ enabled: isManager });
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState(''); // '' = My Timesheet
-  const selectedEmployee = mappedEmployees.find((e) => String(e.id) === selectedEmployeeId);
-  const employeeOptions = [
-    { value: '', label: 'My Timesheet' },
-    ...mappedEmployees.map((e) => ({ value: String(e.id), label: e.full_name })),
-  ];
-
   const [mode, setMode] = useState('daily'); // 'daily' | 'monthly'
   const [month, setMonth] = useState(today.month() + 1);
   const [year, setYear] = useState(today.year());
@@ -285,44 +272,21 @@ const EmployeeTimesheet = () => {
         <div>
           <h1 className="text-xl font-bold tracking-tight">My Work Log</h1>
           <p className="text-sm text-muted-foreground">
-            {selectedEmployeeId
-              ? `Viewing ${selectedEmployee?.full_name ?? 'this Employee'}'s complete timesheet.`
-              : mode === 'daily' ? 'Log your hours for each working day.' : 'Log your total hours for a whole month.'}
+            {mode === 'daily' ? 'Log your hours for each working day.' : 'Log your total hours for a whole month.'}
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          {isManager && (
-            <SearchableSelect
-              options={employeeOptions}
-              value={selectedEmployeeId}
-              onValueChange={setSelectedEmployeeId}
-              placeholder="My Timesheet"
-              searchPlaceholder="Search…"
-              className="w-56"
-            />
-          )}
-
-          {!selectedEmployeeId && (
-            <Tabs value={mode} onValueChange={setMode}>
-              <TabsList>
-                <TabsTrigger value="daily">Daily</TabsTrigger>
-                <TabsTrigger value="monthly">Monthly</TabsTrigger>
-              </TabsList>
-            </Tabs>
-          )}
+          <Tabs value={mode} onValueChange={setMode}>
+            <TabsList>
+              <TabsTrigger value="daily">Daily</TabsTrigger>
+              <TabsTrigger value="monthly">Monthly</TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
       </div>
 
-      {selectedEmployeeId && (
-        <ManagerTeamTimesheetView
-          key={selectedEmployeeId}
-          employeeId={selectedEmployeeId}
-          employeeName={selectedEmployee?.full_name}
-        />
-      )}
-
-      {!selectedEmployeeId && mode === 'daily' && (
+      {mode === 'daily' && (
         <>
           {(isCalendarError || isDailyError) && (
             <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
@@ -382,7 +346,7 @@ const EmployeeTimesheet = () => {
         </>
       )}
 
-      {!selectedEmployeeId && mode === 'monthly' && (
+      {mode === 'monthly' && (
         <>
           {isMonthlyError && (
             <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
