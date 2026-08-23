@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { Save } from 'lucide-react';
 import { useServicePO, useCreateServicePO, useUpdateServicePO } from '@/hooks/useServicePOs';
 import { useActiveClients } from '@/hooks/useClients';
-import { clientsApi } from '@/api/clients.api';
+import { useCompanies } from '@/hooks/useCompanies';
 import { useProjectsByClient } from '@/hooks/useProjects';
 import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
 import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
@@ -60,6 +60,7 @@ const poSchema = (isEdit) => z
       .min(3, 'Service PO name must be at least 3 characters')
       .max(200, 'Service PO name cannot exceed 200 characters'),
     service_po_code: servicePoCodeField(!isEdit),
+    company_id: z.coerce.number({ required_error: 'Business Unit is required' }).positive('Business Unit is required'),
     client_id: z.coerce.number({ required_error: 'Client is required' }).positive('Client is required'),
     project_id: z.coerce.number({ required_error: 'Project is required' }).positive('Project is required'),
     delivery_head_employee_id: z.coerce
@@ -107,6 +108,8 @@ const ServicePOForm = () => {
   const { success, error: showError } = useNotification();
 
   const { data: po, isPending: isLoadingPO } = useServicePO(id);
+  const { data: companiesData, isPending: isLoadingCompanies } = useCompanies({ limit: 200 });
+  const activeCompanies = companiesData?.data ?? [];
   const { data: activeClients = [], isPending: isLoadingClients } = useActiveClients();
   const { data: serviceTypes = [], isPending: isLoadingTypes } = useActiveServiceTypes();
   const { data: activeCategories = [], isPending: isLoadingCategories } = useActiveServiceCategories();
@@ -120,13 +123,13 @@ const ServicePOForm = () => {
   const updateMutation = useUpdateServicePO(id);
 
   const [selectedCategory, setSelectedCategory] = useState('');
-  const [isResolvingCompany, setIsResolvingCompany] = useState(false);
 
   const form = useForm({
     resolver: zodResolver(poSchema(isEdit)),
     defaultValues: {
       service_po_name: '',
       service_po_code: '',
+      company_id: '',
       client_id: '',
       project_id: '',
       delivery_head_employee_id: '',
@@ -161,6 +164,7 @@ const ServicePOForm = () => {
       form.reset({
         service_po_name: po.service_po_name ?? '',
         service_po_code: po.service_po_code ?? '',
+        company_id: po.company_id ?? po.company?.id ?? '',
         client_id: po.client_id ?? '',
         project_id: po.project_id ?? po.project?.id ?? '',
         delivery_head_employee_id:
@@ -176,8 +180,6 @@ const ServicePOForm = () => {
     }
   }, [po, isEdit, form, serviceTypes]);
 
-  // The backend requires company_id (Business Unit) on create but a Service PO has no BU field
-  // of its own, so it's looked up from the selected Client's own record instead of asking again.
   const onSubmit = async (values) => {
     let is_billable = false;
     if (selectedCategory && activeCategories.length > 0) {
@@ -191,22 +193,6 @@ const ServicePOForm = () => {
       Object.entries(values).filter(([, v]) => v !== '' && v != null)
     );
     clean.is_billable = is_billable;
-
-    if (!isEdit) {
-      try {
-        setIsResolvingCompany(true);
-        const client = await clientsApi.getById(values.client_id);
-        const companyId = client?.company_id ?? client?.company?.id;
-        if (companyId != null) {
-          clean.company_id = Number(companyId);
-        }
-      } catch (err) {
-        setIsResolvingCompany(false);
-        showError(extractApiError(err));
-        return;
-      }
-      setIsResolvingCompany(false);
-    }
 
     const mutation = isEdit ? updateMutation : createMutation;
     mutation.mutate(clean, {
@@ -231,7 +217,7 @@ const ServicePOForm = () => {
     navigate(ROUTES.SERVICE_POS);
   };
 
-  const isSubmitting = createMutation.isPending || updateMutation.isPending || isResolvingCompany;
+  const isSubmitting = createMutation.isPending || updateMutation.isPending;
 
   if (isEdit && isLoadingPO) return <FormSkeleton />;
 
@@ -285,6 +271,31 @@ const ServicePOForm = () => {
                     <FormControl>
                       <Input placeholder="e.g. PO-1001" className="h-8 text-sm uppercase" {...field} />
                     </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="company_id"
+                render={({ field }) => (
+                  <FormItem className="space-y-1">
+                    <FormLabel className="text-[13px]">
+                      <span className="text-destructive">*</span> Business Unit
+                    </FormLabel>
+                    <SearchableSelect
+                      options={activeCompanies.map(c => ({
+                        value: String(c.id),
+                        label: c.company_name
+                      }))}
+                      value={field.value}
+                      onValueChange={(val) => field.onChange(val ? parseInt(val, 10) : undefined)}
+                      disabled={isLoadingCompanies}
+                      placeholder="Select business unit"
+                      searchPlaceholder="Search business unit..."
+                      className="h-8 text-sm"
+                    />
                     <FormMessage />
                   </FormItem>
                 )}
