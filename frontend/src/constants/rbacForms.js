@@ -16,7 +16,7 @@ import {
   FileText, FolderOpen, FolderKanban, Clock, DollarSign,
   Tag, Layers, Sparkles, ClipboardList, Landmark, ShieldCheck,
   FileBarChart2, PieChart, CalendarRange, UserCheck, Network, Receipt, Table2, Wallet, IndianRupee,
-  ListTree, ListChecks, Banknote, CalendarClock, Timer,
+  ListTree, ListChecks, Banknote, CalendarClock, Timer, Hourglass,
   TrendingUp, LineChart, Target, Percent, Award, BatteryCharging, AlertTriangle, Crown,
   ReceiptText, GitCompare, Scale, BarChart3, Building, Activity, Armchair, Users2,
 } from 'lucide-react';
@@ -64,6 +64,11 @@ export const FORM_NAMES = {
   // reusing "Dashboard" here would collide and resolve to the wrong route.
   EMPLOYEE_DASHBOARD: 'Employee Dashboard',
   EMPLOYEE_WORK_LOG: 'My Work Log',
+  // Guessed name — same caveat as the rest of this file's Employee self-service entries; confirm
+  // against the actual Form Master row once one is seeded. Brand-new screen (frontend brief
+  // dated 2026-08-23) that split off "My Work Log"'s old exact-time toggle into its own form —
+  // see pages/employee/EmployeeTimeEntry.jsx.
+  EMPLOYEE_TIME_ENTRY: 'Time Entry',
   EMPLOYEE_MONTHLY_SUMMARY: 'Monthly Summary',
   EMPLOYEE_REPORTS: 'PO Wise Report',
   // Guessed name — same caveat as the rest of this file's Employee self-service entries; confirm
@@ -151,6 +156,7 @@ export const FORM_ROUTE_CONFIG = {
   [FORM_NAMES.REPORT_CLIENT_SERVICE_PO_HOURS]: { to: ROUTES.REPORT_CLIENT_SERVICE_PO_HOURS, icon: Receipt },
   [FORM_NAMES.EMPLOYEE_DASHBOARD]: { to: ROUTES.EMPLOYEE_DASHBOARD, icon: LayoutDashboard, exact: true },
   [FORM_NAMES.EMPLOYEE_WORK_LOG]: { to: ROUTES.EMPLOYEE_TIMESHEET, icon: Clock },
+  [FORM_NAMES.EMPLOYEE_TIME_ENTRY]: { to: ROUTES.EMPLOYEE_TIME_ENTRY, icon: Hourglass, exact: true },
   [FORM_NAMES.EMPLOYEE_MONTHLY_SUMMARY]: { to: ROUTES.EMPLOYEE_MONTHLY_SUMMARY, icon: Table2 },
   [FORM_NAMES.EMPLOYEE_REPORTS]: { to: ROUTES.EMPLOYEE_REPORTS, icon: FileBarChart2 },
   [FORM_NAMES.EMPLOYEE_PROJECT_HOURS_REPORT]: { to: ROUTES.EMPLOYEE_PROJECT_HOURS_REPORT, icon: ListTree },

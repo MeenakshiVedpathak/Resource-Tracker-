@@ -73,12 +73,17 @@ const TotalHoursBar = ({ totalHours }) => (
   </div>
 );
 
-// One row per work-log entry (never aggregated, even for the same employee/date/PO) — see
-// GET /employee-reports/work-log-time. startTime/endTime come back null for older entries
-// logged before start/end time existed, and `module` is null when no hierarchy node was tagged
-// at all — both shown as "—" rather than fabricated. A Manager additionally gets an employee
-// picker (own team, or "My Work Log" for just themselves) and an Employee column; a plain
-// Employee only ever sees their own rows so that column is redundant and left out.
+// One row per work-log entry, expanded one row per time segment when an entry has time_entries
+// (Date/Project/Module/Task repeated across those rows, Start/End specific to that segment) —
+// an entry with no time_entries still returns exactly one row (nulls for start/end). See
+// GET /employee-reports/work-log-time. startTime/endTime come back null for older/plain-hours
+// entries, and `module` is null when no hierarchy node was tagged at all — both shown as "—"
+// rather than fabricated. `combinedHours`/`combinedHoursLabel` repeat the same
+// Module/Task/date-level total (e.g. "1 hr 50 mins") across every one of that entry's segment
+// rows, distinct from `totalHours` which is that one segment's own duration. A Manager
+// additionally gets an employee picker (own team, or "My Work Log" for just themselves) and an
+// Employee column; a plain Employee only ever sees their own rows so that column is redundant
+// and left out.
 const EmployeeWorkLogTimeReport = () => {
   const { error: showError } = useNotification();
   const { hasRole } = useAuth();
@@ -181,6 +186,11 @@ const EmployeeWorkLogTimeReport = () => {
         header: 'Hours',
         size: 80,
         cell: (info) => <span className="text-sm font-medium tabular-nums">{info.getValue()}</span>,
+      }),
+      columnHelper.accessor('combinedHoursLabel', {
+        header: 'Total',
+        size: 110,
+        cell: (info) => <span className="whitespace-nowrap text-sm text-muted-foreground">{info.getValue() ?? '—'}</span>,
       })
     );
     return cols;

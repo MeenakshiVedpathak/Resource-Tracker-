@@ -17,12 +17,19 @@ import apiClient from '@/services/apiClient';
 //     rolled up server-side, never re-summed client-side; see MonthlySummaryMonthView below)
 //     422 if month/year/viewType is missing or invalid; message is shown via toast as-is.
 //   POST /employee-timesheets/entries — whole-day replace, not per-row create. Body is
-//     { timesheet_date, entries: [{ service_po_id, sub_project_id?, hierarchy_node_id?, hours,
-//     description }] }; any existing entry for that date not present in `entries` is deleted
-//     server-side, so callers must send every row that should survive, not just edited ones.
-//     `entries: []` clears the whole day. Always 200, never 409/201 — there's no create-vs-update
-//     branch anymore.
-//   PUT/DELETE /employee-timesheets/entries/:id — still available for single-row edits.
+//     { timesheet_date, entries: [...] }; each line is EITHER hours-based
+//     ({ service_po_id, sub_project_id?, hierarchy_node_id?, hours, description }) OR
+//     time_entries-based ({ ..., time_entries: [{start_time,end_time}, ...], description } —
+//     hours omitted, always server-computed as the sum of the segments), never both. Any
+//     existing entry for that date not present in `entries` is deleted server-side, so callers
+//     must send every row that should survive, not just edited ones — this is why both the
+//     "Work Log" (EmployeeTimesheet.jsx, hours-only) and "Time Entry" (EmployeeTimeEntry.jsx,
+//     time_entries-only) forms have to read the day back first before saving; see
+//     utils/employeeTimeEntry.js. `entries: []` clears the whole day. Always 200, never
+//     409/201 — there's no create-vs-update branch anymore.
+//   PUT/DELETE /employee-timesheets/entries/:id — still available for single-row edits. PUT
+//     with `time_entries` replaces that row's whole segment breakdown and recalculates hours;
+//     omit `time_entries` to leave an existing breakdown untouched.
 //
 //   GET /employee-timesheets/monthly?month=&year=
 //     -> { eligible, service_pos: [{ service_po_id, service_po_name, hours, po_total_hrs, children }] }

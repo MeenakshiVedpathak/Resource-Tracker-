@@ -14,8 +14,13 @@
 // whether it `hasChildren`.
 const dayNumberOf = (dateStr) => Number(dateStr.slice(-2));
 
+// `id` is carried through defensively wherever the source node has one — the Work Log grid
+// itself never needed per-row ids (it always whole-day-replaces), but the separate Time Entry
+// form (see utils/employeeTimeEntry.js) prefers a targeted PUT over a whole-day replace when it
+// can identify an existing row, so this stays a no-op passthrough until/unless a given backend
+// response actually includes it.
 const ensureNode = (map, key, name) => {
-  if (!map.has(key)) map.set(key, { name, hoursByDay: {}, childMap: new Map() });
+  if (!map.has(key)) map.set(key, { name, id: undefined, hoursByDay: {}, childMap: new Map() });
   return map.get(key);
 };
 
@@ -23,6 +28,7 @@ const walkChildren = (children = [], parentChildMap, day) => {
   children.forEach((child) => {
     const node = ensureNode(parentChildMap, child.hierarchy_id, child.name);
     node.hoursByDay[day] = Number(child.hours || 0);
+    node.id = child.id ?? child.entry_id ?? node.id;
     walkChildren(child.children, node.childMap, day);
   });
 };
@@ -35,7 +41,7 @@ const flattenChildren = (childMap, depth, days, servicePOId, ancestorKeys) => {
     days.forEach((day) => { hoursByDay[day] = node.hoursByDay[day] || 0; });
     const rowKey = `h:${hierarchyId}`;
     rows.push({
-      servicePOId, hierarchyId, label: node.name, depth, hasChildren, editable: true, hoursByDay, rowKey, ancestorKeys,
+      servicePOId, hierarchyId, label: node.name, depth, hasChildren, editable: true, hoursByDay, rowKey, ancestorKeys, id: node.id,
     });
     rows.push(...flattenChildren(node.childMap, depth + 1, days, servicePOId, [...ancestorKeys, rowKey]));
   });
@@ -52,6 +58,7 @@ export const buildMonthlySummaryRows = (dayEntries = []) => {
     service_pos.forEach((po) => {
       const poNode = ensureNode(poMap, po.service_po_id, po.service_po_name);
       poNode.hoursByDay[day] = Number(po.hours || 0);
+      poNode.id = po.id ?? po.entry_id ?? poNode.id;
       walkChildren(po.children, poNode.childMap, day);
     });
   });
@@ -64,7 +71,7 @@ export const buildMonthlySummaryRows = (dayEntries = []) => {
     dayList.forEach((day) => { hoursByDay[day] = node.hoursByDay[day] || 0; });
     const rowKey = `po:${servicePOId}`;
     rows.push({
-      servicePOId, label: node.name, depth: 0, hasChildren, editable: true, hoursByDay, rowKey, ancestorKeys: [],
+      servicePOId, label: node.name, depth: 0, hasChildren, editable: true, hoursByDay, rowKey, ancestorKeys: [], id: node.id,
     });
     rows.push(...flattenChildren(node.childMap, 1, dayList, servicePOId, [rowKey]));
   });
@@ -77,33 +84,25 @@ export const buildMonthlySummaryRows = (dayEntries = []) => {
 // `hoursByDay[day]` — not just the cells the user touched this session. Rows at 0 hours are
 // left out entirely; omitting a row has the same clearing effect as sending it with hours: 0.
 //
-// `timeEdits` (optional) is `{ [rowKey]: { [day]: { start_time, end_time } } }` — a row with a
-// start_time/end_time pair set there gets those attached to its entry, and the backend
-// recalculates/overrides `hours` server-side (see employeeWorkLog.api.js). A row is kept even at
-// 0 hours if it carries a partial time pair, so validateDayEntries below can still surface the
-// "provide both" error instead of the partial input silently vanishing.
-export const buildDayEntries = (rows, day, edits, timeEdits) =>
+// Plain-hours only — the Work Log form never sends time_entries (that's the separate Time Entry
+// form's job, see utils/employeeTimeEntry.js and pages/employee/EmployeeTimeEntry.jsx).
+export const buildDayEntries = (rows, day, edits) =>
   rows
     .map((row) => {
       const edited = edits?.[row.rowKey]?.[day];
       const hours = edited !== undefined ? Number(edited || 0) : Number(row.hoursByDay?.[day] ?? 0);
-      const time = timeEdits?.[row.rowKey]?.[day];
-      return { row, hours, time };
+      return { row, hours };
     })
-    .filter(({ hours, time }) => hours > 0 || time?.start_time || time?.end_time)
-    .map(({ row, hours, time }) => ({
+    .filter(({ hours }) => hours > 0)
+    .map(({ row, hours }) => ({
       service_po_id: row.servicePOId,
       hierarchy_node_id: row.hierarchyId ?? null,
       hours,
       description: row.label ?? 'Logged via Monthly Summary',
-      ...(time?.start_time ? { start_time: time.start_time } : {}),
-      ...(time?.end_time ? { end_time: time.end_time } : {}),
     }));
 
 // Mirrors the 400s the server enforces on a whole-day save, so the user sees the same wording
-// without a round trip. Returns the error string, or null if the day is valid. start_time/
-// end_time are "HH:MM" (zero-padded 24-hour, as <input type="time"> always emits), which sort
-// and compare correctly as plain strings — no need to parse them into minutes here.
+// without a round trip. Returns the error string, or null if the day is valid.
 export const validateDayEntries = (entries, dateLabel, dailyHoursCap) => {
   const seen = new Set();
   for (const entry of entries) {
@@ -113,16 +112,6 @@ export const validateDayEntries = (entries, dateLabel, dailyHoursCap) => {
       return `Duplicate entry for Service PO #${entry.service_po_id}${nodePart} in the same request.`;
     }
     seen.add(key);
-
-    if (entry.start_time && !entry.end_time) {
-      return 'end_time is required when start_time is provided.';
-    }
-    if (entry.end_time && !entry.start_time) {
-      return 'start_time is required when end_time is provided.';
-    }
-    if (entry.start_time && entry.end_time && entry.end_time <= entry.start_time) {
-      return 'End time must be greater than start time.';
-    }
   }
 
   const total = entries.reduce((sum, entry) => sum + Number(entry.hours || 0), 0);

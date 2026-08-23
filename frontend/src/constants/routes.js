@@ -14,6 +14,7 @@ export const ROUTES = {
   // Employee self-service (dynamic login)
   EMPLOYEE_DASHBOARD: '/employee/dashboard',
   EMPLOYEE_TIMESHEET: '/employee/timesheet',
+  EMPLOYEE_TIME_ENTRY: '/employee/time-entry',
   EMPLOYEE_MONTHLY_SUMMARY: '/employee/monthly-summary',
   EMPLOYEE_REPORTS: '/employee/reports',
   EMPLOYEE_PROJECT_HOURS_REPORT: '/employee/project-hours-report',
