@@ -83,7 +83,3 @@ export const SENIOR_ROLE_NAMES = [
 
 // Roles that operate platform-wide / across Entities and never carry a company_id.
 export const NO_COMPANY_ROLES = [ROLE_NAMES.PLATFORM_ADMIN, ROLE_NAMES.ADMIN, ROLE_NAMES.ENTITY_ADMIN];
-
-// Manager-tier roles eligible as an Employee's primary/secondary manager (a role "inheriting"
-// Manager's capabilities, per spec §3.1).
-export const MANAGER_TIER_ROLES = [ROLE_NAMES.MANAGER, ROLE_NAMES.SERVICE_PO_ADMIN, ROLE_NAMES.PROJECT_ADMIN];

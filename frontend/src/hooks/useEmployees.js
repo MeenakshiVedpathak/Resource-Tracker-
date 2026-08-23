@@ -1,7 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { employeesApi } from '@/api/employees.api';
 import { QUERY_KEYS } from '@/constants/queryKeys';
-import { MANAGER_TIER_ROLES } from '@/constants/roleHierarchy';
 
 export const useEmployees = (params) =>
   useQuery({
@@ -48,18 +47,19 @@ export const useEmployeeMappings = (id) =>
     enabled: !!id,
   });
 
-// Employee Identity Migration: Primary/Secondary Manager pickers now source from Employees
-// directly (manager fields moved from manager_user_id to manager_employee_id — there's no more
-// separate Users resource to source them from). Filtered client-side by MANAGER_TIER_ROLES
-// membership in the employee's flat `roles` array, same "inherits Manager's capabilities" set
-// (Manager, Service PO Admin, Project Admin) the old Users-sourced version used.
+// Employee Identity Migration: Primary/Secondary Manager pickers. GET /employees (list)
+// deliberately carries no role/BU data (pagination cost), so eligibility can't be filtered off
+// that response client-side — this pre-filters server-side via GET /employees/eligible-managers,
+// the same manager.view_mapped_employees rule assertValidManager() enforces at save time.
 export const useAssignableManagers = () =>
   useQuery({
-    queryKey: QUERY_KEYS.EMPLOYEES({ limit: 200, status: 'active' }),
-    queryFn: () => employeesApi.getAll({ limit: 200, status: 'active' }),
-    select: (res) => (res?.data ?? []).filter(
-      (e) => (e.roles ?? []).some((r) => MANAGER_TIER_ROLES.includes(r.role_name))
-    ),
+    queryKey: QUERY_KEYS.ELIGIBLE_MANAGERS,
+    queryFn: employeesApi.getEligibleManagers,
+    select: (data) => {
+      if (Array.isArray(data)) return data;
+      if (Array.isArray(data?.data)) return data.data;
+      return [];
+    },
   });
 
 export const useCreateEmployee = () => {

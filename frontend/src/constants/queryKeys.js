@@ -14,6 +14,7 @@ export const QUERY_KEYS = {
   EMPLOYEES: (params) => ['employees', params],
   EMPLOYEES_ACTIVE: ['employees', 'active'],
   ELIGIBLE_DELIVERY_HEADS: ['employees', 'eligible-delivery-heads'],
+  ELIGIBLE_MANAGERS: ['employees', 'eligible-managers'],
   EMPLOYEE: (id) => ['employees', id],
   EMPLOYEE_MAPPINGS: (id) => ['employees', id, 'mappings'],
 

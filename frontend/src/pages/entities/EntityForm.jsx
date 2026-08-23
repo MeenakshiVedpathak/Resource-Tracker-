@@ -56,10 +56,11 @@ const EntityForm = () => {
   const { data: entity, isPending: isLoadingEntity } = useEntity(id);
   // Already scoped server-side to Entity Admins this Admin created (§2) — safe to populate the
   // dropdown directly from this list with no extra filtering. Skipped entirely for an Entity
-  // Admin caller since the field is hidden for them.
+  // Admin caller, and on create since the field is hidden in both cases — a new Entity is always
+  // created unassigned, with the admin assigned later via Edit.
   const { data: entityAdminsData, isPending: isLoadingEntityAdmins } = useEntityAdmins(
     { status: 'active', limit: 200 },
-    { enabled: !isEntityAdminCaller }
+    { enabled: !isEntityAdminCaller && isEdit }
   );
   const createMutation = useCreateEntity();
   const updateMutation = useUpdateEntity(id);
@@ -92,10 +93,11 @@ const EntityForm = () => {
     );
     // Never sent for an Entity Admin caller — the backend ignores/forces this to their own id
     // anyway, and sending a stale value risks the "not your Entity Admin" 403 on edit.
+    // On create, always sent explicitly as null — a new Entity always starts unassigned, the
+    // admin is picked later via Edit. On edit, sent explicitly (even null) so unassigning an
+    // Entity Admin actually reaches the backend — the blanket filter above would otherwise drop it.
     if (!isEntityAdminCaller) {
-      // Always sent explicitly (even null) so unassigning an Entity Admin on edit actually
-      // reaches the backend — the blanket filter above would otherwise drop a `null`.
-      clean.entity_admin_user_id = entity_admin_user_id ?? null;
+      clean.entity_admin_user_id = isEdit ? (entity_admin_user_id ?? null) : null;
     }
 
     const mutation = isEdit ? updateMutation : createMutation;
@@ -147,7 +149,7 @@ const EntityForm = () => {
                       )}
                     />
 
-                    {!isEntityAdminCaller && (
+                    {!isEntityAdminCaller && isEdit && (
                       <FormField
                         control={form.control}
                         name="entity_admin_user_id"

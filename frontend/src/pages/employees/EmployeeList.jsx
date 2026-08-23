@@ -5,11 +5,11 @@ import { useIsMutating } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus, Pencil, KeyRound, UserCog, Search, Download, Upload, CheckCircle2, AlertCircle, FileDown, FileText, Printer, FileSpreadsheet, ChevronDown } from 'lucide-react';
+import { Plus, Pencil, UserCog, Search, Download, Upload, CheckCircle2, AlertCircle, FileDown, FileText, Printer, FileSpreadsheet, ChevronDown } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { useEmployees, useImportEmployees, useToggleEmployeeStatus, useResetEmployeePassword, useUpdateEmployee, useEmployeeMappings } from '@/hooks/useEmployees';
+import { useEmployees, useImportEmployees, useToggleEmployeeStatus, useUpdateEmployee, useEmployeeMappings } from '@/hooks/useEmployees';
 import { useRoles } from '@/hooks/useRoles';
 import { useCompanies } from '@/hooks/useCompanies';
 import { employeesApi } from '@/api/employees.api';
@@ -19,7 +19,6 @@ import { ROLE_NAMES, getAssignableRoleNames, ADDITIONAL_ROLE_NAMES, SENIOR_ROLE_
 import { useNotification } from '@/hooks/useNotification';
 import { useDebounce } from '@/hooks/useDebounce';
 import { extractApiError } from '@/services/apiClient';
-import { passwordSchema } from '@/utils/validators';
 import { buildPath, ROUTES } from '@/constants/routes';
 import { formatDate } from '@/utils/formatters';
 import { cn } from '@/utils/cn';
@@ -64,95 +63,6 @@ const TruncatedCell = ({ value, maxWidth = '150px', className }) => {
     <div className={cn("text-sm truncate", className)} style={{ maxWidth }} title={value}>
       {value}
     </div>
-  );
-};
-
-const resetPasswordSchema = z
-  .object({
-    password: passwordSchema,
-    confirmPassword: z.string(),
-  })
-  .refine((d) => d.password === d.confirmPassword, {
-    message: 'Passwords do not match',
-    path: ['confirmPassword'],
-  });
-
-// Targets the employee directly now — an Employee's login lives on the Employee record itself,
-// no more separate linked User to look up (see employees.api.js's resetPassword).
-const ResetPasswordDialog = ({ employee, onOpenChange }) => {
-  const { success, error: showError } = useNotification();
-  const resetMutation = useResetEmployeePassword();
-
-  const form = useForm({
-    resolver: zodResolver(resetPasswordSchema),
-    defaultValues: { password: '', confirmPassword: '' },
-  });
-
-  useEffect(() => {
-    if (employee) form.reset({ password: '', confirmPassword: '' });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [employee]);
-
-  const onSubmit = (values) => {
-    resetMutation.mutate(
-      { id: employee.id, newPassword: values.password, confirmPassword: values.confirmPassword },
-      {
-        onSuccess: () => {
-          success(`Password reset for ${employee.full_name}.`);
-          onOpenChange(false);
-        },
-        onError: (err) => showError(extractApiError(err)),
-      }
-    );
-  };
-
-  return (
-    <Dialog open={!!employee} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm">
-        <DialogHeader>
-          <DialogTitle>Reset password</DialogTitle>
-          <DialogDescription>Set a new password for {employee?.full_name}.</DialogDescription>
-        </DialogHeader>
-        <Form {...form}>
-          <form id="reset-password-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="password"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>New Password</FormLabel>
-                  <FormControl>
-                    <Input type="password" placeholder="At least 8 characters" autoComplete="new-password" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="confirmPassword"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Confirm Password</FormLabel>
-                  <FormControl>
-                    <Input type="password" placeholder="Repeat password" autoComplete="new-password" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </form>
-        </Form>
-        <DialogFooter>
-          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={resetMutation.isPending}>
-            Cancel
-          </Button>
-          <Button size="sm" type="submit" form="reset-password-form" disabled={resetMutation.isPending}>
-            {resetMutation.isPending ? 'Saving…' : 'Reset Password'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 };
 
@@ -322,7 +232,6 @@ const EmployeeList = () => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [roleFilter, setRoleFilter] = useState('all');
-  const [resetPasswordTarget, setResetPasswordTarget] = useState(null);
   const [mappingTarget, setMappingTarget] = useState(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
@@ -393,14 +302,6 @@ const EmployeeList = () => {
             </Button>
             <Button
               size="sm"
-              className="h-6 w-6 p-0 bg-slate-500 hover:bg-slate-600 text-white rounded transition-colors"
-              title="Reset Password"
-              onClick={() => setResetPasswordTarget(row.original)}
-            >
-              <KeyRound className="h-3 w-3" />
-            </Button>
-            <Button
-              size="sm"
               className="h-6 w-6 p-0 bg-teal-600 hover:bg-teal-700 text-white rounded transition-colors"
               title="Map Roles & Business Units"
               onClick={() => setMappingTarget(row.original)}
@@ -434,23 +335,6 @@ const EmployeeList = () => {
       header: 'Designation',
       size: 180,
       cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="160px" />,
-    }),
-    columnHelper.accessor('roles', {
-      header: 'Roles',
-      size: 180,
-      cell: (info) => {
-        const list = info.row.original.roles ?? [];
-        if (!list.length) return <span className="text-sm text-muted-foreground">—</span>;
-        return (
-          <div className="flex flex-wrap gap-1">
-            {list.map((r, i) => (
-              <Badge key={r.id ?? i} variant={i === 0 ? 'secondary' : 'outline'} className="text-xs">
-                {r.role_name}
-              </Badge>
-            ))}
-          </div>
-        );
-      },
     }),
     columnHelper.accessor('businessUnits', {
       header: 'Business Units',
@@ -1024,11 +908,6 @@ const EmployeeList = () => {
           onRowClick={(row) => navigate(buildPath(ROUTES.EMPLOYEE_EDIT, { id: row.id }))}
         />
       )}
-
-      <ResetPasswordDialog
-        employee={resetPasswordTarget}
-        onOpenChange={(open) => !open && setResetPasswordTarget(null)}
-      />
 
       <RoleBuMappingDialog
         employee={mappingTarget}

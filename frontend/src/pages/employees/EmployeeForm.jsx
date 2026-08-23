@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, IdCard, Lock, Users, Briefcase, ClipboardList } from 'lucide-react';
 import { useEmployee, useCreateEmployee, useUpdateEmployee, useAssignableManagers } from '@/hooks/useEmployees';
 import { useRoles } from '@/hooks/useRoles';
 import { useNotification } from '@/hooks/useNotification';
@@ -213,7 +213,9 @@ const EmployeeForm = () => {
 
                 {/* Identity Group */}
                 <div className="rounded-lg border border-gray-200 bg-slate-50/60 p-4 space-y-3">
-                  <h3 className="text-xs font-semibold text-foreground uppercase tracking-wide border-b border-gray-200 pb-2">Identity</h3>
+                  <h3 className="flex items-center gap-1.5 text-xs font-semibold text-foreground uppercase tracking-wide border-b border-gray-200 pb-2">
+                    <IdCard className="h-3.5 w-3.5 text-muted-foreground" /> Identity
+                  </h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     <FormField
                       control={form.control}
@@ -291,7 +293,9 @@ const EmployeeForm = () => {
                     Roles & Business Units" table action. */}
                 {!isEdit && (
                   <div className="rounded-lg border border-gray-200 bg-slate-50/60 p-4 space-y-3">
-                    <h3 className="text-xs font-semibold text-foreground uppercase tracking-wide border-b border-gray-200 pb-2">Account</h3>
+                    <h3 className="flex items-center gap-1.5 text-xs font-semibold text-foreground uppercase tracking-wide border-b border-gray-200 pb-2">
+                      <Lock className="h-3.5 w-3.5 text-muted-foreground" /> Account
+                    </h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <FormField
                         control={form.control}
@@ -357,7 +361,9 @@ const EmployeeForm = () => {
 
                 {/* Reporting Group */}
                 <div className="rounded-lg border border-gray-200 bg-slate-50/60 p-4 space-y-3">
-                  <h3 className="text-xs font-semibold text-foreground uppercase tracking-wide border-b border-gray-200 pb-2">Reporting</h3>
+                  <h3 className="flex items-center gap-1.5 text-xs font-semibold text-foreground uppercase tracking-wide border-b border-gray-200 pb-2">
+                    <Users className="h-3.5 w-3.5 text-muted-foreground" /> Reporting
+                  </h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <FormField
                       control={form.control}
@@ -403,7 +409,9 @@ const EmployeeForm = () => {
 
                 {/* Experience Group */}
                 <div className="rounded-lg border border-gray-200 bg-slate-50/60 p-4 space-y-3">
-                  <h3 className="text-xs font-semibold text-foreground uppercase tracking-wide border-b border-gray-200 pb-2">Experience &amp; Employment</h3>
+                  <h3 className="flex items-center gap-1.5 text-xs font-semibold text-foreground uppercase tracking-wide border-b border-gray-200 pb-2">
+                    <Briefcase className="h-3.5 w-3.5 text-muted-foreground" /> Experience &amp; Employment
+                  </h3>
                   <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                     <FormField
                       control={form.control}
@@ -474,7 +482,9 @@ const EmployeeForm = () => {
 
                 {/* Additional Group */}
                 <div className="rounded-lg border border-gray-200 bg-slate-50/60 p-4 space-y-3">
-                  <h3 className="text-xs font-semibold text-foreground uppercase tracking-wide border-b border-gray-200 pb-2">Additional Details</h3>
+                  <h3 className="flex items-center gap-1.5 text-xs font-semibold text-foreground uppercase tracking-wide border-b border-gray-200 pb-2">
+                    <ClipboardList className="h-3.5 w-3.5 text-muted-foreground" /> Additional Details
+                  </h3>
                   <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-4 items-start">
                     <FormField
                       control={form.control}
