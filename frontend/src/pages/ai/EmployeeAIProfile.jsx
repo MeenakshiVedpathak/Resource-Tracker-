@@ -24,10 +24,10 @@ const TREND_MONTHS = [3, 2, 1].map((offset) => {
 const LAST_MONTH_LABEL = formatMonthYear(TREND_MONTHS[2].month, TREND_MONTHS[2].year);
 
 const useEmployeeMonth = (employeeId, month, year) => {
-  const { user } = useAuth();
+  const { roleObjects } = useAuth();
   const { data, isPending } = useResourceProjectUtilization({
     month, year, employeeIds: employeeId ? String(employeeId) : undefined,
-    roleId: user?.role_id, hoursSource: 'M', page: 1, limit: 5,
+    roleId: roleObjects[0]?.id, hoursSource: 'M', page: 1, limit: 5,
   });
   const rows = Array.isArray(data?.data) ? data.data : [];
   const row = rows.find((r) => String(r.employeeId ?? r.employee_id) === String(employeeId)) ?? rows[0];

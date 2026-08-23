@@ -12,8 +12,8 @@ import { Button } from '@/components/ui/button';
 // whatever the account can actually reach.
 const WelcomeNoDashboard = () => {
   const navigate = useNavigate();
-  const { user, employee, accessibleForms, homeRoute } = useAuth();
-  const displayName = employee?.full_name ?? user?.full_name ?? user?.name ?? 'there';
+  const { employee, accessibleForms, homeRoute } = useAuth();
+  const displayName = employee?.full_name ?? employee?.email ?? 'there';
 
   // Same accessibleForms shape Sidebar/EmployeeSidebar already render from — reused here so
   // this page's quick links never drift from what the sidebar itself shows as available.

@@ -198,7 +198,7 @@ const ResourceProjectUtilization = () => {
     setPoIds([]);
     setPage(1);
   };
-    const { user } = useAuth();
+    const { roleObjects } = useAuth();
 
 
   const params = {
@@ -206,7 +206,7 @@ const ResourceProjectUtilization = () => {
     year: monthYear.year,
     hoursSource,
     page,
-     roleId: user?.role_id,
+     roleId: roleObjects[0]?.id,
     limit,
     ...(employeeIds.length > 0 && { employeeIds: employeeIds.join(',') }),
     ...(clientIds.length > 0 && { clientIds: clientIds.join(',') }),

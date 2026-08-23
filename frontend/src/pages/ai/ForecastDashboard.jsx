@@ -54,7 +54,7 @@ const ForecastCard = ({ icon: Icon, title, loading, children }) => (
 const HORIZONS = [30, 60, 90];
 
 const ForecastDashboard = () => {
-  const { user } = useAuth();
+  const { roleObjects } = useAuth();
   const [revenuePoints, setRevenuePoints] = useState(null);
   const bench = useAIQuery();
   const risk = useAIQuery();
@@ -68,7 +68,7 @@ const ForecastDashboard = () => {
     Promise.all(
       months.map((m) =>
         aiCopilotApi
-          .query({ question: `What was our revenue in ${m.format('MMMM YYYY')}?`, roleId: user?.role_id, hoursSource: 'M' })
+          .query({ question: `What was our revenue in ${m.format('MMMM YYYY')}?`, roleId: roleObjects[0]?.id, hoursSource: 'M' })
           .then((res) => ({ label: m.format('MMM YY'), value: Number(res?.data?.data?.revenue?.total_po_value ?? 0) }))
           .catch(() => ({ label: m.format('MMM YY'), value: null })),
       ),

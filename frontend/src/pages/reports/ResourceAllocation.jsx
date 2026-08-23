@@ -250,13 +250,13 @@ const ResourceAllocation = () => {
     setPoId('all');
     setPage(1);
   };
-  const { user } = useAuth();
+  const { roleObjects } = useAuth();
 
   const params = {
     page,
     limit,
     hoursSource,
-     roleId: user?.role_id,
+     roleId: roleObjects[0]?.id,
     ...(monthYear && { month: monthYear.month, year: monthYear.year }),
     ...(employeeId !== 'all' && { employeeId }),
     ...(poId !== 'all' && { poId }),

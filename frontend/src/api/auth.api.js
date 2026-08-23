@@ -1,42 +1,34 @@
 import apiClient from '@/services/apiClient';
 import { RBAC_MOCK_ENABLED } from '@/mocks/rbacMockConfig';
 import {
-  delay, getDb, persist, findUserById, findRoleById, serializeUser, serializeEmployee,
-  rolesForLoginResponse, formsForRoleName, issueTokenFor, getCurrentMockUser, mockError, MOCK_OTP,
-  mappedBusForUser,
+  delay, persist, findEmployeeByEmail, findEmployeeById,
+  rolesForLoginResponse, businessUnitsForLoginResponse, formsForRoleNames, issueTokenFor,
+  getCurrentMockEmployee, mockError, MOCK_OTP, serializeEmployeeFull,
 } from '@/mocks/rbacMockDb';
-import { ROLE_NAMES } from '@/constants/roleHierarchy';
 
 const mockLogin = async (email, password) => {
   await delay();
-  const user = getDb().users.find((u) => u.email.toLowerCase() === email.toLowerCase());
-  if (!user) throw mockError(404, 'Email ID is not registered.');
-  if (user.password !== password) throw mockError(401, 'Incorrect password.');
-  if (user.status !== 'active') throw mockError(403, 'This account is inactive.');
+  const employee = findEmployeeByEmail(email);
+  if (!employee) throw mockError(404, 'Email ID is not registered.');
+  if (employee.password !== password) throw mockError(401, 'Incorrect password.');
+  if (employee.status !== 'active') throw mockError(403, 'This account is inactive.');
 
-  user.last_login = new Date().toISOString();
+  employee.last_login = new Date().toISOString();
   persist();
 
-  const employee = user.employee_id
-    ? serializeEmployee(getDb().employees.find((e) => e.id === user.employee_id))
-    : null;
-  const roleName = findRoleById(user.role_id).role_name;
+  const roles = rolesForLoginResponse(employee.id);
 
   return {
     success: true,
     message: 'Login successful.',
     data: {
-      accessToken: issueTokenFor(user.id),
-      refreshToken: `refresh.${issueTokenFor(user.id)}`,
+      accessToken: issueTokenFor(employee.id),
+      refreshToken: `refresh.${issueTokenFor(employee.id)}`,
       expiresIn: '15m',
-      user: serializeUser(user),
-      employee,
-      roles: rolesForLoginResponse(user.id),
-      forms: formsForRoleName(roleName),
-      // BU Head spec §8/§9 — only ever populated for a BU Head login; absent (undefined) for
-      // every other role, same as `company`/`employee` already are for accounts that don't
-      // carry them.
-      ...(roleName === ROLE_NAMES.BU_HEAD ? { mapped_bu: mappedBusForUser(user.id) } : {}),
+      employee: serializeEmployeeFull(employee),
+      roles,
+      businessUnits: businessUnitsForLoginResponse(employee.id),
+      forms: formsForRoleNames(roles.map((r) => r.name)),
     },
   };
 };
@@ -44,20 +36,20 @@ const mockLogin = async (email, password) => {
 const mockRefresh = async (refreshToken) => {
   await delay();
   const match = /mock\.(\d+)\./.exec(refreshToken ?? '');
-  const userId = match ? Number(match[1]) : null;
-  const user = userId ? findUserById(userId) : null;
-  if (!user) throw mockError(401, 'Invalid or expired refresh token.');
-  const roleName = findRoleById(user.role_id).role_name;
+  const employeeId = match ? Number(match[1]) : null;
+  const employee = employeeId ? findEmployeeById(employeeId) : null;
+  if (!employee) throw mockError(401, 'Invalid or expired refresh token.');
+  const roles = rolesForLoginResponse(employee.id);
   return {
     success: true,
     message: 'Token refreshed.',
     data: {
-      accessToken: issueTokenFor(user.id),
-      refreshToken: `refresh.${issueTokenFor(user.id)}`,
+      accessToken: issueTokenFor(employee.id),
+      refreshToken: `refresh.${issueTokenFor(employee.id)}`,
       expiresIn: '15m',
-      user: serializeUser(user),
-      roles: rolesForLoginResponse(user.id),
-      forms: formsForRoleName(roleName),
+      roles,
+      businessUnits: businessUnitsForLoginResponse(employee.id),
+      forms: formsForRoleNames(roles.map((r) => r.name)),
     },
   };
 };
@@ -66,8 +58,8 @@ const mockRefresh = async (refreshToken) => {
 // real mailbox — see MOCK_OTP in rbacMockDb.js.
 const mockForgotPassword = async (email) => {
   await delay();
-  const user = getDb().users.find((u) => u.email.toLowerCase() === email.toLowerCase());
-  if (!user) throw mockError(404, 'Email ID is not registered.');
+  const employee = findEmployeeByEmail(email);
+  if (!employee) throw mockError(404, 'Email ID is not registered.');
   return { success: true, message: `OTP sent to ${email}. (Mock OTP: ${MOCK_OTP})` };
 };
 
@@ -81,18 +73,18 @@ const mockResetPassword = async (email, otp, password, confirmPassword) => {
   await delay();
   if (otp !== MOCK_OTP) throw mockError(422, 'Invalid or expired OTP.');
   if (password !== confirmPassword) throw mockError(422, 'Passwords do not match.');
-  const user = getDb().users.find((u) => u.email.toLowerCase() === email.toLowerCase());
-  if (!user) throw mockError(404, 'Email ID is not registered.');
-  user.password = password;
+  const employee = findEmployeeByEmail(email);
+  if (!employee) throw mockError(404, 'Email ID is not registered.');
+  employee.password = password;
   persist();
   return { success: true, message: 'Password reset successfully.' };
 };
 
 const mockChangePassword = async (newPassword) => {
   await delay();
-  const user = getCurrentMockUser();
-  if (!user) throw mockError(401, 'Not authenticated.');
-  user.password = newPassword;
+  const employee = getCurrentMockEmployee();
+  if (!employee) throw mockError(401, 'Not authenticated.');
+  employee.password = newPassword;
   persist();
   return { success: true, message: 'Password changed successfully.' };
 };

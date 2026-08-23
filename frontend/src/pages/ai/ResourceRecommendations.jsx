@@ -31,13 +31,13 @@ const UNDERUTILIZED_THRESHOLD = 60;
 // report), and (3) their monthly cost record. No fabricated skill-match percentage or
 // hourly rate — "Experience Match" and "Monthly Cost" are both real, traceable figures.
 const ResourceRecommendations = () => {
-  const { user } = useAuth();
+  const { roleObjects } = useAuth();
   const [serviceTypeId, setServiceTypeId] = useState('');
   const { data: serviceTypes = [] } = useActiveServiceTypes();
   const utilQuery = useAIQuery();
 
   const { data: typeUsageRes, isPending: typeUsageLoading } = useResourceProjectUtilization({
-    month: REPORT_MONTH, year: REPORT_YEAR, roleId: user?.role_id, hoursSource: 'M',
+    month: REPORT_MONTH, year: REPORT_YEAR, roleId: roleObjects[0]?.id, hoursSource: 'M',
     page: 1, limit: 200, ...(serviceTypeId && { serviceTypeIds: serviceTypeId }),
   });
   const { data: costsRes } = useMonthlyCosts({ month: REPORT_MONTH, year: REPORT_YEAR, limit: 200 });

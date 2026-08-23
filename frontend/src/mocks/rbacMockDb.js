@@ -1,13 +1,28 @@
-// In-memory mock "backend" for the RBAC redesign spec (see rbacMockConfig.js for why this
-// exists). Persisted to sessionStorage so a page refresh mid-demo doesn't lose state; a new
-// browser tab/session starts fresh from the seed below.
-import { ROLE_HIERARCHY, ROLE_NAMES, ROLE_CREATION_MATRIX, NO_COMPANY_ROLES, ADDITIONAL_ROLE_NAMES } from '@/constants/roleHierarchy';
+// In-memory mock "backend" for the Employee Identity Migration (see
+// project_employee_identity_migration in this session's notes / the plan this implements).
+// Persisted to sessionStorage so a page refresh mid-demo doesn't lose state; a new browser
+// tab/session starts fresh from the seed below.
+//
+// Login is now directly against an Employee row — `role_ids`/`business_unit_ids` live flat on
+// the employee (no primary/additional split, no single `company_id`). `businessUnits` carries
+// `is_original_data_visible` now (moved off Role Master's own field — see companies.api.js's new
+// create payload), not roles.
+//
+// Coexistence note (staged migration — BU Admin Master / BU Head Master stay live until backend
+// cutover, per explicit product decision): the legacy `users` + `buHeadBuMappings` collections
+// below are kept alongside the new `employees` model purely so those two screens keep working
+// exactly as before. They are a separate, disconnected dataset from `employees` — a `users` row
+// can no longer log in (login is 100% employee-based now), and creating/managing a BU Admin or
+// BU Head through these legacy screens does NOT create or update anything in `employees`. This
+// intentional duplication is expected during the transition and gets reconciled at real cutover,
+// not before.
+import { ROLE_HIERARCHY, ROLE_NAMES, ROLE_CREATION_MATRIX, SENIOR_ROLE_NAMES, ADDITIONAL_ROLE_NAMES } from '@/constants/roleHierarchy';
 import { getAccessToken } from '@/services/apiClient';
 
-const STORAGE_KEY = 'rbac_mock_db_v1';
+const STORAGE_KEY = 'rbac_mock_db_v2';
 
-// Every seeded account shares this password — documented in the final summary so the app is
-// actually click-through testable per role.
+// Every seeded account shares this password — documented here so the app is actually
+// click-through testable per role.
 export const MOCK_PASSWORD = 'Test@1234';
 export const MOCK_OTP = '582194';
 
@@ -21,7 +36,10 @@ const buildSeed = () => {
     status: 'active',
     hierarchy_rank: r.hierarchy_rank,
     inherits_role_id: null,
-    is_original_data_visible: [ROLE_NAMES.HR, ROLE_NAMES.BU_ADMIN, ROLE_NAMES.BU_HEAD].includes(r.name),
+    // Role Master's own field (unchanged screen/concept, unrelated to this migration) — no
+    // longer what the login response's isOriginalDataVisible gate reads from (that moved to
+    // businessUnits, see below), but Role Master itself still owns and edits this.
+    is_original_data_visible: [ROLE_NAMES.HR, ROLE_NAMES.BU_ADMIN].includes(r.name),
     is_system: true,
     created_at: '2026-01-01T00:00:00.000Z',
   }));
@@ -31,62 +49,62 @@ const buildSeed = () => {
   roles.find((r) => r.role_name === ROLE_NAMES.SERVICE_PO_ADMIN).inherits_role_id = roleId(ROLE_NAMES.PROJECT_ADMIN);
   roles.find((r) => r.role_name === ROLE_NAMES.PROJECT_ADMIN).inherits_role_id = roleId(ROLE_NAMES.MANAGER);
 
-  const users = [
-    { id: 1, company_id: null, employee_id: null, email: 'platformadmin@mock.test', password: MOCK_PASSWORD, role_id: roleId(ROLE_NAMES.PLATFORM_ADMIN), status: 'active', last_login: null },
-    { id: 2, company_id: null, employee_id: null, email: 'admin@mock.test', password: MOCK_PASSWORD, role_id: roleId(ROLE_NAMES.ADMIN), status: 'active', last_login: null },
-    { id: 3, company_id: null, employee_id: null, email: 'entityadmin@mock.test', password: MOCK_PASSWORD, role_id: roleId(ROLE_NAMES.ENTITY_ADMIN), status: 'active', last_login: null },
-    { id: 4, company_id: 1, employee_id: null, email: 'buadmin@mock.test', password: MOCK_PASSWORD, role_id: roleId(ROLE_NAMES.BU_ADMIN), status: 'active', last_login: null },
-    { id: 5, company_id: 1, employee_id: null, email: 'projectadmin@mock.test', password: MOCK_PASSWORD, role_id: roleId(ROLE_NAMES.PROJECT_ADMIN), status: 'active', last_login: null },
-    { id: 6, company_id: 1, employee_id: null, email: 'servicepoadmin@mock.test', password: MOCK_PASSWORD, role_id: roleId(ROLE_NAMES.SERVICE_PO_ADMIN), status: 'active', last_login: null },
-    { id: 7, company_id: 1, employee_id: null, email: 'manager@mock.test', password: MOCK_PASSWORD, role_id: roleId(ROLE_NAMES.MANAGER), status: 'active', last_login: null },
-    { id: 8, company_id: 1, employee_id: null, email: 'hr@mock.test', password: MOCK_PASSWORD, role_id: roleId(ROLE_NAMES.HR), status: 'active', last_login: null },
-    { id: 9, company_id: 1, employee_id: 1, email: 'employee@mock.test', password: MOCK_PASSWORD, role_id: roleId(ROLE_NAMES.EMPLOYEE), status: 'active', last_login: null },
-    { id: 10, company_id: 1, employee_id: null, email: 'manager2@mock.test', password: MOCK_PASSWORD, role_id: roleId(ROLE_NAMES.MANAGER), status: 'active', last_login: null },
-    // BU Head — additive role (see roleHierarchy.js). Carries the plain Employee role as an
-    // additional role (§4 of the BU Head spec: "Roles automatically assigned: BU Head + Employee")
-    // and is linked to its own Employee record below, same as the plain Employee seed above.
-    { id: 11, company_id: null, employee_id: 3, email: 'buhead@mock.test', password: MOCK_PASSWORD, role_id: roleId(ROLE_NAMES.BU_HEAD), additional_role_ids: [roleId(ROLE_NAMES.EMPLOYEE)], status: 'active', last_login: null },
+  // Companies are real-backend-only in this app (never mocked — see companies.api.js), so this
+  // is a small denormalized placeholder table purely so mock employees have something to hold
+  // `business_unit_ids` against and the login response can echo real-looking `businessUnits`.
+  const businessUnits = [
+    { id: 1, name: 'Mock BU Alpha', is_original_data_visible: true },
+    { id: 2, name: 'Mock BU Beta', is_original_data_visible: false },
   ];
 
+  // One employee row IS the login now — no separate `users` collection. Every account tier from
+  // the old seed is preserved 1:1 (same emails) so nothing regresses; `multibu@mock.test` is new,
+  // replacing the old BU-Head-only multi-BU seed to exercise the now-universal BU switcher.
   const employees = [
-    {
-      id: 1, company_id: 1, employee_code: 'EMP-0001', full_name: 'Stage3 Smoketest Employee',
-      designation: 'Software Engineer', total_experience: 3.5, company_experience: 1.0,
-      resource_description: '', date_of_joining: '2025-01-15', date_of_leaving: null,
-      status: 'active', primary_manager_user_id: 7, secondary_manager_user_id: null, linked_user_id: 9,
-    },
-    {
-      id: 2, company_id: 1, employee_code: 'EMP-0002', full_name: 'Jordan Lee',
-      designation: 'QA Engineer', total_experience: 2.0, company_experience: 2.0,
-      resource_description: '', date_of_joining: '2024-06-01', date_of_leaving: null,
-      status: 'active', primary_manager_user_id: 10, secondary_manager_user_id: null, linked_user_id: null,
-    },
-    {
-      id: 3, company_id: null, employee_code: 'EMP-0003', full_name: 'Morgan BU Head',
-      designation: 'BU Head', total_experience: 8.0, company_experience: 4.0,
-      resource_description: '', date_of_joining: '2023-03-01', date_of_leaving: null,
-      status: 'active', primary_manager_user_id: null, secondary_manager_user_id: null, linked_user_id: 11,
-    },
+    { id: 1, employee_code: 'EMP-PLAT', full_name: 'Priya PlatformAdmin', designation: 'Platform Admin', total_experience: 12, company_experience: 5, resource_description: '', date_of_joining: '2020-01-01', date_of_leaving: null, status: 'active', email: 'platformadmin@mock.test', password: MOCK_PASSWORD, role_ids: [roleId(ROLE_NAMES.PLATFORM_ADMIN)], business_unit_ids: [], primary_manager_employee_id: null, secondary_manager_employee_id: null, is_timesheet_approval_required: false },
+    { id: 2, employee_code: 'EMP-ADMIN', full_name: 'Amit Admin', designation: 'Admin', total_experience: 10, company_experience: 4, resource_description: '', date_of_joining: '2020-06-01', date_of_leaving: null, status: 'active', email: 'admin@mock.test', password: MOCK_PASSWORD, role_ids: [roleId(ROLE_NAMES.ADMIN)], business_unit_ids: [], primary_manager_employee_id: null, secondary_manager_employee_id: null, is_timesheet_approval_required: false },
+    { id: 3, employee_code: 'EMP-EADMIN', full_name: 'Elena EntityAdmin', designation: 'Entity Admin', total_experience: 9, company_experience: 3, resource_description: '', date_of_joining: '2021-02-01', date_of_leaving: null, status: 'active', email: 'entityadmin@mock.test', password: MOCK_PASSWORD, role_ids: [roleId(ROLE_NAMES.ENTITY_ADMIN)], business_unit_ids: [], primary_manager_employee_id: null, secondary_manager_employee_id: null, is_timesheet_approval_required: false },
+    { id: 4, employee_code: 'EMP-BUADM', full_name: 'Baldev BuAdmin', designation: 'BU Admin', total_experience: 8, company_experience: 3, resource_description: '', date_of_joining: '2021-06-01', date_of_leaving: null, status: 'active', email: 'buadmin@mock.test', password: MOCK_PASSWORD, role_ids: [roleId(ROLE_NAMES.BU_ADMIN), roleId(ROLE_NAMES.EMPLOYEE)], business_unit_ids: [1], primary_manager_employee_id: null, secondary_manager_employee_id: null, is_timesheet_approval_required: true },
+    // Exercises the universal (no-longer-BU-Head-only) multi-BU switcher and a senior role held
+    // alongside an operational one, same combination BU Admin + Employee already had.
+    { id: 5, employee_code: 'EMP-MULTI', full_name: 'Morgan MultiBu', designation: 'BU Admin', total_experience: 8, company_experience: 4, resource_description: '', date_of_joining: '2021-03-01', date_of_leaving: null, status: 'active', email: 'multibu@mock.test', password: MOCK_PASSWORD, role_ids: [roleId(ROLE_NAMES.BU_ADMIN), roleId(ROLE_NAMES.EMPLOYEE)], business_unit_ids: [1, 2], primary_manager_employee_id: null, secondary_manager_employee_id: null, is_timesheet_approval_required: true },
+    { id: 6, employee_code: 'EMP-PROJ', full_name: 'Priti ProjectAdmin', designation: 'Project Admin', total_experience: 7, company_experience: 3, resource_description: '', date_of_joining: '2022-01-01', date_of_leaving: null, status: 'active', email: 'projectadmin@mock.test', password: MOCK_PASSWORD, role_ids: [roleId(ROLE_NAMES.PROJECT_ADMIN), roleId(ROLE_NAMES.EMPLOYEE)], business_unit_ids: [1], primary_manager_employee_id: null, secondary_manager_employee_id: null, is_timesheet_approval_required: true },
+    { id: 7, employee_code: 'EMP-SPOA', full_name: 'Sanjay ServicePoAdmin', designation: 'Service PO Admin', total_experience: 6, company_experience: 3, resource_description: '', date_of_joining: '2022-03-01', date_of_leaving: null, status: 'active', email: 'servicepoadmin@mock.test', password: MOCK_PASSWORD, role_ids: [roleId(ROLE_NAMES.SERVICE_PO_ADMIN), roleId(ROLE_NAMES.EMPLOYEE)], business_unit_ids: [1], primary_manager_employee_id: null, secondary_manager_employee_id: null, is_timesheet_approval_required: true },
+    { id: 8, employee_code: 'EMP-MGR1', full_name: 'Manisha Manager', designation: 'Manager', total_experience: 6, company_experience: 3, resource_description: '', date_of_joining: '2022-04-01', date_of_leaving: null, status: 'active', email: 'manager@mock.test', password: MOCK_PASSWORD, role_ids: [roleId(ROLE_NAMES.MANAGER), roleId(ROLE_NAMES.EMPLOYEE)], business_unit_ids: [1], primary_manager_employee_id: null, secondary_manager_employee_id: null, is_timesheet_approval_required: true },
+    { id: 9, employee_code: 'EMP-MGR2', full_name: 'Rohit Manager', designation: 'Manager', total_experience: 5, company_experience: 2, resource_description: '', date_of_joining: '2022-05-01', date_of_leaving: null, status: 'active', email: 'manager2@mock.test', password: MOCK_PASSWORD, role_ids: [roleId(ROLE_NAMES.MANAGER), roleId(ROLE_NAMES.EMPLOYEE)], business_unit_ids: [1], primary_manager_employee_id: null, secondary_manager_employee_id: null, is_timesheet_approval_required: true },
+    { id: 10, employee_code: 'EMP-HR01', full_name: 'Hema HR', designation: 'HR', total_experience: 4, company_experience: 2, resource_description: '', date_of_joining: '2022-07-01', date_of_leaving: null, status: 'active', email: 'hr@mock.test', password: MOCK_PASSWORD, role_ids: [roleId(ROLE_NAMES.HR), roleId(ROLE_NAMES.EMPLOYEE)], business_unit_ids: [1], primary_manager_employee_id: null, secondary_manager_employee_id: null, is_timesheet_approval_required: true },
+    { id: 11, employee_code: 'EMP-0001', full_name: 'Stage3 Smoketest Employee', designation: 'Software Engineer', total_experience: 3.5, company_experience: 1.0, resource_description: '', date_of_joining: '2025-01-15', date_of_leaving: null, status: 'active', email: 'employee@mock.test', password: MOCK_PASSWORD, role_ids: [roleId(ROLE_NAMES.EMPLOYEE)], business_unit_ids: [1], primary_manager_employee_id: 8, secondary_manager_employee_id: null, is_timesheet_approval_required: true },
+    // Extra non-login-documented row purely for list-page variety/pagination testing.
+    { id: 12, employee_code: 'EMP-0002', full_name: 'Jordan Lee', designation: 'QA Engineer', total_experience: 2.0, company_experience: 2.0, resource_description: '', date_of_joining: '2024-06-01', date_of_leaving: null, status: 'active', email: 'jordan.lee@mock.test', password: MOCK_PASSWORD, role_ids: [roleId(ROLE_NAMES.EMPLOYEE)], business_unit_ids: [1], primary_manager_employee_id: 9, secondary_manager_employee_id: null, is_timesheet_approval_required: true },
+  ];
+
+  // Legacy dataset backing BU Admin Master / BU Head Master only (see coexistence note above) —
+  // disconnected from the `employees` seed above, same shape this app used before this
+  // migration. `buhead@mock.test` cannot log in through the new employee-based login (that's
+  // the whole point of the migration); it's here purely so BU Head Master's own list has a row.
+  const legacyUsers = [
+    { id: 101, company_id: 1, employee_id: null, email: 'legacy-buadmin@mock.test', password: MOCK_PASSWORD, role_id: roleId(ROLE_NAMES.BU_ADMIN), status: 'active', last_login: null },
+    { id: 102, company_id: null, employee_id: null, email: 'buhead@mock.test', password: MOCK_PASSWORD, role_id: roleId(ROLE_NAMES.BU_HEAD), additional_role_ids: [roleId(ROLE_NAMES.EMPLOYEE)], status: 'active', last_login: null },
   ];
 
   return {
-    meta: { nextIds: { users: 12, employees: 4, roles: roles.length + 1, teamMappings: 2, managerServicePoGrants: 1, employeeServicePoGrants: 1, buHeadBuMappings: 3 } },
+    meta: { nextIds: { employees: 13, roles: roles.length + 1, teamMappings: 2, managerServicePoGrants: 1, employeeServicePoGrants: 1, users: 103, buHeadBuMappings: 3 } },
     roles,
-    users,
+    businessUnits,
     employees,
+    users: legacyUsers,
+    // BU Head <-> BU (Company) mapping — Companies are real-backend-only in this app (never
+    // mocked, see companies.api.js), so BU names are denormalized placeholders here, cosmetic in
+    // mock mode only.
+    buHeadBuMappings: [
+      { id: 1, bu_head_user_id: 102, company_id: 1, company_name: 'Mock BU Alpha' },
+      { id: 2, bu_head_user_id: 102, company_id: 2, company_name: 'Mock BU Beta' },
+    ],
     teamMappings: [
-      { id: 1, company_id: 1, service_po_admin_user_id: 6, manager_user_id: 7, status: 'active' },
+      { id: 1, company_id: 1, service_po_admin_user_id: 7, manager_user_id: 8, status: 'active' },
     ],
     managerServicePoGrants: [],
     employeeServicePoGrants: [],
-    // BU Head <-> BU (Company) mapping — a genuinely new many-to-many relationship with no
-    // existing precedent (BU Admin is single-company via user.company_id). Company name is
-    // denormalized here (not joined from a mock Companies table) since Companies are real-
-    // backend-only in this app (never mocked) — see companies.api.js.
-    buHeadBuMappings: [
-      { id: 1, bu_head_user_id: 11, company_id: 1, company_name: 'Mock BU Alpha' },
-      { id: 2, bu_head_user_id: 11, company_id: 2, company_name: 'Mock BU Beta' },
-    ],
     otpStore: {},
   };
 };
@@ -127,19 +145,22 @@ export const nextId = (collection) => {
 // ── Lookups ──
 export const findRoleById = (id) => db.roles.find((r) => r.id === id);
 export const findRoleByName = (name) => db.roles.find((r) => r.role_name === name);
-export const findUserById = (id) => db.users.find((u) => u.id === id);
 export const findEmployeeById = (id) => db.employees.find((e) => e.id === id);
+export const findEmployeeByEmail = (email) => db.employees.find((e) => e.email.toLowerCase() === email.toLowerCase());
+export const findBusinessUnitById = (id) => db.businessUnits.find((b) => b.id === id);
+// Legacy lookup — BU Admin Master / BU Head Master only (see coexistence note above).
+export const findUserById = (id) => db.users.find((u) => u.id === id);
 
-// The mock's "auth" — no real JWT, just `mock.<userId>` issued at login and decoded back here.
-// Every mocked endpoint that needs to know "who is calling" reads it directly off localStorage
-// rather than threading a token through every function (there's no real network hop to carry it
-// on for a mock).
-export const issueTokenFor = (userId) => `mock.${userId}.${Date.now()}`;
-export const getCurrentMockUser = () => {
+// The mock's "auth" — no real JWT, just `mock.<employeeId>` issued at login and decoded back
+// here. Every mocked endpoint that needs to know "who is calling" reads it directly off
+// localStorage rather than threading a token through every function (there's no real network
+// hop to carry it on for a mock).
+export const issueTokenFor = (employeeId) => `mock.${employeeId}.${Date.now()}`;
+export const getCurrentMockEmployee = () => {
   const token = getAccessToken();
   if (!token?.startsWith('mock.')) return null;
-  const userId = Number(token.split('.')[1]);
-  return findUserById(userId) ?? null;
+  const employeeId = Number(token.split('.')[1]);
+  return findEmployeeById(employeeId) ?? null;
 };
 
 export const serializeRole = (role) => role && {
@@ -153,80 +174,59 @@ export const serializeRole = (role) => role && {
   is_system: role.is_system,
 };
 
-export const serializeUser = (user) => user && {
-  id: user.id,
-  company_id: user.company_id,
-  employee_id: user.employee_id,
-  email: user.email,
-  role_id: user.role_id,
-  status: user.status,
-  role: serializeRole(findRoleById(user.role_id)),
+// Full employee record (list/detail views) — roles/businessUnits resolved flat, no
+// primary/additional split. Never includes `password`.
+export const serializeEmployeeFull = (employee) => {
+  if (!employee) return null;
+  const { password, role_ids, business_unit_ids, ...rest } = employee;
+  return {
+    ...rest,
+    roles: (role_ids ?? []).map(findRoleById).filter(Boolean).map((r) => ({ id: r.id, role_name: r.role_name })),
+    businessUnits: (business_unit_ids ?? []).map(findBusinessUnitById).filter(Boolean),
+  };
 };
 
-export const serializeEmployee = (employee) => employee && {
-  id: employee.id,
-  company_id: employee.company_id,
-  employee_code: employee.employee_code,
-  full_name: employee.full_name,
-  designation: employee.designation,
-  status: employee.status,
+// Login response's flat `roles[]` — no primary/additional distinction, no
+// `is_original_data_visible` (that moved to `businessUnits`, see below).
+export const rolesForLoginResponse = (employeeId) => {
+  const employee = findEmployeeById(employeeId);
+  return (employee.role_ids ?? []).map((rid) => {
+    const role = findRoleById(rid);
+    return { id: role.id, name: role.role_name, permission: role.permission, hierarchyRank: role.hierarchy_rank };
+  });
 };
 
-// Full employee record (list/detail views) — includes manager fields + linked user, which the
-// real spec's employee payload carries per §3.
-export const serializeEmployeeFull = (employee) => employee && {
-  ...employee,
-  email: findUserById(employee.linked_user_id)?.email ?? null,
-};
-
-// One entry per role the user holds, primary first (§4) — additional roles are purely
-// operational and never carry `is_original_data_visible` (that's a primary-role-only concept).
-export const rolesForLoginResponse = (userId) => {
-  const user = findUserById(userId);
-  const role = findRoleById(user.role_id);
-  const additionalRoles = (user.additional_role_ids ?? []).map(findRoleById).filter(Boolean);
-  return [
-    {
-      id: role.id,
-      name: role.role_name,
-      permission: role.permission,
-      hierarchyRank: role.hierarchy_rank,
-      is_original_data_visible: role.is_original_data_visible,
-    },
-    ...additionalRoles.map((r) => ({
-      id: r.id,
-      name: r.role_name,
-      permission: r.permission,
-      hierarchyRank: r.hierarchy_rank,
-    })),
-  ];
+// Login response's `businessUnits[]` — always present, `[]` for an employee with none (e.g.
+// Platform Admin/Admin/Entity Admin).
+export const businessUnitsForLoginResponse = (employeeId) => {
+  const employee = findEmployeeById(employeeId);
+  return (employee.business_unit_ids ?? []).map(findBusinessUnitById).filter(Boolean);
 };
 
 // module -> [{ id, name }], matching the shape POST /roles/forms already returns and Sidebar's
 // buildNavGroups already consumes — see constants/rbacForms.js FORM_NAMES for the exact strings.
+// 'BU Head Master' deliberately NOT seeded here — Sidebar.jsx injects it via a hardcoded
+// Admin/Entity Admin check (mirroring Entity Admins), so it isn't duplicated.
 const FORMS_BY_ROLE = {
   [ROLE_NAMES.PLATFORM_ADMIN]: {},
-  // 'BU Head Master' deliberately NOT seeded here — Sidebar.jsx injects it via a hardcoded
-  // Admin/Entity Admin check (mirroring Entity Admins), same as the real-backend-mode fallback,
-  // so it isn't duplicated once a real Form Master row for it eventually exists too.
   [ROLE_NAMES.ADMIN]: { 'Entity Management': [{ id: 101, name: 'Entity Master' }, { id: 102, name: 'BU Admin Master' }] },
   [ROLE_NAMES.ENTITY_ADMIN]: { 'Entity Management': [{ id: 101, name: 'Entity Master' }, { id: 102, name: 'BU Admin Master' }] },
   [ROLE_NAMES.BU_ADMIN]: {
     Administration: [{ id: 103, name: 'Roles' }, { id: 104, name: 'Forms' }],
-    People: [{ id: 105, name: 'Employees' }],
+    People: [{ id: 105, name: 'Employee Master' }],
   },
-  // BU Head gets the identical form set as BU Admin (§14 of the BU Head spec) — never diverge
-  // this from BU_ADMIN's own entry above.
+  // BU Head gets the identical form set as BU Admin — never diverge this from BU_ADMIN's own
+  // entry above. Currently unreachable via login (no employee holds this role — BU Head Master
+  // is the only mint path and its accounts are legacy `users` rows that can't log in), kept for
+  // parity/robustness.
   [ROLE_NAMES.BU_HEAD]: {
     Administration: [{ id: 103, name: 'Roles' }, { id: 104, name: 'Forms' }],
-    People: [{ id: 105, name: 'Employees' }],
+    People: [{ id: 105, name: 'Employee Master' }],
   },
   [ROLE_NAMES.PROJECT_ADMIN]: {},
   [ROLE_NAMES.SERVICE_PO_ADMIN]: {},
   [ROLE_NAMES.MANAGER]: {},
-  [ROLE_NAMES.HR]: { People: [{ id: 105, name: 'Employees' }] },
-  // Previously static/always-on regardless of mapping — now seeded here like every other
-  // role's forms, since Employee screens are formName-gated too (see routes/index.jsx).
+  [ROLE_NAMES.HR]: { People: [{ id: 105, name: 'Employee Master' }] },
   [ROLE_NAMES.EMPLOYEE]: {
     Core: [{ id: 401, name: 'Employee Dashboard' }],
     'Work Log': [{ id: 402, name: 'My Work Log' }, { id: 403, name: 'Monthly Summary' }],
@@ -234,17 +234,21 @@ const FORMS_BY_ROLE = {
   },
 };
 
-export const formsForRoleName = (roleName) => FORMS_BY_ROLE[roleName] ?? {};
-
-export const isNoCompanyRole = (roleName) => NO_COMPANY_ROLES.includes(roleName);
-
-// BU Head <-> BU (Company) mapping lookups (§8/§9 of the BU Head spec: login's `mapped_bu`
-// list). `{ id, name }` shape matches the real backend contract this feature is designed
-// against — see buHeads.api.js's header comment for the caveat that the contract is unconfirmed.
-export const mappedBusForUser = (userId) =>
-  getDb().buHeadBuMappings
-    .filter((m) => m.bu_head_user_id === userId)
-    .map((m) => ({ id: m.company_id, name: m.company_name }));
+// A multi-role employee's forms are the union across every held role (roles is a real flat
+// array now, not one primary role) — de-duplicated per module/form id.
+export const formsForRoleNames = (roleNames) => {
+  const merged = {};
+  roleNames.forEach((name) => {
+    const forms = FORMS_BY_ROLE[name] ?? {};
+    Object.entries(forms).forEach(([moduleName, rows]) => {
+      merged[moduleName] = merged[moduleName] ?? [];
+      rows.forEach((row) => {
+        if (!merged[moduleName].some((f) => f.id === row.id)) merged[moduleName].push(row);
+      });
+    });
+  });
+  return merged;
+};
 
 export const roleMatrixError = (actorRoleName, targetRoleName) => {
   const allowed = ROLE_CREATION_MATRIX[actorRoleName] ?? [];
@@ -260,14 +264,32 @@ export const assertCanAssignRole = (actorRoleName, targetRoleName) => {
   }
 };
 
-// Multi-role support (§4): senior tiers can only ever be someone's one primary role. Shared by
-// every mocked endpoint that can assign additional roles (Users, Employees).
+// Multi-role support: any number of non-senior/operational roles may be held alongside the
+// (at most one) senior role — shared by every mocked endpoint that assigns roles.
 export const assertValidAdditionalRole = (roleName) => {
   if (!ADDITIONAL_ROLE_NAMES.includes(roleName)) {
     const err = new Error(
       `"${roleName}" cannot be held as an additional role — only Project Admin, Service PO Admin, Manager, HR, or Employee may be assigned as additional roles.`
     );
     err.response = { status: 400, data: { success: false, message: err.message } };
+    throw err;
+  }
+};
+
+// Preserved invariant (explicitly confirmed, not dropped, when roles moved off `users.role_id`
+// onto a flat `employee_roles` table): an employee can hold at most one senior tier (rank <= 4 —
+// Platform Admin/Admin/Entity Admin/BU Admin) at a time, plus any number of operational roles.
+// The frontend's Roles multi-select may warn on selecting a second senior role, but this is the
+// actual enforcement point (mirroring the real backend's planned server-side check).
+export const assertAtMostOneSeniorRole = (roleIds) => {
+  const seniorCount = roleIds
+    .map(findRoleById)
+    .filter(Boolean)
+    .filter((r) => SENIOR_ROLE_NAMES.includes(r.role_name))
+    .length;
+  if (seniorCount > 1) {
+    const err = new Error('An employee can hold at most one senior-tier role (Platform Admin, Admin, Entity Admin, or BU Admin) at a time.');
+    err.response = { status: 422, data: { success: false, code: 'VALIDATION_ERROR', message: err.message, errors: [{ field: 'role_ids', message: err.message }] } };
     throw err;
   }
 };
@@ -281,7 +303,7 @@ export const mockError = (status, message) => {
 };
 
 // Generic in-memory list -> paginated envelope, shared by every mocked list endpoint (Roles,
-// Users, Employees, Entity Admins). `searchFields` are checked case-insensitively as substrings;
+// Employees, Entity Admins). `searchFields` are checked case-insensitively as substrings;
 // `sortBy`/`sortOrder`("asc"/"desc"/"ASC"/"DESC") sort in place on a copy.
 export const paginate = (list, { page = 1, limit = 10, search, searchFields = [], status, sortBy, sortOrder, filter } = {}) => {
   let rows = [...list];

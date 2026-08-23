@@ -1,4 +1,5 @@
-import { Plus, Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import { ChevronDown, ChevronRight, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/utils/cn';
@@ -79,17 +80,32 @@ export const ServicePOChildrenOnlyEditor = ({ nodes, onChange }) => {
 };
 
 const ParentRow = ({
-  parent, onChangeName, onDelete, onAddChild,
+  parent, isCollapsed, onToggleCollapse, onChangeName, onDelete, onAddChild,
   onChangeChildName, onDeleteChild,
 }) => (
   <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
     <div className="flex items-center gap-2">
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="h-8 w-8 p-0 shrink-0"
+        title={isCollapsed ? 'Expand module' : 'Collapse module'}
+        onClick={onToggleCollapse}
+      >
+        {isCollapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+      </Button>
       <Input
         value={parent.name}
         onChange={(e) => onChangeName(e.target.value)}
         placeholder="Module name"
         className="h-9 flex-1 text-sm font-medium bg-white"
       />
+      {isCollapsed && parent.children.length > 0 && (
+        <span className="shrink-0 text-xs text-muted-foreground">
+          {parent.children.length} task{parent.children.length === 1 ? '' : 's'}
+        </span>
+      )}
       <Button
         type="button"
         variant="ghost"
@@ -101,23 +117,25 @@ const ParentRow = ({
         <Trash2 className="h-3.5 w-3.5" />
       </Button>
     </div>
-    {parent.children.length > 0 ? (
-      <div className="space-y-2 border-l-2 border-border pl-4">
-        {parent.children.map((child, idx) => (
-          <ChildRow
-            key={child.id}
-            child={child}
-            onChangeName={(name) => onChangeChildName(child.id, name)}
-            onDelete={() => onDeleteChild(child.id)}
-            showAdd={idx === parent.children.length - 1}
-            onAdd={onAddChild}
-          />
-        ))}
-      </div>
-    ) : (
-      <Button type="button" variant="outline" size="sm" className="ml-4 h-7 gap-1.5 text-xs" onClick={onAddChild}>
-        <Plus className="h-3 w-3" /> Add Task
-      </Button>
+    {!isCollapsed && (
+      parent.children.length > 0 ? (
+        <div className="ml-10 space-y-2 border-l-2 border-border pl-4">
+          {parent.children.map((child, idx) => (
+            <ChildRow
+              key={child.id}
+              child={child}
+              onChangeName={(name) => onChangeChildName(child.id, name)}
+              onDelete={() => onDeleteChild(child.id)}
+              showAdd={idx === parent.children.length - 1}
+              onAdd={onAddChild}
+            />
+          ))}
+        </div>
+      ) : (
+        <Button type="button" variant="outline" size="sm" className="ml-10 h-7 gap-1.5 text-xs" onClick={onAddChild}>
+          <Plus className="h-3 w-3" /> Add Task
+        </Button>
+      )
     )}
   </div>
 );
@@ -127,6 +145,16 @@ const ParentRow = ({
 // Deleting a Module drops its whole task array with it (client-side cascade); deleting a Task only
 // removes that one row.
 const ServicePOHierarchyEditor = ({ parents, onChange }) => {
+  const [collapsedIds, setCollapsedIds] = useState(() => new Set());
+
+  const toggleCollapse = (id) =>
+    setCollapsedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
   const addParent = () => onChange([...parents, emptyParentNode()]);
 
   const changeParentName = (id, name) => onChange(parents.map((p) => (p.id === id ? { ...p, name } : p)));
@@ -154,6 +182,8 @@ const ServicePOHierarchyEditor = ({ parents, onChange }) => {
         <ParentRow
           key={parent.id}
           parent={parent}
+          isCollapsed={collapsedIds.has(parent.id)}
+          onToggleCollapse={() => toggleCollapse(parent.id)}
           onChangeName={(name) => changeParentName(parent.id, name)}
           onDelete={() => deleteParent(parent.id)}
           onAddChild={() => addChild(parent.id)}

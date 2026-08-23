@@ -281,7 +281,7 @@ const SectionLabel = ({ icon: Icon, title, action }) => (
 /* ─── Dashboard ──────────────────────────────────────────────────────────── */
 const Dashboard = () => {
   const navigate = useNavigate();
-  const { user, accessibleForms, accessibleFormsLoaded, isPlatformAdmin } = useAuth();
+  const { roleObjects, accessibleForms, accessibleFormsLoaded, isPlatformAdmin } = useAuth();
   const [fiscalYear, setFiscalYear]           = useState(currentFY);
   const [bottomMonthYear, setBottomMonthYear] = useState({ month: prevMonth.getMonth() + 1, year: prevMonth.getFullYear() });
   const [quarter, setQuarter]                 = useState(null);
@@ -411,7 +411,7 @@ const Dashboard = () => {
   const analyticsParams = {
     fiscalYear,
     hoursSource,
-    roleId: user?.role_id,
+    roleId: roleObjects[0]?.id,
     ...(quarter     && { quarter }),
     ...(employeeId  && { employeeId }),
     ...(clientId    && { clientId }),
@@ -430,7 +430,7 @@ const Dashboard = () => {
     month: bottomMonthYear.month,
     year:  bottomMonthYear.year,
     hoursSource,
-    roleId: user?.role_id,
+    roleId: roleObjects[0]?.id,
     ...(employeeId  && { employeeId }),
     ...(clientId    && { clientId }),
     ...(servicePOId && { poId: servicePOId }),

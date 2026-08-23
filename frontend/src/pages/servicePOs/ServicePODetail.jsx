@@ -153,6 +153,11 @@ const ServicePODetail = () => {
                 Billable
               </Badge>
             )}
+            {po.is_centralised && (
+              <Badge variant="secondary" className="text-xs">
+                Centralised
+              </Badge>
+            )}
             <Badge variant="outline" className="text-xs">Level {level}</Badge>
           </div>
           {ancestors.length > 0 && (

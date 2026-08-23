@@ -160,6 +160,9 @@ const BuAdminList = () => {
                 onChange={(e) => { setSearch(e.target.value); setPage(1); }}
               />
             </div>
+            {/* Shortcut to Create BU, not a BU Admin creator — BU creation no longer bundles
+                one (see companies.api.js), there's just no other create entry point on this
+                page right now. */}
             <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => navigate(ROUTES.COMPANY_NEW)}>
               <Plus className="mr-1.5 h-4 w-4" /> Add BU
             </Button>
@@ -182,15 +185,9 @@ const BuAdminList = () => {
         onPageChange={setPage}
         onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
         emptyState={
-          // A freshly-created Admin/Entity Admin legitimately has zero BU Admins until they
-          // add a BU (which bundles one) — not an error state (§1 gotcha).
-          !search ? (
-            <EmptyState
-              title="No BU Admins yet"
-              description="BU Admins are created automatically when you add a BU — create one to get started."
-              action={{ label: 'Add BU', icon: Plus, onClick: () => navigate(ROUTES.COMPANY_NEW) }}
-            />
-          ) : undefined
+          // A freshly-created Admin/Entity Admin legitimately has zero BU Admins — BU creation
+          // no longer bundles one — not an error state (§1 gotcha).
+          !search ? <EmptyState title="No BU Admins yet" /> : undefined
         }
       />
 

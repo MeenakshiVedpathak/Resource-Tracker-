@@ -14,8 +14,8 @@ export default {
       },
     },
     extend: {
-      fontFamily: {
-        sans: ['Lato', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
+       fontFamily: {
+        sans: ['Inter', '"Source Sans Pro"', 'Helvetica', 'Arial', 'sans-serif'],
         mono: ['JetBrains Mono', 'Fira Code', 'Cascadia Code', 'monospace'],
       },
       colors: {

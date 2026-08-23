@@ -15,9 +15,7 @@ export const QUERY_KEYS = {
   EMPLOYEES_ACTIVE: ['employees', 'active'],
   ELIGIBLE_DELIVERY_HEADS: ['employees', 'eligible-delivery-heads'],
   EMPLOYEE: (id) => ['employees', id],
-
-  // Users
-  USERS: (params) => ['users', params],
+  EMPLOYEE_MAPPINGS: (id) => ['employees', id, 'mappings'],
 
   // Roles
   ROLES: (params) => ['roles', params],
@@ -29,6 +27,9 @@ export const QUERY_KEYS = {
   FORMS: (params) => ['forms', params],
   FORM: (id) => ['forms', id],
   FORM_MODULES: (params) => ['forms', 'modules', params],
+  FORM_HIERARCHY: ['forms', 'hierarchy'],
+  FORM_CATEGORIES: (params) => ['forms', 'categories', params],
+  FORM_CATEGORY: (id) => ['forms', 'categories', id],
 
   // Clients
   CLIENTS: (params) => ['clients', params],

@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { Save } from 'lucide-react';
 import { useServicePO, useCreateServicePO, useUpdateServicePO } from '@/hooks/useServicePOs';
 import { useActiveClients } from '@/hooks/useClients';
+import { clientsApi } from '@/api/clients.api';
 import { useProjectsByClient } from '@/hooks/useProjects';
 import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
 import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
@@ -20,6 +21,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { SearchableSelect } from '@/components/ui/searchable-select';
+import { Switch } from '@/components/ui/switch';
 import {
   Sheet,
   SheetContent,
@@ -66,19 +68,12 @@ const poSchema = (isEdit) => z
     service_type_id: z.coerce
       .number({ required_error: 'Service type is required' })
       .positive('Service type is required'),
-    po_value: z.preprocess(
-      (v) => (v === '' || v == null ? undefined : Number(v)),
-      z.number().positive('PO value must be positive').optional()
-    ),
     start_date: z.string().min(1, 'Start date is required'),
     end_date: z.string().min(1, 'End date is required'),
-    expected_man_hours: z.preprocess(
-      (v) => (v === '' || v == null ? undefined : Number(v)),
-      z.number().positive('Expected hours must be positive').optional()
-    ),
     service_description: z.string().min(1, 'Service description is required').max(1000),
     invoice_frequency: z.string().min(1, 'Invoice frequency is required'),
     status: z.enum(['in-progress', 'completed', 'on-hold', 'pending', 'cancelled', 'closed']).default('in-progress'),
+    is_centralised: z.boolean().default(false),
   })
   .refine(
     (data) => {
@@ -125,6 +120,7 @@ const ServicePOForm = () => {
   const updateMutation = useUpdateServicePO(id);
 
   const [selectedCategory, setSelectedCategory] = useState('');
+  const [isResolvingCompany, setIsResolvingCompany] = useState(false);
 
   const form = useForm({
     resolver: zodResolver(poSchema(isEdit)),
@@ -135,13 +131,12 @@ const ServicePOForm = () => {
       project_id: '',
       delivery_head_employee_id: '',
       service_type_id: '',
-      po_value: '',
       start_date: '',
       end_date: '',
-      expected_man_hours: '',
       service_description: '',
       invoice_frequency: '',
       status: 'in-progress',
+      is_centralised: false,
     },
   });
 
@@ -171,18 +166,19 @@ const ServicePOForm = () => {
         delivery_head_employee_id:
           po.delivery_head_employee_id ?? po.delivery_head?.id ?? po.delivery_head_employee?.id ?? '',
         service_type_id: po.service_type_id ?? '',
-        po_value: po.po_value ?? '',
         start_date: po.start_date ? po.start_date.slice(0, 10) : '',
         end_date: po.end_date ? po.end_date.slice(0, 10) : '',
-        expected_man_hours: po.expected_man_hours ?? '',
         service_description: po.service_description ?? '',
         invoice_frequency: po.invoice_frequency ?? '',
         status: po.status ?? 'in-progress',
+        is_centralised: po.is_centralised ?? false,
       });
     }
   }, [po, isEdit, form, serviceTypes]);
 
-  const onSubmit = (values) => {
+  // The backend requires company_id (Business Unit) on create but a Service PO has no BU field
+  // of its own, so it's looked up from the selected Client's own record instead of asking again.
+  const onSubmit = async (values) => {
     let is_billable = false;
     if (selectedCategory && activeCategories.length > 0) {
       const category = activeCategories.find((c) => String(c.id) === String(selectedCategory));
@@ -195,6 +191,22 @@ const ServicePOForm = () => {
       Object.entries(values).filter(([, v]) => v !== '' && v != null)
     );
     clean.is_billable = is_billable;
+
+    if (!isEdit) {
+      try {
+        setIsResolvingCompany(true);
+        const client = await clientsApi.getById(values.client_id);
+        const companyId = client?.company_id ?? client?.company?.id;
+        if (companyId != null) {
+          clean.company_id = Number(companyId);
+        }
+      } catch (err) {
+        setIsResolvingCompany(false);
+        showError(extractApiError(err));
+        return;
+      }
+      setIsResolvingCompany(false);
+    }
 
     const mutation = isEdit ? updateMutation : createMutation;
     mutation.mutate(clean, {
@@ -219,7 +231,7 @@ const ServicePOForm = () => {
     navigate(ROUTES.SERVICE_POS);
   };
 
-  const isSubmitting = createMutation.isPending || updateMutation.isPending;
+  const isSubmitting = createMutation.isPending || updateMutation.isPending || isResolvingCompany;
 
   if (isEdit && isLoadingPO) return <FormSkeleton />;
 
@@ -469,48 +481,6 @@ const ServicePOForm = () => {
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <FormField
                 control={form.control}
-                name="po_value"
-                render={({ field }) => (
-                  <FormItem className="space-y-1">
-                    <FormLabel className="text-[13px]">PO Value (INR)</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        placeholder="e.g. 500000"
-                        className="h-8 text-sm"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="expected_man_hours"
-                render={({ field }) => (
-                  <FormItem className="space-y-1">
-                    <FormLabel className="text-[13px]">Expected Man-Hours</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        min="0"
-                        step="0.5"
-                        placeholder="e.g. 1200"
-                        className="h-8 text-sm"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
                 name="start_date"
                 render={({ field }) => (
                   <FormItem className="space-y-1">
@@ -561,6 +531,27 @@ const ServicePOForm = () => {
                       searchPlaceholder="Search frequency..."
                       className="h-8 text-sm w-full"
                     />
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="is_centralised"
+                render={({ field }) => (
+                  <FormItem className="space-y-1 sm:col-span-2">
+                    <div className="flex items-center justify-between rounded-md border px-3 py-2">
+                      <div className="space-y-0.5">
+                        <FormLabel className="text-[13px]">Is Centralised</FormLabel>
+                        <p className="text-[11px] text-muted-foreground">
+                          New employees are automatically mapped to this PO going forward.
+                        </p>
+                      </div>
+                      <FormControl>
+                        <Switch checked={field.value} onCheckedChange={field.onChange} />
+                      </FormControl>
+                    </div>
                     <FormMessage />
                   </FormItem>
                 )}

@@ -1,8 +1,10 @@
+import { useEffect, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useFormById, useFormModules, useCreateForm, useUpdateForm } from '@/hooks/useForms';
+import { useFormById, useFormModules, useCreateForm, useUpdateForm, useMoveForm } from '@/hooks/useForms';
+import { useFormCategories } from '@/hooks/useFormCategories';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import { ROUTES } from '@/constants/routes';
@@ -27,6 +29,9 @@ const moduleSchema = z.object({
 const formSchema = z.object({
   form_name: z.string().min(2, 'Must be at least 2 characters').max(100),
   module_name: z.string().min(1, 'Module is required'),
+  // Select values must be strings — 'none' means "directly under the module" (category_id: null),
+  // anything else is a numeric category id converted back to a number at submit time.
+  category_id: z.string().default('none'),
   status: z.enum(['active', 'inactive']).default('active'),
 });
 
@@ -45,6 +50,7 @@ const FormFields = ({ id, isEdit, isModule, formRecord, onClose }) => {
   const { success, error: showError } = useNotification();
   const createMutation = useCreateForm();
   const updateMutation = useUpdateForm(id);
+  const moveMutation = useMoveForm();
   // Module dropdown must come from GET /forms/modules (module rows only), never derived from
   // the flat form list.
   const { data: moduleOptions = [], isPending: isLoadingModules } = useFormModules({ status: 'active' });
@@ -53,32 +59,90 @@ const FormFields = ({ id, isEdit, isModule, formRecord, onClose }) => {
     resolver: zodResolver(isModule ? moduleSchema : formSchema),
     defaultValues: {
       form_name: formRecord?.form_name ?? '',
-      ...(isModule ? {} : { module_name: formRecord?.module_name ?? '' }),
+      ...(isModule ? {} : {
+        module_name: formRecord?.module_name ?? '',
+        category_id: formRecord?.category_id != null ? String(formRecord.category_id) : 'none',
+      }),
       status: formRecord?.status ?? 'active',
     },
   });
 
   const formStatus = useWatch({ control: rhForm.control, name: 'status' });
+  const watchedModuleName = useWatch({ control: rhForm.control, name: 'module_name' });
+  const selectedModuleId = moduleOptions.find((m) => m.form_name === watchedModuleName)?.id;
 
-  const onSubmit = (values) => {
-    // Never send seq — the server always computes it (next module slot, or next slot within
-    // the chosen module).
-    const payload = isModule ? { form_name: values.form_name, module_name: null, status: values.status } : values;
-    const mutation = isEdit ? updateMutation : createMutation;
-    mutation.mutate(payload, {
-      onSuccess: () => {
-        success(
-          isEdit
-            ? isModule ? 'Module updated successfully.' : 'Form updated successfully.'
-            : isModule ? 'Module created successfully.' : 'Form created successfully.'
-        );
-        onClose();
-      },
-      onError: (err) => showError(extractApiError(err)),
-    });
+  // Category options are scoped to whichever module is currently selected — an empty result
+  // means "No Category Available" (still a valid state, not an error).
+  const { data: categoryOptions = [], isPending: isLoadingCategories } = useFormCategories(
+    { module_id: selectedModuleId, status: 'active' }
+  );
+
+  // Changing the Module must reset the Category selection — a category from the previous module
+  // is never valid for the new one. Skip the very first render so loading an existing form's
+  // saved module_name doesn't wipe its saved category_id.
+  const isFirstModuleRender = useRef(true);
+  useEffect(() => {
+    if (isModule) return;
+    if (isFirstModuleRender.current) {
+      isFirstModuleRender.current = false;
+      return;
+    }
+    rhForm.setValue('category_id', 'none');
+  }, [watchedModuleName, isModule, rhForm]);
+
+  const onSubmit = async (values) => {
+    if (isModule) {
+      // Never send seq — the server always computes it (next module slot).
+      const payload = { form_name: values.form_name, module_name: null, status: values.status };
+      const mutation = isEdit ? updateMutation : createMutation;
+      mutation.mutate(payload, {
+        onSuccess: () => {
+          success(isEdit ? 'Module updated successfully.' : 'Module created successfully.');
+          onClose();
+        },
+        onError: (err) => showError(extractApiError(err)),
+      });
+      return;
+    }
+
+    const resolvedCategoryId = values.category_id === 'none' ? null : Number(values.category_id);
+
+    if (!isEdit) {
+      // Never send seq — the server always computes the next slot within the chosen module/category.
+      const payload = { form_name: values.form_name, module_name: values.module_name, status: values.status, category_id: resolvedCategoryId };
+      createMutation.mutate(payload, {
+        onSuccess: () => {
+          success('Form created successfully.');
+          onClose();
+        },
+        onError: (err) => showError(extractApiError(err)),
+      });
+      return;
+    }
+
+    // Edit path: PUT /forms/:id never touches category_id, so module/category changes go through
+    // the dedicated move endpoint instead — always together, since omitting category_id while
+    // changing module_id would otherwise silently reset the category to null server-side.
+    const moduleChanged = values.module_name !== formRecord.module_name;
+    const categoryChanged = resolvedCategoryId !== (formRecord.category_id ?? null);
+
+    try {
+      await updateMutation.mutateAsync({ form_name: values.form_name, status: values.status });
+      if (moduleChanged || categoryChanged) {
+        await moveMutation.mutateAsync({
+          id,
+          module_id: moduleOptions.find((m) => m.form_name === values.module_name)?.id,
+          category_id: resolvedCategoryId,
+        });
+      }
+      success('Form updated successfully.');
+      onClose();
+    } catch (err) {
+      showError(extractApiError(err));
+    }
   };
 
-  const isSubmitting = createMutation.isPending || updateMutation.isPending;
+  const isSubmitting = createMutation.isPending || updateMutation.isPending || moveMutation.isPending;
 
   return (
     <>
@@ -123,6 +187,35 @@ const FormFields = ({ id, isEdit, isModule, formRecord, onClose }) => {
                         ))}
                       </SelectContent>
                     </Select>
+                    <FormMessage className="text-[10px]" />
+                  </FormItem>
+                )}
+              />
+            )}
+
+            {!isModule && (
+              <FormField
+                control={rhForm.control}
+                name="category_id"
+                render={({ field }) => (
+                  <FormItem className="space-y-1">
+                    <FormLabel className="text-[11px] text-muted-foreground font-medium">Category</FormLabel>
+                    <Select value={field.value || undefined} onValueChange={(v) => v && field.onChange(v)} disabled={isLoadingCategories || !selectedModuleId}>
+                      <FormControl>
+                        <SelectTrigger className="h-8 text-sm border-gray-200">
+                          <SelectValue placeholder={isLoadingCategories ? 'Loading categories…' : 'Select a category'} />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="none">No Category</SelectItem>
+                        {categoryOptions.map((c) => (
+                          <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {!isLoadingCategories && categoryOptions.length === 0 && (
+                      <p className="text-[10px] text-muted-foreground">No Category Available — this form will sit directly under the module.</p>
+                    )}
                     <FormMessage className="text-[10px]" />
                   </FormItem>
                 )}

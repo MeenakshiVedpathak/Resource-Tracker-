@@ -4,16 +4,13 @@ import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Eye, EyeOff } from 'lucide-react';
-import { useEmployee, useCreateEmployee, useUpdateEmployee } from '@/hooks/useEmployees';
-import { useAssignableManagers } from '@/hooks/useUsers';
+import { useEmployee, useCreateEmployee, useUpdateEmployee, useAssignableManagers } from '@/hooks/useEmployees';
 import { useRoles } from '@/hooks/useRoles';
-import { useAuth } from '@/hooks/useAuth';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import { employeeBaseFields, employeePasswordField } from '@/constants/employeeFormSchema';
 import { ROUTES } from '@/constants/routes';
-import { isProtectedAccount } from '@/constants/protectedAccounts';
-import { getAssignableRoleNames, ADDITIONAL_ROLE_NAMES, SENIOR_ROLE_NAMES, ROLE_NAMES } from '@/constants/roleHierarchy';
+import { ROLE_NAMES } from '@/constants/roleHierarchy';
 import {
   Form, FormField, FormItem, FormLabel, FormControl, FormMessage,
 } from '@/components/ui/form';
@@ -22,7 +19,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { SearchableSelect } from '@/components/ui/searchable-select';
-import { MultiSelect } from '@/components/ui/multi-select';
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter,
 } from '@/components/ui/sheet';
@@ -30,17 +26,17 @@ import { cn } from '@/utils/cn';
 
 const baseFields = employeeBaseFields;
 
-const roleIdsField = z.array(z.coerce.number()).min(1, 'Select at least one role');
-
 const passwordField = employeePasswordField;
 
-// Create requires a Role and a Password (this is now the only place a login gets created —
-// former User Master's Account Details/Role sections, merged in) — Primary Manager stays optional.
+// Create requires a Password (Employee Master IS the login now — there's no more separate User
+// Master) — Primary Manager stays optional. Roles/Business Units are no longer picked here at
+// all — every new employee is sent to the backend with the plain "Employee" role by default
+// (see onSubmit), and both Roles and Business Units are managed afterwards via the "Map Roles &
+// Business Units" table action on Employee List.
 const createSchema = z
   .object({
     ...baseFields,
-    primary_manager_user_id: z.coerce.number().positive().optional().nullable(),
-    role_ids: roleIdsField,
+    primary_manager_employee_id: z.coerce.number().positive().optional().nullable(),
     password: passwordField,
     confirmPassword: z.string(),
   })
@@ -49,28 +45,13 @@ const createSchema = z
     path: ['confirmPassword'],
   });
 
-// Manager reassignment is optional on update (§3.2) — password is never editable here (use the
-// Employee List's Reset Password action instead), but Role can be changed and email can be
-// corrected/backfilled (e.g. an employee record with no linked user account yet).
+// Manager reassignment is optional on update — password is never editable here (use the
+// Employee List's Reset Password action instead). Roles/Business Units are edited exclusively
+// via Employee List's mapping table, not this form, so they're neither shown nor submitted here.
 const editSchema = z.object({
   ...baseFields,
-  primary_manager_user_id: z.coerce.number().positive().optional().nullable(),
-  role_ids: roleIdsField,
+  primary_manager_employee_id: z.coerce.number().positive().optional().nullable(),
 });
-
-// The backend still wants role_ids ordered as [primary, ...additional] (§4/§9) even though the
-// UI is just one flat "Roles" picker — this reconstructs that order without asking the user to
-// think about "primary" at all. A senior tier (if selected) always leads; otherwise the most
-// senior selected role the actor is actually permitted to assign becomes the leader. Returns
-// null if no selected role is one the actor's Role Creation Matrix allows as a leader at all.
-const orderRoleIds = (selectedRoles, assignableNames) => {
-  const senior = selectedRoles.find((r) => SENIOR_ROLE_NAMES.includes(r.role_name));
-  const leader = senior ?? [...selectedRoles]
-    .sort((a, b) => (a.hierarchy_rank ?? 99) - (b.hierarchy_rank ?? 99))
-    .find((r) => assignableNames.includes(r.role_name));
-  if (!leader) return null;
-  return [leader.id, ...selectedRoles.filter((r) => r.id !== leader.id).map((r) => r.id)];
-};
 
 const FormSkeleton = () => (
   <div className="space-y-4 p-4">
@@ -85,47 +66,22 @@ const EmployeeForm = () => {
   const { id } = useParams();
   const isEdit = !!id;
   const { success, error: showError } = useNotification();
-  const { role: actorRoleName } = useAuth();
 
   const { data: employee, isPending: isLoadingEmployee } = useEmployee(id);
   const { data: managers = [], isPending: isLoadingManagers } = useAssignableManagers();
+  // Only fetched to resolve the plain "Employee" role's id — every new employee is sent to the
+  // backend with that role by default, since Roles are no longer selectable on this form (see
+  // onSubmit and [[project_employee_identity_migration]] for why the mapping moved to the list).
   const { data: rolesData } = useRoles({ status: 'active', limit: 100 });
   const createMutation = useCreateEmployee();
   const updateMutation = useUpdateEmployee(id);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  // Direct-URL/row-click safety net — the Edit action is already hidden in EmployeeList for this
-  // account, but nothing stops someone navigating to /employees/:id/edit by hand.
-  useEffect(() => {
-    if (isEdit && employee && isProtectedAccount(employee)) {
-      showError('This account is protected and cannot be edited.');
-      navigate(ROUTES.EMPLOYEES, { replace: true });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isEdit, employee]);
-
   const allRoles = rolesData?.data ?? [];
-
-  // The Role Creation Matrix (§0, expanded for BU Admin) plus every operational role that's
-  // always eligible as an additional role (§4) — the union of everything the actor could
-  // validly use in some combination. What actually becomes the "leader" of role_ids is worked
-  // out on submit (orderRoleIds), never surfaced as a separate field in this UI.
-  //
-  // Employee Master always allows assigning the plain Employee role regardless of the actor's
-  // tier, even though the matrix's HR entry is empty — HR is the primary actor here, and per the
-  // matrix's own comment ("HR creates Employee via the dedicated Employee-creation flow, not the
-  // generic Users screen") that was always a deliberate bypass, previously baked into the old
-  // Employee form hardcoding role_id to Employee with no picker at all. Every role beyond plain
-  // Employee still goes through the actor's real Role Creation Matrix.
-  const assignableNames = [...new Set([...getAssignableRoleNames(actorRoleName), ROLE_NAMES.EMPLOYEE])];
-  const roleOptions = allRoles
-    .filter((r) => assignableNames.includes(r.role_name) || ADDITIONAL_ROLE_NAMES.includes(r.role_name))
-    .map((r) => ({ label: r.role_name, value: String(r.id) }));
-  // Every row here IS an employee, so plain Employee is mandatory — pinned checked & disabled in
-  // the picker rather than just conveniently pre-selected (see the sync effect below too).
+  // Every row in Employee Master IS an employee, so plain Employee is the mandatory baseline
+  // role sent on create (see onSubmit) — not user-selectable here.
   const employeeRoleId = allRoles.find((r) => r.role_name === ROLE_NAMES.EMPLOYEE)?.id;
-  const lockedRoleValues = employeeRoleId != null ? [String(employeeRoleId)] : [];
 
   const form = useForm({
     resolver: zodResolver(isEdit ? editSchema : createSchema),
@@ -140,11 +96,10 @@ const EmployeeForm = () => {
       date_of_joining: '',
       date_of_leaving: '',
       status: 'active',
-      role_ids: [],
       password: 'Gtt@1234',
       confirmPassword: 'Gtt@1234',
-      primary_manager_user_id: null,
-      secondary_manager_user_id: null,
+      primary_manager_employee_id: null,
+      secondary_manager_employee_id: null,
       // No backend value exists yet for a brand-new employee, so this just seeds the toggle in
       // its recommended starting position — every other case (loading an existing employee)
       // always uses the value the API actually returned, never this default.
@@ -154,12 +109,11 @@ const EmployeeForm = () => {
 
   const dateOfJoining = useWatch({ control: form.control, name: 'date_of_joining' });
   const formStatus = useWatch({ control: form.control, name: 'status' });
-  const primaryManagerId = useWatch({ control: form.control, name: 'primary_manager_user_id' });
+  const primaryManagerId = useWatch({ control: form.control, name: 'primary_manager_employee_id' });
   const timesheetApprovalRequired = useWatch({ control: form.control, name: 'is_timesheet_approval_required' });
-  const watchedRoleIds = useWatch({ control: form.control, name: 'role_ids' }) ?? [];
 
   const managerOptions = managers.map((m) => ({
-    label: m.employee?.full_name ?? m.email,
+    label: m.full_name ?? m.email,
     value: String(m.id),
   }));
   const secondaryManagerOptions = [
@@ -179,18 +133,6 @@ const EmployeeForm = () => {
     form.setValue('company_experience', Math.max(0, parseFloat(years.toFixed(1))));
   }, [dateOfJoining, form]);
 
-  // Every row in Employee Master IS an employee (§ role bypass above — this screen absorbed User
-  // Master), so plain Employee is a mandatory baseline role, not just a convenient default: it's
-  // pinned selected-and-disabled in the picker (see lockedRoleValues/MultiSelect below) and this
-  // effect keeps the underlying form value in sync with that — seeding it on create, and topping
-  // it back up on edit if a legacy record's saved role_ids happens to be missing it.
-  useEffect(() => {
-    if (employeeRoleId == null) return;
-    if (!watchedRoleIds.map(Number).includes(employeeRoleId)) {
-      form.setValue('role_ids', [...watchedRoleIds.map(Number), employeeRoleId]);
-    }
-  }, [employeeRoleId, watchedRoleIds, form]);
-
   useEffect(() => {
     if (employee && isEdit) {
       form.reset({
@@ -204,9 +146,8 @@ const EmployeeForm = () => {
         date_of_joining: employee.date_of_joining?.split('T')[0] ?? '',
         date_of_leaving: employee.date_of_leaving?.split('T')[0] ?? '',
         status: employee.status ?? 'active',
-        role_ids: [employee.role_id ?? employee.role?.id, ...(employee.additionalRoles ?? []).map((r) => r.id)].filter(Boolean),
-        primary_manager_user_id: employee.primary_manager_user_id ?? null,
-        secondary_manager_user_id: employee.secondary_manager_user_id ?? null,
+        primary_manager_employee_id: employee.primary_manager_employee_id ?? null,
+        secondary_manager_employee_id: employee.secondary_manager_employee_id ?? null,
         // Straight from the API response — never assumed. `?? true` only covers an employee
         // record that predates this field entirely (backend returns null/undefined for it),
         // not a real ON/OFF answer.
@@ -216,32 +157,29 @@ const EmployeeForm = () => {
   }, [employee, isEdit, form]);
 
   const onSubmit = async (values) => {
-    const { password, confirmPassword, secondary_manager_user_id, primary_manager_user_id, email, role_ids, ...rest } = values;
-
-    const selectedRoles = role_ids.map((rid) => allRoles.find((r) => r.id === Number(rid))).filter(Boolean);
-    const ordered = orderRoleIds(selectedRoles, assignableNames);
-    if (!ordered) {
-      showError(
-        assignableNames.length
-          ? `Select at least one role you're permitted to assign: ${assignableNames.join(', ')}.`
-          : `Your role (${actorRoleName ?? '—'}) is not permitted to assign any role here.`
-      );
-      return;
-    }
+    const {
+      password, confirmPassword, secondary_manager_employee_id, primary_manager_employee_id,
+      email, ...rest
+    } = values;
 
     const clean = Object.fromEntries(
       Object.entries(rest).filter(([, v]) => v !== '' && v != null)
     );
 
     clean.email = email;
-    clean.role_ids = ordered;
-    if (!isEdit) clean.password = password;
-    if (primary_manager_user_id) {
-      clean.primary_manager_user_id = primary_manager_user_id;
+    if (!isEdit) {
+      clean.password = password;
+      // Every new employee is sent to the backend with the plain "Employee" role by default —
+      // Roles/Business Units are no longer picked on this form at all, and are mapped afterwards
+      // from Employee List's "Map Roles & Business Units" table action.
+      if (employeeRoleId != null) clean.role_ids = [employeeRoleId];
+    }
+    if (primary_manager_employee_id) {
+      clean.primary_manager_employee_id = primary_manager_employee_id;
     }
     // Always sent explicitly (even null) so clearing the Secondary Manager on update actually
     // reaches the backend/mock — the blanket filter above would otherwise drop a `null`.
-    clean.secondary_manager_user_id = secondary_manager_user_id ?? null;
+    clean.secondary_manager_employee_id = secondary_manager_employee_id ?? null;
 
     const mutation = isEdit ? updateMutation : createMutation;
     mutation.mutate(clean, {
@@ -261,7 +199,7 @@ const EmployeeForm = () => {
 
   return (
     <Sheet open={true} onOpenChange={(open) => !open && handleClose()}>
-      <SheetContent side="right" className="w-full sm:max-w-6xl p-0 flex flex-col bg-white overflow-hidden">
+      <SheetContent side="right" className="w-full sm:max-w-4xl p-0 flex flex-col bg-white overflow-hidden">
         <SheetHeader className="px-5 py-3 border-b">
           <SheetTitle className="text-base font-medium text-left">{isEdit ? 'Edit Employee' : 'Add New Employee'}</SheetTitle>
         </SheetHeader>
@@ -347,115 +285,75 @@ const EmployeeForm = () => {
                   </div>
                 </div>
 
-                {/* Account & Role Group — merged in from the retired User Master (role
-                    assignment, password) since every Employee now IS the login account. */}
-                <div className="rounded-lg border border-gray-200 bg-slate-50/60 p-4 space-y-3">
-                  <h3 className="text-xs font-semibold text-foreground uppercase tracking-wide border-b border-gray-200 pb-2">Account &amp; Role</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="role_ids"
-                      render={({ field }) => (
-                        <FormItem className="space-y-1">
-                          <FormLabel className="text-[11px] text-muted-foreground font-medium"><span className="text-destructive mr-0.5">*</span> Roles</FormLabel>
-                          <MultiSelect
-                            options={roleOptions}
-                            value={(field.value ?? []).map(String)}
-                            lockedValues={lockedRoleValues}
-                            onValueChange={(vals) => {
-                              const numeric = vals.map(Number);
-                              const seniorSelected = numeric.filter((rid) => {
-                                const r = allRoles.find((x) => x.id === rid);
-                                return r && SENIOR_ROLE_NAMES.includes(r.role_name);
-                              });
-                              if (seniorSelected.length > 1) {
-                                // At most one senior tier (Platform Admin/Admin/Entity
-                                // Admin/BU Admin) at a time — keep only the one just picked.
-                                const prevIds = new Set((field.value ?? []).map(Number));
-                                const newest = seniorSelected.find((rid) => !prevIds.has(rid)) ?? seniorSelected.at(-1);
-                                field.onChange(numeric.filter((rid) => !seniorSelected.includes(rid) || rid === newest));
-                              } else {
-                                field.onChange(numeric);
-                              }
-                            }}
-                            placeholder="Select roles…"
-                            searchPlaceholder="Search roles…"
-                            className="h-8 text-sm border-gray-200"
-                          />
-                          <FormMessage className="text-[10px]" />
-                        </FormItem>
-                      )}
-                    />
-
-                    {!isEdit && (
-                      <>
-                        <FormField
-                          control={form.control}
-                          name="password"
-                          render={({ field }) => (
-                            <FormItem className="space-y-1">
-                              <FormLabel className="text-[11px] text-muted-foreground font-medium"><span className="text-destructive mr-0.5">*</span> Password</FormLabel>
-                              <FormControl>
-                                <div className="relative">
-                                  <Input
-                                    type={showPassword ? 'text' : 'password'}
-                                    placeholder="Min 8 chars, upper, lower, digit, special"
-                                    autoComplete="new-password"
-                                    className="h-8 text-sm border-gray-200 pr-9"
-                                    {...field}
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={() => setShowPassword((v) => !v)}
-                                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                                    tabIndex={-1}
-                                  >
-                                    {showPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                                  </button>
-                                </div>
-                              </FormControl>
-                              <FormMessage className="text-[10px]" />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={form.control}
-                          name="confirmPassword"
-                          render={({ field }) => (
-                            <FormItem className="space-y-1">
-                              <FormLabel className="text-[11px] text-muted-foreground font-medium"><span className="text-destructive mr-0.5">*</span> Confirm Password</FormLabel>
-                              <FormControl>
-                                <div className="relative">
-                                  <Input
-                                    type={showConfirmPassword ? 'text' : 'password'}
-                                    placeholder="Repeat password"
-                                    autoComplete="new-password"
-                                    className="h-8 text-sm border-gray-200 pr-9"
-                                    {...field}
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={() => setShowConfirmPassword((v) => !v)}
-                                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                                    tabIndex={-1}
-                                  >
-                                    {showConfirmPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                                  </button>
-                                </div>
-                              </FormControl>
-                              <FormMessage className="text-[10px]" />
-                            </FormItem>
-                          )}
-                        />
-                      </>
-                    )}
+                {/* Account Group — every Employee IS the login account now. Roles/Business Units
+                    are no longer picked here; every new employee is created with the plain
+                    "Employee" role by default and mapped afterwards from Employee List's "Map
+                    Roles & Business Units" table action. */}
+                {!isEdit && (
+                  <div className="rounded-lg border border-gray-200 bg-slate-50/60 p-4 space-y-3">
+                    <h3 className="text-xs font-semibold text-foreground uppercase tracking-wide border-b border-gray-200 pb-2">Account</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="password"
+                        render={({ field }) => (
+                          <FormItem className="space-y-1">
+                            <FormLabel className="text-[11px] text-muted-foreground font-medium"><span className="text-destructive mr-0.5">*</span> Password</FormLabel>
+                            <FormControl>
+                              <div className="relative">
+                                <Input
+                                  type={showPassword ? 'text' : 'password'}
+                                  placeholder="Min 8 chars, upper, lower, digit, special"
+                                  autoComplete="new-password"
+                                  className="h-8 text-sm border-gray-200 pr-9"
+                                  {...field}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => setShowPassword((v) => !v)}
+                                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                                  tabIndex={-1}
+                                >
+                                  {showPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                </button>
+                              </div>
+                            </FormControl>
+                            <FormMessage className="text-[10px]" />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="confirmPassword"
+                        render={({ field }) => (
+                          <FormItem className="space-y-1">
+                            <FormLabel className="text-[11px] text-muted-foreground font-medium"><span className="text-destructive mr-0.5">*</span> Confirm Password</FormLabel>
+                            <FormControl>
+                              <div className="relative">
+                                <Input
+                                  type={showConfirmPassword ? 'text' : 'password'}
+                                  placeholder="Repeat password"
+                                  autoComplete="new-password"
+                                  className="h-8 text-sm border-gray-200 pr-9"
+                                  {...field}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => setShowConfirmPassword((v) => !v)}
+                                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                                  tabIndex={-1}
+                                >
+                                  {showConfirmPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                </button>
+                              </div>
+                            </FormControl>
+                            <FormMessage className="text-[10px]" />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
                   </div>
-                  {roleOptions.length === 0 && (
-                    <p className="text-[11px] text-muted-foreground">
-                      Your role ({actorRoleName ?? '—'}) is not permitted to assign any role here.
-                    </p>
-                  )}
-                </div>
+                )}
 
                 {/* Reporting Group */}
                 <div className="rounded-lg border border-gray-200 bg-slate-50/60 p-4 space-y-3">
@@ -463,7 +361,7 @@ const EmployeeForm = () => {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <FormField
                       control={form.control}
-                      name="primary_manager_user_id"
+                      name="primary_manager_employee_id"
                       render={({ field }) => (
                         <FormItem className="space-y-1">
                           <FormLabel className="text-[11px] text-muted-foreground font-medium">Primary Manager</FormLabel>
@@ -483,7 +381,7 @@ const EmployeeForm = () => {
 
                     <FormField
                       control={form.control}
-                      name="secondary_manager_user_id"
+                      name="secondary_manager_employee_id"
                       render={({ field }) => (
                         <FormItem className="space-y-1">
                           <FormLabel className="text-[11px] text-muted-foreground font-medium">Secondary Manager</FormLabel>
@@ -608,9 +506,6 @@ const EmployeeForm = () => {
                               <span className="text-[11px] font-medium">{timesheetApprovalRequired ? 'ON' : 'OFF'}</span>
                             </div>
                           </FormControl>
-                          {/* <p className="text-[10px] text-muted-foreground leading-snug">
-                            Turn on if this employee's timesheets require manager approval.
-                          </p> */}
                         </FormItem>
                       )}
                     />

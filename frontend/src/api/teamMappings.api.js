@@ -1,18 +1,21 @@
 import apiClient from '@/services/apiClient';
 import { RBAC_MOCK_ENABLED } from '@/mocks/rbacMockConfig';
 import {
-  delay, getDb, persist, nextId, findUserById, findRoleByName, getCurrentMockUser, mockError,
+  delay, getDb, persist, nextId, findEmployeeById, findRoleByName, getCurrentMockEmployee, mockError,
 } from '@/mocks/rbacMockDb';
 
+// Employee Identity Migration: the actor and every Manager/Service PO Admin referenced here are
+// Employees now (no more separate `users` row) — `*_user_id` field names on the mapping rows are
+// kept as-is (pre-existing, unrelated-to-this-migration contract) but now hold employee ids.
 const requireActor = () => {
-  const actor = getCurrentMockUser();
+  const actor = getCurrentMockEmployee();
   if (!actor) throw mockError(401, 'Not authenticated.');
   return actor;
 };
 
 const serializeMapping = (m) => ({
   ...m,
-  manager_email: findUserById(m.manager_user_id)?.email ?? null,
+  manager_email: findEmployeeById(m.manager_user_id)?.email ?? null,
 });
 
 const mockGetMyTeam = async () => {
@@ -27,7 +30,10 @@ const mockGetAvailableManagers = async () => {
   await delay();
   const actor = requireActor();
   const managerRole = findRoleByName('Manager');
-  const managers = getDb().users.filter((u) => u.role_id === managerRole.id && u.company_id === actor.company_id);
+  const actorBuIds = new Set(actor.business_unit_ids ?? []);
+  const managers = getDb().employees.filter(
+    (e) => (e.role_ids ?? []).includes(managerRole.id) && (e.business_unit_ids ?? []).some((id) => actorBuIds.has(id))
+  );
   return managers.map((m) => {
     const owner = getDb().teamMappings.find((t) => t.manager_user_id === m.id && t.status === 'active');
     return {
@@ -35,7 +41,7 @@ const mockGetAvailableManagers = async () => {
       email: m.email,
       status: m.status,
       current_owner: owner
-        ? { service_po_admin_user_id: owner.service_po_admin_user_id, email: findUserById(owner.service_po_admin_user_id)?.email ?? null }
+        ? { service_po_admin_user_id: owner.service_po_admin_user_id, email: findEmployeeById(owner.service_po_admin_user_id)?.email ?? null }
         : null,
     };
   });
@@ -51,7 +57,7 @@ const mockAddManager = async (managerUserId) => {
   if (existing) throw mockError(409, 'This Manager is already on your team.');
   const mapping = {
     id: nextId('teamMappings'),
-    company_id: actor.company_id,
+    company_id: actor.business_unit_ids?.[0] ?? null,
     service_po_admin_user_id: actor.id,
     manager_user_id: managerUserId,
     status: 'active',
@@ -79,7 +85,7 @@ const mockGetServicePoGrants = async () => {
   );
   return getDb().managerServicePoGrants
     .filter((g) => myManagerIds.has(g.manager_user_id) && g.status === 'active')
-    .map((g) => ({ ...g, manager_email: findUserById(g.manager_user_id)?.email ?? null }));
+    .map((g) => ({ ...g, manager_email: findEmployeeById(g.manager_user_id)?.email ?? null }));
 };
 
 const mockGrantServicePo = async (managerUserId, servicePOId) => {
@@ -91,7 +97,7 @@ const mockGrantServicePo = async (managerUserId, servicePOId) => {
   if (existing) throw mockError(409, 'This Service PO is already granted to this Manager.');
   const grant = {
     id: nextId('managerServicePoGrants'),
-    company_id: actor.company_id,
+    company_id: actor.business_unit_ids?.[0] ?? null,
     manager_user_id: managerUserId,
     service_po_id: servicePOId,
     status: 'active',

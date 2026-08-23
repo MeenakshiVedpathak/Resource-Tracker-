@@ -202,14 +202,14 @@ const Sidebar = () => {
   const collapsed = useSelector(selectSidebarCollapsed);
   const { pathname } = useLocation();
   const { accessibleForms, hasRole, isPlatformAdmin } = useAuth();
-  // BU Head is an additive peer of BU Admin with identical form/permission access (§14 of the
-  // BU Head spec) — extends the same bypass BU Admin already gets, never a standalone concept.
+  // BU Head is an additive peer of BU Admin with identical form/permission access — extends the
+  // same bypass BU Admin already gets, never a standalone concept.
   const isSuperAdmin = hasRole('BU Admin', 'BU Head');
   const canViewEntityAdmins = hasRole(...ENTITY_ADMIN_MANAGEMENT_ROLES);
   const canViewTeamMapping = hasRole(...TEAM_MAPPING_ROLES);
   const { moduleRank, formRank } = useMenuRank();
-  // isPlatformAdmin is derived from the single role every login returns (§0) — overrides the
-  // normal accessible-forms-driven nav entirely.
+  // isPlatformAdmin is derived from the held roles (§0) — overrides the normal
+  // accessible-forms-driven nav entirely.
   const navGroups = useMemo(() => {
     if (isPlatformAdmin) return SUPER_ADMIN_NAV_GROUPS;
     const base = buildNavGroups(accessibleForms, { isSuperAdmin, moduleRank, formRank });

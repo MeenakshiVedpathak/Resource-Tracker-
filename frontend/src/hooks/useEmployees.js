@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { employeesApi } from '@/api/employees.api';
 import { QUERY_KEYS } from '@/constants/queryKeys';
+import { MANAGER_TIER_ROLES } from '@/constants/roleHierarchy';
 
 export const useEmployees = (params) =>
   useQuery({
@@ -38,14 +39,34 @@ export const useEmployee = (id) =>
     enabled: !!id,
   });
 
+// Seeds Employee List's "Map Roles & Business Units" dialog — GET /employees (list) returns no
+// role/BU data, so the dialog can't rely on the row it was opened from.
+export const useEmployeeMappings = (id) =>
+  useQuery({
+    queryKey: QUERY_KEYS.EMPLOYEE_MAPPINGS(id),
+    queryFn: () => employeesApi.getMappings(id),
+    enabled: !!id,
+  });
+
+// Employee Identity Migration: Primary/Secondary Manager pickers now source from Employees
+// directly (manager fields moved from manager_user_id to manager_employee_id — there's no more
+// separate Users resource to source them from). Filtered client-side by MANAGER_TIER_ROLES
+// membership in the employee's flat `roles` array, same "inherits Manager's capabilities" set
+// (Manager, Service PO Admin, Project Admin) the old Users-sourced version used.
+export const useAssignableManagers = () =>
+  useQuery({
+    queryKey: QUERY_KEYS.EMPLOYEES({ limit: 200, status: 'active' }),
+    queryFn: () => employeesApi.getAll({ limit: 200, status: 'active' }),
+    select: (res) => (res?.data ?? []).filter(
+      (e) => (e.roles ?? []).some((r) => MANAGER_TIER_ROLES.includes(r.role_name))
+    ),
+  });
+
 export const useCreateEmployee = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: employeesApi.create,
-    onSuccess: () => Promise.all([
-        qc.invalidateQueries({ queryKey: ['employees'] }),
-        qc.invalidateQueries({ queryKey: ['users'] })
-      ]),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['employees'] }),
   });
 };
 
@@ -56,10 +77,17 @@ export const useUpdateEmployee = (id) => {
     onSuccess: () => Promise.all([
         qc.invalidateQueries({ queryKey: ['employees'] }),
         qc.invalidateQueries({ queryKey: QUERY_KEYS.EMPLOYEE(id) }),
-        qc.invalidateQueries({ queryKey: ['users'] })
+        qc.invalidateQueries({ queryKey: QUERY_KEYS.EMPLOYEE_MAPPINGS(id) }),
       ]),
   });
 };
+
+// Employee Identity Migration: targets the employee directly (no more separate linked-User
+// lookup — see employees.api.js's resetPassword for the guessed-and-flagged endpoint).
+export const useResetEmployeePassword = () =>
+  useMutation({
+    mutationFn: ({ id, newPassword, confirmPassword }) => employeesApi.resetPassword(id, newPassword, confirmPassword),
+  });
 
 export const useDeleteEmployee = () => {
   const qc = useQueryClient();
@@ -81,9 +109,6 @@ export const useToggleEmployeeStatus = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, status }) => employeesApi.update(id, { status }),
-    onSuccess: () => Promise.all([
-        qc.invalidateQueries({ queryKey: ['employees'] }),
-        qc.invalidateQueries({ queryKey: ['users'] })
-      ]),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['employees'] }),
   });
 };

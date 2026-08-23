@@ -250,7 +250,7 @@ const ServicePOSummary = () => {
     setPoId('all');
     setPage(1);
   };
-  const { user } = useAuth();
+  const { roleObjects } = useAuth();
 
   const params = {
     ...(monthYear && { month: monthYear.month, year: monthYear.year }),
@@ -265,7 +265,7 @@ const ServicePOSummary = () => {
     ...(dateRange?.endDate && { endDate: dateRange.endDate }),
     page,
     limit,
-     roleId: user?.role_id,
+     roleId: roleObjects[0]?.id,
     ...(debouncedSearch && { search: debouncedSearch }),
   };
 

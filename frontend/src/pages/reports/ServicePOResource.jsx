@@ -163,13 +163,13 @@ const ServicePOResource = () => {
     setPoId('all');
     setPage(1);
   };
-  const { user } = useAuth();
+  const { roleObjects } = useAuth();
 
   const params = {
     ...(monthYear && { month: monthYear.month }),
     ...(monthYear && { year: monthYear.year }),
     hoursSource,
-    ...(user?.role_id && { roleId: user.role_id }),
+    ...(roleObjects[0]?.id && { roleId: roleObjects[0].id }),
     ...(employeeId !== 'all' && { employeeId }),
     ...(categoryId !== 'all' && { serviceCategoryId: categoryId }),
     ...(typeId !== 'all' && { serviceTypeId: typeId }),

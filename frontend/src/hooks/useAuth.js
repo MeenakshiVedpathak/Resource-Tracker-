@@ -1,7 +1,7 @@
 import { useDispatch, useSelector } from 'react-redux';
 import { queryClient } from '@/lib/queryClient';
 import {
-  selectCurrentUser,
+  selectCurrentEmployee,
   selectIsAuthenticated,
   selectUserRole,
   selectUserRoles,
@@ -12,48 +12,39 @@ import {
   selectAccessibleFormsLoaded,
   selectIsOriginalDataVisible,
   selectHasWriteAccess,
-  selectCurrentCompany,
-  selectCompanyId,
-  selectCurrentEmployee,
   selectHierarchyRank,
   selectIsPlatformAdmin,
   selectIsEmployee,
   selectIsEmployeeOnly,
-  selectMappedBus,
-  selectSelectedBuId,
+  selectBusinessUnits,
+  selectActiveBuId,
   logout,
   setCredentials,
-  setUser,
   setAccessibleForms,
-  setIsOriginalDataVisible,
-  setCompany,
-  setSelectedBu,
+  setActiveBu,
 } from '@/store/slices/authSlice';
 import { ROUTES } from '@/constants/routes';
 import { computeHomeRoute, FORM_NAMES } from '@/constants/rbacForms';
 
 export const useAuth = () => {
   const dispatch = useDispatch();
-  const user = useSelector(selectCurrentUser);
+  const employee = useSelector(selectCurrentEmployee); // login's sole identity object, or null
   const isAuthenticated = useSelector(selectIsAuthenticated);
   const role = useSelector(selectUserRole);       // first role — for display
   const roles = useSelector(selectUserRoles);     // all role names — for hasRole checks
   const permissions = useSelector(selectUserPermissions);
-  const roleObjects = useSelector(selectAuthRoles);   // [{ id, name, permission }] — RBAC source of truth
+  const roleObjects = useSelector(selectAuthRoles);   // [{ id, name, permission, hierarchyRank }] — RBAC source of truth
   const roleIds = useSelector(selectAuthRoleIds);
   const accessibleForms = useSelector(selectAccessibleForms); // { [module]: [{ id, name }] }
   const accessibleFormsLoaded = useSelector(selectAccessibleFormsLoaded); // false only right after a fresh login, until forms are fetched
-  const isOriginalDataVisible = useSelector(selectIsOriginalDataVisible); // gates Modified/Original toggle
+  const isOriginalDataVisible = useSelector(selectIsOriginalDataVisible); // gates Modified/Original toggle, derived from the active BU
   const hasWriteAccess = useSelector(selectHasWriteAccess);   // any role carries "Read & Write"
-  const company = useSelector(selectCurrentCompany); // multi-tenancy retrofit — null until backend sends one
-  const companyId = useSelector(selectCompanyId);
-  const employee = useSelector(selectCurrentEmployee); // login's sibling `employee` object, or null
-  const hierarchyRank = useSelector(selectHierarchyRank); // the held role's position in the RBAC hierarchy
-  const isPlatformAdmin = useSelector(selectIsPlatformAdmin); // derived from the single held role
+  const hierarchyRank = useSelector(selectHierarchyRank); // the most senior held role's position in the RBAC hierarchy
+  const isPlatformAdmin = useSelector(selectIsPlatformAdmin); // true if ANY held role is Platform Admin
   const isEmployee = useSelector(selectIsEmployee); // true if Employee is ANY held role
   const isEmployeeOnly = useSelector(selectIsEmployeeOnly); // true only if Employee is the SOLE held role
-  const mappedBus = useSelector(selectMappedBus); // BU Head spec — [] for every non-BU-Head login
-  const selectedBuId = useSelector(selectSelectedBuId); // the currently-selected BU, global across the app
+  const businessUnits = useSelector(selectBusinessUnits); // [] for an employee with no BU (Platform Admin/Admin/Entity Admin)
+  const activeBuId = useSelector(selectActiveBuId); // the currently-active BU, global across the app
 
   // true if the user has ANY of the specified roles
   const hasRole = (...requiredRoles) => roles.some((r) => requiredRoles.includes(r));
@@ -79,21 +70,15 @@ export const useAuth = () => {
 
   const updateCredentials = (payload) => dispatch(setCredentials(payload));
 
-  const updateUser = (userData) => dispatch(setUser(userData));
-
   const updateAccessibleForms = (forms) => dispatch(setAccessibleForms(forms));
 
-  const updateIsOriginalDataVisible = (visible) => dispatch(setIsOriginalDataVisible(visible));
-
-  const updateCompany = (company) => dispatch(setCompany(company));
-
-  // BU Head spec §12: switching BU updates the global selection only — no re-login, no full
-  // page reload. Callers (UserMenu's BU dropdown) are responsible for invalidating React Query
-  // so BU-scoped screens refetch (§17), same as handleLogout's queryClient.clear() above.
-  const selectBu = (buId) => dispatch(setSelectedBu(buId));
+  // Switching BU updates the global selection only — no re-login, no full page reload. Callers
+  // (UserMenu's BU switcher) are responsible for invalidating React Query so BU-scoped screens
+  // refetch, same as handleLogout's queryClient.clear() above.
+  const selectBu = (buId) => dispatch(setActiveBu(buId));
 
   return {
-    user,
+    employee,
     isAuthenticated,
     role,
     roles,
@@ -104,25 +89,19 @@ export const useAuth = () => {
     accessibleFormsLoaded,
     isOriginalDataVisible,
     hasWriteAccess,
-    company,
-    companyId,
-    employee,
     hierarchyRank,
     isPlatformAdmin,
     isEmployee,
     isEmployeeOnly,
-    mappedBus,
-    selectedBuId,
+    businessUnits,
+    activeBuId,
     homeRoute,
     hasRole,
     hasPermission,
     logout: handleLogout,
     setCredentials: updateCredentials,
-    setUser: updateUser,
     setAccessibleForms: updateAccessibleForms,
-    setIsOriginalDataVisible: updateIsOriginalDataVisible,
-    setCompany: updateCompany,
-    setSelectedBu: selectBu,
+    setActiveBu: selectBu,
   };
 };
 

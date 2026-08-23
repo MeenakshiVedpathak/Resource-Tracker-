@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { Save } from 'lucide-react';
 import { useProject, useCreateProject, useUpdateProject } from '@/hooks/useProjects';
 import { useActiveClients } from '@/hooks/useClients';
+import { clientsApi } from '@/api/clients.api';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import { ROUTES } from '@/constants/routes';
@@ -53,6 +54,7 @@ const ProjectForm = () => {
   const { data: activeClients = [], isPending: isLoadingClients } = useActiveClients();
   const createMutation = useCreateProject();
   const updateMutation = useUpdateProject(id);
+  const [isResolvingCompany, setIsResolvingCompany] = useState(false);
 
   const form = useForm({
     resolver: zodResolver(projectSchema),
@@ -75,10 +77,28 @@ const ProjectForm = () => {
     }
   }, [project, isEdit, form]);
 
-  const onSubmit = (values) => {
+  // The backend requires company_id (Business Unit) on create but a Project has no BU field of
+  // its own, so it's looked up from the selected Client's own record instead of asking again.
+  const onSubmit = async (values) => {
     const clean = Object.fromEntries(
       Object.entries(values).filter(([, v]) => v !== '' && v != null)
     );
+
+    if (!isEdit) {
+      try {
+        setIsResolvingCompany(true);
+        const client = await clientsApi.getById(values.client_id);
+        const companyId = client?.company_id ?? client?.company?.id;
+        if (companyId != null) {
+          clean.company_id = Number(companyId);
+        }
+      } catch (err) {
+        setIsResolvingCompany(false);
+        showError(extractApiError(err));
+        return;
+      }
+      setIsResolvingCompany(false);
+    }
 
     const mutation = isEdit ? updateMutation : createMutation;
     mutation.mutate(clean, {
@@ -94,7 +114,7 @@ const ProjectForm = () => {
     navigate(ROUTES.PROJECTS);
   };
 
-  const isSubmitting = createMutation.isPending || updateMutation.isPending;
+  const isSubmitting = createMutation.isPending || updateMutation.isPending || isResolvingCompany;
 
   if (isEdit && isLoadingProject) return <FormSkeleton />;
 

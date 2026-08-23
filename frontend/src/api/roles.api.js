@@ -1,7 +1,7 @@
 import apiClient from '@/services/apiClient';
 import { RBAC_MOCK_ENABLED } from '@/mocks/rbacMockConfig';
 import {
-  delay, getDb, persist, nextId, paginate, findRoleById, serializeRole, formsForRoleName, mockError,
+  delay, getDb, persist, nextId, paginate, findRoleById, serializeRole, formsForRoleNames, mockError,
 } from '@/mocks/rbacMockDb';
 
 const mockGetAll = async (params) => {
@@ -48,8 +48,8 @@ const mockDelete = async (id) => {
   const role = findRoleById(Number(id));
   if (!role) throw mockError(404, 'Role not found.');
   if (role.is_system) throw mockError(403, `"${role.role_name}" is a system role and cannot be deleted.`);
-  const inUse = getDb().users.some((u) => u.role_id === role.id);
-  if (inUse) throw mockError(409, 'This role is still assigned to at least one user.');
+  const inUse = getDb().employees.some((e) => (e.role_ids ?? []).includes(role.id));
+  if (inUse) throw mockError(409, 'This role is still assigned to at least one employee.');
   getDb().roles = getDb().roles.filter((r) => r.id !== role.id);
   persist();
   return { success: true, message: 'Role deleted successfully.' };
@@ -57,16 +57,8 @@ const mockDelete = async (id) => {
 
 const mockGetAccessibleForms = async (roleIds) => {
   await delay();
-  const merged = {};
-  (roleIds ?? []).forEach((id) => {
-    const role = findRoleById(Number(id));
-    if (!role) return;
-    const forms = formsForRoleName(role.role_name);
-    Object.entries(forms).forEach(([moduleName, list]) => {
-      merged[moduleName] = [...(merged[moduleName] ?? []), ...list];
-    });
-  });
-  return merged;
+  const roleNames = (roleIds ?? []).map((id) => findRoleById(Number(id))?.role_name).filter(Boolean);
+  return formsForRoleNames(roleNames);
 };
 
 export const rolesApi = {

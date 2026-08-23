@@ -31,19 +31,13 @@ apiClient.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    // Multi-tenancy retrofit: attach the logged-in user's company on every request, once the
-    // backend actually sends one on login (see authSlice.js). Additive and a no-op today —
-    // no company is ever stored yet, so this header is simply absent, same as before this change.
-    const company = getStoredCompany();
-    if (company?.id) {
-      config.headers['X-Company-Id'] = company.id;
-    }
-    // BU Head spec §13: a BU Head's currently-selected BU takes precedence over `company?.id`
-    // (BU Head never has a single `company.id` of its own — see authSlice.js's `mappedBus`).
-    // Same header BU-scoping already uses everywhere, since BU *is* Company in this app.
-    const selectedBuId = getStoredSelectedBuId();
-    if (selectedBuId) {
-      config.headers['X-Company-Id'] = selectedBuId;
+    // Employee Identity Migration: every employee now carries businessUnits[] (0/1/many) instead
+    // of a single `company` — the currently-active BU (auto-selected on login, switchable via
+    // UserMenu) drives this header uniformly. Absent for an employee with no BU (Platform
+    // Admin/Admin/Entity Admin) since activeBuId is null for them.
+    const activeBuId = getStoredActiveBuId();
+    if (activeBuId != null) {
+      config.headers['X-Company-Id'] = activeBuId;
     }
     return config;
   },
@@ -123,29 +117,18 @@ apiClient.interceptors.response.use(
 const TOKEN_KEYS = {
   ACCESS: 'rut_access_token',
   REFRESH: 'rut_refresh_token',
-  USER: 'rut_user',
   ROLES: 'rut_roles',
   ACCESSIBLE_FORMS: 'rut_accessible_forms',
-  ORIGINAL_DATA_VISIBLE: 'rut_original_data_visible',
-  COMPANY: 'rut_company',
   EMPLOYEE: 'rut_employee',
   AI_COPILOT_CONVERSATION: 'rut_ai_copilot_conversation',
-  MAPPED_BUS: 'rut_mapped_bus',
-  SELECTED_BU_ID: 'rut_selected_bu_id',
+  BUSINESS_UNITS: 'rut_business_units',
+  ACTIVE_BU_ID: 'rut_active_bu_id',
 };
 
 export const getAccessToken = () => localStorage.getItem(TOKEN_KEYS.ACCESS);
 export const getRefreshToken = () => localStorage.getItem(TOKEN_KEYS.REFRESH);
-export const getStoredUser = () => {
-  try {
-    const raw = localStorage.getItem(TOKEN_KEYS.USER);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-};
 
-// Roles from login response: [{ id, name, permission }]
+// Roles from login response: [{ id, name, permission, hierarchyRank }]
 export const getStoredRoles = () => {
   try {
     const raw = localStorage.getItem(TOKEN_KEYS.ROLES);
@@ -165,23 +148,7 @@ export const getStoredAccessibleForms = () => {
   }
 };
 
-// Gates the Modified/Original hours-source toggle — derived from GET /roles/form-mappings/:userId
-export const getStoredOriginalDataVisible = () =>
-  localStorage.getItem(TOKEN_KEYS.ORIGINAL_DATA_VISIBLE) === 'true';
-
-// Multi-tenancy retrofit: the logged-in user's company, once the backend sends one on login.
-// `null` today for every user (no backend support yet) — see authSlice.js.
-export const getStoredCompany = () => {
-  try {
-    const raw = localStorage.getItem(TOKEN_KEYS.COMPANY);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-};
-
-// RBAC redesign: login's sibling `employee` object — null for any account with no linked
-// Employee (every Admin/Manager-tier account that isn't also staff).
+// Employee Identity Migration: login's sole identity object — null only before the first login.
 export const getStoredEmployee = () => {
   try {
     const raw = localStorage.getItem(TOKEN_KEYS.EMPLOYEE);
@@ -196,28 +163,12 @@ export const saveTokens = (accessToken, refreshToken) => {
   localStorage.setItem(TOKEN_KEYS.REFRESH, refreshToken);
 };
 
-export const saveUser = (user) => {
-  localStorage.setItem(TOKEN_KEYS.USER, JSON.stringify(user));
-};
-
 export const saveRoles = (roles) => {
   localStorage.setItem(TOKEN_KEYS.ROLES, JSON.stringify(roles ?? []));
 };
 
 export const saveAccessibleForms = (accessibleForms) => {
   localStorage.setItem(TOKEN_KEYS.ACCESSIBLE_FORMS, JSON.stringify(accessibleForms ?? {}));
-};
-
-export const saveOriginalDataVisible = (visible) => {
-  localStorage.setItem(TOKEN_KEYS.ORIGINAL_DATA_VISIBLE, visible ? 'true' : 'false');
-};
-
-export const saveCompany = (company) => {
-  if (company) {
-    localStorage.setItem(TOKEN_KEYS.COMPANY, JSON.stringify(company));
-  } else {
-    localStorage.removeItem(TOKEN_KEYS.COMPANY);
-  }
 };
 
 export const saveEmployee = (employee) => {
@@ -228,46 +179,43 @@ export const saveEmployee = (employee) => {
   }
 };
 
-// BU Head spec §9: login's `mapped_bu` — [{ id, name }], `[]`/absent for every other role.
-export const getStoredMappedBus = () => {
+// Employee Identity Migration: every employee's `businessUnits[]` — always present, possibly [].
+export const getStoredBusinessUnits = () => {
   try {
-    const raw = localStorage.getItem(TOKEN_KEYS.MAPPED_BUS);
+    const raw = localStorage.getItem(TOKEN_KEYS.BUSINESS_UNITS);
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
   }
 };
 
-export const saveMappedBus = (mappedBus) => {
-  localStorage.setItem(TOKEN_KEYS.MAPPED_BUS, JSON.stringify(mappedBus ?? []));
+export const saveBusinessUnits = (businessUnits) => {
+  localStorage.setItem(TOKEN_KEYS.BUSINESS_UNITS, JSON.stringify(businessUnits ?? []));
 };
 
-// BU Head spec §10-§12: the BU Head's currently-selected BU, global across the whole app.
-export const getStoredSelectedBuId = () => {
-  const raw = localStorage.getItem(TOKEN_KEYS.SELECTED_BU_ID);
+// The currently-active BU, global across the whole app — drives the X-Company-Id header.
+export const getStoredActiveBuId = () => {
+  const raw = localStorage.getItem(TOKEN_KEYS.ACTIVE_BU_ID);
   return raw ? Number(raw) : null;
 };
 
-export const saveSelectedBuId = (buId) => {
+export const saveActiveBuId = (buId) => {
   if (buId != null) {
-    localStorage.setItem(TOKEN_KEYS.SELECTED_BU_ID, String(buId));
+    localStorage.setItem(TOKEN_KEYS.ACTIVE_BU_ID, String(buId));
   } else {
-    localStorage.removeItem(TOKEN_KEYS.SELECTED_BU_ID);
+    localStorage.removeItem(TOKEN_KEYS.ACTIVE_BU_ID);
   }
 };
 
 export const clearAuth = () => {
   localStorage.removeItem(TOKEN_KEYS.ACCESS);
   localStorage.removeItem(TOKEN_KEYS.REFRESH);
-  localStorage.removeItem(TOKEN_KEYS.USER);
   localStorage.removeItem(TOKEN_KEYS.ROLES);
   localStorage.removeItem(TOKEN_KEYS.ACCESSIBLE_FORMS);
-  localStorage.removeItem(TOKEN_KEYS.ORIGINAL_DATA_VISIBLE);
-  localStorage.removeItem(TOKEN_KEYS.COMPANY);
   localStorage.removeItem(TOKEN_KEYS.EMPLOYEE);
   localStorage.removeItem(TOKEN_KEYS.AI_COPILOT_CONVERSATION);
-  localStorage.removeItem(TOKEN_KEYS.MAPPED_BUS);
-  localStorage.removeItem(TOKEN_KEYS.SELECTED_BU_ID);
+  localStorage.removeItem(TOKEN_KEYS.BUSINESS_UNITS);
+  localStorage.removeItem(TOKEN_KEYS.ACTIVE_BU_ID);
 };
 
 // ── Logout handler (avoids circular dependency with store) ──

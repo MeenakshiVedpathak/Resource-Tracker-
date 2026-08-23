@@ -3,7 +3,7 @@ import { cn } from '@/utils/cn';
 const PageHeader = ({ title, description, actions, className, children }) => (
   <div className={cn('mb-4 flex flex-wrap items-start justify-between gap-x-4 gap-y-2', className)}>
     <div className="min-w-0">
-      <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
       {description && (
         <p className="mt-1 text-sm text-muted-foreground">{description}</p>
       )}

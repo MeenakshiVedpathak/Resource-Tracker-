@@ -27,7 +27,7 @@ const nextId = () => {
 // Chat panel and copilot bubble both drive this same hook so history stays a single
 // thread regardless of which surface sent the message.
 export const useAICopilot = () => {
-  const { user } = useAuth();
+  const { roleObjects } = useAuth();
   const [messages, setMessages] = useState(loadHistory);
   const [isThinking, setIsThinking] = useState(false);
 
@@ -45,7 +45,7 @@ export const useAICopilot = () => {
     setMessages((prev) => [...prev, { id: thinkingId, role: 'assistant', text: '', thinking: true, createdAt: new Date().toISOString() }]);
 
     try {
-      const res = await aiCopilotApi.query({ question: query, roleId: user?.role_id, hoursSource: 'M' });
+      const res = await aiCopilotApi.query({ question: query, roleId: roleObjects[0]?.id, hoursSource: 'M' });
       const answer = res?.data?.answer;
       const text = formatAnswerAsMarkdown(answer);
       setMessages((prev) =>
@@ -59,7 +59,7 @@ export const useAICopilot = () => {
     } finally {
       setIsThinking(false);
     }
-  }, [user?.role_id]);
+  }, [roleObjects]);
 
   const sendMessage = useCallback((query) => {
     const trimmed = (query ?? '').trim();

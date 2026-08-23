@@ -74,3 +74,24 @@ export const useReorderForms = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['forms'] }),
   });
 };
+
+// Full nested Module -> Category -> Form tree — source for the Category management screen and
+// for labeling categorized forms in the Form List (no search/status params on this endpoint).
+export const useFormHierarchy = () =>
+  useQuery({
+    queryKey: QUERY_KEYS.FORM_HIERARCHY,
+    queryFn: () => formsApi.getHierarchy(),
+  });
+
+// The only mutation that changes a form's module and/or category — PUT /forms/:id never touches
+// category_id. Callers should send both module_id and category_id together when either changes.
+export const useMoveForm = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...payload }) => formsApi.moveForm(id, payload),
+    onSuccess: () => Promise.all([
+      qc.invalidateQueries({ queryKey: ['forms'] }),
+      qc.invalidateQueries({ queryKey: QUERY_KEYS.FORM_HIERARCHY }),
+    ]),
+  });
+};

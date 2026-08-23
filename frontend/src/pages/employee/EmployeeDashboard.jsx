@@ -20,7 +20,7 @@ const WEEK_STRIP_MAX_HOURS = 10;
 // on (GET /employee-timesheets/calendar) — no extra endpoints, so "This Month" here always
 // matches MonthlyHoursCard on the Work Log page instead of drifting out of sync with it.
 const EmployeeDashboard = () => {
-  const { user, employee } = useAuth();
+  const { employee } = useAuth();
   const today = dayjs();
   const todayKey = today.format('YYYY-MM-DD');
 
@@ -40,7 +40,7 @@ const EmployeeDashboard = () => {
     return { key, label: date.format('dd'), dayNum: date.date(), hours, isToday: key === todayKey };
   });
 
-  const displayName = employee?.full_name ?? user?.full_name ?? user?.email ?? 'there';
+  const displayName = employee?.full_name ?? employee?.email ?? 'there';
   const firstName = displayName.split(' ')[0];
 
   const statCards = [

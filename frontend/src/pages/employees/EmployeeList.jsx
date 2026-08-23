@@ -5,23 +5,22 @@ import { useIsMutating } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus, Pencil, KeyRound, Search, Download, Upload, CheckCircle2, AlertCircle, FileDown, FileText, Printer, FileSpreadsheet, ChevronDown, Lock } from 'lucide-react';
+import { Plus, Pencil, KeyRound, UserCog, Search, Download, Upload, CheckCircle2, AlertCircle, FileDown, FileText, Printer, FileSpreadsheet, ChevronDown } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { useEmployees, useImportEmployees, useToggleEmployeeStatus } from '@/hooks/useEmployees';
-import { useResetUserPassword, useUserByEmployeeId } from '@/hooks/useUsers';
+import { useEmployees, useImportEmployees, useToggleEmployeeStatus, useResetEmployeePassword, useUpdateEmployee, useEmployeeMappings } from '@/hooks/useEmployees';
 import { useRoles } from '@/hooks/useRoles';
+import { useCompanies } from '@/hooks/useCompanies';
 import { employeesApi } from '@/api/employees.api';
 import { useCanWrite } from '@/hooks/usePermissions';
 import { useAuth } from '@/hooks/useAuth';
-import { ROLE_NAMES } from '@/constants/roleHierarchy';
+import { ROLE_NAMES, getAssignableRoleNames, ADDITIONAL_ROLE_NAMES, SENIOR_ROLE_NAMES } from '@/constants/roleHierarchy';
 import { useNotification } from '@/hooks/useNotification';
 import { useDebounce } from '@/hooks/useDebounce';
 import { extractApiError } from '@/services/apiClient';
 import { passwordSchema } from '@/utils/validators';
 import { buildPath, ROUTES } from '@/constants/routes';
-import { isProtectedAccount } from '@/constants/protectedAccounts';
 import { formatDate } from '@/utils/formatters';
 import { cn } from '@/utils/cn';
 import DataTable from '@/components/common/DataTable';
@@ -39,6 +38,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
@@ -77,13 +77,11 @@ const resetPasswordSchema = z
     path: ['confirmPassword'],
   });
 
-// PUT /users/:id/reset-password (§2.6), targeting the Employee's LINKED USER id — an Employee's
-// login lives on their linked User now, not on the Employee record itself. GET /employees
-// doesn't return that user id, so it's looked up from the Users list via useUserByEmployeeId.
+// Targets the employee directly now — an Employee's login lives on the Employee record itself,
+// no more separate linked User to look up (see employees.api.js's resetPassword).
 const ResetPasswordDialog = ({ employee, onOpenChange }) => {
   const { success, error: showError } = useNotification();
-  const resetMutation = useResetUserPassword();
-  const { data: linkedUser, isPending: isLoadingUser } = useUserByEmployeeId(employee?.id);
+  const resetMutation = useResetEmployeePassword();
 
   const form = useForm({
     resolver: zodResolver(resetPasswordSchema),
@@ -96,12 +94,8 @@ const ResetPasswordDialog = ({ employee, onOpenChange }) => {
   }, [employee]);
 
   const onSubmit = (values) => {
-    if (!linkedUser?.id) {
-      showError('No login account found for this employee.');
-      return;
-    }
     resetMutation.mutate(
-      { id: linkedUser.id, newPassword: values.password, confirmPassword: values.confirmPassword },
+      { id: employee.id, newPassword: values.password, confirmPassword: values.confirmPassword },
       {
         onSuccess: () => {
           success(`Password reset for ${employee.full_name}.`);
@@ -153,8 +147,144 @@ const ResetPasswordDialog = ({ employee, onOpenChange }) => {
           <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={resetMutation.isPending}>
             Cancel
           </Button>
-          <Button size="sm" type="submit" form="reset-password-form" disabled={resetMutation.isPending || isLoadingUser || !linkedUser?.id}>
+          <Button size="sm" type="submit" form="reset-password-form" disabled={resetMutation.isPending}>
             {resetMutation.isPending ? 'Saving…' : 'Reset Password'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+// Roles and Business Units are no longer picked on the Add/Edit Employee form (see
+// EmployeeForm.jsx and [[project_employee_identity_migration]]) — they're mapped here instead,
+// as two checkbox tables, opened per-row from Employee List's "Map Roles & Business Units"
+// action.
+const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits, onOpenChange }) => {
+  const { success, error: showError } = useNotification();
+  const updateMutation = useUpdateEmployee(employee?.id);
+  const { data: mappings, isLoading: mappingsLoading } = useEmployeeMappings(employee?.id);
+  const [selectedRoleIds, setSelectedRoleIds] = useState([]);
+  const [selectedBuIds, setSelectedBuIds] = useState([]);
+
+  // GET /employees (list) carries no role/BU data, so the row this dialog opened from can't seed
+  // the checkboxes — fetch the employee's actual mappings fresh instead (see
+  // [[project_employee_identity_migration]]).
+  useEffect(() => {
+    if (mappings) {
+      setSelectedRoleIds(mappings.role_ids ?? []);
+      setSelectedBuIds(mappings.business_unit_ids ?? []);
+    }
+  }, [mappings]);
+
+  // Every row here IS an employee, so plain Employee is a mandatory baseline role — pinned
+  // checked & disabled, same standing bypass EmployeeForm.jsx used to apply for HR (whose
+  // ROLE_CREATION_MATRIX entry is deliberately empty).
+  const employeeRoleId = allRoles.find((r) => r.role_name === ROLE_NAMES.EMPLOYEE)?.id;
+  const assignableNames = [...new Set([...getAssignableRoleNames(actorRoleName), ROLE_NAMES.EMPLOYEE])];
+  const roleRows = allRoles.filter(
+    (r) => assignableNames.includes(r.role_name) || ADDITIONAL_ROLE_NAMES.includes(r.role_name)
+  );
+
+  const toggleRole = (roleId) => {
+    if (roleId === employeeRoleId) return;
+    setSelectedRoleIds((prev) => {
+      if (prev.includes(roleId)) return prev.filter((id) => id !== roleId);
+      const isSenior = SENIOR_ROLE_NAMES.includes(allRoles.find((r) => r.id === roleId)?.role_name);
+      // At most one senior tier (Platform Admin/Admin/Entity Admin/BU Admin/BU Head) at a time —
+      // client-side UX guard only, the real enforcement is server-side.
+      const base = isSenior
+        ? prev.filter((id) => !SENIOR_ROLE_NAMES.includes(allRoles.find((r) => r.id === id)?.role_name))
+        : prev;
+      return [...base, roleId];
+    });
+  };
+
+  const toggleBu = (buId) => {
+    setSelectedBuIds((prev) => (prev.includes(buId) ? prev.filter((id) => id !== buId) : [...prev, buId]));
+  };
+
+  const handleSave = () => {
+    const roleIds = employeeRoleId != null && !selectedRoleIds.includes(employeeRoleId)
+      ? [...selectedRoleIds, employeeRoleId]
+      : selectedRoleIds;
+    updateMutation.mutate(
+      { role_ids: roleIds, business_unit_ids: selectedBuIds },
+      {
+        onSuccess: () => {
+          success(`Roles & Business Units updated for ${employee.full_name}.`);
+          onOpenChange(false);
+        },
+        onError: (err) => showError(extractApiError(err)),
+      }
+    );
+  };
+
+  return (
+    <Dialog open={!!employee} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Map Roles &amp; Business Units</DialogTitle>
+          <DialogDescription>Assign roles and business units for {employee?.full_name}.</DialogDescription>
+        </DialogHeader>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Roles</Label>
+            <div className="border rounded-md max-h-[45vh] overflow-y-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-10"></TableHead>
+                    <TableHead>Role</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {roleRows.map((r) => (
+                    <TableRow key={r.id}>
+                      <TableCell>
+                        <Checkbox
+                          checked={r.id === employeeRoleId ? true : selectedRoleIds.includes(r.id)}
+                          disabled={r.id === employeeRoleId}
+                          onCheckedChange={() => toggleRole(r.id)}
+                        />
+                      </TableCell>
+                      <TableCell className="text-sm">{r.role_name}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Business Units</Label>
+            <div className="border rounded-md max-h-[45vh] overflow-y-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-10"></TableHead>
+                    <TableHead>Business Unit</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {businessUnits.map((bu) => (
+                    <TableRow key={bu.id}>
+                      <TableCell>
+                        <Checkbox checked={selectedBuIds.includes(bu.id)} onCheckedChange={() => toggleBu(bu.id)} />
+                      </TableCell>
+                      <TableCell className="text-sm">{bu.company_name}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={updateMutation.isPending}>
+            Cancel
+          </Button>
+          <Button size="sm" onClick={handleSave} disabled={updateMutation.isPending || mappingsLoading}>
+            {updateMutation.isPending ? 'Saving…' : 'Save'}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -165,12 +295,11 @@ const ResetPasswordDialog = ({ employee, onOpenChange }) => {
 const StatusToggle = ({ employee }) => {
   const { mutate, isPending } = useToggleEmployeeStatus();
   const isActive = employee.status === 'active';
-  const isProtected = isProtectedAccount(employee);
   return (
     <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
       <Switch
         checked={isActive}
-        disabled={isPending || isProtected}
+        disabled={isPending}
         onCheckedChange={(checked) =>
           mutate({ id: employee.id, status: checked ? 'active' : 'inactive' })
         }
@@ -194,6 +323,7 @@ const EmployeeList = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [roleFilter, setRoleFilter] = useState('all');
   const [resetPasswordTarget, setResetPasswordTarget] = useState(null);
+  const [mappingTarget, setMappingTarget] = useState(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const debouncedSearch = useDebounce(search, 400);
@@ -211,6 +341,8 @@ const EmployeeList = () => {
 
   const { data, isPending, isFetching } = useEmployees(params);
   const { data: rolesData } = useRoles({ limit: 100 });
+  // Sourced for the "Map Roles & Business Units" dialog's Business Units table.
+  const { data: companiesData } = useCompanies({ status: 'active', limit: 200 });
   const importMutation = useImportEmployees();
   const isMutating = useIsMutating();
   const fileInputRef = useRef(null);
@@ -246,16 +378,9 @@ const EmployeeList = () => {
     columnHelper.display({
       id: 'actions',
       header: 'Actions',
-      size: 120,
+      size: 150,
       meta: { sticky: true, left: 0 },
       cell: ({ row }) => {
-        if (isProtectedAccount(row.original)) {
-          return (
-            <div className="flex items-center gap-1 text-muted-foreground" onClick={(e) => e.stopPropagation()} title="Protected system account">
-              <Lock className="h-3 w-3" />
-            </div>
-          );
-        }
         return isHR ? (
           <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
             <Button
@@ -273,6 +398,14 @@ const EmployeeList = () => {
               onClick={() => setResetPasswordTarget(row.original)}
             >
               <KeyRound className="h-3 w-3" />
+            </Button>
+            <Button
+              size="sm"
+              className="h-6 w-6 p-0 bg-teal-600 hover:bg-teal-700 text-white rounded transition-colors"
+              title="Map Roles & Business Units"
+              onClick={() => setMappingTarget(row.original)}
+            >
+              <UserCog className="h-3 w-3" />
             </Button>
           </div>
         ) : null;
@@ -302,18 +435,34 @@ const EmployeeList = () => {
       size: 180,
       cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="160px" />,
     }),
-    columnHelper.accessor('role', {
-      header: 'Role',
+    columnHelper.accessor('roles', {
+      header: 'Roles',
       size: 180,
       cell: (info) => {
-        const row = info.row.original;
-        const list = row.role ? [row.role, ...(row.additionalRoles ?? [])] : [];
+        const list = info.row.original.roles ?? [];
         if (!list.length) return <span className="text-sm text-muted-foreground">—</span>;
         return (
           <div className="flex flex-wrap gap-1">
             {list.map((r, i) => (
               <Badge key={r.id ?? i} variant={i === 0 ? 'secondary' : 'outline'} className="text-xs">
                 {r.role_name}
+              </Badge>
+            ))}
+          </div>
+        );
+      },
+    }),
+    columnHelper.accessor('businessUnits', {
+      header: 'Business Units',
+      size: 180,
+      cell: (info) => {
+        const list = info.row.original.businessUnits ?? [];
+        if (!list.length) return <span className="text-sm text-muted-foreground">—</span>;
+        return (
+          <div className="flex flex-wrap gap-1">
+            {list.map((bu, i) => (
+              <Badge key={bu.id ?? i} variant="outline" className="text-xs">
+                {bu.name ?? bu.company_name}
               </Badge>
             ))}
           </div>
@@ -879,6 +1028,14 @@ const EmployeeList = () => {
       <ResetPasswordDialog
         employee={resetPasswordTarget}
         onOpenChange={(open) => !open && setResetPasswordTarget(null)}
+      />
+
+      <RoleBuMappingDialog
+        employee={mappingTarget}
+        actorRoleName={actorRoleName}
+        allRoles={rolesData?.data ?? []}
+        businessUnits={companiesData?.data ?? []}
+        onOpenChange={(open) => !open && setMappingTarget(null)}
       />
 
       <Outlet />

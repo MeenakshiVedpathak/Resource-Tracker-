@@ -44,6 +44,11 @@ export const ROUTES = {
   FORM_NEW: '/forms/new',
   FORM_EDIT: '/forms/:id/edit',
 
+  // Form Categories — sub-screen of Form Master, reached via its "Manage Categories" button
+  FORM_CATEGORIES: '/forms/categories',
+  FORM_CATEGORY_NEW: '/forms/categories/new',
+  FORM_CATEGORY_EDIT: '/forms/categories/:id/edit',
+
   // Role-Form Mapping is a per-row action on the Roles page, not its own menu item
   ROLE_FORM_MAPPING_EDIT: '/roles/:roleId/forms',
 

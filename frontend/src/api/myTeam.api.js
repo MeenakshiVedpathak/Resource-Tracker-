@@ -1,11 +1,11 @@
 import apiClient from '@/services/apiClient';
 import { RBAC_MOCK_ENABLED } from '@/mocks/rbacMockConfig';
 import {
-  delay, getDb, persist, nextId, findEmployeeById, getCurrentMockUser, mockError,
+  delay, getDb, persist, nextId, findEmployeeById, getCurrentMockEmployee, mockError,
 } from '@/mocks/rbacMockDb';
 
 const requireActor = () => {
-  const actor = getCurrentMockUser();
+  const actor = getCurrentMockEmployee();
   if (!actor) throw mockError(401, 'Not authenticated.');
   return actor;
 };
@@ -16,14 +16,14 @@ const serializeEmployee = (e) => ({
   full_name: e.full_name,
   designation: e.designation,
   status: e.status,
-  mapping_type: e.primary_manager_user_id === e.__actorId ? 'PRIMARY' : 'SECONDARY',
+  mapping_type: e.primary_manager_employee_id === e.__actorId ? 'PRIMARY' : 'SECONDARY',
 });
 
 const mockGetEmployees = async () => {
   await delay();
   const actor = requireActor();
   return getDb().employees
-    .filter((e) => e.primary_manager_user_id === actor.id || e.secondary_manager_user_id === actor.id)
+    .filter((e) => e.primary_manager_employee_id === actor.id || e.secondary_manager_employee_id === actor.id)
     .map((e) => serializeEmployee({ ...e, __actorId: actor.id }));
 };
 
@@ -38,10 +38,11 @@ const mockMapEmployee = async (employeeId) => {
   const actor = requireActor();
   const employee = findEmployeeById(employeeId);
   if (!employee) throw mockError(404, 'Employee not found.');
-  if (employee.company_id !== actor.company_id) throw mockError(404, 'Employee not found.');
-  if (employee.primary_manager_user_id === actor.id) throw mockError(409, 'You are already this Employee\'s Primary manager.');
-  if (employee.secondary_manager_user_id) throw mockError(409, 'This Employee already has a Secondary manager.');
-  employee.secondary_manager_user_id = actor.id;
+  const actorBuIds = new Set(actor.business_unit_ids ?? []);
+  if (!(employee.business_unit_ids ?? []).some((id) => actorBuIds.has(id))) throw mockError(404, 'Employee not found.');
+  if (employee.primary_manager_employee_id === actor.id) throw mockError(409, 'You are already this Employee\'s Primary manager.');
+  if (employee.secondary_manager_employee_id) throw mockError(409, 'This Employee already has a Secondary manager.');
+  employee.secondary_manager_employee_id = actor.id;
   persist();
   return {
     success: true,
@@ -54,10 +55,10 @@ const mockUnmapEmployee = async (employeeId) => {
   await delay();
   const actor = requireActor();
   const employee = findEmployeeById(employeeId);
-  if (!employee || employee.secondary_manager_user_id !== actor.id) {
+  if (!employee || employee.secondary_manager_employee_id !== actor.id) {
     throw mockError(404, "This Employee isn't yours.");
   }
-  employee.secondary_manager_user_id = null;
+  employee.secondary_manager_employee_id = null;
   persist();
 };
 

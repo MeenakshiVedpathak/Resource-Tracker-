@@ -1,23 +1,20 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { useForm, useWatch } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Save, Eye, EyeOff } from 'lucide-react';
+import { Save } from 'lucide-react';
 import { useCompany, useCreateCompany, useUpdateCompany } from '@/hooks/useCompanies';
 import { useActiveEntities } from '@/hooks/useEntities';
 import { useAuth } from '@/hooks/useAuth';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError, extractFieldErrors } from '@/services/apiClient';
-import { employeeBaseFields } from '@/constants/employeeFormSchema';
 import { ROUTES } from '@/constants/routes';
 import {
   Form, FormField, FormItem, FormLabel, FormControl, FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { cn } from '@/utils/cn';
 import {
@@ -28,27 +25,12 @@ import {
   SheetFooter,
 } from '@/components/ui/sheet';
 
-// A BU Admin always comes bundled with a new Company AND, per the "BU Admin is also an Employee"
-// requirement, a new Employee Master record — one form, one submit, one backend call. The
-// Employee-shaped fields below (full_name/employee_code/designation/etc.) are literally the same
-// Zod schemas EmployeeForm.jsx uses (imported from constants/employeeFormSchema.js), not a
-// re-typed copy, so validation can't drift between the two forms. Email is intentionally NOT
-// duplicated as a separate Employee field — admin_email is reused as the Employee's email, since
-// this is one person's one login.
+// Creating a BU only ever collects the BU shell itself — Entity, BU Code, BU Name. No admin or
+// Employee data is collected here.
 const createSchema = z.object({
   entity_id: z.coerce.number({ required_error: 'Entity is required' }).positive('Entity is required'),
   company_code: z.string().min(1, 'BU code is required').max(50),
   company_name: z.string().min(1, 'BU name is required').max(100),
-  admin_email: z.string().min(1, 'Admin email is required').email('Enter a valid email'),
-  admin_password: z.string().min(8, 'Password must be at least 8 characters'),
-  full_name: employeeBaseFields.full_name,
-  employee_code: employeeBaseFields.employee_code,
-  designation: employeeBaseFields.designation,
-  date_of_joining: employeeBaseFields.date_of_joining,
-  date_of_leaving: employeeBaseFields.date_of_leaving,
-  total_experience: employeeBaseFields.total_experience,
-  company_experience: employeeBaseFields.company_experience,
-  resource_description: employeeBaseFields.resource_description,
 });
 
 const editSchema = z.object({
@@ -56,16 +38,9 @@ const editSchema = z.object({
   status: z.enum(['active', 'inactive']).default('active'),
 });
 
-// Known create-mode field names — used to route a backend field-validation error (duplicate
-// email, duplicate employee code, invalid entity, etc.) to the right input instead of a generic
-// toast. A returned field key may come back dot-prefixed (e.g. "employee.employee_code") since the
-// request body is grouped into company/admin/employee sections — matched on the suffix after the
-// last '.' as well as the raw key, so either shape lands correctly.
-const CREATE_FIELD_NAMES = [
-  'entity_id', 'company_code', 'company_name', 'admin_email', 'admin_password',
-  'full_name', 'employee_code', 'designation', 'date_of_joining', 'date_of_leaving',
-  'total_experience', 'company_experience', 'resource_description',
-];
+// Known create-mode field names — used to route a backend field-validation error (duplicate BU
+// code, invalid entity, etc.) to the right input instead of a generic toast.
+const CREATE_FIELD_NAMES = ['entity_id', 'company_code', 'company_name'];
 
 const FormSkeleton = () => (
   <div className="space-y-4 p-4">
@@ -83,7 +58,6 @@ const CompanyForm = () => {
   const isEdit = !!id;
   const { success, error: showError } = useNotification();
   const { hasRole } = useAuth();
-  const [showPassword, setShowPassword] = useState(false);
 
   const { data: company, isPending: isLoadingCompany } = useCompany(id);
   const {
@@ -99,13 +73,7 @@ const CompanyForm = () => {
     resolver: zodResolver(isEdit ? editSchema : createSchema),
     defaultValues: isEdit
       ? { company_name: '', status: 'active' }
-      : {
-          entity_id: entityIdParam ?? '', company_code: '', company_name: '',
-          admin_email: '', admin_password: '',
-          full_name: '', employee_code: '', designation: '',
-          date_of_joining: '', date_of_leaving: '',
-          total_experience: '', company_experience: '', resource_description: '',
-        },
+      : { entity_id: entityIdParam ?? '', company_code: '', company_name: '' },
   });
 
   useEffect(() => {
@@ -137,26 +105,9 @@ const CompanyForm = () => {
     }
   }, [isEdit, entityIdParam, hasRole, isLoadingEntities, activeEntities, form]);
 
-  // Same auto-calc EmployeeForm uses for its own Company Exp. field — kept in sync here since
-  // this create form is also creating that Employee record.
-  const dateOfJoining = useWatch({ control: form.control, name: 'date_of_joining' });
-  useEffect(() => {
-    if (isEdit) return;
-    if (!dateOfJoining) {
-      form.setValue('company_experience', '');
-      return;
-    }
-    const start = new Date(dateOfJoining);
-    if (isNaN(start.getTime())) return;
-    const diffMs = Date.now() - start.getTime();
-    const years = diffMs / (1000 * 60 * 60 * 24 * 365.25);
-    form.setValue('company_experience', Math.max(0, parseFloat(years.toFixed(1))));
-  }, [isEdit, dateOfJoining, form]);
-
-  // Maps a 422/409 field-validation error (duplicate email, duplicate employee code, invalid
-  // entity, etc.) onto the specific input it belongs to. Returns whether anything matched, so the
-  // caller can fall back to a form-level toast for anything it couldn't place (e.g. a generic
-  // transaction failure with no field attached).
+  // Maps a 422/409 field-validation error (duplicate BU code, invalid entity, etc.) onto the
+  // specific input it belongs to. Returns whether anything matched, so the caller can fall back
+  // to a form-level toast for anything it couldn't place.
   const applyFieldErrors = (err) => {
     const fieldErrors = extractFieldErrors(err);
     let matched = false;
@@ -171,50 +122,10 @@ const CompanyForm = () => {
   };
 
   const onSubmit = (values) => {
-    if (isEdit) {
-      updateMutation.mutate(values, {
-        onSuccess: () => {
-          success('BU updated successfully.');
-          handleClose();
-        },
-        onError: (err) => {
-          if (!applyFieldErrors(err)) showError(extractApiError(err));
-        },
-      });
-      return;
-    }
-
-    // One request, three logical sections — the backend creates Company + Employee + User +
-    // both role assignments (BU Admin, Employee) inside a single transaction. The frontend never
-    // makes separate create calls for these.
-    const payload = {
-      company: {
-        entity_id: values.entity_id,
-        company_code: values.company_code,
-        company_name: values.company_name,
-      },
-      admin: {
-        admin_email: values.admin_email,
-        admin_password: values.admin_password,
-      },
-      employee: Object.fromEntries(
-        Object.entries({
-          employee_code: values.employee_code,
-          full_name: values.full_name,
-          email: values.admin_email,
-          designation: values.designation,
-          total_experience: values.total_experience,
-          company_experience: values.company_experience,
-          resource_description: values.resource_description,
-          date_of_joining: values.date_of_joining,
-          date_of_leaving: values.date_of_leaving,
-        }).filter(([, v]) => v !== '' && v != null)
-      ),
-    };
-
-    createMutation.mutate(payload, {
+    const mutation = isEdit ? updateMutation : createMutation;
+    mutation.mutate(values, {
       onSuccess: () => {
-        success('BU and BU Admin created successfully.');
+        success(isEdit ? 'BU updated successfully.' : 'BU created successfully.');
         handleClose();
       },
       onError: (err) => {
@@ -233,7 +144,7 @@ const CompanyForm = () => {
 
   return (
     <Sheet open={true} onOpenChange={(open) => !open && handleClose()}>
-      <SheetContent side="right" className="w-full sm:max-w-2xl p-0 flex flex-col bg-white overflow-hidden">
+      <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col bg-white overflow-hidden">
         <SheetHeader className="px-5 py-4 border-b">
           <SheetTitle className="text-base font-medium text-left">
             {isEdit ? 'Edit BU' : 'Create BU'}
@@ -248,7 +159,7 @@ const CompanyForm = () => {
               <form id="company-form" onSubmit={form.handleSubmit(onSubmit)} className="p-5 flex flex-col gap-6">
                 <div className="space-y-2">
                   <h3 className="text-xs font-semibold text-foreground border-b pb-1">BU Details</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-4">
                     {isEdit && (
                       <div className="space-y-1">
                         <span className="text-[11px] text-muted-foreground font-medium">BU Code</span>
@@ -352,204 +263,6 @@ const CompanyForm = () => {
                     )}
                   </div>
                 </div>
-
-                {!isEdit && (
-                  <div className="space-y-2">
-                    <div className="border-t pt-4 space-y-1">
-                      <h3 className="text-xs font-semibold text-foreground pb-1">BU Admin / Employee Details</h3>
-                      <p className="text-[11px] text-muted-foreground">
-                        This person is created as both the BU's first admin login and its first Employee Master record.
-                      </p>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <FormField
-                        control={form.control}
-                        name="full_name"
-                        render={({ field }) => (
-                          <FormItem className="space-y-1">
-                            <FormLabel className="text-[11px] text-muted-foreground font-medium">
-                              <span className="text-destructive mr-0.5">*</span> Full Name
-                            </FormLabel>
-                            <FormControl>
-                              <Input
-                                placeholder="e.g. John Smith"
-                                {...field}
-                                onChange={(e) => field.onChange(e.target.value.replace(/[^A-Za-z\s]/g, ''))}
-                                className="h-8 text-sm border-gray-200"
-                              />
-                            </FormControl>
-                            <FormMessage className="text-[10px]" />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="employee_code"
-                        render={({ field }) => (
-                          <FormItem className="space-y-1">
-                            <FormLabel className="text-[11px] text-muted-foreground font-medium">
-                              <span className="text-destructive mr-0.5">*</span> Employee Code
-                            </FormLabel>
-                            <FormControl>
-                              <Input
-                                placeholder="e.g. EMP-001"
-                                {...field}
-                                onChange={(e) => field.onChange(e.target.value.toUpperCase())}
-                                className="h-8 text-sm border-gray-200"
-                              />
-                            </FormControl>
-                            <FormMessage className="text-[10px]" />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="admin_email"
-                        render={({ field }) => (
-                          <FormItem className="space-y-1">
-                            <FormLabel className="text-[11px] text-muted-foreground font-medium">
-                              <span className="text-destructive mr-0.5">*</span> Email
-                            </FormLabel>
-                            <FormControl>
-                              <Input placeholder="e.g. admin@acme.com" type="email" className="h-8 text-sm border-gray-200" {...field} />
-                            </FormControl>
-                            <FormMessage className="text-[10px]" />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="admin_password"
-                        render={({ field }) => (
-                          <FormItem className="space-y-1">
-                            <FormLabel className="text-[11px] text-muted-foreground font-medium">
-                              <span className="text-destructive mr-0.5">*</span> Password
-                            </FormLabel>
-                            <FormControl>
-                              <div className="relative">
-                                <Input
-                                  type={showPassword ? 'text' : 'password'}
-                                  placeholder="Min. 8 characters"
-                                  autoComplete="new-password"
-                                  className="h-8 text-sm border-gray-200 pr-9"
-                                  {...field}
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => setShowPassword((v) => !v)}
-                                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                                  tabIndex={-1}
-                                >
-                                  {showPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                                </button>
-                              </div>
-                            </FormControl>
-                            <FormMessage className="text-[10px]" />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="designation"
-                        render={({ field }) => (
-                          <FormItem className="space-y-1">
-                            <FormLabel className="text-[11px] text-muted-foreground font-medium">Designation</FormLabel>
-                            <FormControl>
-                              <Input placeholder="e.g. Senior Engineer" {...field} className="h-8 text-sm border-gray-200" />
-                            </FormControl>
-                            <FormMessage className="text-[10px]" />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="date_of_joining"
-                        render={({ field }) => (
-                          <FormItem className="space-y-1">
-                            <FormLabel className="text-[11px] text-muted-foreground font-medium">
-                              <span className="text-destructive mr-0.5">*</span> Date of Joining
-                            </FormLabel>
-                            <FormControl>
-                              <Input type="date" {...field} className="h-8 text-sm border-gray-200" />
-                            </FormControl>
-                            <FormMessage className="text-[10px]" />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="total_experience"
-                        render={({ field }) => (
-                          <FormItem className="space-y-1">
-                            <FormLabel className="text-[11px] text-muted-foreground font-medium">Total Experience (yrs)</FormLabel>
-                            <FormControl>
-                              <Input type="number" step="0.1" min="0" max="60" placeholder="e.g. 7.5" {...field} className="h-8 text-sm border-gray-200" />
-                            </FormControl>
-                            <FormMessage className="text-[10px]" />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="company_experience"
-                        render={({ field }) => (
-                          <FormItem className="space-y-1">
-                            <FormLabel className="text-[11px] text-muted-foreground font-medium">Company Exp. (yrs)</FormLabel>
-                            <FormControl>
-                              <Input
-                                type="number"
-                                step="0.1"
-                                placeholder="Auto-calculated"
-                                readOnly
-                                tabIndex={-1}
-                                className="h-8 text-sm bg-muted cursor-not-allowed border-gray-200"
-                                {...field}
-                                value={field.value ?? ''}
-                              />
-                            </FormControl>
-                            <FormMessage className="text-[10px]" />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="resource_description"
-                        render={({ field }) => (
-                          <FormItem className="space-y-1 sm:col-span-2">
-                            <FormLabel className="text-[11px] text-muted-foreground font-medium">Resource Description</FormLabel>
-                            <FormControl>
-                              <Textarea
-                                placeholder="Skills, certifications, and project experience…"
-                                className="h-12 min-h-0 text-sm resize-none border-gray-200"
-                                {...field}
-                              />
-                            </FormControl>
-                            <FormMessage className="text-[10px]" />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-
-                    <div className="border-t pt-3 space-y-1.5">
-                      <span className="text-[11px] text-muted-foreground font-medium">Roles automatically assigned</span>
-                      <div className="flex items-center gap-1.5">
-                        <Badge variant="info">BU Admin</Badge>
-                        <Badge variant="muted">Employee</Badge>
-                      </div>
-                      <p className="text-[10px] text-muted-foreground">
-                        This BU Admin will also be created as an Employee — roles are assigned automatically and can't be changed here.
-                      </p>
-                    </div>
-                  </div>
-                )}
               </form>
             </Form>
           )}

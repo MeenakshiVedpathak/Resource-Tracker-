@@ -1,69 +1,75 @@
 import apiClient from '@/services/apiClient';
 import { RBAC_MOCK_ENABLED } from '@/mocks/rbacMockConfig';
 import {
-  delay, getDb, persist, nextId, paginate, findUserById, findRoleByName, mockError,
+  delay, getDb, persist, nextId, paginate, findEmployeeById, findRoleByName, mockError,
 } from '@/mocks/rbacMockDb';
 
-const isEntityAdmin = (user) => findRoleByName('Entity Admin').id === user.role_id;
+// Employee Identity Migration: an Entity Admin account is an Employee holding the Entity Admin
+// role now (no more separate `users` row) — mock reads/writes the `employees` collection directly.
+const isEntityAdmin = (employee) => (employee.role_ids ?? []).includes(findRoleByName('Entity Admin').id);
 
-const serialize = (user) => user && {
-  id: user.id,
-  email: user.email,
-  status: user.status,
-  role_id: user.role_id,
-  company_id: user.company_id,
+const serialize = (employee) => employee && {
+  id: employee.id,
+  email: employee.email,
+  status: employee.status,
+  role_id: findRoleByName('Entity Admin').id,
+  company_id: null,
 };
 
 const mockCreate = async (payload) => {
   await delay();
-  if (getDb().users.some((u) => u.email.toLowerCase() === payload.email.toLowerCase())) {
-    throw mockError(409, 'A user with this email already exists.');
+  if (getDb().employees.some((e) => e.email.toLowerCase() === payload.email.toLowerCase())) {
+    throw mockError(409, 'An account with this email already exists.');
   }
   const entityAdminRole = findRoleByName('Entity Admin');
-  const user = {
-    id: nextId('users'),
-    company_id: null,
-    employee_id: null,
+  const employee = {
+    id: nextId('employees'),
+    employee_code: `EADMIN-${payload.email.split('@')[0]}`.toUpperCase(),
+    full_name: payload.email.split('@')[0],
     email: payload.email,
     password: payload.password,
-    role_id: entityAdminRole.id,
+    designation: 'Entity Admin',
+    role_ids: [entityAdminRole.id],
+    business_unit_ids: [],
     status: 'active',
-    last_login: null,
+    primary_manager_employee_id: null,
+    secondary_manager_employee_id: null,
+    is_timesheet_approval_required: false,
   };
-  getDb().users.push(user);
+  getDb().employees.push(employee);
   persist();
-  return { success: true, message: 'Entity Admin created successfully.', data: serialize(user) };
+  return { success: true, message: 'Entity Admin created successfully.', data: serialize(employee) };
 };
 
 const mockGetAll = async (params) => {
   await delay();
-  const result = paginate(getDb().users.filter(isEntityAdmin), { ...params, searchFields: ['email'] });
+  const result = paginate(getDb().employees.filter(isEntityAdmin), { ...params, searchFields: ['email'] });
   return { success: true, message: 'OK', data: result.data.map(serialize), meta: result.meta };
 };
 
 const mockGetById = async (id) => {
   await delay();
-  const user = findUserById(Number(id));
-  if (!user || !isEntityAdmin(user)) throw mockError(404, 'Entity Admin not found.');
-  return serialize(user);
+  const employee = findEmployeeById(Number(id));
+  if (!employee || !isEntityAdmin(employee)) throw mockError(404, 'Entity Admin not found.');
+  return serialize(employee);
 };
 
 const mockUpdate = async (id, payload) => {
   await delay();
-  const user = findUserById(Number(id));
-  if (!user || !isEntityAdmin(user)) throw mockError(404, 'Entity Admin not found.');
-  Object.assign(user, payload);
+  const employee = findEmployeeById(Number(id));
+  if (!employee || !isEntityAdmin(employee)) throw mockError(404, 'Entity Admin not found.');
+  Object.assign(employee, payload);
   persist();
-  return { success: true, message: 'Entity Admin updated successfully.', data: serialize(user) };
+  return { success: true, message: 'Entity Admin updated successfully.', data: serialize(employee) };
 };
 
 const mockUpdateStatus = async (id, status) => {
   await delay();
-  const user = findUserById(Number(id));
-  if (!user || !isEntityAdmin(user)) throw mockError(404, 'Entity Admin not found.');
-  user.status = status;
+  const employee = findEmployeeById(Number(id));
+  if (!employee || !isEntityAdmin(employee)) throw mockError(404, 'Entity Admin not found.');
+  employee.status = status;
   persist();
-  return { success: true, message: 'Status updated successfully.', data: serialize(user) };
+  return { success: true, message: 'Status updated successfully.', data: serialize(employee) };
 };
 
 // Reachable by Admin (§6.2). List/view/edit/status are all platform-wide — Entity Admins have

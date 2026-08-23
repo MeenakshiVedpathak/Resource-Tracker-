@@ -29,8 +29,8 @@ let sharedDigestPromise = null;
 // full chat panel. Mounted once in MainLayout — purely additive, touches no existing
 // dashboard/reports/nav code or routes.
 const AICopilotWidget = () => {
-  const { user } = useAuth();
-  const displayName = user?.name ?? user?.username ?? user?.email?.split('@')[0] ?? 'there';
+  const { employee, roleObjects } = useAuth();
+  const displayName = employee?.full_name ?? employee?.email?.split('@')[0] ?? 'there';
   const copilot = useAICopilot();
   const widgetRef = useRef(null);
   const [chatOpen, setChatOpen] = useState(false);
@@ -59,7 +59,7 @@ const AICopilotWidget = () => {
 
     if (!sessionStorage.getItem(DIGEST_CACHE_KEY)) {
       if (!sharedDigestPromise) {
-        sharedDigestPromise = aiCopilotApi.query({ question: DIGEST_QUESTION, roleId: user?.role_id, hoursSource: 'M' })
+        sharedDigestPromise = aiCopilotApi.query({ question: DIGEST_QUESTION, roleId: roleObjects[0]?.id, hoursSource: 'M' })
           .then((res) => res?.data?.answer ?? null)
           .catch(() => null);
       }

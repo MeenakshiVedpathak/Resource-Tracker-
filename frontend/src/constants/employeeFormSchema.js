@@ -16,9 +16,15 @@ export const employeeBaseFields = {
   date_of_joining: z.string().min(1, 'Date of joining is required'),
   date_of_leaving: z.string().optional().or(z.literal('')),
   status: z.enum(['active', 'inactive']).default('active'),
-  secondary_manager_user_id: z.coerce.number().positive().optional().nullable(),
+  secondary_manager_employee_id: z.coerce.number().positive().optional().nullable(),
   is_timesheet_approval_required: z.boolean(),
 };
+
+// Employee Identity Migration: every employee now carries its own Business Units directly
+// (flat many-to-many, replacing the old single `company_id`/BU-Head-only mapping) — required,
+// same as `role_ids`, since an employee with zero BUs would be unable to be scoped by any
+// BU-dependent screen.
+export const employeeBusinessUnitIdsField = z.array(z.coerce.number()).min(1, 'Select at least one business unit');
 
 export const employeePasswordField = passwordSchema
   .regex(/[A-Z]/, 'Must contain at least one uppercase letter')

@@ -19,4 +19,20 @@ export const formsApi = {
   // Reorders forms within one module only — items: [{ id, seq }].
   reorderForms: (moduleName, items) =>
     apiClient.patch('/forms/reorder', { module_name: moduleName, items }).then((r) => r.data),
+  // Full nested Module -> Category -> Form tree, pre-built server-side. No search/status params.
+  getHierarchy: () => apiClient.get('/forms/hierarchy').then((r) => r.data?.data ?? []),
+  // Category dropdown source, scoped by module_id — returns [] (not an error) if the module has none.
+  getCategories: (params) => apiClient.get('/forms/categories', { params }).then((r) => r.data?.data ?? []),
+  createCategory: (payload) => apiClient.post('/forms/categories', payload).then((r) => r.data),
+  // module_id is immutable — never send it here; categories never change module.
+  updateCategory: (id, payload) => apiClient.put(`/forms/categories/${id}`, payload).then((r) => r.data),
+  // 400s if the category still has any forms assigned (active or inactive).
+  deleteCategory: (id) => apiClient.delete(`/forms/categories/${id}`).then((r) => r.data),
+  // Reorders categories within one module only — items: [{ id, seq }].
+  reorderCategories: (moduleId, items) =>
+    apiClient.patch('/forms/categories/reorder', { module_id: moduleId, items }).then((r) => r.data),
+  // Dedicated move endpoint — only this changes a form's module/category, never PUT /forms/:id.
+  // At least one of module_id/category_id is required; omitting category_id while changing
+  // module_id resets category to null server-side, so callers should always send both together.
+  moveForm: (id, payload) => apiClient.put(`/forms/${id}/move`, payload).then((r) => r.data),
 };

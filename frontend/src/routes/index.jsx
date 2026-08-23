@@ -38,6 +38,8 @@ const RoleForm = lazy(() => import('@/pages/roles/RoleForm'));
 // ── RBAC admin (access gated by Role-Form Mapping, not a hard-coded role) ──
 const FormList = lazy(() => import('@/pages/forms/FormList'));
 const FormForm = lazy(() => import('@/pages/forms/FormForm'));
+const CategoryList = lazy(() => import('@/pages/forms/categories/CategoryList'));
+const CategoryForm = lazy(() => import('@/pages/forms/categories/CategoryForm'));
 const RoleFormMappingForm = lazy(() => import('@/pages/roleFormMapping/RoleFormMappingForm'));
 
 // ── Platform Admin / Admin tier ──
@@ -238,6 +240,20 @@ const AppRoutes = () => {
           <Route path=":id/edit" element={<FormForm />} />
         </Route>
 
+        {/* Form Categories — sub-screen of Form Master, same RBAC gate, reached via its
+            "Manage Categories" button rather than its own Sidebar entry. */}
+        <Route
+          path={ROUTES.FORM_CATEGORIES}
+          element={
+            <ProtectedRoute formName={FORM_NAMES.FORMS}>
+              <CategoryList />
+            </ProtectedRoute>
+          }
+        >
+          <Route path="new" element={<CategoryForm />} />
+          <Route path=":id/edit" element={<CategoryForm />} />
+        </Route>
+
         {/* Platform Admin — manages Admins only; no longer touches Entity Admins/Companies.
             "Add Admin" is a nested route rendered as a Sheet over this list (Outlet), same
             drawer pattern as every other master — it used to be its own full page. */}
@@ -263,9 +279,9 @@ const AppRoutes = () => {
           <Route path=":id/edit" element={<ProtectedRoute allowedRoles={['Admin', 'Entity Admin']}><EntityForm /></ProtectedRoute>} />
         </Route>
 
-        {/* BU Admin Master */}
+        {/* BU Admin Master — kept fully live (staged migration: stays until backend cutover) */}
         <Route path={ROUTES.BU_ADMINS} element={<ProtectedRoute formName={FORM_NAMES.BU_ADMIN_MASTER}><BuAdminList /></ProtectedRoute>} />
-        {/* BU Head Master — additive peer of BU Admin Master (§2/§24 of the BU Head spec).
+        {/* BU Head Master — additive peer of BU Admin Master, also kept fully live.
             allowedRoles (not formName) — same as Entity Admins/Companies below — since there's
             no real Form Master row for this yet and ProtectedRoute ANDs formName with
             allowedRoles when both are given (a formName check would 403 every Admin/Entity
@@ -274,8 +290,8 @@ const AppRoutes = () => {
         <Route path={ROUTES.BU_HEADS} element={<ProtectedRoute allowedRoles={['Admin', 'Entity Admin']}><BuHeadList /></ProtectedRoute>} />
 
         {/* Company Management — Admin (platform-wide) and Entity Admin (own Entities) both reach
-            this, per §6.3. No Form Master row of its own, so it's gated by role name directly
-            rather than formName — reached via a button on Entity Master / BU Admin Master. */}
+            this, reached via a button on Entity Master / BU Admin Master. No Form Master row of
+            its own, so it's gated by role name directly rather than formName. */}
         <Route path={ROUTES.COMPANIES} element={<ProtectedRoute allowedRoles={['Admin', 'Entity Admin']}><CompanyList /></ProtectedRoute>}>
           <Route path="new" element={<CompanyForm />} />
           <Route path=":id/edit" element={<CompanyForm />} />

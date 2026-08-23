@@ -122,7 +122,7 @@ const TimesheetImportDetail = () => {
   const isLocked = !!importRecord?.is_publish;
 
   const notify = useNotification();
-  const { user } = useAuth();
+  const { employee } = useAuth();
   const canWrite = useCanWrite();
   const canAddEntry = canWrite;
   // Modified Hours, the Status badge, and Publish are all gated purely by the Role Master's
@@ -168,8 +168,8 @@ const TimesheetImportDetail = () => {
         timesheet_date: timesheetDate,
         hours_logged: Number(addForm.hours_logged),
         timesheet_import_id: Number(id),
-        created_by: user?.id,
-        updated_by: user?.id,
+        created_by: employee?.id,
+        updated_by: employee?.id,
       });
       notify.success('Timesheet entry added.');
       setIsAddDialogOpen(false);

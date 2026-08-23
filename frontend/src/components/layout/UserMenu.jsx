@@ -23,21 +23,22 @@ import ChangePasswordDialog from '@/components/profile/ChangePasswordDialog';
 import { cn } from '@/utils/cn';
 
 const UserMenu = () => {
-  const { user, employee, company, logout, hasRole, mappedBus, selectedBuId, setSelectedBu } = useAuth();
+  const { employee, logout, roleObjects, businessUnits, activeBuId, setActiveBu } = useAuth();
   const navigate = useNavigate();
   const { error } = useNotification();
   const queryClient = useQueryClient();
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  // BU Head spec §9-§12: global BU switcher, shown only for a BU Head login. Switching BU
-  // updates the global selection immediately (no re-login, no full page reload) and invalidates
-  // React Query so every BU-scoped screen refetches against the newly-selected BU rather than
-  // showing stale data from the prior one (§17) — same fix already used for the analogous
-  // stale-data bug on logout (see useAuth's handleLogout).
-  const isBuHead = hasRole('BU Head');
+  // Employee Identity Migration: any employee with more than one BU gets the switcher now —
+  // no longer gated to a single role. Switching BU updates the global selection immediately (no
+  // re-login, no full page reload) and invalidates React Query so every BU-scoped screen
+  // refetches against the newly-selected BU rather than showing stale data from the prior one
+  // (same fix already used for the analogous stale-data bug on logout — see useAuth's
+  // handleLogout).
+  const showBuSwitcher = businessUnits.length > 1;
   const handleBuChange = (value) => {
-    setSelectedBu(Number(value));
+    setActiveBu(Number(value));
     queryClient.invalidateQueries();
   };
 
@@ -53,22 +54,21 @@ const UserMenu = () => {
     }
   };
 
-  // An Employee's name lives on the login response's sibling `employee` object, not `user` —
-  // fall back to it first since every other account has no linked Employee at all.
-  const displayName = employee?.full_name ?? user?.full_name ?? user?.email ?? '';
-  const email = user?.email;
-  const roleName = user?.role?.role_name ?? null;
+  const displayName = employee?.full_name ?? employee?.email ?? '';
+  const email = employee?.email;
+  const roleName = roleObjects[0]?.name ?? null;
+  const activeBuName = businessUnits.find((bu) => bu.id === activeBuId)?.name ?? null;
 
   return (
     <>
     <div className="flex items-center gap-2">
-      {isBuHead && mappedBus.length > 0 && (
-        <Select value={selectedBuId != null ? String(selectedBuId) : ''} onValueChange={handleBuChange}>
+      {showBuSwitcher && (
+        <Select value={activeBuId != null ? String(activeBuId) : ''} onValueChange={handleBuChange}>
           <SelectTrigger className="h-8 w-[160px] text-xs bg-muted/40 border-border/60">
             <SelectValue placeholder="Select BU" />
           </SelectTrigger>
           <SelectContent>
-            {mappedBus.map((bu) => (
+            {businessUnits.map((bu) => (
               <SelectItem key={bu.id} value={String(bu.id)}>{bu.name}</SelectItem>
             ))}
           </SelectContent>
@@ -84,8 +84,8 @@ const UserMenu = () => {
           </Avatar>
           <div className="hidden sm:block text-left">
             <p className="text-xs font-semibold leading-none text-foreground">{displayName}</p>
-            {company?.company_name && (
-              <p className="text-[10px] text-muted-foreground mt-0.5 font-medium">{company.company_name}</p>
+            {!showBuSwitcher && activeBuName && (
+              <p className="text-[10px] text-muted-foreground mt-0.5 font-medium">{activeBuName}</p>
             )}
             {roleName && <p className="text-[10px] text-muted-foreground mt-0.5 font-medium">{roleName}</p>}
           </div>
@@ -96,8 +96,8 @@ const UserMenu = () => {
         <DropdownMenuLabel className="font-normal">
           <p className="text-sm font-medium">{displayName}</p>
           <p className="text-xs text-muted-foreground">{email}</p>
-          {company?.company_name && (
-            <p className="text-xs text-muted-foreground mt-0.5">{company.company_name}</p>
+          {!showBuSwitcher && activeBuName && (
+            <p className="text-xs text-muted-foreground mt-0.5">{activeBuName}</p>
           )}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />

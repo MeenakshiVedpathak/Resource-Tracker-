@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, Outlet } from 'react-router-dom';
-import { Pencil, Plus, Search, GripVertical, GripHorizontal, ChevronDown, ChevronRight, FolderTree } from 'lucide-react';
+import { Pencil, Plus, Search, GripVertical, GripHorizontal, ChevronDown, ChevronRight, FolderTree, FolderCog, ArrowRightLeft } from 'lucide-react';
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors,
 } from '@dnd-kit/core';
@@ -9,6 +9,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useForms, useToggleFormStatus, useReorderModules, useReorderForms } from '@/hooks/useForms';
+import { useFormCategories } from '@/hooks/useFormCategories';
 import { useCanWrite } from '@/hooks/usePermissions';
 import { useNotification } from '@/hooks/useNotification';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -17,13 +18,14 @@ import { buildPath, ROUTES } from '@/constants/routes';
 import PageHeader from '@/components/common/PageHeader';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
+import MoveFormDialog from './MoveFormDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/utils/cn';
 
-const ROW_GRID = 'grid grid-cols-[40px_1fr_90px_110px_96px] items-center gap-2';
+const ROW_GRID = 'grid grid-cols-[40px_1fr_90px_110px_120px] items-center gap-2';
 
 // Groups the flat module+form rows returned by GET /forms into a module -> forms tree, ordered
 // by each level's own `seq`. A form whose module_name doesn't match any module row currently in
@@ -73,38 +75,47 @@ const FormStatusToggle = ({ id, status, disabled }) => {
   );
 };
 
-const FormRow = ({ form, canWrite, onEdit }) => {
+const FormRow = ({ form, canWrite, onEdit, onMove, sortable = true }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: form.id,
-    disabled: !canWrite,
+    disabled: !canWrite || !sortable,
   });
-  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
+  const style = sortable ? { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 } : undefined;
 
   return (
-    <div ref={setNodeRef} style={style} className={cn(ROW_GRID, 'px-3 py-2 border-t border-dashed bg-white')}>
-      <button
-        type="button"
-        title={canWrite ? 'Drag to reorder within this module' : undefined}
-        className={cn('flex items-center justify-center pl-4 text-muted-foreground', canWrite ? 'cursor-grab active:cursor-grabbing' : 'cursor-not-allowed opacity-30')}
-        {...(canWrite ? { ...attributes, ...listeners } : {})}
-      >
-        <GripHorizontal className="h-3.5 w-3.5" />
-      </button>
+    <div ref={sortable ? setNodeRef : undefined} style={style} className={cn(ROW_GRID, 'px-3 py-2 border-t border-dashed bg-white')}>
+      {sortable ? (
+        <button
+          type="button"
+          title={canWrite ? 'Drag to reorder within this module' : undefined}
+          className={cn('flex items-center justify-center pl-4 text-muted-foreground', canWrite ? 'cursor-grab active:cursor-grabbing' : 'cursor-not-allowed opacity-30')}
+          {...(canWrite ? { ...attributes, ...listeners } : {})}
+        >
+          <GripHorizontal className="h-3.5 w-3.5" />
+        </button>
+      ) : (
+        <span />
+      )}
       <span className="truncate pl-2 text-sm">{form.form_name}</span>
       <span className="text-sm text-muted-foreground">{form.seq ?? '—'}</span>
       <FormStatusToggle id={form.id} status={form.status} disabled={!canWrite} />
       <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
         {canWrite && (
-          <Button size="sm" title="Edit" onClick={onEdit} className="h-6 w-6 p-0 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors">
-            <Pencil className="h-3 w-3" />
-          </Button>
+          <>
+            <Button size="sm" title="Edit" onClick={onEdit} className="h-6 w-6 p-0 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors">
+              <Pencil className="h-3 w-3" />
+            </Button>
+            <Button size="sm" title="Move Form" onClick={() => onMove(form)} className="h-6 w-6 p-0 bg-slate-500 hover:bg-slate-600 text-white rounded transition-colors">
+              <ArrowRightLeft className="h-3 w-3" />
+            </Button>
+          </>
         )}
       </div>
     </div>
   );
 };
 
-const ModuleBlock = ({ module, canWrite, expanded, onToggleExpand, onEditModule, onEditForm, onFormsReorder }) => {
+const ModuleBlock = ({ module, canWrite, expanded, onToggleExpand, onEditModule, onEditForm, onFormsReorder, onMoveForm, onAddCategory, categoryLookup }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: module.id,
     disabled: module.isOrphan || !canWrite,
@@ -113,13 +124,34 @@ const ModuleBlock = ({ module, canWrite, expanded, onToggleExpand, onEditModule,
 
   const formSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
+  // Forms with a category_id are grouped under their category and shown in seq order only — the
+  // API has no reorder-within-category endpoint (only module-scoped PATCH /forms/reorder), so
+  // only the uncategorized subset below is drag-sortable.
+  const uncategorizedForms = module.forms.filter((f) => f.category_id == null);
+  const categorizedGroups = useMemo(() => {
+    const byCategory = new Map();
+    module.forms.forEach((f) => {
+      if (f.category_id == null) return;
+      if (!byCategory.has(f.category_id)) byCategory.set(f.category_id, []);
+      byCategory.get(f.category_id).push(f);
+    });
+    return Array.from(byCategory.entries())
+      .map(([categoryId, forms]) => ({
+        id: categoryId,
+        name: categoryLookup.get(categoryId)?.name ?? `Category #${categoryId}`,
+        seq: categoryLookup.get(categoryId)?.seq ?? 0,
+        forms: forms.slice().sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0)),
+      }))
+      .sort((a, b) => a.seq - b.seq);
+  }, [module.forms, categoryLookup]);
+
   const handleFormsDragEnd = (event) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    const oldIndex = module.forms.findIndex((f) => f.id === active.id);
-    const newIndex = module.forms.findIndex((f) => f.id === over.id);
+    const oldIndex = uncategorizedForms.findIndex((f) => f.id === active.id);
+    const newIndex = uncategorizedForms.findIndex((f) => f.id === over.id);
     if (oldIndex === -1 || newIndex === -1) return;
-    onFormsReorder(module.form_name, arrayMove(module.forms, oldIndex, newIndex));
+    onFormsReorder(module.form_name, arrayMove(uncategorizedForms, oldIndex, newIndex));
   };
 
   return (
@@ -141,9 +173,14 @@ const ModuleBlock = ({ module, canWrite, expanded, onToggleExpand, onEditModule,
         <FormStatusToggle id={module.id} status={module.status} disabled={!canWrite || module.isOrphan} />
         <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
           {canWrite && !module.isOrphan && (
-            <Button size="sm" title="Edit module" onClick={onEditModule} className="h-6 w-6 p-0 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors">
-              <Pencil className="h-3 w-3" />
-            </Button>
+            <>
+              <Button size="sm" title="Edit module" onClick={onEditModule} className="h-6 w-6 p-0 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors">
+                <Pencil className="h-3 w-3" />
+              </Button>
+              <Button size="sm" title="Add Category" onClick={() => onAddCategory(module.id)} className="h-6 w-6 p-0 bg-slate-500 hover:bg-slate-600 text-white rounded transition-colors">
+                <FolderCog className="h-3 w-3" />
+              </Button>
+            </>
           )}
         </div>
       </div>
@@ -152,18 +189,41 @@ const ModuleBlock = ({ module, canWrite, expanded, onToggleExpand, onEditModule,
         module.forms.length === 0 ? (
           <div className="pl-12 pr-3 py-2 text-xs text-muted-foreground bg-white">No forms in this module yet.</div>
         ) : (
-          <DndContext sensors={formSensors} collisionDetection={closestCenter} onDragEnd={handleFormsDragEnd}>
-            <SortableContext items={module.forms.map((f) => f.id)} strategy={verticalListSortingStrategy}>
-              {module.forms.map((form) => (
-                <FormRow
-                  key={form.id}
-                  form={form}
-                  canWrite={canWrite}
-                  onEdit={() => onEditForm(form)}
-                />
-              ))}
-            </SortableContext>
-          </DndContext>
+          <>
+            {categorizedGroups.map((group) => (
+              <div key={group.id}>
+                <div className="pl-9 pr-3 py-1.5 border-t bg-slate-50/40 text-[11px] font-semibold text-muted-foreground flex items-center gap-1.5">
+                  <FolderCog className="h-3 w-3" /> {group.name}
+                </div>
+                {group.forms.map((form) => (
+                  <FormRow
+                    key={form.id}
+                    form={form}
+                    canWrite={canWrite}
+                    sortable={false}
+                    onEdit={() => onEditForm(form)}
+                    onMove={onMoveForm}
+                  />
+                ))}
+              </div>
+            ))}
+
+            {uncategorizedForms.length > 0 && (
+              <DndContext sensors={formSensors} collisionDetection={closestCenter} onDragEnd={handleFormsDragEnd}>
+                <SortableContext items={uncategorizedForms.map((f) => f.id)} strategy={verticalListSortingStrategy}>
+                  {uncategorizedForms.map((form) => (
+                    <FormRow
+                      key={form.id}
+                      form={form}
+                      canWrite={canWrite}
+                      onEdit={() => onEditForm(form)}
+                      onMove={onMoveForm}
+                    />
+                  ))}
+                </SortableContext>
+              </DndContext>
+            )}
+          </>
         )
       )}
     </div>
@@ -180,6 +240,7 @@ const FormList = () => {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(() => new Set());
   const [tree, setTree] = useState(null);
+  const [moveDialogForm, setMoveDialogForm] = useState(null);
   const collapsedInitialized = useRef(false);
 
   const debouncedSearch = useDebounce(search, 400);
@@ -191,6 +252,10 @@ const FormList = () => {
   const { data, isPending } = useForms(params);
   const reorderModulesMutation = useReorderModules();
   const reorderFormsMutation = useReorderForms();
+  // Unscoped fetch across all modules — used only to label categorized forms in this tree, not
+  // as a dropdown source (those are always fetched module-scoped via useFormCategories elsewhere).
+  const { data: allCategories = [] } = useFormCategories({});
+  const categoryLookup = useMemo(() => new Map(allCategories.map((c) => [c.id, c])), [allCategories]);
 
   useEffect(() => {
     const nextTree = buildTree(data?.data ?? []);
@@ -240,8 +305,15 @@ const FormList = () => {
   };
 
   const handleFormsReorder = (moduleName, reorderedForms) => {
+    // reorderedForms is only the uncategorized subset of this module — merge the new seq values
+    // back into the module's full forms list so categorized forms are left untouched.
     const withSeq = reorderedForms.map((f, i) => ({ ...f, seq: i + 1 }));
-    setTree((prev) => (prev ?? []).map((m) => (m.form_name === moduleName && !m.isOrphan ? { ...m, forms: withSeq } : m)));
+    const withSeqById = new Map(withSeq.map((f) => [f.id, f]));
+    setTree((prev) => (prev ?? []).map((m) => (
+      m.form_name === moduleName && !m.isOrphan
+        ? { ...m, forms: m.forms.map((f) => withSeqById.get(f.id) ?? f) }
+        : m
+    )));
     const items = withSeq.map((f) => ({ id: f.id, seq: f.seq }));
     reorderFormsMutation.mutate({ moduleName, items }, {
       onError: (err) => showError(extractApiError(err)),
@@ -269,6 +341,9 @@ const FormList = () => {
               onToggle={() => setFiltersOpen((prev) => !prev)}
               activeCount={activeFilterCount}
             />
+            <Button size="sm" variant="outline" onClick={() => navigate(ROUTES.FORM_CATEGORIES)}>
+              <FolderCog className="mr-1.5 h-4 w-4" /> Manage Categories
+            </Button>
             {canWrite && (
               <>
                 <Button size="sm" variant="outline" onClick={() => navigate(`${ROUTES.FORM_NEW}?type=module`)}>
@@ -351,12 +426,21 @@ const FormList = () => {
                   onEditModule={() => navigate(buildPath(ROUTES.FORMS + '/' + module.id + '/edit'))}
                   onEditForm={(form) => navigate(buildPath(ROUTES.FORMS + '/' + form.id + '/edit'))}
                   onFormsReorder={handleFormsReorder}
+                  onMoveForm={setMoveDialogForm}
+                  onAddCategory={(moduleId) => navigate(`${ROUTES.FORM_CATEGORY_NEW}?module_id=${moduleId}`)}
+                  categoryLookup={categoryLookup}
                 />
               ))}
             </SortableContext>
           </DndContext>
         )}
       </div>
+
+      <MoveFormDialog
+        form={moveDialogForm}
+        open={!!moveDialogForm}
+        onOpenChange={(open) => !open && setMoveDialogForm(null)}
+      />
 
       <Outlet />
     </div>

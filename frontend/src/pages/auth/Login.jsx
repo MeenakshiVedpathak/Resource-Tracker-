@@ -28,7 +28,7 @@ const loginSchema = z.object({
 const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { setCredentials, setAccessibleForms, setIsOriginalDataVisible } = useAuth();
+  const { setCredentials, setAccessibleForms } = useAuth();
   const { error: showError } = useNotification();
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -44,18 +44,13 @@ const Login = () => {
   });
 
   const completeLogin = (data) => {
-    const { user, employee, accessToken, refreshToken, roles, forms, mapped_bu: mappedBu } = data;
-    const roleName = user?.role?.role_name;
+    const { employee, accessToken, refreshToken, roles, businessUnits, forms } = data;
     // Employee-only means Employee is the account's SOLE role — a multi-role account (e.g.
     // Employee + Manager) must land wherever `forms` sends it below, not always the Employee
-    // dashboard, so this checks the full `roles[]` array rather than the singular FK role.
+    // dashboard, so this checks the full `roles[]` array rather than a singular role.
     const isEmployeeOnly = (roles ?? []).length > 0 && (roles ?? []).every((r) => r.name === 'Employee');
 
-    // The login response only carries `company_id` (a number), not a nested `company` object
-    // (§0/§2.1) — reshape it into `{ id }` so the existing X-Company-Id request header (which
-    // every company-scoped role must send) keys off it unchanged.
-    const company = user?.company_id ? { id: user.company_id } : null;
-    setCredentials({ user, employee, accessToken, refreshToken, roles, company, mapped_bu: mappedBu });
+    setCredentials({ employee, accessToken, refreshToken, roles, businessUnits });
 
     // Paint immediately from whatever the login response embedded, if anything — avoids a
     // blank sidebar flash while the call below is in flight.
@@ -75,8 +70,6 @@ const Login = () => {
         // if the store ends up with no accessible-forms cached at all.
       : Promise.resolve(forms ?? {});
 
-    setIsOriginalDataVisible((roles ?? []).some((r) => r.is_original_data_visible === true));
-
     // A Platform Admin always lands on its own fixed home (MainLayout also enforces this on
     // every navigation, but this avoids an unnecessary bounce right after login). An Employee
     // lands on Employee Dashboard only when that form is actually mapped to it — an account
@@ -94,7 +87,7 @@ const Login = () => {
       } else {
         formsPromise.then((resolvedForms) => navigate(computeHomeRoute(resolvedForms, employeeHomeOpts), { replace: true }));
       }
-    } else if (roleName === 'Platform Admin') {
+    } else if ((roles ?? []).some((r) => r.name === 'Platform Admin')) {
       navigate(ROUTES.ADMINS, { replace: true });
     } else if (from) {
       navigate(from, { replace: true });

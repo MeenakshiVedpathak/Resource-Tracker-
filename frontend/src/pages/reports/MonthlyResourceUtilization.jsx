@@ -137,9 +137,9 @@ const MonthlyResourceUtilization = () => {
 
   const enabled = !!(monthYear?.year >= 2000 && monthYear?.year <= 2100);
 
-  const { user } = useAuth();
+  const { roleObjects } = useAuth();
   const params = enabled ? {
-     roleId: user?.role_id,
+     roleId: roleObjects[0]?.id,
     month: monthYear.month,
     year:  monthYear.year,
     hoursSource,
