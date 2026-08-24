@@ -1,4 +1,5 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -12,11 +13,15 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import ProjectSelect from './ProjectSelect';
-import { useSaveWorkLogDay, useUpdateWorkLogEntry } from '@/hooks/useEmployeeWorkLog';
+import TimeSegmentsInput, { BLANK_SEGMENT } from './TimeSegmentsInput';
+import { useSaveWorkLogDay, useUpdateWorkLogEntry, useResubmitWorkLogEntry } from '@/hooks/useEmployeeWorkLog';
 import { useEmployeeMappedProjects } from '@/hooks/useEmployeeProjects';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError, extractFieldErrors } from '@/services/apiClient';
+import { formatDateTime } from '@/utils/formatters';
 import { flattenHierarchyTree } from '@/utils/servicePOHierarchy';
+import { validateSegments, sumSegmentHours } from '@/utils/employeeTimeEntry';
+import { ROUTES } from '@/constants/routes';
 
 export const DAILY_HOURS_CAP = 12;
 // A standard workday, used only client-side to color the calendar heatmap and the daily
@@ -31,7 +36,10 @@ export const MONTHLY_HOURS_CAP = 31 * 24;
 // (this entry + everything else already logged that day > 12h) is deliberately NOT checked
 // here — that's a server-owned rule (400, with an exact "current total would be N hours"
 // message) surfaced as a toast via extractApiError instead of approximated client-side.
-const taskSchema = z.object({
+// Hours-wise entries (and new/create mode, which is always hours-wise) require a real Hours
+// value; Time-based entries compute Hours from segments instead, so that field is left optional
+// here and validated separately via validateSegments (see isTimeBased below).
+const hoursTaskSchema = z.object({
   service_po_id: z.string().min(1, 'Service PO is required.'),
   hierarchy_node_id: z.string().optional(),
   hours: z.coerce
@@ -41,6 +49,7 @@ const taskSchema = z.object({
   description: z.string().min(1, 'Description is required.').max(1000),
   timesheet_date: z.string().min(1, 'Date is required.'),
 });
+const timeBasedTaskSchema = hoursTaskSchema.extend({ hours: z.coerce.number().optional() });
 
 const buildDefaults = (task, date) => ({
   service_po_id: task ? String(task.service_po_id) : '',
@@ -50,14 +59,33 @@ const buildDefaults = (task, date) => ({
   timesheet_date: task ? dayjs(task.timesheet_date ?? task.work_date).format('YYYY-MM-DD') : dayjs(date).format('YYYY-MM-DD'),
 });
 
+// GET's timeEntries (camelCase) carries "HH:mm:ss"; TimeSegmentsInput/TimeRangePicker work in
+// "HH:mm". A non-empty timeEntries/time_entries array is what makes an entry Time-based — see
+// the Work Log Rejection Workflow API contract (no separate "type" field exists on the backend).
+const buildSegmentsFromTask = (task) => {
+  const entries = task?.timeEntries ?? task?.time_entries ?? [];
+  if (!entries.length) return [{ ...BLANK_SEGMENT }];
+  return entries.map((e) => ({
+    start_time: e.start_time ? e.start_time.slice(0, 5) : '',
+    end_time: e.end_time ? e.end_time.slice(0, 5) : '',
+  }));
+};
+
 // Create/edit modal for a single Work Log entry. Save & New only applies to create mode —
 // there's no "new" flow while editing an existing entry.
 //
-// Not currently rendered anywhere — My Work Log (EmployeeTimesheet.jsx) now edits hours
-// inline via WorkLogEntryTable's per-node steppers, since /employee-timesheets/daily no
-// longer returns individual entries with ids for this modal's edit mode to target. Kept
-// around for DAILY_HOURS_CAP/EXPECTED_DAILY_HOURS and in case a dedicated add-entry flow
-// is reintroduced later.
+// Rendered by the Work Log Rejection Workflow (EmployeeRejectedEntries.jsx) to edit a rejected
+// entry before resubmitting. A rejected entry's original type (Month-wise / Hours-wise /
+// Time-based) is preserved through reject -> resubmit, and the backend has no explicit "type"
+// field for it — it's derived here exactly as the API contract specifies:
+//   - log_type === 'monthly'          -> Month-wise: not editable here, defer to the Monthly
+//                                        tab on My Work Log (EmployeeTimesheet.jsx).
+//   - timeEntries/time_entries non-empty -> Time-based: edit via Start/End Time segments,
+//                                        Hours becomes a read-only, client-computed display.
+//   - otherwise (log_type === 'daily')   -> Hours-wise: the original editable Hours input.
+// Editing a rejected entry leaves it 'rejected' (PUT .../:id never changes status); this modal
+// resubmits it (PUT .../:id/resubmit) right after a successful edit so the employee doesn't have
+// to take a second action to get it back to 'pending'.
 //
 // NOTE: create mode below sends only this one row to the whole-day-replace POST — correct
 // only when the date has no other entries yet. If this modal is reintroduced for a date that
@@ -67,20 +95,29 @@ const WorkLogEntryModal = ({ open, onOpenChange, date, task }) => {
   const { success, error: showError } = useNotification();
   const saveDayMutation = useSaveWorkLogDay();
   const updateMutation = useUpdateWorkLogEntry();
+  const resubmitMutation = useResubmitWorkLogEntry();
   const isEdit = !!task;
-  const isSaving = saveDayMutation.isPending || updateMutation.isPending;
+  const isMonthly = isEdit && task?.log_type === 'monthly';
+  const rawTimeEntries = task?.timeEntries ?? task?.time_entries ?? [];
+  const isTimeBased = isEdit && Array.isArray(rawTimeEntries) && rawTimeEntries.length > 0;
+  const isSaving = saveDayMutation.isPending || updateMutation.isPending || resubmitMutation.isPending;
 
   const today = dayjs().format('YYYY-MM-DD');
   const { data: projects = [] } = useEmployeeMappedProjects();
 
+  const [segments, setSegments] = useState(() => buildSegmentsFromTask(task));
+  const [segmentsError, setSegmentsError] = useState(null);
+
   const form = useForm({
-    resolver: zodResolver(taskSchema),
+    resolver: zodResolver(isTimeBased ? timeBasedTaskSchema : hoursTaskSchema),
     defaultValues: buildDefaults(task, date),
   });
 
   useEffect(() => {
     if (!open) return;
     form.reset(buildDefaults(task, date));
+    setSegments(buildSegmentsFromTask(task));
+    setSegmentsError(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, task]);
 
@@ -88,19 +125,48 @@ const WorkLogEntryModal = ({ open, onOpenChange, date, task }) => {
   const selectedProject = projects.find((p) => String(p.id) === String(selectedServicePOId));
   const hierarchyOptions = flattenHierarchyTree(selectedProject?.hierarchy ?? []);
 
+  const filledSegments = segments.filter((s) => s.start_time || s.end_time);
+  const totalHours = sumSegmentHours(filledSegments);
+
+  const handleSegmentsChange = (next) => {
+    setSegments(next);
+    if (segmentsError) setSegmentsError(null);
+  };
+
   const submit = async (values, { keepOpen }) => {
+    if (isTimeBased) {
+      const segErr = validateSegments(filledSegments);
+      if (segErr) {
+        setSegmentsError(segErr);
+        return;
+      }
+    }
     try {
       if (isEdit) {
         const payload = {
           service_po_id: values.service_po_id,
           hierarchy_node_id: values.hierarchy_node_id || null,
           sub_project_id: null, // no sub-project selector in this UI
-          hours: values.hours,
           description: values.description,
           timesheet_date: values.timesheet_date,
+          // Time-based: send time_entries, never hours — the backend recalculates hours as the
+          // sum of these segments and would otherwise ignore a stale hours value. Hours-wise:
+          // send hours, and omit time_entries entirely (an explicit [] would wipe the entry's
+          // breakdown, but there isn't one here anyway).
+          ...(isTimeBased ? { time_entries: filledSegments } : { hours: values.hours }),
         };
         await updateMutation.mutateAsync({ id: task.id, payload });
-        success('Entry updated.');
+
+        if (task.status === 'rejected') {
+          try {
+            await resubmitMutation.mutateAsync(task.id);
+            success('Entry updated and resubmitted for approval.');
+          } catch (resubmitErr) {
+            showError(`Entry updated, but couldn't resubmit automatically: ${extractApiError(resubmitErr)}`);
+          }
+        } else {
+          success('Entry updated.');
+        }
       } else {
         await saveDayMutation.mutateAsync({
           timesheet_date: values.timesheet_date,
@@ -135,6 +201,35 @@ const WorkLogEntryModal = ({ open, onOpenChange, date, task }) => {
           <DialogTitle>{isEdit ? 'Edit Work Log Entry' : 'Add Work Log Entry'}</DialogTitle>
         </DialogHeader>
 
+        {task?.status === 'rejected' && (
+          <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+            <p className="font-medium">
+              Rejected{task.rejected_by_name ? ` by ${task.rejected_by_name}` : ''}
+              {task.rejected_at ? ` on ${formatDateTime(task.rejected_at)}` : ''}
+            </p>
+            {task.rejection_remark && <p className="mt-1">{task.rejection_remark}</p>}
+          </div>
+        )}
+
+        {isMonthly ? (
+          <>
+            <div className="rounded-md border bg-muted/30 p-4 text-sm text-muted-foreground">
+              This is a Month-Wise entry. Edit and resubmit it from the Monthly tab on{' '}
+              <Link
+                to={ROUTES.EMPLOYEE_TIMESHEET}
+                onClick={() => onOpenChange(false)}
+                className="font-medium text-primary underline"
+              >
+                My Work Log
+              </Link>
+              .
+            </div>
+            <DialogFooter>
+              <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>Close</Button>
+            </DialogFooter>
+          </>
+        ) : (
+        <>
         <Form {...form}>
           <form className="space-y-4">
             <FormField
@@ -207,19 +302,32 @@ const WorkLogEntryModal = ({ open, onOpenChange, date, task }) => {
               />
             )}
 
-            <FormField
-              control={form.control}
-              name="hours"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Hours</FormLabel>
-                  <FormControl>
-                    <Input type="number" step="0.5" min="0" max={DAILY_HOURS_CAP} placeholder="e.g. 4.5" disabled={isSaving} {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {isTimeBased ? (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Time Segments</span>
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {totalHours} {totalHours === 1 ? 'hr' : 'hrs'} (calculated)
+                  </span>
+                </div>
+                <TimeSegmentsInput segments={segments} onChange={handleSegmentsChange} disabled={isSaving} />
+                {segmentsError && <p className="text-xs font-medium text-destructive">{segmentsError}</p>}
+              </div>
+            ) : (
+              <FormField
+                control={form.control}
+                name="hours"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Hours</FormLabel>
+                    <FormControl>
+                      <Input type="number" step="0.5" min="0" max={DAILY_HOURS_CAP} placeholder="e.g. 4.5" disabled={isSaving} {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             <FormField
               control={form.control}
@@ -256,9 +364,13 @@ const WorkLogEntryModal = ({ open, onOpenChange, date, task }) => {
             onClick={form.handleSubmit((v) => submit(v, { keepOpen: false }))}
             disabled={isSaving}
           >
-            {isSaving ? 'Saving…' : 'Save & Close'}
+            {isSaving
+              ? (resubmitMutation.isPending ? 'Resubmitting…' : 'Saving…')
+              : (isEdit && task?.status === 'rejected' ? 'Save & Resubmit' : 'Save & Close')}
           </Button>
         </DialogFooter>
+        </>
+        )}
       </DialogContent>
     </Dialog>
   );

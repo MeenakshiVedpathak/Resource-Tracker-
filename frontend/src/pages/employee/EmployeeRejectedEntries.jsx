@@ -1,17 +1,22 @@
 import { useState } from 'react';
-import { Pencil, RotateCcw, Trash2, ChevronLeft, ChevronRight, XCircle } from 'lucide-react';
+import { Pencil, RotateCcw, Trash2, ChevronLeft, ChevronRight, XCircle, X } from 'lucide-react';
 import { useEmployeeEntries, useDeleteWorkLogEntry, useResubmitWorkLogEntry } from '@/hooks/useEmployeeWorkLog';
 import { useEmployeeMappedProjects } from '@/hooks/useEmployeeProjects';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import { formatDate, formatDateTime } from '@/utils/formatters';
+import { sortServicePOsHierarchically } from '@/utils/servicePOHierarchy';
 import EmptyState from '@/components/common/EmptyState';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import WorkLogEntryModal from '@/components/employee/WorkLogEntryModal';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 
 const LIMIT = 10;
+
+const emptyFilters = { poId: '', startDate: '', endDate: '' };
 
 // Work Log Rejection Workflow (2026-08-23), Employee side. Lists only status=rejected entries
 // via the flat GET /employee-timesheets/entries?status=rejected list — distinct from the
@@ -20,10 +25,18 @@ const LIMIT = 10;
 const EmployeeRejectedEntries = () => {
   const { success, error: showError } = useNotification();
   const [page, setPage] = useState(1);
+  const [filters, setFilters] = useState(emptyFilters);
   const [editTask, setEditTask] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
 
-  const { data, isLoading, isError } = useEmployeeEntries({ status: 'rejected', page, limit: LIMIT });
+  const { data, isLoading, isError } = useEmployeeEntries({
+    status: 'rejected',
+    page,
+    limit: LIMIT,
+    poId: filters.poId || undefined,
+    startDate: filters.startDate || undefined,
+    endDate: filters.endDate || undefined,
+  });
   const { data: projects = [] } = useEmployeeMappedProjects();
   const deleteMutation = useDeleteWorkLogEntry();
   const resubmitMutation = useResubmitWorkLogEntry();
@@ -31,6 +44,17 @@ const EmployeeRejectedEntries = () => {
   const entries = data?.data ?? [];
   const meta = data?.meta;
   const projectName = (servicePoId) => projects.find((p) => String(p.id) === String(servicePoId))?.name ?? `Service PO #${servicePoId}`;
+  const projectOptions = sortServicePOsHierarchically(projects).map((p) => ({
+    value: String(p.id),
+    label: p.name,
+    searchValue: p.name,
+  }));
+  const hasActiveFilters = !!(filters.poId || filters.startDate || filters.endDate);
+
+  const updateFilter = (patch) => {
+    setPage(1);
+    setFilters((prev) => ({ ...prev, ...patch }));
+  };
 
   const handleResubmit = (entry) => {
     resubmitMutation.mutate(entry.id, {
@@ -66,6 +90,38 @@ const EmployeeRejectedEntries = () => {
         </p>
       </div>
 
+      <div className="flex flex-wrap items-end gap-2 rounded-lg border bg-card p-3">
+        <div className="min-w-[200px] flex-1">
+          <SearchableSelect
+            options={[{ label: 'All Projects', value: '' }, ...projectOptions]}
+            value={filters.poId}
+            onValueChange={(v) => updateFilter({ poId: v })}
+            placeholder="All Projects"
+            searchPlaceholder="Search projects…"
+          />
+        </div>
+        <Input
+          type="date"
+          value={filters.startDate}
+          onChange={(e) => updateFilter({ startDate: e.target.value })}
+          className="w-auto"
+          aria-label="From date"
+        />
+        <Input
+          type="date"
+          value={filters.endDate}
+          onChange={(e) => updateFilter({ endDate: e.target.value })}
+          className="w-auto"
+          aria-label="To date"
+        />
+        {hasActiveFilters && (
+          <Button variant="ghost" size="sm" onClick={() => updateFilter(emptyFilters)}>
+            <X className="mr-1.5 h-3.5 w-3.5" />
+            Clear
+          </Button>
+        )}
+      </div>
+
       {isError && (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
           Unable to load rejected entries. Please try again.
@@ -80,7 +136,7 @@ const EmployeeRejectedEntries = () => {
         <EmptyState
           icon={XCircle}
           title="No rejected entries."
-          description="Everything you've logged is pending or already approved."
+          description={hasActiveFilters ? 'No rejected entries match these filters.' : "Everything you've logged is pending or already approved."}
         />
       ) : (
         <div className="space-y-3">
