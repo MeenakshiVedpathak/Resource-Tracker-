@@ -60,17 +60,40 @@ const poSchema = (isEdit) => z
       .min(3, 'Service PO name must be at least 3 characters')
       .max(200, 'Service PO name cannot exceed 200 characters'),
     service_po_code: servicePoCodeField(!isEdit),
-    company_id: z.coerce.number({ required_error: 'Business Unit is required' }).positive('Business Unit is required'),
+    // Required for a Normal Service PO, optional for a Centralised one — the conditional check
+    // (depends on is_centralised, another field in this object) lives in the superRefine below.
+    // Preprocess '' -> undefined first, since z.coerce.number() would otherwise still run on the
+    // empty string left behind once the field is cleared/disabled and fail .positive() on 0.
+    company_id: z.preprocess(
+      (v) => (v === '' || v == null ? undefined : v),
+      z.coerce.number().positive('Business Unit is required').optional()
+    ),
     client_id: z.coerce.number({ required_error: 'Client is required' }).positive('Client is required'),
     project_id: z.coerce.number({ required_error: 'Project is required' }).positive('Project is required'),
-    delivery_head_employee_id: z.coerce
-      .number({ required_error: 'Delivery Head is required' })
-      .positive('Delivery Head is required'),
+    // Delivery Head is not collected on create (backend sets it NULL there) — only required
+    // once the field is actually shown, on edit. On create the field is never rendered, so its
+    // form value stays '' — preprocess it to undefined first, or z.coerce.number() would still
+    // run on '' (only undefined skips an optional check) and fail .positive() on Number('') = 0,
+    // silently blocking submission.
+    delivery_head_employee_id: isEdit
+      ? z.coerce
+          .number({ required_error: 'Delivery Head is required' })
+          .positive('Delivery Head is required')
+      : z.preprocess(
+          (v) => (v === '' || v == null ? undefined : v),
+          z.coerce.number().positive().optional()
+        ),
     service_type_id: z.coerce
       .number({ required_error: 'Service type is required' })
       .positive('Service type is required'),
     start_date: z.string().min(1, 'Start date is required'),
-    end_date: z.string().min(1, 'End date is required'),
+    // Required for a Normal Service PO, optional for a Centralised one (an ongoing PO with no
+    // fixed end) — the conditional check lives in the superRefine below, alongside company_id's.
+    // Preprocess '' -> undefined so a blank, optional end date doesn't fail as a non-empty string.
+    end_date: z.preprocess(
+      (v) => (v === '' || v == null ? undefined : v),
+      z.string().optional()
+    ),
     service_description: z.string().min(1, 'Service description is required').max(1000),
     invoice_frequency: z.string().min(1, 'Invoice frequency is required'),
     status: z.enum(['in-progress', 'completed', 'on-hold', 'pending', 'cancelled', 'closed']).default('in-progress'),
@@ -82,7 +105,25 @@ const poSchema = (isEdit) => z
       return new Date(data.end_date) >= new Date(data.start_date);
     },
     { message: 'End date must be on or after start date', path: ['end_date'] }
-  );
+  )
+  // Business Unit and End Date are required for a Normal Service PO but optional for a
+  // Centralised one (BU-less, ongoing PO with no fixed end).
+  .superRefine((data, ctx) => {
+    if (!data.is_centralised && data.company_id == null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Business Unit is required',
+        path: ['company_id'],
+      });
+    }
+    if (!data.is_centralised && !data.end_date) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'End date is required',
+        path: ['end_date'],
+      });
+    }
+  });
 
 // Field names for the eligible-delivery-heads response aren't confirmed against the backend
 // contract yet, so this reads common variants defensively rather than assuming one exact shape.
@@ -118,7 +159,7 @@ const ServicePOForm = () => {
     isPending: isLoadingDeliveryHeads,
     isError: isDeliveryHeadsError,
     error: deliveryHeadsError,
-  } = useEligibleDeliveryHeads();
+  } = useEligibleDeliveryHeads(isEdit);
   const createMutation = useCreateServicePO();
   const updateMutation = useUpdateServicePO(id);
 
@@ -142,6 +183,10 @@ const ServicePOForm = () => {
       is_centralised: false,
     },
   });
+
+  // Drives the Business Unit field's required/disabled state — a Centralised Service PO has no
+  // BU (see company_id's superRefine in poSchema above).
+  const isCentralised = form.watch('is_centralised');
 
   // Project dropdown is scoped to whichever Client is currently selected — refetches whenever
   // it changes, and is disabled until a Client is picked (see Project field below).
@@ -282,7 +327,7 @@ const ServicePOForm = () => {
                 render={({ field }) => (
                   <FormItem className="space-y-1">
                     <FormLabel className="text-[13px]">
-                      <span className="text-destructive">*</span> Business Unit
+                      {!isCentralised && <span className="text-destructive">*</span>} Business Unit
                     </FormLabel>
                     <SearchableSelect
                       options={activeCompanies.map(c => ({
@@ -291,8 +336,8 @@ const ServicePOForm = () => {
                       }))}
                       value={field.value}
                       onValueChange={(val) => field.onChange(val ? parseInt(val, 10) : undefined)}
-                      disabled={isLoadingCompanies}
-                      placeholder="Select business unit"
+                      disabled={isLoadingCompanies || isCentralised}
+                      placeholder={isCentralised ? 'Not required for a Centralised PO' : 'Select business unit'}
                       searchPlaceholder="Search business unit..."
                       className="h-8 text-sm"
                     />
@@ -362,36 +407,40 @@ const ServicePOForm = () => {
                 )}
               />
 
-              <FormField
-                control={form.control}
-                name="delivery_head_employee_id"
-                render={({ field }) => (
-                  <FormItem className="space-y-1">
-                    <FormLabel className="text-[13px]">
-                      <span className="text-destructive">*</span> Delivery Head
-                    </FormLabel>
-                    <SearchableSelect
-                      options={deliveryHeads.map((e) => ({
-                        value: String(e.id ?? e.employee_id),
-                        label: formatDeliveryHeadLabel(e),
-                      }))}
-                      value={field.value}
-                      onValueChange={(val) => field.onChange(val ? parseInt(val, 10) : undefined)}
-                      disabled={isLoadingDeliveryHeads}
-                      placeholder="Select delivery head"
-                      searchPlaceholder="Search by name, code or email..."
-                      emptyMessage={isDeliveryHeadsError ? 'Failed to load delivery heads.' : 'No eligible delivery heads found.'}
-                      className="h-8 text-sm"
-                    />
-                    {isDeliveryHeadsError && (
-                      <p className="text-[11px] text-destructive">
-                        Couldn't load delivery heads: {extractApiError(deliveryHeadsError)}
-                      </p>
-                    )}
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {/* Delivery Head is not collected on create — backend sets it NULL there; only
+                  shown/required once a Service PO already exists, on edit. */}
+              {isEdit && (
+                <FormField
+                  control={form.control}
+                  name="delivery_head_employee_id"
+                  render={({ field }) => (
+                    <FormItem className="space-y-1">
+                      <FormLabel className="text-[13px]">
+                        <span className="text-destructive">*</span> Delivery Head
+                      </FormLabel>
+                      <SearchableSelect
+                        options={deliveryHeads.map((e) => ({
+                          value: String(e.id ?? e.employee_id),
+                          label: formatDeliveryHeadLabel(e),
+                        }))}
+                        value={field.value}
+                        onValueChange={(val) => field.onChange(val ? parseInt(val, 10) : undefined)}
+                        disabled={isLoadingDeliveryHeads}
+                        placeholder="Select delivery head"
+                        searchPlaceholder="Search by name, code or email..."
+                        emptyMessage={isDeliveryHeadsError ? 'Failed to load delivery heads.' : 'No eligible delivery heads found.'}
+                        className="h-8 text-sm"
+                      />
+                      {isDeliveryHeadsError && (
+                        <p className="text-[11px] text-destructive">
+                          Couldn't load delivery heads: {extractApiError(deliveryHeadsError)}
+                        </p>
+                      )}
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
 
               <div className="space-y-1">
                 <FormLabel className="text-[13px]">
@@ -512,7 +561,7 @@ const ServicePOForm = () => {
                 render={({ field }) => (
                   <FormItem className="space-y-1">
                     <FormLabel className="text-[13px]">
-                      <span className="text-destructive">*</span> End Date 
+                      {!isCentralised && <span className="text-destructive">*</span>} End Date
                     </FormLabel>
                     <FormControl>
                       <Input type="date" className="h-8 text-sm" {...field} />
@@ -556,11 +605,20 @@ const ServicePOForm = () => {
                       <div className="space-y-0.5">
                         <FormLabel className="text-[13px]">Is Centralised</FormLabel>
                         <p className="text-[11px] text-muted-foreground">
-                          New employees are automatically mapped to this PO going forward.
+                          New employees are automatically mapped to this PO going forward. A
+                          Centralised PO does not require a Business Unit.
                         </p>
                       </div>
                       <FormControl>
-                        <Switch checked={field.value} onCheckedChange={field.onChange} />
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={(checked) => {
+                            field.onChange(checked);
+                            // Centralised has no BU — clear whatever was picked so a stale value
+                            // never lingers behind the now-disabled field.
+                            if (checked) form.setValue('company_id', '', { shouldValidate: true });
+                          }}
+                        />
                       </FormControl>
                     </div>
                     <FormMessage />

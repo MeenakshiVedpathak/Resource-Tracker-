@@ -19,7 +19,7 @@ export const useActiveEmployees = () =>
 // Service PO create/edit's Delivery Head dropdown — response envelope not yet confirmed against
 // the exact shape the new backend endpoint returns, so `select` defensively unwraps either
 // `{ data: [...] }` or a bare array.
-export const useEligibleDeliveryHeads = () =>
+export const useEligibleDeliveryHeads = (enabled = true) =>
   useQuery({
     queryKey: QUERY_KEYS.ELIGIBLE_DELIVERY_HEADS,
     queryFn: employeesApi.getEligibleDeliveryHeads,
@@ -29,6 +29,7 @@ export const useEligibleDeliveryHeads = () =>
       return [];
     },
     staleTime: 1000 * 60 * 5,
+    enabled,
   });
 
 export const useEmployee = (id) =>
@@ -112,3 +113,4 @@ export const useToggleEmployeeStatus = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['employees'] }),
   });
 };
+ 
