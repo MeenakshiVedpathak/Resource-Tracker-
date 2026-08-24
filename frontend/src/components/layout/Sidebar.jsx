@@ -10,7 +10,7 @@ import { useFormModules, useForms } from '@/hooks/useForms';
 import { useFormCategories } from '@/hooks/useFormCategories';
 import { resolveFormRoute } from '@/constants/rbacForms';
 import { ROUTES } from '@/constants/routes';
-import { ChevronLeft, ChevronRight, ChevronDown, UserPlus, Shield, ClipboardList, UserCog, Landmark, Network, Folder } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, UserPlus, Shield, ClipboardList, Network, Folder } from 'lucide-react';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import ScrollOnHoverText from '@/components/common/ScrollOnHoverText';
 
@@ -33,12 +33,6 @@ const SUPER_ADMIN_NAV_GROUPS = [
 // redesign's per-company "first admin", renamed from the old "Company Admin"), regardless of
 // what any role's own form mappings say — a hardcoded UI restriction on top of the RBAC data.
 const RESTRICTED_MODULES = ['administration'];
-
-// Screens gated by role name directly (allowedRoles on the route) rather than a Form Master
-// row — their nav items are injected on top of the RBAC-driven groups below rather than
-// resolved from accessibleForms, same pattern as the BU Admin bypass above.
-const ENTITY_ADMIN_MANAGEMENT_ROLES = ['Admin'];
-const TEAM_MAPPING_ROLES = ['Service PO Admin'];
 
 // Modules with a dedicated category-browser landing page (Zoho-style folder list + report
 // list) — their group label becomes a link into that hub instead of plain text.
@@ -278,32 +272,14 @@ const Sidebar = () => {
   // BU Head is an additive peer of BU Admin with identical form/permission access — extends the
   // same bypass BU Admin already gets, never a standalone concept.
   const isSuperAdmin = hasRole('BU Admin', 'BU Head');
-  const canViewEntityAdmins = hasRole(...ENTITY_ADMIN_MANAGEMENT_ROLES);
-  const canViewTeamMapping = hasRole(...TEAM_MAPPING_ROLES);
   const { moduleRank, formRank, categoryOf, categoryInfo } = useMenuRank();
   // isPlatformAdmin is derived from the held roles (§0) — overrides the normal
-  // accessible-forms-driven nav entirely.
+  // accessible-forms-driven nav entirely. Every other nav item comes strictly from
+  // accessibleForms (the Forms API) — no role-name-based injection on top of it.
   const navGroups = useMemo(() => {
     if (isPlatformAdmin) return SUPER_ADMIN_NAV_GROUPS;
-    const base = buildNavGroups(accessibleForms, { isSuperAdmin, moduleRank, formRank, categoryOf, categoryInfo });
-
-    const injected = [];
-    if (canViewEntityAdmins) {
-      injected.push({ group: 'Entity Management', item: { label: 'Entity Admins', icon: Landmark, to: ROUTES.ENTITY_ADMINS, exact: false } });
-    }
-    if (canViewTeamMapping) {
-      injected.push({ group: 'People', item: { label: 'Team Mapping', icon: UserCog, to: ROUTES.TEAM_MAPPINGS, exact: true } });
-    }
-    if (injected.length === 0) return base;
-
-    return injected.reduce((groups, { group: groupLabel, item }) => {
-      const idx = groups.findIndex((g) => g.label.trim().toLowerCase() === groupLabel.toLowerCase());
-      if (idx === -1) return [...groups, { label: groupLabel, items: [item] }];
-      // Entity Admins should lead its group, ahead of the RBAC-driven BU Admin Master item.
-      const prepend = groupLabel === 'Entity Management';
-      return groups.map((g, i) => (i === idx ? { ...g, items: prepend ? [item, ...g.items] : [...g.items, item] } : g));
-    }, base);
-  }, [accessibleForms, isSuperAdmin, isPlatformAdmin, canViewEntityAdmins, canViewTeamMapping, moduleRank, formRank, categoryOf, categoryInfo]);
+    return buildNavGroups(accessibleForms, { isSuperAdmin, moduleRank, formRank, categoryOf, categoryInfo });
+  }, [accessibleForms, isSuperAdmin, isPlatformAdmin, moduleRank, formRank, categoryOf, categoryInfo]);
 
   // Guards navigation away from a page with unsaved changes (e.g. Timesheet
   // Import Detail's Modified Hours edits) — any page can opt in via the

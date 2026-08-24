@@ -19,7 +19,7 @@ import {
   ListTree, ListChecks, Banknote, CalendarClock, Timer, Hourglass,
   TrendingUp, LineChart, Target, Percent, Award, BatteryCharging, AlertTriangle, Crown,
   ReceiptText, GitCompare, Scale, BarChart3, Building, Activity, Armchair, Users2,
-  ClipboardCheck, XCircle,
+  ClipboardCheck, XCircle, UserCog,
 } from 'lucide-react';
 import { ROUTES } from '@/constants/routes';
 
@@ -36,6 +36,10 @@ export const FORM_NAMES = {
   // (module "Entity Management"). Company Management has no form of its own on purpose — it's
   // reached via buttons on these two screens, not a sidebar item (see CompanyList/BuAdminList).
   ENTITY_MASTER: 'Entity Master',
+  // Global Entity Admin account pool (§6.2) — previously injected into the Sidebar directly
+  // off hasRole('Admin') rather than resolved from accessibleForms; now needs a real Form
+  // Master row named exactly this, assigned to the Admin role via Role Form Mapping.
+  ENTITY_ADMINS: 'Entity Admins',
   BU_ADMIN_MASTER: 'BU Admin Master',
   // Additive BU Head role form — real Form Master row confirmed seeded under "Entity
   // Management"; nav item now comes entirely from accessibleForms (no Sidebar.jsx injection).
@@ -104,6 +108,10 @@ export const FORM_NAMES = {
   // exists on the backend, so this is picked up automatically by buildNavGroups() instead of
   // the MY_TEAM_ROLES hardcoded injection in Sidebar.jsx.
   MY_TEAM: 'My Team',
+  // Business module, Service PO Admin login — previously injected into the Sidebar directly
+  // off hasRole('Service PO Admin') rather than resolved from accessibleForms; now needs a
+  // real Form Master row named exactly this, assigned via Role Form Mapping.
+  TEAM_MAPPING: 'Team Mapping',
   // Guessed names — same caveat as the rest of this file: these two screens are brand new
   // (backend spec dated 2026-08-19, no Form Master rows confirmed yet). Confirm against the
   // real GET /roles/forms response once these are seeded.
@@ -141,6 +149,7 @@ export const FORM_ROUTE_CONFIG = {
   [FORM_NAMES.ROLES]: { to: ROUTES.ROLES, icon: Shield },
   [FORM_NAMES.FORMS]: { to: ROUTES.FORMS, icon: ClipboardList },
   [FORM_NAMES.ENTITY_MASTER]: { to: ROUTES.ENTITIES, icon: Landmark },
+  [FORM_NAMES.ENTITY_ADMINS]: { to: ROUTES.ENTITY_ADMINS, icon: Landmark },
   // Points at the Companies screen, not a dedicated BU Admin Master page — see routes/index.jsx.
   [FORM_NAMES.BU_ADMIN_MASTER]: { to: ROUTES.COMPANIES, icon: ShieldCheck },
   [FORM_NAMES.BU_HEAD_MASTER]: { to: ROUTES.BU_HEADS, icon: Users2 },
@@ -172,6 +181,7 @@ export const FORM_ROUTE_CONFIG = {
   [FORM_NAMES.MANAGER_TIMESHEET_APPROVAL]: { to: ROUTES.MANAGER_TIMESHEET_APPROVAL, icon: ClipboardCheck, exact: true },
   [FORM_NAMES.SERVICE_PO_MONTHLY_BUDGET]: { to: ROUTES.SERVICE_PO_MONTHLY_BUDGET, icon: Wallet, exact: true },
   [FORM_NAMES.MY_TEAM]: { to: ROUTES.MY_TEAM, icon: Network, exact: true },
+  [FORM_NAMES.TEAM_MAPPING]: { to: ROUTES.TEAM_MAPPINGS, icon: UserCog, exact: true },
   [FORM_NAMES.COST_BUDGET]: { to: ROUTES.COST_BUDGETS, icon: Banknote, exact: true },
   [FORM_NAMES.RESOURCE_BUDGET]: { to: ROUTES.RESOURCE_BUDGETS, icon: CalendarClock, exact: true },
   [FORM_NAMES.REPORT_SERVICE_PO_PROFITABILITY]: { to: ROUTES.REPORT_SERVICE_PO_PROFITABILITY, icon: TrendingUp },
