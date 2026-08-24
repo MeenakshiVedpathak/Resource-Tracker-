@@ -141,24 +141,29 @@ export const FORM_NAMES = {
   REPORT_EMPLOYEE_BENCH_PERCENTAGE: 'Employee Bench Percentage',
 };
 
-// form_name (lowercased/trimmed) -> { to, icon, exact }. Icons are used by the dynamic Sidebar.
+// form_name (lowercased/trimmed) -> { to, icon, exact, addTo?, addLabel? }. Icons are used by
+// the dynamic Sidebar. `addTo` is only set when the module has a real, dedicated Add/Create
+// route already used by that list page's own "Add" button (see Sidebar.jsx's quick-add "+") —
+// a module whose "Add" opens an in-page Sheet/mutation instead of navigating (e.g. BU Head
+// Master, Team Mapping) is deliberately left without one rather than inventing a route.
 export const FORM_ROUTE_CONFIG = {
   [FORM_NAMES.DASHBOARD]: { to: ROUTES.DASHBOARD, icon: LayoutDashboard, exact: true },
   [FORM_NAMES.AI_INSIGHTS]: { to: ROUTES.AI_INSIGHTS, icon: Sparkles, exact: true },
-  [FORM_NAMES.EMPLOYEES]: { to: ROUTES.EMPLOYEES, icon: Users },
-  [FORM_NAMES.ROLES]: { to: ROUTES.ROLES, icon: Shield },
-  [FORM_NAMES.FORMS]: { to: ROUTES.FORMS, icon: ClipboardList },
-  [FORM_NAMES.ENTITY_MASTER]: { to: ROUTES.ENTITIES, icon: Landmark },
-  [FORM_NAMES.ENTITY_ADMINS]: { to: ROUTES.ENTITY_ADMINS, icon: Landmark },
+  [FORM_NAMES.EMPLOYEES]: { to: ROUTES.EMPLOYEES, icon: Users, addTo: ROUTES.EMPLOYEE_NEW, addLabel: 'Add Employee' },
+  [FORM_NAMES.ROLES]: { to: ROUTES.ROLES, icon: Shield, addTo: ROUTES.ROLE_NEW, addLabel: 'Add Role' },
+  [FORM_NAMES.FORMS]: { to: ROUTES.FORMS, icon: ClipboardList, addTo: `${ROUTES.FORM_NEW}?type=form`, addLabel: 'Add Form' },
+  [FORM_NAMES.ENTITY_MASTER]: { to: ROUTES.ENTITIES, icon: Landmark, addTo: ROUTES.ENTITY_NEW, addLabel: 'Add Entity' },
+  [FORM_NAMES.ENTITY_ADMINS]: { to: ROUTES.ENTITY_ADMINS, icon: Landmark, addTo: ROUTES.ENTITY_ADMIN_NEW, addLabel: 'Add Entity Admin' },
   // Points at the Companies screen, not a dedicated BU Admin Master page — see routes/index.jsx.
-  [FORM_NAMES.BU_ADMIN_MASTER]: { to: ROUTES.COMPANIES, icon: ShieldCheck },
+  // addTo likewise reuses Companies' own "Add BU" route rather than a BU-Admin-specific one.
+  [FORM_NAMES.BU_ADMIN_MASTER]: { to: ROUTES.COMPANIES, icon: ShieldCheck, addTo: ROUTES.COMPANY_NEW, addLabel: 'Add BU' },
   [FORM_NAMES.BU_HEAD_MASTER]: { to: ROUTES.BU_HEADS, icon: Users2 },
-  [FORM_NAMES.CLIENTS]: { to: ROUTES.CLIENTS, icon: Building2 },
-  [FORM_NAMES.PROJECTS]: { to: ROUTES.PROJECTS, icon: FolderKanban },
-  [FORM_NAMES.SERVICE_POS]: { to: ROUTES.SERVICE_POS, icon: FileText },
-  [FORM_NAMES.SUB_PROJECTS]: { to: ROUTES.SUB_PROJECTS, icon: FolderOpen },
-  [FORM_NAMES.SERVICE_TYPES]: { to: ROUTES.SERVICE_TYPES, icon: Layers },
-  [FORM_NAMES.SERVICE_CATEGORIES]: { to: ROUTES.SERVICE_CATEGORIES, icon: Tag },
+  [FORM_NAMES.CLIENTS]: { to: ROUTES.CLIENTS, icon: Building2, addTo: ROUTES.CLIENT_NEW, addLabel: 'Add Client' },
+  [FORM_NAMES.PROJECTS]: { to: ROUTES.PROJECTS, icon: FolderKanban, addTo: ROUTES.PROJECT_NEW, addLabel: 'Add Project' },
+  [FORM_NAMES.SERVICE_POS]: { to: ROUTES.SERVICE_POS, icon: FileText, addTo: ROUTES.SERVICE_PO_NEW, addLabel: 'Add Service PO' },
+  [FORM_NAMES.SUB_PROJECTS]: { to: ROUTES.SUB_PROJECTS, icon: FolderOpen, addTo: ROUTES.SUB_PROJECT_NEW, addLabel: 'Add Sub-Project' },
+  [FORM_NAMES.SERVICE_TYPES]: { to: ROUTES.SERVICE_TYPES, icon: Layers, addTo: ROUTES.SERVICE_TYPE_NEW, addLabel: 'Add Service Type' },
+  [FORM_NAMES.SERVICE_CATEGORIES]: { to: ROUTES.SERVICE_CATEGORIES, icon: Tag, addTo: ROUTES.SERVICE_CATEGORY_NEW, addLabel: 'Add Category' },
   [FORM_NAMES.TIMESHEETS]: { to: ROUTES.TIMESHEETS, icon: Clock },
   [FORM_NAMES.MONTHLY_COSTS]: { to: ROUTES.MONTHLY_COSTS, icon: DollarSign },
   [FORM_NAMES.REPORT_PO_VS_RESOURCE]: { to: ROUTES.REPORT_SERVICE_PO_RESOURCE, icon: Network },

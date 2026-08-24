@@ -10,7 +10,7 @@ import { useFormModules, useForms } from '@/hooks/useForms';
 import { useFormCategories } from '@/hooks/useFormCategories';
 import { resolveFormRoute } from '@/constants/rbacForms';
 import { ROUTES } from '@/constants/routes';
-import { ChevronLeft, ChevronRight, ChevronDown, UserPlus, Shield, ClipboardList, Network, Folder } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, UserPlus, Shield, ClipboardList, Network, Folder, Plus } from 'lucide-react';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import ScrollOnHoverText from '@/components/common/ScrollOnHoverText';
 
@@ -21,9 +21,9 @@ const SUPER_ADMIN_NAV_GROUPS = [
   {
     label: 'Administration',
     items: [
-      { label: 'Admins', icon: UserPlus, to: ROUTES.ADMINS, exact: false },
-      { label: 'Role Master', icon: Shield, to: ROUTES.ROLES, exact: false },
-      { label: 'Forms Master', icon: ClipboardList, to: ROUTES.FORMS, exact: false },
+      { label: 'Admins', icon: UserPlus, to: ROUTES.ADMINS, exact: false, addTo: ROUTES.ADMIN_NEW, addLabel: 'Add Admin' },
+      { label: 'Role Master', icon: Shield, to: ROUTES.ROLES, exact: false, addTo: ROUTES.ROLE_NEW, addLabel: 'Add Role' },
+      { label: 'Forms Master', icon: ClipboardList, to: ROUTES.FORMS, exact: false, addTo: `${ROUTES.FORM_NEW}?type=form`, addLabel: 'Add Form' },
       { label: 'Organization Overview', icon: Network, to: ROUTES.ORGANIZATION_OVERVIEW, exact: true },
     ],
   },
@@ -74,6 +74,8 @@ const buildNavGroups = (accessibleForms, { isSuperAdmin, moduleRank, formRank, c
             icon: cfg.icon,
             to: cfg.to,
             exact: cfg.exact,
+            addTo: cfg.addTo,
+            addLabel: cfg.addLabel,
             categoryId: categoryOf(moduleName, form.name),
           };
         })
@@ -156,36 +158,57 @@ const isActive = (to, pathname, exact) => {
 };
 
 // Indented child link rendered below a parent with children
-const SubNavItem = ({ item, onNavAttempt }) => {
+const SubNavItem = ({ item, onNavAttempt, onQuickAdd }) => {
   const { pathname } = useLocation();
   const active = pathname === item.to;
   const [hovered, setHovered] = useState(false);
 
   return (
-    <Link
-      to={item.to}
-      onClick={(e) => onNavAttempt(e, item.to)}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+    // Background/rounding live on this row wrapper (not the Link) so an active item's pill
+    // extends under the "+" button too, instead of the button sitting outside it on the bare
+    // sidebar background.
+    <div
       className={cn(
-        'relative flex items-center rounded-md py-1 pl-8 pr-3 text-xs transition-colors min-w-0',
+        'group relative flex items-center rounded-md pl-8 pr-2 py-1 text-xs transition-colors min-w-0',
         active
           ? 'text-sidebar-foreground font-medium bg-sidebar-hover/70'
           : 'text-sidebar-foreground/55 hover:text-sidebar-foreground hover:bg-sidebar-hover/40'
       )}
-      title={item.label}
     >
-      {active && (
-        <span className="absolute left-[18px] top-1/2 -translate-y-1/2 h-3.5 w-0.5 rounded-full bg-primary/70" />
+      <Link
+        to={item.to}
+        onClick={(e) => onNavAttempt(e, item.to)}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        className="relative flex flex-1 items-center min-w-0"
+        title={item.label}
+      >
+        {active && (
+          <span className="absolute left-[-8px] top-1/2 -translate-y-1/2 h-3.5 w-0.5 rounded-full bg-primary/70" />
+        )}
+        <ScrollOnHoverText text={item.label} hovered={hovered} className="min-w-0" />
+      </Link>
+      {item.addTo && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onQuickAdd(item.addTo);
+          }}
+          title={item.addLabel || `Add ${item.label}`}
+          className="shrink-0 ml-1 rounded p-0.5 opacity-0 group-hover:opacity-100 hover:bg-white/15 transition-opacity"
+        >
+          <Plus className="h-3 w-3" />
+        </button>
       )}
-      <ScrollOnHoverText text={item.label} hovered={hovered} className="min-w-0" />
-    </Link>
+    </div>
   );
 };
 
 // Category sub-header rendered between a module label and its forms — same indent/connector
 // styling as NavItem's own children, but this one isn't a link itself.
-const CategoryNavGroup = ({ category, onNavAttempt }) => (
+const CategoryNavGroup = ({ category, onNavAttempt, onQuickAdd }) => (
   <div className="mt-0.5">
     <p
       className="px-3 pt-1 pb-0.5 text-[10px] font-medium uppercase tracking-wide text-sidebar-foreground/40 truncate"
@@ -195,13 +218,13 @@ const CategoryNavGroup = ({ category, onNavAttempt }) => (
     </p>
     <div className="relative ml-[22px] border-l border-sidebar-border/60">
       {category.items.map((item) => (
-        <SubNavItem key={item.to} item={item} onNavAttempt={onNavAttempt} />
+        <SubNavItem key={item.to} item={item} onNavAttempt={onNavAttempt} onQuickAdd={onQuickAdd} />
       ))}
     </div>
   </div>
 );
 
-const NavItem = ({ item, collapsed, onNavAttempt }) => {
+const NavItem = ({ item, collapsed, onNavAttempt, onQuickAdd }) => {
   const { pathname } = useLocation();
   const active = isActive(item.to, pathname, item.exact);
   const hasChildren = !collapsed && Array.isArray(item.children) && item.children.length > 0;
@@ -209,36 +232,60 @@ const NavItem = ({ item, collapsed, onNavAttempt }) => {
 
   return (
     <div>
-      <Link
-        to={item.to}
-        onClick={(e) => onNavAttempt(e, item.to)}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
+      {/* Background/rounding live on this row wrapper (nav-item/active), not the Link, so an
+          active item's blue pill extends under the "+" button instead of the button sitting
+          outside it on the bare sidebar background. */}
+      <div
         className={cn(
           'nav-item group relative flex items-center gap-3 transition-all min-w-0',
           active && 'active',
           collapsed && 'justify-center px-2'
         )}
-        title={item.label}
       >
-        {active && (
-          <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.5 rounded-r-full bg-primary" />
-        )}
-        <item.icon className={cn('shrink-0', collapsed ? 'h-5 w-5' : 'h-4 w-4')} />
-        <AnimatePresence initial={false}>
-          {!collapsed && (
-            <motion.span
-              initial={{ opacity: 0, width: 0 }}
-              animate={{ opacity: 1, width: 'auto' }}
-              exit={{ opacity: 0, width: 0 }}
-              transition={{ duration: 0.15 }}
-              className="min-w-0"
-            >
-              <ScrollOnHoverText text={item.label} hovered={hovered} />
-            </motion.span>
+        <Link
+          to={item.to}
+          onClick={(e) => onNavAttempt(e, item.to)}
+          onMouseEnter={() => setHovered(true)}
+          onMouseLeave={() => setHovered(false)}
+          className={cn('relative flex flex-1 items-center gap-3 min-w-0', collapsed && 'flex-initial justify-center')}
+          title={item.label}
+        >
+          {active && (
+            <span className="absolute left-[-12px] top-1/2 -translate-y-1/2 h-5 w-0.5 rounded-r-full bg-primary" />
           )}
-        </AnimatePresence>
-      </Link>
+          <item.icon className={cn('shrink-0', collapsed ? 'h-5 w-5' : 'h-4 w-4')} />
+          <AnimatePresence initial={false}>
+            {!collapsed && (
+              <motion.span
+                initial={{ opacity: 0, width: 0 }}
+                animate={{ opacity: 1, width: 'auto' }}
+                exit={{ opacity: 0, width: 0 }}
+                transition={{ duration: 0.15 }}
+                className="min-w-0"
+              >
+                <ScrollOnHoverText text={item.label} hovered={hovered} />
+              </motion.span>
+            )}
+          </AnimatePresence>
+        </Link>
+        {/* Quick Add — navigates straight to this module's existing Add/Create route without
+            following the parent Link; hidden in the icon-only collapsed rail (no room) and
+            only rendered when the resolved route config actually defines one (see rbacForms.js). */}
+        {!collapsed && item.addTo && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onQuickAdd(item.addTo);
+            }}
+            title={item.addLabel || `Add ${item.label}`}
+            className="shrink-0 rounded p-1 opacity-0 group-hover:opacity-100 hover:bg-white/15 transition-opacity"
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
 
       {/* Sub-items — only rendered when sidebar is expanded */}
       <AnimatePresence initial={false}>
@@ -253,7 +300,7 @@ const NavItem = ({ item, collapsed, onNavAttempt }) => {
             {/* Vertical connector line */}
             <div className="relative ml-[22px] mt-0.5 mb-1 border-l border-sidebar-border/60 pl-0">
               {item.children.map((child) => (
-                <SubNavItem key={child.to} item={child} onNavAttempt={onNavAttempt} />
+                <SubNavItem key={child.to} item={child} onNavAttempt={onNavAttempt} onQuickAdd={onQuickAdd} />
               ))}
             </div>
           </motion.div>
@@ -304,6 +351,17 @@ const Sidebar = () => {
     if (!isDirty) return;
     e.preventDefault();
     setPendingTo(to);
+  };
+
+  // Quick Add "+" — not a Link, so there's no default navigation to prevent; just apply the
+  // same unsaved-changes guard handleNavAttempt gives ordinary nav clicks before navigating
+  // straight to the module's existing Add/Create route.
+  const handleQuickAdd = (to) => {
+    if (isDirty) {
+      setPendingTo(to);
+      return;
+    }
+    navigate(to);
   };
 
   // Drawer on mobile: start closed, and close again after each navigation
@@ -426,13 +484,13 @@ const Sidebar = () => {
               )
             ) : collapsed ? (
               flattenNavItems(group.items).map((item) => (
-                <NavItem key={item.to} item={item} collapsed={collapsed} onNavAttempt={handleNavAttempt} />
+                <NavItem key={item.to} item={item} collapsed={collapsed} onNavAttempt={handleNavAttempt} onQuickAdd={handleQuickAdd} />
               ))
             ) : moduleCollapsed ? null : (
               group.items.map((item) => (
                 item.isCategory
-                  ? <CategoryNavGroup key={`cat-${item.id}`} category={item} onNavAttempt={handleNavAttempt} />
-                  : <NavItem key={item.to} item={item} collapsed={collapsed} onNavAttempt={handleNavAttempt} />
+                  ? <CategoryNavGroup key={`cat-${item.id}`} category={item} onNavAttempt={handleNavAttempt} onQuickAdd={handleQuickAdd} />
+                  : <NavItem key={item.to} item={item} collapsed={collapsed} onNavAttempt={handleNavAttempt} onQuickAdd={handleQuickAdd} />
               ))
             )}
           </div>

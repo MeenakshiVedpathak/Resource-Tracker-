@@ -220,21 +220,29 @@ const CostBudgetList = () => {
             toolbar={null}
             rowClassName={(r) => (r.status !== 'active' ? 'opacity-50' : '')}
             emptyState={
-              <EmptyState
-                title="No cost budgets yet"
-                description="No months have been added for this Service PO yet."
-                action={canManage && !addingInline ? { label: 'Add Cost Budget', icon: Plus, onClick: () => setAddingInline(true) } : undefined}
-              />
+              addingInline ? (
+                <InlineAddRow
+                  servicePoId={servicePoId}
+                  nextPeriod={nextPeriod}
+                  onDone={() => setAddingInline(false)}
+                />
+              ) : (
+                <EmptyState
+                  title="No cost budgets yet"
+                  description="No months have been added for this Service PO yet."
+                  action={canManage ? { label: 'Add Cost Budget', icon: Plus, onClick: () => setAddingInline(true) } : undefined}
+                />
+              )
             }
           />
-          {canManage && (
+          {canManage && sortedRecords.length > 0 && (
             addingInline ? (
               <InlineAddRow
                 servicePoId={servicePoId}
                 nextPeriod={nextPeriod}
                 onDone={() => setAddingInline(false)}
               />
-            ) : sortedRecords.length > 0 && (
+            ) : (
               <button
                 type="button"
                 onClick={() => setAddingInline(true)}
