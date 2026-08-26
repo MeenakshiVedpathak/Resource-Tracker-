@@ -19,9 +19,11 @@ import { cn } from '@/utils/cn';
 
 const SortIcon = ({ column }) => {
   const sorted = column.getIsSorted();
-  if (sorted === 'asc') return <ChevronUp className="ml-1 h-3 w-3" />;
-  if (sorted === 'desc') return <ChevronDown className="ml-1 h-3 w-3" />;
-  return <ChevronsUpDown className="ml-1 h-3 w-3 opacity-40" />;
+  // shrink-0 keeps the icon at its full size next to a truncated label instead of
+  // being squeezed out of the (fixed-width) header cell and over the next column.
+  if (sorted === 'asc') return <ChevronUp className="h-3 w-3 shrink-0" />;
+  if (sorted === 'desc') return <ChevronDown className="h-3 w-3 shrink-0" />;
+  return <ChevronsUpDown className="h-3 w-3 shrink-0 opacity-40" />;
 };
 
 const DataTable = ({
@@ -137,7 +139,7 @@ const DataTable = ({
                   return (
                     <TableHead
                       key={header.id}
-                      className={cn('whitespace-nowrap', isSticky && 'sticky-col', align === 'right' && 'text-right')}
+                      className={cn('overflow-hidden whitespace-nowrap', isSticky && 'sticky-col', align === 'right' && 'text-right')}
                       style={{
                         ...(w ? { width: w, minWidth: w, maxWidth: w } : {}),
                         ...(isSticky ? { left } : {})
@@ -146,9 +148,15 @@ const DataTable = ({
                       {header.isPlaceholder ? null : header.column.getCanSort() ? (
                         <button
                           onClick={header.column.getToggleSortingHandler()}
-                          className="inline-flex items-center gap-0.5 hover:text-foreground transition-colors"
+                          title={typeof header.column.columnDef.header === 'string' ? header.column.columnDef.header : undefined}
+                          className={cn(
+                            'flex w-full min-w-0 items-center gap-1 hover:text-foreground transition-colors',
+                            align === 'right' && 'justify-end'
+                          )}
                         >
-                          {flexRender(header.column.columnDef.header, header.getContext())}
+                          <span className="min-w-0 truncate">
+                            {flexRender(header.column.columnDef.header, header.getContext())}
+                          </span>
                           <SortIcon column={header.column} />
                         </button>
                       ) : (

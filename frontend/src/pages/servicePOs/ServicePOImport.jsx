@@ -1,10 +1,12 @@
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDropzone } from 'react-dropzone';
-import * as XLSX from 'xlsx';
 import { Download, UploadCloud, FileSpreadsheet, X, CheckCircle2, XCircle, AlertCircle, ArrowLeft } from 'lucide-react';
 import { useImportServicePOs } from '@/hooks/useServicePOs';
+import { useAuth } from '@/hooks/useAuth';
 import { useNotification } from '@/hooks/useNotification';
+import { NO_COMPANY_ROLES } from '@/constants/roleHierarchy';
+import { downloadServicePoSample, servicePoSampleColumns } from '@/utils/servicePoSample';
 import { extractApiError } from '@/services/apiClient';
 import { ROUTES } from '@/constants/routes';
 import { formatFileSize } from '@/utils/formatters';
@@ -24,17 +26,6 @@ import { cn } from '@/utils/cn';
 
 const MAX_SIZE = 10 * 1024 * 1024; // 10 MB
 
-// Matches the company's standard Service PO import template format.
-// Note: there is no raw "Billable" input — is_billable is derived from the matched
-// Service Type's category, never read from the sheet.
-// "Project Name", "Delivery Head Manager", "Hierarchy Parent"/"Hierarchy Child" are
-// template-only — they are not parsed by the file import endpoint.
-const SAMPLE_COLUMNS = [
-  'Service PO Name', 'Client Name', 'Project Name', 'Service Type', 'PO Value',
-  'Start Date', 'End Date', 'Expected Man Hours', 'Delivery Head Manager', 'Service Description',
-  'Invoice Frequency', 'Status', 'Hierarchy Parent', 'Hierarchy Child',
-];
-
 const REQUIRED_COLUMNS = [
   'Service PO Name', 'Client Name', 'Service Type', 'PO Value', 'Start Date', 'End Date',
 ];
@@ -42,6 +33,13 @@ const REQUIRED_COLUMNS = [
 const ServicePOImport = () => {
   const navigate = useNavigate();
   const { success, error: showError } = useNotification();
+  const { hasRole, businessUnits, activeBuId } = useAuth();
+
+  // Cosmetic only — this picks which template/copy to show. The backend independently re-derives
+  // the actor's role and enforces BU authorization on every row.
+  const isCompanyLessActor = hasRole(...NO_COMPANY_ROLES);
+  const sampleColumns = servicePoSampleColumns(isCompanyLessActor);
+  const activeBuName = businessUnits.find((bu) => bu.id === activeBuId)?.name ?? null;
 
   const [selectedFile, setSelectedFile] = useState(null);
   const [result, setResult] = useState(null); // { total, imported, skipped, errorRows } — all-or-nothing: skipped > 0 means nothing was inserted
@@ -72,29 +70,6 @@ const ServicePOImport = () => {
       }
     },
   });
-
-  const handleDownloadSample = () => {
-    const wsData = [
-      SAMPLE_COLUMNS,
-      [
-        'Analytics Support one', 'pockit', 'pockit mobile', 'Project', 500000,
-        '2026-01-01', '2026-12-31', 2000, 'Akshaya Arun jadhav', 'Ongoing analytics platform support',
-        'monthly', 'in-progress', 'Development', 'Frontend',
-      ],
-      [
-        'Analytics Support two', 'pockit', 'pockit mobile', 'Project', 500000,
-        '2026-01-01', '2026-12-31', 2000, 'Akshaya Arun jadhav', 'Ongoing analytics platform support',
-        'monthly', 'in-progress', 'Development', 'Frontend',
-      ],
-    ];
-
-    const ws = XLSX.utils.aoa_to_sheet(wsData);
-    ws['!cols'] = SAMPLE_COLUMNS.map(() => ({ wch: 20 }));
-
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Service POs');
-    XLSX.writeFile(wb, 'ServicePO_Sample.xlsx');
-  };
 
   // ── Import (single step — backend imports immediately) ─────────────────────
   const handleImport = () => {
@@ -131,7 +106,7 @@ const ServicePOImport = () => {
         description="Bulk-import Service Purchase Orders from an Excel or CSV file"
         actions={
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={handleDownloadSample}>
+            <Button variant="outline" size="sm" onClick={() => downloadServicePoSample(isCompanyLessActor)}>
               <Download className="mr-1.5 h-4 w-4" />
               Download Sample
             </Button>
@@ -152,7 +127,7 @@ const ServicePOImport = () => {
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-2">
-              {SAMPLE_COLUMNS.map((col) => (
+              {sampleColumns.map((col) => (
                 <Badge key={col} variant="secondary" className="font-mono text-xs">{col}</Badge>
               ))}
             </div>
@@ -169,10 +144,24 @@ const ServicePOImport = () => {
               Dates accept <strong>YYYY-MM-DD</strong> or <strong>DD/MM/YYYY</strong>.
             </p>
             <p className="mt-2 text-xs text-muted-foreground">
-              <strong>Project Name</strong>, <strong>Delivery Head Manager</strong>,{' '}
-              <strong>Hierarchy Parent</strong> and <strong>Hierarchy Child</strong> are shown for reference
-              only — they are not read by this import; set PO hierarchy from the Service POs list after import.
+              <strong>Project Name</strong>, <strong>Hierarchy Parent</strong> and{' '}
+              <strong>Hierarchy Child</strong> are shown for reference only — they are not read by this
+              import; set PO hierarchy from the Service POs list after import.
             </p>
+            {isCompanyLessActor ? (
+              <p className="mt-2 text-xs text-muted-foreground">
+                <strong>BU Name</strong> is required on every row — it must exactly match one of your own
+                Business Units, and each imported Service PO is created under the Business Unit named on
+                its row. A row with a blank or unrecognized BU Name is rejected.
+              </p>
+            ) : (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Every imported Service PO will be created under your currently-active Business Unit
+                {activeBuName ? <> — <strong>{activeBuName}</strong></> : null}. No <strong>BU Name</strong>{' '}
+                column is needed; switch your active Business Unit before importing if you meant a
+                different one.
+              </p>
+            )}
           </CardContent>
         </Card>
 

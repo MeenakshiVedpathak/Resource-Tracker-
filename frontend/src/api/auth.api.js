@@ -115,6 +115,12 @@ export const authApi = {
   selectRole: (loginTicket, roleId) =>
     apiClient.post('/auth/select-role', { loginTicket, roleId }).then((r) => r.data),
 
+  // Microsoft Entra ID SSO — the backend re-derives the employee from the verified ID token
+  // itself, so only the raw token is sent (no email/name/claims from the MSAL result). Response
+  // shape is identical to /auth/login, including the multi-role `requiresRoleSelection` case.
+  microsoftLogin: (idToken) =>
+    apiClient.post('/auth/microsoft', { idToken }).then((r) => r.data),
+
   getProfile: () =>
     apiClient.get('/auth/profile').then((r) => r.data),
 

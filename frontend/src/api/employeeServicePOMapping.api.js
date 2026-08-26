@@ -19,4 +19,14 @@ export const employeeServicePOMappingApi = {
     apiClient
       .get(`/employee-servicepo-mapping/service-po/${servicePOId}`, { params: status ? { status } : {} })
       .then((r) => r.data?.data ?? []),
+  // Employee Master's "Manage Service PO Mapping" action — backend pre-filters eligible POs by
+  // the employee's BU (or returns the whole tenant + `unrestricted: true` for Service PO
+  // Admin/Delivery Head), so the frontend just renders what comes back.
+  getOptions: (employeeId) =>
+    apiClient.get(`/employee-servicepo-mapping/employee/${employeeId}/options`).then((r) => r.data?.data),
+  // Replaces the full mapped set in one call — always send every checked id, not a diff.
+  saveMapping: (employeeId, servicePoIds) =>
+    apiClient
+      .put(`/employee-servicepo-mapping/employee/${employeeId}`, { service_po_ids: servicePoIds })
+      .then((r) => r.data),
 };

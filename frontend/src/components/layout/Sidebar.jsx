@@ -335,11 +335,13 @@ const Sidebar = () => {
   const dirtyMessage = useSelector(selectDirtyMessage);
   const [pendingTo, setPendingTo] = useState(null);
 
-  // Per-module collapse in the expanded drawer — purely a UI convenience (not persisted), so
-  // reopening the drawer always starts with every module expanded, same as before this existed.
-  const [collapsedModules, setCollapsedModules] = useState(() => new Set());
+  // Per-module expand/collapse in the drawer — purely a UI convenience (not persisted), so
+  // reopening the drawer always starts with every module collapsed. Tracking *expanded*
+  // labels (rather than collapsed ones) means the empty initial Set naturally means
+  // "everything collapsed" with no need to know the module list up front.
+  const [expandedModules, setExpandedModules] = useState(() => new Set());
   const toggleModule = (label) => {
-    setCollapsedModules((prev) => {
+    setExpandedModules((prev) => {
       const next = new Set(prev);
       if (next.has(label)) next.delete(label);
       else next.add(label);
@@ -445,29 +447,33 @@ const Sidebar = () => {
           // Collapse toggle only makes sense when the drawer itself is expanded and there's
           // actually a Category/Form list under this module to hide (onlyModuleLink modules
           // already show nothing below their label).
-          const moduleCollapsed = !onlyModuleLink && collapsedModules.has(group.label);
+          const moduleCollapsed = !onlyModuleLink && !expandedModules.has(group.label);
           return (
           <div key={group.label} className="space-y-px">
             <AnimatePresence initial={false}>
               {!collapsed && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                   {overviewRoute ? (
+                    // Hub-page modules have no chevron to show, so the same leading slot carries
+                    // the module icon instead — keeps the label aligned with its collapsible
+                    // siblings, and matches the icon this group already gets in the icon rail.
                     <Link
                       to={overviewRoute}
                       onClick={(e) => handleNavAttempt(e, overviewRoute)}
-                      className="block px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/30 whitespace-nowrap hover:text-sidebar-foreground/60 transition-colors"
+                      className="flex w-full items-center gap-1 px-3 pt-2 pb-1 text-[11px] font-bold uppercase tracking-widest text-sidebar-foreground/70 whitespace-nowrap hover:text-sidebar-foreground transition-colors"
                     >
-                      {group.label}
+                      <Folder className="h-3 w-3 shrink-0" />
+                      <span className="truncate">{group.label}</span>
                     </Link>
                   ) : (
                     <button
                       type="button"
                       onClick={() => toggleModule(group.label)}
-                      className="flex w-full items-center gap-1 px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/30 whitespace-nowrap hover:text-sidebar-foreground/60 transition-colors"
+                      className="flex w-full items-center gap-1 px-3 pt-2 pb-1 text-[11px] font-bold uppercase tracking-widest text-sidebar-foreground/70 whitespace-nowrap hover:text-sidebar-foreground transition-colors"
                     >
                       {moduleCollapsed
-                        ? <ChevronRight className="h-3 w-3 shrink-0" />
-                        : <ChevronDown className="h-3 w-3 shrink-0" />}
+                        ? <ChevronRight className="h-3 w-3 shrink-0 transition-transform duration-150" />
+                        : <ChevronDown className="h-3 w-3 shrink-0 transition-transform duration-150" />}
                       <span className="truncate">{group.label}</span>
                     </button>
                   )}

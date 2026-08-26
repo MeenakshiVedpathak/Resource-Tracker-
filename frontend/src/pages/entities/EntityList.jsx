@@ -127,17 +127,18 @@ const EntityList = () => {
       size: 190,
       cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="170px" />,
     }),
-    columnHelper.display({
-      id: 'entity_admin',
-      header: 'Entity Admin',
-      size: 220,
-      cell: ({ row }) => (
-        <TruncatedCell
-          value={row.original.entity_admin_email ?? row.original.entity_admin?.email ?? row.original.entityAdmin?.email}
-          maxWidth="200px"
-        />
-      ),
-    }),
+    // Entity Admin column hidden for now — kept here intentionally, uncomment to restore.
+    // columnHelper.display({
+    //   id: 'entity_admin',
+    //   header: 'Entity Admin',
+    //   size: 220,
+    //   cell: ({ row }) => (
+    //     <TruncatedCell
+    //       value={row.original.entity_admin_email ?? row.original.entity_admin?.email ?? row.original.entityAdmin?.email}
+    //       maxWidth="200px"
+    //     />
+    //   ),
+    // }),
     columnHelper.accessor('status', {
       header: 'Status',
       size: 140,

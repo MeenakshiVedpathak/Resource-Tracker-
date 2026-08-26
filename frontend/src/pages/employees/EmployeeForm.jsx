@@ -112,10 +112,14 @@ const EmployeeForm = () => {
   const primaryManagerId = useWatch({ control: form.control, name: 'primary_manager_employee_id' });
   const timesheetApprovalRequired = useWatch({ control: form.control, name: 'is_timesheet_approval_required' });
 
-  const managerOptions = managers.map((m) => ({
-    label: m.full_name ?? m.email,
-    value: String(m.id),
-  }));
+  // Nobody can report to themselves, so the employee being edited is never a valid manager for
+  // their own record — drop them from the list rather than relying on the user not picking it.
+  const managerOptions = managers
+    .filter((m) => !isEdit || String(m.id) !== String(id))
+    .map((m) => ({
+      label: m.full_name ?? m.email,
+      value: String(m.id),
+    }));
   const secondaryManagerOptions = [
     { label: 'None', value: 'none' },
     ...managerOptions.filter((o) => o.value !== String(primaryManagerId)),

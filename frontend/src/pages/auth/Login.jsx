@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { motion } from 'framer-motion';
+import { useMsal } from '@azure/msal-react';
 import { Eye, EyeOff, LogIn } from 'lucide-react';
 import { authApi } from '@/api/auth.api';
 import { employeesApi } from '@/api/employees.api';
@@ -21,6 +22,17 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
+import { MicrosoftSignInButton } from '@/components/auth/MicrosoftSignInButton';
+
+// Backend codes with copy that replaces the raw backend message — every other code from
+// POST /auth/microsoft (ACCOUNT_INACTIVE, ROLE_INACTIVE, INVALID_MICROSOFT_TOKEN,
+// MICROSOFT_EMAIL_CLAIM_MISSING) is shown verbatim via extractApiError instead.
+const MICROSOFT_ERROR_COPY = {
+  EMAIL_NOT_REGISTERED: "This Microsoft account isn't linked to a RUT Portal employee. Contact your administrator to get access.",
+  MICROSOFT_SSO_NOT_CONFIGURED: "Microsoft sign-in isn't available right now. Please use your email and password.",
+};
+const MICROSOFT_POPUP_CANCELLED = 'Sign-in was cancelled. Please try again — or check that pop-ups are allowed for this site.';
 
 const loginSchema = z.object({
   email: emailSchema,
@@ -30,10 +42,15 @@ const loginSchema = z.object({
 const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { instance: msalInstance } = useMsal();
   const { setCredentials, setAccessibleForms, setBusinessUnits } = useAuth();
   const { error: showError } = useNotification();
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isMsLoading, setIsMsLoading] = useState(false);
+  // Both sign-in paths must disable while either is mid-submit — a user can't fire a password
+  // attempt and a Microsoft popup at the same time.
+  const isBusy = isLoading || isMsLoading;
   // Role-Based Login: set only when /auth/login returns `requiresRoleSelection: true` — no
   // tokens exist yet at that point, so `loginTicket` lives here in component state only (never
   // localStorage) until the user picks a role and /auth/select-role exchanges it for real tokens.
@@ -173,6 +190,32 @@ const Login = () => {
     }
   };
 
+  const handleMicrosoftSignIn = async () => {
+    setIsMsLoading(true);
+    try {
+      const result = await msalInstance.loginPopup({ scopes: ['openid', 'profile', 'email'] });
+      // Only the raw ID token is sent — the backend re-derives the employee from the verified
+      // token itself, never from claims read out of the MSAL result on this side.
+      const res = await authApi.microsoftLogin(result.idToken);
+      if (res.data?.requiresRoleSelection) {
+        setRoleSelection({ loginTicket: res.data.loginTicket, roles: res.data.roles ?? [] });
+      } else {
+        completeLogin(res.data);
+      }
+    } catch (err) {
+      if (err?.response) {
+        // Reached the backend — map its code to copy, or show its message verbatim.
+        const code = err.response.data?.code;
+        showError(MICROSOFT_ERROR_COPY[code] ?? extractApiError(err));
+      } else {
+        // Never reached the backend — the MSAL popup was closed, blocked, or timed out.
+        showError(MICROSOFT_POPUP_CANCELLED);
+      }
+    } finally {
+      setIsMsLoading(false);
+    }
+  };
+
   if (roleSelection) {
     return (
       <motion.div
@@ -285,7 +328,7 @@ const Login = () => {
             )}
           />
 
-          <Button type="submit" className="w-full mt-2" disabled={isLoading} size="lg">
+          <Button type="submit" className="w-full mt-2" disabled={isBusy} size="lg">
             {isLoading ? (
               <span className="flex items-center gap-2">
                 <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
@@ -300,6 +343,14 @@ const Login = () => {
           </Button>
         </form>
       </Form>
+
+      <div className="my-6 flex items-center gap-3">
+        <Separator className="flex-1" />
+        <span className="text-xs text-muted-foreground">or</span>
+        <Separator className="flex-1" />
+      </div>
+
+      <MicrosoftSignInButton onClick={handleMicrosoftSignIn} disabled={isBusy} loading={isMsLoading} />
 
       <p className="mt-6 text-center text-xs text-muted-foreground">
         Contact your administrator if you don't have access.

@@ -9,11 +9,12 @@ export const useServicePOs = (params) =>
     placeholderData: (prev) => prev,
   });
 
-export const useActiveServicePOs = () =>
+export const useActiveServicePOs = (enabled = true) =>
   useQuery({
     queryKey: QUERY_KEYS.SERVICE_POS_ACTIVE,
     queryFn: servicePOsApi.getActiveList,
     staleTime: 1000 * 60 * 10,
+    enabled,
   });
 
 export const useServicePO = (id) =>

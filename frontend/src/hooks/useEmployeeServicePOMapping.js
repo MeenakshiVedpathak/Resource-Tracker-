@@ -33,3 +33,19 @@ export const useSetEmployeeServicePOMappingStatus = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['employee-servicepo-mapping'] }),
   });
 };
+
+// Employee Master's "Manage Service PO Mapping" dialog.
+export const useEmployeeServicePOMappingOptions = (employeeId) =>
+  useQuery({
+    queryKey: QUERY_KEYS.EMPLOYEE_SERVICEPO_MAPPING_OPTIONS(employeeId),
+    queryFn: () => employeeServicePOMappingApi.getOptions(employeeId),
+    enabled: !!employeeId,
+  });
+
+export const useSaveEmployeeServicePOMapping = (employeeId) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (servicePoIds) => employeeServicePOMappingApi.saveMapping(employeeId, servicePoIds),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['employee-servicepo-mapping'] }),
+  });
+};

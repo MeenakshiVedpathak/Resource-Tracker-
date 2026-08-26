@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { Route, Routes } from 'react-router-dom';
 import { ROUTES } from '@/constants/routes';
 import { FORM_NAMES } from '@/constants/rbacForms';
+import { ROLE_NAMES } from '@/constants/roleHierarchy';
 import { useAuth } from '@/hooks/useAuth';
 import ProtectedRoute from './ProtectedRoute';
 import AuthLayout from '@/layouts/AuthLayout';
@@ -12,6 +13,7 @@ import LoadingScreen from '@/components/common/LoadingScreen';
 
 // ── Auth pages ──
 const Login = lazy(() => import('@/pages/auth/Login'));
+const MicrosoftCallback = lazy(() => import('@/pages/auth/MicrosoftCallback'));
 const ForgotPasswordEmail = lazy(() => import('@/pages/auth/ForgotPasswordEmail'));
 const ForgotPasswordOtp = lazy(() => import('@/pages/auth/ForgotPasswordOtp'));
 const ForgotPasswordReset = lazy(() => import('@/pages/auth/ForgotPasswordReset'));
@@ -183,6 +185,10 @@ const AppRoutes = () => {
   return (
   <Suspense fallback={<LoadingScreen />}>
     <Routes>
+      {/* Microsoft SSO popup redirect target — standalone, no layout/auth redirect, since it
+          renders inside the loginPopup window rather than as a normal page the user navigates to. */}
+      <Route path={ROUTES.MICROSOFT_CALLBACK} element={<MicrosoftCallback />} />
+
       {/* Auth */}
       <Route element={<AuthLayout />}>
         <Route path={ROUTES.LOGIN} element={<Login />} />
@@ -393,7 +399,7 @@ const AppRoutes = () => {
 
         {/* Team Mapping — Service PO Admin's own team self-service (§7). Gated by allowedRoles
             rather than formName since there's no Form Master row for this feature. */}
-        <Route path={ROUTES.TEAM_MAPPINGS} element={<ProtectedRoute allowedRoles={['Service PO Admin']}><TeamMappingList /></ProtectedRoute>} />
+        <Route path={ROUTES.TEAM_MAPPINGS} element={<ProtectedRoute allowedRoles={[ROLE_NAMES.SERVICE_PO_ADMIN]}><TeamMappingList /></ProtectedRoute>} />
 
         {/* My Team — People module Form Master row (confirmed via GET /roles/forms), now gated
             dynamically by formName like every other RBAC-driven screen instead of a hardcoded

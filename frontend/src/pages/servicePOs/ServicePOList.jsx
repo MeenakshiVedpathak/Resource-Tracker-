@@ -6,10 +6,14 @@ import { Plus, Pencil, Eye, Search, Download, Upload, Users, GitBranch } from 'l
 import { useServicePOs } from '@/hooks/useServicePOs';
 import { servicePOsApi } from '@/api/servicePOs.api';
 import { useActiveClients } from '@/hooks/useClients';
+import { useCompanies } from '@/hooks/useCompanies';
 import { useActiveServicePOs } from '@/hooks/useServicePOs';
 import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
 import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
 import { useCanWrite } from '@/hooks/usePermissions';
+import { useAuth } from '@/hooks/useAuth';
+import { NO_COMPANY_ROLES } from '@/constants/roleHierarchy';
+import { downloadServicePoSample } from '@/utils/servicePoSample';
 import { useDebounce } from '@/hooks/useDebounce';
 import { buildPath, ROUTES } from '@/constants/routes';
 import { formatCurrency, formatDate } from '@/utils/formatters';
@@ -57,36 +61,6 @@ const exportToExcel = (rows, categoryByTypeId) => {
   XLSX.writeFile(wb, 'Service_POs.xlsx');
 };
 
-// Matches the company's standard Service PO import template format.
-// "Project Name", "Delivery Head Manager", "Hierarchy Parent"/"Hierarchy Child" are
-// template-only — they are not parsed by the file import endpoint.
-const SAMPLE_COLUMNS = [
-  'Service PO Name', 'Client Name', 'Project Name', 'Service Type', 'PO Value',
-  'Start Date', 'End Date', 'Expected Man Hours', 'Delivery Head Manager', 'Service Description',
-  'Invoice Frequency', 'Status', 'Hierarchy Parent', 'Hierarchy Child',
-];
-
-const downloadSampleExcel = () => {
-  const wsData = [
-    SAMPLE_COLUMNS,
-    [
-      'Analytics Support one', 'pockit', 'pockit mobile', 'Project', 500000,
-      '2026-01-01', '2026-12-31', 2000, 'Akshaya Arun jadhav', 'Ongoing analytics platform support',
-      'monthly', 'in-progress', 'Development', 'Frontend',
-    ],
-    [
-      'Analytics Support two', 'pockit', 'pockit mobile', 'Project', 500000,
-      '2026-01-01', '2026-12-31', 2000, 'Akshaya Arun jadhav', 'Ongoing analytics platform support',
-      'monthly', 'in-progress', 'Development', 'Frontend',
-    ],
-  ];
-  const ws = XLSX.utils.aoa_to_sheet(wsData);
-  ws['!cols'] = SAMPLE_COLUMNS.map(() => ({ wch: 20 }));
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Service POs');
-  XLSX.writeFile(wb, 'ServicePO_Sample.xlsx');
-};
-
 const TruncatedCell = ({ value, maxWidth = '150px', className, wrap = false }) => {
   if (!value) return <span className="text-sm text-muted-foreground">—</span>;
   if (wrap) {
@@ -105,6 +79,18 @@ const TruncatedCell = ({ value, maxWidth = '150px', className, wrap = false }) =
 
 const ServicePOList = () => {
   const navigate = useNavigate();
+  const { hasRole } = useAuth();
+  // Cosmetic only — picks the admin (per-row "BU Name") template vs the BU-scoped one; the
+  // backend enforces the real BU authorization per row.
+  const isCompanyLessActor = hasRole(...NO_COMPANY_ROLES);
+  const { data: companiesData } = useCompanies({ limit: 200 }, { enabled: isCompanyLessActor });
+  // List rows aren't guaranteed to embed the company relation, so resolve company_id against the
+  // BU list as a fallback.
+  const buNameById = useMemo(() => {
+    const map = new Map();
+    (companiesData?.data ?? []).forEach((c) => map.set(String(c.id), c.company_name));
+    return map;
+  }, [companiesData]);
   const [searchParams] = useSearchParams();
   const categoryIdParam = searchParams.get('service_category_id');
   const servicePoIdParam = searchParams.get('service_po_id');
@@ -300,6 +286,25 @@ const ServicePOList = () => {
       size: 220,
       cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="200px" />,
     }),
+    ...(isCompanyLessActor
+      ? [
+          columnHelper.display({
+            id: 'bu_name',
+            header: 'BU Name',
+            size: 200,
+            cell: ({ row }) => (
+              <TruncatedCell
+                value={
+                  row.original.company?.company_name
+                  ?? row.original.company?.name
+                  ?? buNameById.get(String(row.original.company_id))
+                }
+                maxWidth="180px"
+              />
+            ),
+          }),
+        ]
+      : []),
     columnHelper.accessor('serviceType.service_type_name', {
       header: 'Service Type',
       size: 220,
@@ -379,7 +384,7 @@ const ServicePOList = () => {
               </Button>
             )}
             {canManage && (
-              <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={downloadSampleExcel}>
+              <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={() => downloadServicePoSample(isCompanyLessActor)}>
                 <Download className="h-4 w-4" /> Sample
               </Button>
             )}

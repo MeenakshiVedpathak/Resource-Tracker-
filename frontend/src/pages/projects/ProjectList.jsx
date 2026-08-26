@@ -1,9 +1,12 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate, Outlet } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Plus, Pencil, Search } from 'lucide-react';
-import { useProjects, useToggleProjectStatus } from '@/hooks/useProjects';
+import { Plus, Pencil, Search, Download, Upload, CheckCircle2, AlertCircle } from 'lucide-react';
+import * as XLSX from 'xlsx';
+import { useProjects, useToggleProjectStatus, useImportProjects } from '@/hooks/useProjects';
 import { useCanWrite } from '@/hooks/usePermissions';
+import { useNotification } from '@/hooks/useNotification';
+import { extractApiError } from '@/services/apiClient';
 import { useDebounce } from '@/hooks/useDebounce';
 import { buildPath, ROUTES } from '@/constants/routes';
 import { formatDate } from '@/utils/formatters';
@@ -15,10 +18,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from '@/components/ui/table';
 import { cn } from '@/utils/cn';
-
+ 
 const columnHelper = createColumnHelper();
-
+ 
 const TruncatedCell = ({ value, maxWidth = '150px', className }) => {
   if (!value) return <span className="text-sm text-muted-foreground">—</span>;
   return (
@@ -27,7 +35,7 @@ const TruncatedCell = ({ value, maxWidth = '150px', className }) => {
     </div>
   );
 };
-
+ 
 const StatusToggle = ({ project }) => {
   const { mutate, isPending } = useToggleProjectStatus();
   const isActive = project.status === 'active';
@@ -46,21 +54,30 @@ const StatusToggle = ({ project }) => {
     </div>
   );
 };
-
+ 
 const ProjectList = () => {
   const navigate = useNavigate();
-
+  const { error: showError } = useNotification();
+ 
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [filtersOpen, setFiltersOpen] = useState(false);
-
+ 
   const debouncedSearch = useDebounce(search, 400);
   const canManage = useCanWrite();
-
+ 
   const [sorting, setSorting] = useState([]);
-
+ 
+  const importMutation = useImportProjects();
+  const fileInputRef = useRef(null);
+  const [previewData, setPreviewData] = useState(null);
+  const [previewFile, setPreviewFile] = useState(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [importResult, setImportResult] = useState(null);
+  const [previewLimit, setPreviewLimit] = useState(5);
+ 
   const params = {
     page,
     limit,
@@ -68,19 +85,19 @@ const ProjectList = () => {
     ...(debouncedSearch && { search: debouncedSearch }),
     ...(sorting[0] && { sort_by: sorting[0].id, sort_order: sorting[0].desc ? 'DESC' : 'ASC' }),
   };
-
+ 
   const { data, isPending } = useProjects(params);
-
+ 
   const projects = data?.data ?? [];
   const meta = data?.meta ?? {};
-
+ 
   const activeFilterCount = statusFilter !== 'all' ? 1 : 0;
-
+ 
   const clearFilters = () => {
     setStatusFilter('all');
     setPage(1);
   };
-
+ 
   const columns = [
     columnHelper.display({
       id: 'actions',
@@ -141,7 +158,174 @@ const ProjectList = () => {
       cell: (info) => formatDate(info.getValue()),
     }),
   ];
-
+ 
+  // Row 1 carries every column in order, which is what fixes the header order for the whole
+  // sheet — json_to_sheet takes its columns from the keys as first seen.
+  const handleDownloadSample = () => {
+    const ws = XLSX.utils.json_to_sheet([
+      {
+        'Project Name': 'Website Revamp',
+        'Project Code': '',
+        'Client Code': '',
+        'Client Name': 'Acme Corporation',
+        'Description': 'Q3 marketing site redesign',
+        'Status': 'active',
+      },
+      {
+        'Project Name': 'Mobile App Rollout',
+        'Project Code': 'PRJ-MOBILE-01',
+        'Client Code': 'CLT-20240615-B7M2',
+        'Client Name': '',
+        'Description': 'iOS/Android release',
+        'Status': 'active',
+      },
+      {
+        'Project Name': 'Data Migration',
+        'Project Code': '',
+        'Client Code': '',
+        'Client Name': 'Globex Inc',
+        'Description': '',
+        'Status': 'inactive',
+      },
+    ]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Projects');
+    XLSX.writeFile(wb, 'project_sample.xlsx');
+  };
+ 
+  const handleFileUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+ 
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const bstr = evt.target.result;
+        const wb = XLSX.read(bstr, { type: 'binary' });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
+        if (data.length === 0) {
+          showError('That file has no rows to import');
+          return;
+        }
+        setPreviewData(data);
+        setPreviewLimit(5);
+        setPreviewFile(file);
+        setIsPreviewOpen(true);
+      } catch (error) {
+        showError('Failed to parse Excel file');
+      } finally {
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      }
+    };
+    // Mirrors the parse path's input reset — without it, re-picking the file that just failed
+    // fires no change event and the button looks dead.
+    reader.onerror = () => {
+      showError('Failed to read the selected file');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+    reader.readAsBinaryString(file);
+  };
+ 
+  const closePreview = () => {
+    setIsPreviewOpen(false);
+    setPreviewFile(null);
+    setPreviewData(null);
+  };
+ 
+  const handleConfirmImport = () => {
+    if (!previewFile) return;
+ 
+    importMutation.mutate(previewFile, {
+      onSuccess: (res) => {
+        setImportResult(res);
+        closePreview();
+      },
+      onError: (err) => {
+        // Row-level rejections can come back on a 4xx body too, so a structured response is a
+        // result to render, not a toast.
+        if (err.response?.data) {
+          setImportResult(err.response.data);
+          closePreview();
+        } else {
+          showError(extractApiError(err));
+        }
+      },
+    });
+  };
+ 
+  const renderImportResults = () => {
+    if (!importResult) return null;
+ 
+    const data = importResult.data || importResult;
+    const errors = data.error_rows || [];
+    const total = data.total ?? 0;
+    const imported = data.imported ?? 0;
+    // The server's own count drives the badge; error_rows only drives the table under it.
+    const skipped = data.skipped ?? errors.length;
+ 
+    return (
+      <div className="space-y-5">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-1.5 rounded-lg border bg-card px-3 py-2">
+            <span className="text-xs text-muted-foreground">Total rows:</span>
+            <span className="font-mono text-xs font-semibold">{total}</span>
+          </div>
+          <Badge className="gap-1.5 bg-green-100 text-green-700 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            {imported} imported
+          </Badge>
+          {skipped > 0 && (
+            <Badge variant="destructive" className="gap-1.5">
+              <AlertCircle className="h-3.5 w-3.5" />
+              {skipped} skipped / failed
+            </Badge>
+          )}
+        </div>
+ 
+        {errors.length > 0 && (
+          <Card className="border-destructive/40">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-sm text-destructive">
+                <AlertCircle className="h-4 w-4" />
+                Error Rows ({errors.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto max-h-[400px]">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-destructive/5">
+                      <TableHead className="w-24 sticky top-0 bg-red-50">Row #</TableHead>
+                      <TableHead className="sticky top-0 bg-red-50">Error Message</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {errors.map((row, idx) => (
+                      <TableRow key={idx} className="hover:bg-destructive/5">
+                        <TableCell className="font-mono text-xs">{row.row_number ?? idx + 1}</TableCell>
+                        <TableCell className="text-sm text-destructive">
+                          {row.errors?.length > 0 ? row.errors.join(', ') : '—'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+ 
+        {skipped === 0 && errors.length === 0 && (
+          <div className="text-center py-8 text-green-600 bg-green-50 rounded-md border border-green-100">
+            All records were imported successfully!
+          </div>
+        )}
+      </div>
+    );
+  };
+ 
   return (
     <div className="space-y-4">
       <PageHeader
@@ -164,6 +348,32 @@ const ProjectList = () => {
               activeCount={activeFilterCount}
             />
             {canManage && (
+              <Button variant="outline" size="sm" className="h-9 gap-1.5 bg-white" onClick={handleDownloadSample}>
+                <Download className="h-4 w-4" /> Sample
+              </Button>
+            )}
+            {canManage && (
+              <>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  className="hidden"
+                  accept=".xlsx,.csv"
+                  onChange={handleFileUpload}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 gap-1.5 bg-white"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={importMutation.isPending}
+                >
+                  <Upload className="h-4 w-4" />
+                  {importMutation.isPending ? 'Importing…' : 'Import Excel'}
+                </Button>
+              </>
+            )}
+            {canManage && (
               <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => navigate(ROUTES.PROJECT_NEW)}>
                 <Plus className="mr-1.5 h-4 w-4" /> Add Project
               </Button>
@@ -171,7 +381,7 @@ const ProjectList = () => {
           </div>
         }
       />
-
+ 
       <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[200px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Status</Label>
@@ -197,31 +407,100 @@ const ProjectList = () => {
           </div>
         </div>
       </FilterPanel>
-
-      <DataTable
-        columns={columns}
-        data={projects}
-        isLoading={isPending}
-        toolbar={null}
-        pagination={
-          meta.total != null
-            ? {
-                page: meta.page ?? page,
-                limit: meta.limit ?? limit,
-                total: meta.total,
-              }
-            : undefined
-        }
-        sorting={sorting}
-        onSortingChange={(s) => { setSorting(s); setPage(1); }}
-        onPageChange={setPage}
-        onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
-        onRowClick={(row) => navigate(buildPath(ROUTES.PROJECT_EDIT, { id: row.id }))}
-      />
-
+ 
+      {importResult ? (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-medium">Import Results</h3>
+            <Button variant="outline" onClick={() => setImportResult(null)}>
+              Back to Projects
+            </Button>
+          </div>
+          {renderImportResults()}
+        </div>
+      ) : isPreviewOpen ? (
+        <Card className="shadow-sm">
+          <CardHeader className="pb-3 border-b bg-muted/20">
+            <CardTitle className="text-lg font-medium text-slate-800">Preview Import Data</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-auto max-h-[60vh]">
+              {previewData && previewData.length > 0 && (
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/50">
+                      {previewData[0]?.map((header, i) => (
+                        <TableHead key={i} className="whitespace-nowrap font-semibold sticky top-0 bg-muted/50">{header}</TableHead>
+                      ))}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {previewData.slice(1, previewLimit + 1).map((row, i) => (
+                      <TableRow key={i}>
+                        {previewData[0].map((_, colIndex) => (
+                          <TableCell key={colIndex} className="whitespace-nowrap py-3 text-sm">
+                            {row[colIndex] != null ? row[colIndex].toString() : '-'}
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    ))}
+                    {previewData.length > previewLimit + 1 && (
+                      <TableRow>
+                        <TableCell colSpan={previewData[0].length} className="text-center bg-muted/10 py-4">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                            onClick={() => setPreviewLimit((prev) => Math.min(prev + 10, previewData.length - 1))}
+                          >
+                            Show more rows ({previewData.length - previewLimit - 1} remaining)
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              )}
+            </div>
+            <div className="p-4 border-t flex justify-end gap-3 bg-muted/10">
+              <Button variant="outline" onClick={closePreview} disabled={importMutation.isPending}>
+                Cancel
+              </Button>
+              <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={handleConfirmImport} disabled={importMutation.isPending}>
+                <CheckCircle2 className="mr-2 h-4 w-4" />
+                {importMutation.isPending ? 'Importing…' : 'Confirm Import'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <DataTable
+          columns={columns}
+          data={projects}
+          isLoading={isPending}
+          toolbar={null}
+          pagination={
+            meta.total != null
+              ? {
+                  page: meta.page ?? page,
+                  limit: meta.limit ?? limit,
+                  total: meta.total,
+                }
+              : undefined
+          }
+          sorting={sorting}
+          onSortingChange={(s) => { setSorting(s); setPage(1); }}
+          onPageChange={setPage}
+          onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
+          onRowClick={(row) => navigate(buildPath(ROUTES.PROJECT_EDIT, { id: row.id }))}
+        />
+      )}
+ 
       <Outlet />
     </div>
   );
 };
-
+ 
 export default ProjectList;
+ 
+ 

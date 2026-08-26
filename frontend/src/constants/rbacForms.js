@@ -40,7 +40,7 @@ export const FORM_NAMES = {
   // off hasRole('Admin') rather than resolved from accessibleForms; now needs a real Form
   // Master row named exactly this, assigned to the Admin role via Role Form Mapping.
   ENTITY_ADMINS: 'Entity Admins',
-  BU_ADMIN_MASTER: 'BU Admin Master',
+  BU_ADMIN_MASTER: 'BU Master',
   // Additive BU Head role form — real Form Master row confirmed seeded under "Entity
   // Management"; nav item now comes entirely from accessibleForms (no Sidebar.jsx injection).
   BU_HEAD_MASTER: 'BU Head Master',

@@ -10,6 +10,8 @@ import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { useEmployees, useImportEmployees, useToggleEmployeeStatus, useUpdateEmployee, useEmployeeMappings } from '@/hooks/useEmployees';
+import { useEmployeeServicePOMappingOptions, useSaveEmployeeServicePOMapping } from '@/hooks/useEmployeeServicePOMapping';
+import { useActiveServicePOs } from '@/hooks/useServicePOs';
 import { useRoles } from '@/hooks/useRoles';
 import { useCompanies } from '@/hooks/useCompanies';
 import { employeesApi } from '@/api/employees.api';
@@ -57,6 +59,11 @@ import { Badge } from '@/components/ui/badge';
 
 const columnHelper = createColumnHelper();
 
+// Keeps each mapping list's header row in place while its body scrolls. Needs the list's scroll
+// container to be the Table's own wrapper (via containerClassName) — sticky resolves against the
+// nearest scrolling ancestor, so an extra overflow div around the Table would break it.
+const STICKY_HEAD = 'sticky top-0 z-10 bg-background';
+
 const TruncatedCell = ({ value, maxWidth = '150px', className }) => {
   if (!value) return <span className="text-sm text-muted-foreground">—</span>;
   return (
@@ -69,13 +76,21 @@ const TruncatedCell = ({ value, maxWidth = '150px', className }) => {
 // Roles and Business Units are no longer picked on the Add/Edit Employee form (see
 // EmployeeForm.jsx and [[project_employee_identity_migration]]) — they're mapped here instead,
 // as two checkbox tables, opened per-row from Employee List's "Map Roles & Business Units"
-// action.
+// action. Checking "Service PO Admin" reveals a third section here — no separate row action/
+// icon for Service PO mapping — since that role gets company-wide, BU-unrestricted PO access
+// (backend flag `unrestricted: true`), so there's nothing to pre-filter: it's just "pick from
+// every active Service PO." (Delivery Head is NOT an RBAC role in this system — it's a per-PO
+// field set via the Service PO Form's own "Delivery Head" dropdown — so it never appears as a
+// checkbox here; once the backend adds it into the same unrestricted bucket as Service PO Admin,
+// only the eligibility response's `unrestricted` flag changes, not this UI.)
 const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits, onOpenChange }) => {
   const { success, error: showError } = useNotification();
   const updateMutation = useUpdateEmployee(employee?.id);
+  const saveServicePoMutation = useSaveEmployeeServicePOMapping(employee?.id);
   const { data: mappings, isLoading: mappingsLoading } = useEmployeeMappings(employee?.id);
   const [selectedRoleIds, setSelectedRoleIds] = useState([]);
   const [selectedBuIds, setSelectedBuIds] = useState([]);
+  const [selectedPoIds, setSelectedPoIds] = useState([]);
 
   // GET /employees (list) carries no role/BU data, so the row this dialog opened from can't seed
   // the checkboxes — fetch the employee's actual mappings fresh instead (see
@@ -91,10 +106,25 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
   // checked & disabled, same standing bypass EmployeeForm.jsx used to apply for HR (whose
   // ROLE_CREATION_MATRIX entry is deliberately empty).
   const employeeRoleId = allRoles.find((r) => r.role_name === ROLE_NAMES.EMPLOYEE)?.id;
+  const servicePoAdminRoleId = allRoles.find((r) => r.role_name === ROLE_NAMES.SERVICE_PO_ADMIN)?.id;
+  const showServicePoSection = servicePoAdminRoleId != null && selectedRoleIds.includes(servicePoAdminRoleId);
   const assignableNames = [...new Set([...getAssignableRoleNames(actorRoleName), ROLE_NAMES.EMPLOYEE])];
   const roleRows = allRoles.filter(
     (r) => assignableNames.includes(r.role_name) || ADDITIONAL_ROLE_NAMES.includes(r.role_name)
   );
+
+  // Full active PO list (company-wide) — Service PO Admin needs no BU-eligibility filtering, so
+  // this doesn't call the employee-scoped options endpoint at all here.
+  const { data: activePOs, isLoading: activePOsLoading } = useActiveServicePOs(showServicePoSection);
+  // Still needed to seed which POs come pre-checked (existing mapping), separate from the list
+  // of options itself.
+  const { data: existingMapping } = useEmployeeServicePOMappingOptions(showServicePoSection ? employee?.id : null);
+
+  useEffect(() => {
+    if (existingMapping) {
+      setSelectedPoIds(existingMapping.mapped_service_po_ids ?? []);
+    }
+  }, [existingMapping]);
 
   const toggleRole = (roleId) => {
     if (roleId === employeeRoleId) return;
@@ -114,38 +144,48 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
     setSelectedBuIds((prev) => (prev.includes(buId) ? prev.filter((id) => id !== buId) : [...prev, buId]));
   };
 
-  const handleSave = () => {
+  const togglePo = (poId) => {
+    setSelectedPoIds((prev) => (prev.includes(poId) ? prev.filter((id) => id !== poId) : [...prev, poId]));
+  };
+
+  const isSaving = updateMutation.isPending || saveServicePoMutation.isPending;
+
+  const handleSave = async () => {
     const roleIds = employeeRoleId != null && !selectedRoleIds.includes(employeeRoleId)
       ? [...selectedRoleIds, employeeRoleId]
       : selectedRoleIds;
-    updateMutation.mutate(
-      { role_ids: roleIds, business_unit_ids: selectedBuIds },
-      {
-        onSuccess: () => {
-          success(`Roles & Business Units updated for ${employee.full_name}.`);
-          onOpenChange(false);
-        },
-        onError: (err) => showError(extractApiError(err)),
+    try {
+      await updateMutation.mutateAsync({ role_ids: roleIds, business_unit_ids: selectedBuIds });
+      if (showServicePoSection) {
+        // Backend rejects the whole request wholesale if any id fails re-validation — let that
+        // throw into the catch below so nothing here is treated as saved.
+        await saveServicePoMutation.mutateAsync(selectedPoIds);
       }
-    );
+      success(`Roles, Business Units${showServicePoSection ? ' & Service PO mapping' : ''} updated for ${employee.full_name}.`);
+      onOpenChange(false);
+    } catch (err) {
+      showError(extractApiError(err));
+    }
   };
 
   return (
     <Dialog open={!!employee} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
+      <DialogContent className="max-w-2xl flex max-h-[90vh] flex-col">
+        <DialogHeader className="shrink-0">
           <DialogTitle>Map Roles &amp; Business Units</DialogTitle>
           <DialogDescription>Assign roles and business units for {employee?.full_name}.</DialogDescription>
         </DialogHeader>
+        {/* min-h-0 is what lets this flex child actually shrink and scroll instead of
+            stretching the dialog past the viewport. */}
+        <div className="flex-1 min-h-0 space-y-4 overflow-y-auto">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <Label className="text-xs">Roles</Label>
-            <div className="border rounded-md max-h-[45vh] overflow-y-auto">
-              <Table>
+            <Table containerClassName="border rounded-md max-h-[240px]">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-10"></TableHead>
-                    <TableHead>Role</TableHead>
+                    <TableHead className={cn('w-10', STICKY_HEAD)}></TableHead>
+                    <TableHead className={STICKY_HEAD}>Role</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -162,17 +202,15 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
                     </TableRow>
                   ))}
                 </TableBody>
-              </Table>
-            </div>
+            </Table>
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Business Units</Label>
-            <div className="border rounded-md max-h-[45vh] overflow-y-auto">
-              <Table>
+            <Table containerClassName="border rounded-md max-h-[240px]">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-10"></TableHead>
-                    <TableHead>Business Unit</TableHead>
+                    <TableHead className={cn('w-10', STICKY_HEAD)}></TableHead>
+                    <TableHead className={STICKY_HEAD}>Business Unit</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -185,16 +223,61 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
                     </TableRow>
                   ))}
                 </TableBody>
-              </Table>
-            </div>
+            </Table>
           </div>
         </div>
-        <DialogFooter>
-          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={updateMutation.isPending}>
+        {showServicePoSection && (
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2">
+              <Label className="text-xs">Service POs</Label>
+              <Badge variant="secondary" className="text-[10px]">Company-wide access</Badge>
+            </div>
+            <Table containerClassName="border rounded-md max-h-[260px]">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className={cn('w-10', STICKY_HEAD)}></TableHead>
+                    <TableHead className={STICKY_HEAD}>Service PO</TableHead>
+                    <TableHead className={STICKY_HEAD}>Client</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {activePOsLoading ? (
+                    <TableRow>
+                      <TableCell colSpan={3} className="text-center text-sm text-muted-foreground py-6">
+                        Loading…
+                      </TableCell>
+                    </TableRow>
+                  ) : (activePOs ?? []).length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={3} className="text-center text-sm text-muted-foreground py-6">
+                        No active Service POs found.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    (activePOs ?? []).map((po) => (
+                      <TableRow key={po.id}>
+                        <TableCell>
+                          <Checkbox checked={selectedPoIds.includes(po.id)} onCheckedChange={() => togglePo(po.id)} />
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {po.service_po_name}
+                          {po.service_po_code ? ` (${po.service_po_code})` : ''}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{po.client?.client_name ?? '—'}</TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+            </Table>
+          </div>
+        )}
+        </div>
+        <DialogFooter className="shrink-0">
+          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={isSaving}>
             Cancel
           </Button>
-          <Button size="sm" onClick={handleSave} disabled={updateMutation.isPending || mappingsLoading}>
-            {updateMutation.isPending ? 'Saving…' : 'Save'}
+          <Button size="sm" onClick={handleSave} disabled={isSaving || mappingsLoading}>
+            {isSaving ? 'Saving…' : 'Save'}
           </Button>
         </DialogFooter>
       </DialogContent>

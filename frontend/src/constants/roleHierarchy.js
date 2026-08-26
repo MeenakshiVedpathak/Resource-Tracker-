@@ -11,7 +11,12 @@ export const ROLE_NAMES = {
   // `company_id`. Never rename/remove BU Admin when touching this.
   BU_HEAD: 'BU Head',
   PROJECT_ADMIN: 'Project Admin',
-  SERVICE_PO_ADMIN: 'Service PO Admin',
+  // Backend renamed this role to fold "Delivery Head" into the same tier (see the Manage
+  // Service PO Mapping spec's "soon to include Delivery Head in the same role" note) — the exact
+  // string must match GET /roles' `role_name` verbatim or every comparison against it
+  // (ADDITIONAL_ROLE_NAMES, ROLE_CREATION_MATRIX, the Employee Master PO-mapping trigger) silently
+  // stops matching.
+  SERVICE_PO_ADMIN: 'Service PO Admin/Delivery head',
   MANAGER: 'Manager',
   EMPLOYEE: 'Employee',
   HR: 'HR',

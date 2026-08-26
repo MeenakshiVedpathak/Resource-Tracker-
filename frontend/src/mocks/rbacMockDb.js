@@ -211,8 +211,8 @@ export const businessUnitsForLoginResponse = (employeeId) => {
 // Admin/Entity Admin check (mirroring Entity Admins), so it isn't duplicated.
 const FORMS_BY_ROLE = {
   [ROLE_NAMES.PLATFORM_ADMIN]: {},
-  [ROLE_NAMES.ADMIN]: { 'Entity Management': [{ id: 101, name: 'Entity Master' }, { id: 102, name: 'BU Admin Master' }] },
-  [ROLE_NAMES.ENTITY_ADMIN]: { 'Entity Management': [{ id: 101, name: 'Entity Master' }, { id: 102, name: 'BU Admin Master' }] },
+  [ROLE_NAMES.ADMIN]: { 'Entity Management': [{ id: 101, name: 'Entity Master' }, { id: 102, name: 'BU Master' }] },
+  [ROLE_NAMES.ENTITY_ADMIN]: { 'Entity Management': [{ id: 101, name: 'Entity Master' }, { id: 102, name: 'BU Master' }] },
   [ROLE_NAMES.BU_ADMIN]: {
     Administration: [{ id: 103, name: 'Roles' }, { id: 104, name: 'Forms' }],
     People: [{ id: 105, name: 'Employee Master' }],

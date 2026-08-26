@@ -165,6 +165,7 @@ export const QUERY_KEYS = {
   // Employee <-> Service PO mapping (Admin-side, backs the Project dropdown above)
   EMPLOYEE_SERVICEPO_MAPPING_BY_EMPLOYEE: (employeeId) => ['employee-servicepo-mapping', 'employee', employeeId],
   EMPLOYEE_SERVICEPO_MAPPING_BY_SERVICE_PO: (servicePOId) => ['employee-servicepo-mapping', 'service-po', servicePOId],
+  EMPLOYEE_SERVICEPO_MAPPING_OPTIONS: (employeeId) => ['employee-servicepo-mapping', 'options', employeeId],
 
   // Employee Reports
   EMPLOYEE_REPORT_DAILY: (date) => ['employee-report', 'daily', date],

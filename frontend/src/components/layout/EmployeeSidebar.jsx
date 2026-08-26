@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useDispatch, useSelector } from 'react-redux';
@@ -9,7 +9,7 @@ import { useFormModules, useForms } from '@/hooks/useForms';
 import { useEmployeeEntries } from '@/hooks/useEmployeeWorkLog';
 import { resolveFormRoute } from '@/constants/rbacForms';
 import { ROUTES } from '@/constants/routes';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
 import ScrollOnHoverText from '@/components/common/ScrollOnHoverText';
 
 // Real module/form ordering, sourced from the same Form Master data the /forms screen
@@ -123,6 +123,33 @@ const EmployeeSidebar = () => {
   const { data: rejectedEntries } = useEmployeeEntries({ status: 'rejected', page: 1, limit: 1 }, hasRejectedEntriesTab);
   const rejectedCount = rejectedEntries?.meta?.total ?? 0;
 
+  // Per-module expand/collapse in the drawer — same convenience-only (unpersisted) behaviour as
+  // the admin Sidebar. Tracking *expanded* labels means an empty Set reads as "all collapsed"
+  // without needing the module list up front.
+  const [expandedModules, setExpandedModules] = useState(() => new Set());
+  const toggleModule = (label) => {
+    setExpandedModules((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
+  };
+
+  // The module holding the current route, so the first render doesn't leave an Employee staring
+  // at nothing but collapsed headers. Seeded once (not on every navigation) so a module the user
+  // has since collapsed by hand stays collapsed.
+  const activeGroupLabel = useMemo(
+    () => navGroups.find((g) => g.items.some((i) => isActive(i.to, pathname, i.exact)))?.label ?? null,
+    [navGroups, pathname]
+  );
+  const seededRef = useRef(false);
+  useEffect(() => {
+    if (seededRef.current || !activeGroupLabel) return;
+    seededRef.current = true;
+    setExpandedModules(new Set([activeGroupLabel]));
+  }, [activeGroupLabel]);
+
   useEffect(() => {
     if (window.innerWidth < 768) dispatch(setSidebarCollapsed(true));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -159,14 +186,34 @@ const EmployeeSidebar = () => {
         </div>
 
         <nav className="flex-1 overflow-y-auto overflow-x-hidden py-2 px-2 space-y-2 scrollbar-thin">
-          {navGroups.map((group) => (
+          {navGroups.map((group) => {
+            const moduleCollapsed = !expandedModules.has(group.label);
+            // Rejected-entries badge is the only one in this nav; surfaced on the header while
+            // the module is folded away so a collapsed group can't hide it.
+            const groupBadge = group.items.some((i) => i.to === ROUTES.EMPLOYEE_REJECTED_ENTRIES)
+              ? rejectedCount
+              : 0;
+            return (
             <div key={group.label} className="space-y-px">
               {!collapsed && (
-                <p className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/30 whitespace-nowrap">
-                  {group.label}
-                </p>
+                <button
+                  type="button"
+                  onClick={() => toggleModule(group.label)}
+                  className="flex w-full items-center gap-1 px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/30 whitespace-nowrap hover:text-sidebar-foreground/60 transition-colors"
+                >
+                  {moduleCollapsed
+                    ? <ChevronRight className="h-3 w-3 shrink-0 transition-transform duration-150" />
+                    : <ChevronDown className="h-3 w-3 shrink-0 transition-transform duration-150" />}
+                  <span className="truncate">{group.label}</span>
+                  {moduleCollapsed && groupBadge > 0 && (
+                    <span className="ml-auto shrink-0 rounded-full bg-destructive px-1.5 py-0.5 text-[10px] font-semibold leading-none text-destructive-foreground">
+                      {groupBadge > 99 ? '99+' : groupBadge}
+                    </span>
+                  )}
+                </button>
               )}
-              {group.items.map((item) => (
+              {/* Icon rail has no group headers to fold, so it always lists every item. */}
+              {(collapsed || !moduleCollapsed) && group.items.map((item) => (
                 <EmployeeNavItem
                   key={item.to}
                   item={item}
@@ -176,7 +223,8 @@ const EmployeeSidebar = () => {
                 />
               ))}
             </div>
-          ))}
+            );
+          })}
         </nav>
 
         <div className="shrink-0 border-t border-sidebar-border p-2">
