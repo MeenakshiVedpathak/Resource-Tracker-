@@ -1,0 +1,3 @@
+[submodule "RUT_Backend"]
+	path = RUT_Backend
+	url = https://github.com/ujefjamadargtt/RUT_Backend.git
