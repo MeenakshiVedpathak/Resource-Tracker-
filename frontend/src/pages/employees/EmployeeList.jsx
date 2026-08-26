@@ -593,10 +593,12 @@ const EmployeeList = () => {
         'Name': emp.full_name,
         'Email ID': emp.email,
         'Designation': emp.designation,
+        'Business Units': (emp.businessUnits ?? []).map(bu => bu.name ?? bu.company_name).join(', '),
         'Total Experience (yrs)': emp.total_experience,
         'Company Experience (yrs)': emp.company_experience,
         'Joined Date': formatDate(emp.date_of_joining),
-        'Status': emp.status
+        'Status': emp.status,
+        'Timesheet Approval': (emp.is_timesheet_approval_required ?? true) ? 'Required' : 'Not Required'
       }));
       const ws = XLSX.utils.json_to_sheet(exportData);
       const wb = XLSX.utils.book_new();

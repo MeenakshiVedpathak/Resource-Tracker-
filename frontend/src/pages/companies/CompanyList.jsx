@@ -45,7 +45,7 @@ const CompanyList = () => {
     limit,
     ...(entityIdParam && { entity_id: entityIdParam }),
     ...(debouncedSearch && { search: debouncedSearch }),
-    ...(sorting[0] && { sortBy: sorting[0].id, sortOrder: sorting[0].desc ? 'desc' : 'asc' }),
+    ...(sorting[0] && { sort_by: sorting[0].id, sort_order: sorting[0].desc ? 'DESC' : 'ASC' }),
   };
 
   const { data, isPending } = useCompanies(params);
@@ -93,6 +93,13 @@ const CompanyList = () => {
       size: 250,
       meta: { sticky: true, left: 110 },
       cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="230px" className="font-medium" />,
+    }),
+    columnHelper.accessor((row) => row.entity?.entity_name, {
+      id: 'entity_name',
+      header: 'Entity Name',
+      size: 200,
+      enableSorting: false,
+      cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="180px" />,
     }),
     columnHelper.accessor('company_code', {
       header: 'BU Code',
@@ -158,7 +165,7 @@ const CompanyList = () => {
         toolbar={null}
         pagination={
           meta.total != null
-            ? { page: meta.current_page ?? page, limit: meta.per_page ?? limit, total: meta.total }
+            ? { page: meta.page ?? page, limit: meta.limit ?? limit, total: meta.total }
             : undefined
         }
         sorting={sorting}

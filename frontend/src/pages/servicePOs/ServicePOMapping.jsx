@@ -86,11 +86,14 @@ const SelectPanel = ({ rows, search, onSearchChange, selectedKeys, onToggle, onT
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-background">
               <tr className="border-b">
-                <th className="w-9 px-3 py-2">
-                  <Checkbox
-                    checked={allChecked}
-                    onCheckedChange={(v) => onToggleAll(filtered.map((r) => r.key), !!v)}
-                  />
+                <th className="px-3 py-2">
+                  <label className="flex items-center gap-1.5 whitespace-nowrap text-xs font-medium text-muted-foreground">
+                    <Checkbox
+                      checked={allChecked}
+                      onCheckedChange={(v) => onToggleAll(filtered.map((r) => r.key), !!v)}
+                    />
+                    Select All
+                  </label>
                 </th>
                 <th className="px-2 py-2 text-left text-xs font-medium text-muted-foreground">Employee</th>
               </tr>
