@@ -807,7 +807,7 @@ const TimesheetImportDetail = () => {
               />
             </div>
             <div className="grid gap-2">
-              <Label>Sub Project</Label>
+              <Label>Sub-Project</Label>
               <SearchableSelect
                 options={[
                   { label: 'None', value: '' },
@@ -816,8 +816,8 @@ const TimesheetImportDetail = () => {
                 value={addForm.sub_project_id}
                 onValueChange={(v) => setAddForm((f) => ({ ...f, sub_project_id: v }))}
                 disabled={!addForm.service_po_id}
-                placeholder="Select sub project (optional)"
-                searchPlaceholder="Search sub project..."
+                placeholder="Select sub-project (optional)"
+                searchPlaceholder="Search sub-project..."
               />
             </div>
             <div className="grid gap-2">

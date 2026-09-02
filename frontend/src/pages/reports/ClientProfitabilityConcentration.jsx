@@ -1,14 +1,16 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Download } from 'lucide-react';
+import { Download, Search } from 'lucide-react';
 import { useClientProfitabilityConcentration } from '@/hooks/useReports';
 import { formatCurrency, formatPercentage } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
+import BusinessUnitFilter, { ALL_BUS } from '@/components/common/BusinessUnitFilter';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import { Progress } from '@/components/ui/progress';
@@ -22,7 +24,7 @@ const MAX_RECORDS_FETCH = 5000;
 
 const exportToExcel = (rows) => {
   const header = [
-    'Client Name', 'Total Invoiced', 'Total Delivery Cost', 'Total Margin', 'Margin %', 'Revenue Concentration %',
+    'Client Name', 'Total Invoiced', 'Total Delivery Cost', 'Total Margin', 'Shortfall', 'Revenue Concentration %',
   ];
   const dataRows = rows.map((r) => [
     r.client_name ?? '',
@@ -71,7 +73,7 @@ const columns = [
     },
   }),
   columnHelper.accessor('margin_pct', {
-    header: 'Margin %',
+    header: 'Shortfall',
     size: 130,
     cell: (info) => {
       const value = info.getValue();
@@ -112,6 +114,8 @@ const ClientProfitabilityConcentration = () => {
     year: prevMonth.getFullYear(),
   });
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [buId, setBuId] = useState(ALL_BUS);
+  const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
 
@@ -119,24 +123,35 @@ const ClientProfitabilityConcentration = () => {
     ...(monthYear && { month: monthYear.month, year: monthYear.year }),
     page: 1,
     limit: MAX_RECORDS_FETCH,
+    buId,
   };
 
   const { data, isPending } = useClientProfitabilityConcentration(params);
 
   const records = data?.data?.records ?? [];
-  const pagedRecords = records.slice((page - 1) * limit, page * limit);
+
+  // Applied in memory — the whole matching set is already here, so there is nothing to gain from
+  // a round-trip. Covers the identifying columns only; the numeric/metric columns are left out,
+  // since substring-matching an amount or a count misleads more than it helps.
+  const filteredRecords = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return records;
+    return records.filter((r) => [r.client_name]
+      .some((v) => String(v ?? '').toLowerCase().includes(q)));
+  }, [records, search]);
+  const pagedRecords = filteredRecords.slice((page - 1) * limit, page * limit);
 
   // Recomputed client-side from the full matching set rather than trusted from the backend's own
   // `summary` — its field names (`total_invoiced_amount`) don't even match the row-level field
   // (`total_invoiced`) the table columns render, a copy-paste mismatch from another report.
-  const summary = records.length > 0 ? {
-    total_invoiced: records.reduce((sum, r) => sum + (Number(r.total_invoiced) || 0), 0),
-    total_delivery_cost: records.reduce((sum, r) => sum + (Number(r.total_delivery_cost) || 0), 0),
-    total_margin: records.reduce((sum, r) => sum + (Number(r.total_margin) || 0), 0),
+  const summary = filteredRecords.length > 0 ? {
+    total_invoiced: filteredRecords.reduce((sum, r) => sum + (Number(r.total_invoiced) || 0), 0),
+    total_delivery_cost: filteredRecords.reduce((sum, r) => sum + (Number(r.total_delivery_cost) || 0), 0),
+    total_margin: filteredRecords.reduce((sum, r) => sum + (Number(r.total_margin) || 0), 0),
   } : null;
 
   // Already have the full matching set in memory — no need for a second network round-trip.
-  const handleExport = () => exportToExcel(records);
+  const handleExport = () => exportToExcel(filteredRecords);
 
   return (
     <div>
@@ -145,13 +160,22 @@ const ClientProfitabilityConcentration = () => {
         description="Revenue concentration and margin per client for the selected month."
         actions={
           <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search client…"
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                className="h-9 w-72 pl-9 text-sm"
+              />
+            </div>
             <FilterToggleButton
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((p) => !p)}
-              activeCount={0}
+              activeCount={buId !== ALL_BUS ? 1 : 0}
               className="h-9"
             />
-            {records.length > 0 && (
+            {filteredRecords.length > 0 && (
               <Button variant="outline" size="sm" className="h-9" onClick={handleExport}>
                 <Download className="mr-1.5 h-4 w-4" />Export Excel
               </Button>
@@ -160,7 +184,9 @@ const ClientProfitabilityConcentration = () => {
         }
       />
 
-      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[240px]">
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[340px]" onClear={() => setBuId(ALL_BUS)} showClear={buId !== ALL_BUS}>
+        <BusinessUnitFilter value={buId} onChange={setBuId} />
+
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Month &amp; Year <span className="text-destructive">*</span></Label>
           <MonthYearPicker
@@ -177,7 +203,7 @@ const ClientProfitabilityConcentration = () => {
         columns={columns}
         data={pagedRecords}
         isLoading={isPending}
-        pagination={{ page, limit, total: records.length }}
+        pagination={{ page, limit, total: filteredRecords.length }}
         onPageChange={setPage}
         onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
       />

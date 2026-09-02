@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Download } from 'lucide-react';
+import { Download, Search } from 'lucide-react';
 import { useServicePOProfitability } from '@/hooks/useReports';
 import { useActiveClients } from '@/hooks/useClients';
 import { formatCurrency, formatHours, formatPercentage } from '@/utils/formatters';
@@ -10,7 +10,9 @@ import PageHeader from '@/components/common/PageHeader';
 import StatusBadge from '@/components/common/StatusBadge';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
+import BusinessUnitFilter, { ALL_BUS } from '@/components/common/BusinessUnitFilter';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
@@ -25,7 +27,7 @@ const MAX_RECORDS_FETCH = 5000;
 const exportToExcel = (rows) => {
   const header = [
     'PO Code', 'PO Name', 'Client', 'Service Type', 'Category', 'Status',
-    'Hours Delivered', 'Invoiced Amount', 'Delivery Cost', 'Margin', 'Margin %',
+    'Hours Delivered', 'Invoiced Amount', 'Delivery Cost', 'Margin', 'Shortfall',
   ];
   const dataRows = rows.map((r) => [
     r.service_po_code ?? '',
@@ -114,7 +116,7 @@ const columns = [
     },
   }),
   columnHelper.accessor('margin_pct', {
-    header: 'Margin %',
+    header: 'Shortfall',
     size: 130,
     cell: (info) => {
       const value = info.getValue();
@@ -142,7 +144,11 @@ const ServicePOProfitability = () => {
     year: prevMonth.getFullYear(),
   });
   const [clientId, setClientId] = useState('all');
+  const [search, setSearch] = useState('');
+  const [serviceType, setServiceType] = useState('all');
+  const [serviceCategory, setServiceCategory] = useState('all');
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [buId, setBuId] = useState(ALL_BUS);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
 
@@ -153,20 +159,57 @@ const ServicePOProfitability = () => {
     ...(clientId && clientId !== 'all' && { clientId }),
     page: 1,
     limit: MAX_RECORDS_FETCH,
+    buId,
   };
 
   const { data, isPending } = useServicePOProfitability(params);
 
   const records = data?.data?.records ?? [];
-  const pagedRecords = records.slice((page - 1) * limit, page * limit);
+
+  // Service Type / Category options come from the fetched rows themselves rather than the
+  // service-type & category masters: the records only carry the display names (service_type,
+  // service_category_name), so sourcing the options from the same field the filter compares
+  // against makes matching exact, needs no extra requests, and never offers a value that
+  // isn't in the current result set. Category narrows the Service Type list, since each row
+  // carries both.
+  const categoryOptions = useMemo(
+    () => Array.from(new Set(records.map((r) => r.service_category_name).filter(Boolean))).sort(),
+    [records]
+  );
+
+  const serviceTypeOptions = useMemo(
+    () => Array.from(new Set(
+      records
+        .filter((r) => serviceCategory === 'all' || r.service_category_name === serviceCategory)
+        .map((r) => r.service_type)
+        .filter(Boolean)
+    )).sort(),
+    [records, serviceCategory]
+  );
+
+  // Search and these two filters are applied in memory — the whole matching set is already here
+  // (see MAX_RECORDS_FETCH), so there is nothing to gain from a round-trip, and the Totals below
+  // recompute off the same filtered set the table shows.
+  const filteredRecords = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return records.filter((r) => {
+      if (serviceCategory !== 'all' && r.service_category_name !== serviceCategory) return false;
+      if (serviceType !== 'all' && r.service_type !== serviceType) return false;
+      if (!q) return true;
+      return [r.service_po_code, r.service_po_name, r.client_name]
+        .some((v) => String(v ?? '').toLowerCase().includes(q));
+    });
+  }, [records, search, serviceType, serviceCategory]);
+
+  const pagedRecords = filteredRecords.slice((page - 1) * limit, page * limit);
 
   // Recomputed client-side from the full matching set rather than trusted from the backend's own
   // `summary` — that object only reflects the current server page, and would understate totals
   // once there's more than one page of POs.
-  const summary = records.length > 0 ? (() => {
-    const total_invoiced_amount = records.reduce((sum, r) => sum + (Number(r.invoiced_amount) || 0), 0);
-    const total_delivery_cost = records.reduce((sum, r) => sum + (Number(r.delivery_cost) || 0), 0);
-    const total_margin = records.reduce((sum, r) => sum + (Number(r.margin) || 0), 0);
+  const summary = filteredRecords.length > 0 ? (() => {
+    const total_invoiced_amount = filteredRecords.reduce((sum, r) => sum + (Number(r.invoiced_amount) || 0), 0);
+    const total_delivery_cost = filteredRecords.reduce((sum, r) => sum + (Number(r.delivery_cost) || 0), 0);
+    const total_margin = filteredRecords.reduce((sum, r) => sum + (Number(r.margin) || 0), 0);
     return {
       total_invoiced_amount,
       total_delivery_cost,
@@ -177,16 +220,31 @@ const ServicePOProfitability = () => {
   })() : null;
 
   const activeFilterCount = [
+    buId !== ALL_BUS,
     clientId !== 'all',
+    serviceType !== 'all',
+    serviceCategory !== 'all',
   ].filter(Boolean).length;
 
   const clearFilters = () => {
+    setBuId(ALL_BUS);
     setClientId('all');
+    setServiceType('all');
+    setServiceCategory('all');
+    setPage(1);
+  };
+
+  // Picking a Category can strip the selected Service Type out of the option list, so the
+  // narrower of the two always resets with it.
+  const handleCategoryChange = (v) => {
+    setServiceCategory(v);
+    setServiceType('all');
     setPage(1);
   };
 
   // Already have the full matching set in memory — no need for a second network round-trip.
-  const handleExport = () => exportToExcel(records);
+  // Exports what the filters and search actually leave on screen, not the unfiltered set.
+  const handleExport = () => exportToExcel(filteredRecords);
 
   return (
     <div>
@@ -195,13 +253,22 @@ const ServicePOProfitability = () => {
         description="Margin analysis per Service PO — invoiced amount vs delivery cost."
         actions={
           <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search PO Code, PO Name, Client…"
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                className="h-9 w-64 pl-9 text-sm"
+              />
+            </div>
             <FilterToggleButton
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((p) => !p)}
               activeCount={activeFilterCount}
               className="h-9"
             />
-            {records.length > 0 && (
+            {filteredRecords.length > 0 && (
               <Button variant="outline" size="sm" className="h-9" onClick={handleExport}>
                 <Download className="mr-1.5 h-4 w-4" />Export Excel
               </Button>
@@ -210,7 +277,16 @@ const ServicePOProfitability = () => {
         }
       />
 
-      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[280px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
+      {/* Five filters on one row from lg up; twMerge lets this override FilterPanel's md:grid-cols-4. */}
+      <FilterPanel
+        isOpen={filtersOpen}
+        maxHeightClass="max-h-[380px]"
+        gridClassName="md:grid-cols-3 lg:grid-cols-5"
+        onClear={clearFilters}
+        showClear={activeFilterCount > 0}
+      >
+        <BusinessUnitFilter value={buId} onChange={setBuId} />
+
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Month &amp; Year <span className="text-destructive">*</span></Label>
           <MonthYearPicker
@@ -238,6 +314,36 @@ const ServicePOProfitability = () => {
             className="h-9 w-full text-sm"
           />
         </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Service Type</Label>
+          <SearchableSelect
+            options={[
+              { label: 'All Service Types', value: 'all' },
+              ...serviceTypeOptions.map((name) => ({ label: name, value: name })),
+            ]}
+            value={serviceType}
+            onValueChange={(v) => { setServiceType(v); setPage(1); }}
+            placeholder="All Service Types"
+            searchPlaceholder="Search service type..."
+            className="h-9 w-full text-sm"
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Category</Label>
+          <SearchableSelect
+            options={[
+              { label: 'All Categories', value: 'all' },
+              ...categoryOptions.map((name) => ({ label: name, value: name })),
+            ]}
+            value={serviceCategory}
+            onValueChange={handleCategoryChange}
+            placeholder="All Categories"
+            searchPlaceholder="Search category..."
+            className="h-9 w-full text-sm"
+          />
+        </div>
       </FilterPanel>
 
       <DataTable
@@ -245,7 +351,7 @@ const ServicePOProfitability = () => {
         columns={columns}
         data={pagedRecords}
         isLoading={isPending}
-        pagination={{ page, limit, total: records.length }}
+        pagination={{ page, limit, total: filteredRecords.length }}
         onPageChange={setPage}
         onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
       />
@@ -262,7 +368,7 @@ const ServicePOProfitability = () => {
               negative={summary.total_margin < 0}
             />
             <SummaryItem
-              label="Overall Margin %"
+              label="Overall Shortfall"
               value={formatPercentage(summary.overall_margin_pct)}
               negative={summary.overall_margin_pct < 0}
             />

@@ -1,11 +1,12 @@
-import { useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useCallback, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useDropzone } from 'react-dropzone';
 import * as XLSX from 'xlsx';
 import dayjs from 'dayjs';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Download, Upload, FileSpreadsheet, CheckCircle2, XCircle, AlertCircle, Loader2, RefreshCw } from 'lucide-react';
 import { useImportMonthlyCosts } from '@/hooks/useMonthlyCosts';
+import { useAuth } from '@/hooks/useAuth';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import { ROUTES } from '@/constants/routes';
@@ -123,7 +124,9 @@ const MONTH_LABELS = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug'
 
 const MonthlyCostImport = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { success, error: showError } = useNotification();
+  const { businessUnits } = useAuth();
   const importMutation = useImportMonthlyCosts();
 
   const [rows, setRows] = useState([]);
@@ -210,8 +213,31 @@ const MonthlyCostImport = () => {
     if (accepted.length) parseFile(accepted[0]);
   }, [parseFile]);
 
+  // Which BU these costs land in is settled before this screen: Monthly Costs' "Upload Excel"
+  // button asks for it (and only bothers asking when there is more than one to choose from),
+  // then passes it here as ?buId=. Resolved fresh from auth on every render so a tampered or
+  // stale id can never be imported against.
+  //   0 BUs  — Platform Admin/Entity Admin, already unscoped: nothing to pick, nothing to send.
+  //   1 BU   — theirs, implicitly; the list page navigates straight here without prompting.
+  //   many   — must come from the URL, and must be one they actually hold.
+  const buParam = searchParams.get('buId');
+  const requiresBu = businessUnits.length > 0;
+  const selectedBuId =
+    businessUnits.length === 0 ? ''
+    : businessUnits.length === 1 ? String(businessUnits[0].id)
+    : (businessUnits.some((bu) => String(bu.id) === buParam) ? buParam : '');
+  const buReady = !requiresBu || !!selectedBuId;
+  const selectedBuName = businessUnits.find((bu) => String(bu.id) === selectedBuId)?.name ?? null;
+
+  // Reachable only by hand-editing the URL — the picker lives on the list page, so send them
+  // back to it rather than stranding them on an upload that can never be submitted.
+  useEffect(() => {
+    if (!buReady) navigate(ROUTES.MONTHLY_COSTS, { replace: true });
+  }, [buReady, navigate]);
+
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
+    disabled: !buReady,
     accept: {
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
       'application/vnd.ms-excel': ['.xls'],
@@ -308,8 +334,12 @@ const MonthlyCostImport = () => {
   };
 
   const handleImport = () => {
+    if (!buReady) {
+      showError('Select the Business Unit you are uploading for before importing.');
+      return;
+    }
     const fileToImport = isSynced ? buildSyncedFile() : file;
-    importMutation.mutate(fileToImport, {
+    importMutation.mutate({ file: fileToImport, businessUnitId: selectedBuId || null }, {
       onSuccess: (res) => {
         const data     = res?.data ?? res ?? {};
         const imported = data.imported ?? 0;
@@ -341,10 +371,14 @@ const MonthlyCostImport = () => {
     >
       <PageHeader
         title="Import Monthly Costs"
-        description="Upload an Excel or CSV file to bulk-import monthly cost records"
+        description={
+          selectedBuName
+            ? `Upload an Excel or CSV file to bulk-import monthly cost records for ${selectedBuName}`
+            : 'Upload an Excel or CSV file to bulk-import monthly cost records'
+        }
         actions={
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={handleSync} disabled={isSyncing}>
+            <Button variant="outline" size="sm" onClick={handleSync} disabled={isSyncing || !buReady}>
               {isSyncing ? (
                 <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
               ) : (
@@ -388,17 +422,23 @@ const MonthlyCostImport = () => {
         <CardContent className="pt-6">
           <div
             {...getRootProps()}
-            className={`flex cursor-pointer flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed px-6 py-12 transition-colors
-              ${isDragActive ? 'border-primary bg-primary/5' : 'border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/40'}`}
+            className={`flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed px-6 py-12 transition-colors
+              ${!buReady
+                ? 'cursor-not-allowed border-muted-foreground/25 opacity-60'
+                : isDragActive
+                  ? 'cursor-pointer border-primary bg-primary/5'
+                  : 'cursor-pointer border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/40'}`}
           >
             <input {...getInputProps()} />
-            <FileSpreadsheet className={`h-10 w-10 ${isDragActive ? 'text-primary' : 'text-muted-foreground'}`} />
+            <FileSpreadsheet className={`h-10 w-10 ${isDragActive && buReady ? 'text-primary' : 'text-muted-foreground'}`} />
             {isDragActive ? (
               <p className="text-sm font-medium text-primary">Drop the file here…</p>
             ) : (
               <>
                 <p className="text-sm font-medium">Drag &amp; drop your Excel file here</p>
-                <p className="text-xs text-muted-foreground">or click to browse · .xlsx, .xls, .csv accepted</p>
+                <p className="text-xs text-muted-foreground">
+                  or click to browse · .xlsx, .xls, .csv accepted
+                </p>
               </>
             )}
           </div>
@@ -478,7 +518,7 @@ const MonthlyCostImport = () => {
             <Button
               size="sm"
               onClick={handleImport}
-              disabled={importMutation.isPending || (!file && !isSynced) || validRows.length === 0 || invalidRows.length > 0}
+              disabled={importMutation.isPending || !buReady || (!file && !isSynced) || validRows.length === 0 || invalidRows.length > 0}
             >
               {importMutation.isPending ? (
                 <>

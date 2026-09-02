@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
-import { useNavigate, useSearchParams, Outlet } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams, Outlet } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
 import { Plus, Pencil, Eye, Search, Download, Upload, Users, GitBranch } from 'lucide-react';
 import { useServicePOs } from '@/hooks/useServicePOs';
@@ -12,9 +12,10 @@ import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
 import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
 import { useCanWrite } from '@/hooks/usePermissions';
 import { useAuth } from '@/hooks/useAuth';
-import { NO_COMPANY_ROLES } from '@/constants/roleHierarchy';
+import { NO_COMPANY_ROLES, ROLE_NAMES } from '@/constants/roleHierarchy';
 import { downloadServicePoSample } from '@/utils/servicePoSample';
 import { useDebounce } from '@/hooks/useDebounce';
+import { useMasterBuFilter } from '@/hooks/useMasterBuFilter';
 import { buildPath, ROUTES } from '@/constants/routes';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
@@ -22,6 +23,7 @@ import PageHeader from '@/components/common/PageHeader';
 import StatusBadge from '@/components/common/StatusBadge';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
+import BusinessUnitFilter from '@/components/common/BusinessUnitFilter';
 import ServicePOHierarchyDrawer from './ServicePOHierarchyDrawer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -79,10 +81,16 @@ const TruncatedCell = ({ value, maxWidth = '150px', className, wrap = false }) =
 
 const ServicePOList = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { hasRole } = useAuth();
   // Cosmetic only — picks the admin (per-row "BU Name") template vs the BU-scoped one; the
   // backend enforces the real BU authorization per row.
   const isCompanyLessActor = hasRole(...NO_COMPANY_ROLES);
+  // An Admin's list is deliberately NOT narrowed by the global BU switcher (see
+  // servicePOs.api.js's crossBuScopeForAdmin) — they get every BU's POs at once, so they're the
+  // only role that needs a BU filter of their own here. Every other role, BU Admin included, is
+  // already scoped to one BU by the switcher, which makes the filter redundant for them.
+  const isAdminActor = hasRole(ROLE_NAMES.ADMIN);
   const { data: companiesData } = useCompanies({ limit: 200 }, { enabled: isCompanyLessActor });
   // List rows aren't guaranteed to embed the company relation, so resolve company_id against the
   // BU list as a fallback.
@@ -91,6 +99,13 @@ const ServicePOList = () => {
     (companiesData?.data ?? []).forEach((c) => map.set(String(c.id), c.company_name));
     return map;
   }, [companiesData]);
+  const buOptions = useMemo(
+    () => [
+      { label: 'All BUs', value: 'all' },
+      ...(companiesData?.data ?? []).map((c) => ({ label: c.company_name, value: String(c.id) })),
+    ],
+    [companiesData]
+  );
   const [searchParams] = useSearchParams();
   const categoryIdParam = searchParams.get('service_category_id');
   const servicePoIdParam = searchParams.get('service_po_id');
@@ -103,6 +118,7 @@ const ServicePOList = () => {
   const [categoryFilter, setCategoryFilter] = useState(categoryIdParam || 'all');
   const [typeFilter, setTypeFilter] = useState('all');
   const [poFilter, setPoFilter] = useState(servicePoIdParam || 'all');
+  const [buFilter, setBuFilter] = useState('all');
   const [filtersOpen, setFiltersOpen] = useState(!!categoryIdParam || !!servicePoIdParam);
   const [exporting, setExporting] = useState(false);
   const [hierarchyTarget, setHierarchyTarget] = useState(null);
@@ -113,15 +129,24 @@ const ServicePOList = () => {
 
   const [sorting, setSorting] = useState([]);
 
+  // Every non-Admin role reaches Service POs through the X-Company-Id header, so a login mapped
+  // to more than one BU gets the standard master BU filter here. An Admin is excluded: their list
+  // is deliberately cross-BU (crossBuScopeForAdmin) and they narrow with the ?company_id filter
+  // below instead — running both would fight over the same axis.
+  const { buId, setBuId, showBuFilter, isBuFiltered, resetBuId, buParams } = useMasterBuFilter({ enabled: !isAdminActor });
+
   const params = {
     page,
     limit,
+    ...buParams,
     ...(statusFilter !== 'all' && { status: statusFilter }),
     ...(debouncedSearch && { search: debouncedSearch }),
     ...(clientFilter !== 'all' && { client_id: clientFilter }),
     ...(categoryFilter !== 'all' && { service_category_id: categoryFilter }),
     ...(typeFilter !== 'all' && { service_type_id: typeFilter }),
     ...(poFilter !== 'all' && { service_po_id: poFilter }),
+    // Admin-only, and the only BU narrowing they get — no X-Company-Id is sent for them.
+    ...(isAdminActor && buFilter !== 'all' && { company_id: buFilter }),
     ...(sorting[0] && { sortBy: sorting[0].id, sortOrder: sorting[0].desc ? 'desc' : 'asc' }),
   };
 
@@ -182,6 +207,8 @@ const ServicePOList = () => {
     typeFilter !== 'all' ? 1 : 0,
     poFilter !== 'all' ? 1 : 0,
     statusFilter !== 'all' ? 1 : 0,
+    isAdminActor && buFilter !== 'all' ? 1 : 0,
+    isBuFiltered ? 1 : 0,
   ].reduce((a, b) => a + b, 0);
 
   const clearFilters = () => {
@@ -190,6 +217,8 @@ const ServicePOList = () => {
     setTypeFilter('all');
     setPoFilter('all');
     setStatusFilter('all');
+    setBuFilter('all');
+    resetBuId();
     setPage(1);
   };
 
@@ -227,7 +256,12 @@ const ServicePOList = () => {
               <Button
                 size="sm"
                 title="Map Employees"
-                onClick={() => navigate(buildPath(ROUTES.SERVICE_PO_MAP_EMPLOYEES, { id: row.original.id }))}
+                // `from` is what the mapping screen's Back button returns to — without it that
+                // screen falls back to the PO detail page, which is not where this click came from.
+                onClick={() => navigate(
+                  buildPath(ROUTES.SERVICE_PO_MAP_EMPLOYEES, { id: row.original.id }),
+                  { state: { from: location.pathname + location.search } }
+                )}
                 className="h-6 w-6 p-0 bg-emerald-500 hover:bg-emerald-600 text-white rounded transition-colors"
               >
                 <Users className="h-3 w-3" />
@@ -402,7 +436,33 @@ const ServicePOList = () => {
         }
       />
 
-      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[460px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
+      {/* Six filters (Business Unit, Client, Category, Service Type, Service PO, Status) on one
+          row — the panel's default caps at 4 per row, which wrapped the last two onto a second
+          line. Steps down on narrower viewports rather than squeezing six selects into a phone
+          width. A single-BU login has five (no BU cell) and still fills one row. */}
+      <FilterPanel
+        isOpen={filtersOpen}
+        maxHeightClass="max-h-[460px]"
+        gridClassName="grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 w-full"
+        onClear={clearFilters}
+        showClear={activeFilterCount > 0}
+      >
+          {isAdminActor && (
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs">Business Unit</Label>
+              <SearchableSelect
+                options={buOptions}
+                value={buFilter}
+                onValueChange={(v) => { setBuFilter(v); setPage(1); }}
+                placeholder="All BUs"
+                searchPlaceholder="Search BU..."
+                className="h-9 w-full text-sm bg-white"
+              />
+            </div>
+          )}
+          {showBuFilter && (
+            <BusinessUnitFilter value={buId} onChange={(v) => { setBuId(v); setPage(1); }} />
+          )}
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs">Client</Label>
             <SearchableSelect
@@ -494,7 +554,7 @@ const ServicePOList = () => {
             <SearchableSelect
               showSearch={false}
               options={[
-                { label: "All status", value: "all" },
+                { label: "All statuses", value: "all" },
                 { label: "In Progress", value: "in-progress" },
                 { label: "Completed", value: "completed" },
                 { label: "On Hold", value: "on-hold" },
@@ -504,7 +564,7 @@ const ServicePOList = () => {
               ]}
               value={statusFilter}
               onValueChange={(v) => { setStatusFilter(v); setPage(1); }}
-              placeholder="All status"
+              placeholder="All statuses"
               className="h-9 w-full text-sm bg-white"
             />
           </div>

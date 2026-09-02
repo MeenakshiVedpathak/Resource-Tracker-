@@ -1,4 +1,4 @@
-import apiClient from '@/services/apiClient';
+import apiClient, { explicitBuScope } from '@/services/apiClient';
 import { RBAC_MOCK_ENABLED } from '@/mocks/rbacMockConfig';
 import {
   delay, getDb, persist, nextId, paginate, findEmployeeById, findRoleById, findRoleByName,
@@ -16,8 +16,8 @@ import { ROLE_NAMES, SENIOR_ROLE_NAMES } from '@/constants/roleHierarchy';
 // convention) and the exact GET /employees role-filter behavior are the agreed target, not a
 // confirmed live contract. Confirm against the real Swagger/controller once implemented.
 
-// Real GET /employees may or may not support server-side `role_id` filtering yet — this bounds
-// how many employees the Role filter/column can consider if it doesn't: enough for a typical
+// Real GET /employees supports `business_unit_id` but not `role_id` filtering — this bounds
+// how many employees the Role filter/column can consider: enough for a typical
 // company, but a match past this bound silently won't be found. Same bound this app already
 // accepted for the equivalent pre-migration workaround.
 const REAL_ROLE_FILTER_SCAN_LIMIT = 100;
@@ -51,6 +51,10 @@ const mockGetAll = async (params) => {
       if (params?.role_id) {
         const targetId = Number(params.role_id);
         if (!(e.role_ids ?? []).includes(targetId)) return false;
+      }
+      if (params?.company_id) {
+        const targetBuId = Number(params.company_id);
+        if (!(e.business_unit_ids ?? []).includes(targetBuId)) return false;
       }
       return true;
     },
@@ -159,17 +163,31 @@ const mockDelete = async (id) => {
   return { success: true, message: 'Employee deleted successfully.' };
 };
 
-// Real GET /employees may not support server-side role filtering yet — scan a bounded batch and
-// filter/re-paginate client-side against the `roles` the endpoint returns inline on each row.
-const realGetAllByRole = async (roleId, employeeParams) => {
+// Business Unit filtering is server-side now (GET /employees?business_unit_id=<id>), but role
+// filtering still has no server-side equivalent — scan a bounded batch and resolve the role
+// predicate client-side against the `roles` array the endpoint returns inline on each row. When a
+// BU is selected too it goes on the batch request itself, so the scan starts from an already
+// BU-filtered set and the two filters intersect (rather than the bound being spent on employees
+// the chosen BU excludes anyway).
+const realGetAllFiltered = async ({ roleId, businessUnitId }, employeeParams) => {
   const { status, search } = employeeParams;
   const batchRes = await apiClient
-    .get('/employees', { params: { page: 1, limit: REAL_ROLE_FILTER_SCAN_LIMIT, status, search } })
+    .get('/employees', {
+      params: {
+        page: 1,
+        limit: REAL_ROLE_FILTER_SCAN_LIMIT,
+        status,
+        search,
+        ...(businessUnitId != null && { business_unit_id: businessUnitId }),
+      },
+    })
     .then((r) => r.data);
-  const targetId = Number(roleId);
-  // Strict `===` previously missed matches whenever the backend serializes role ids as strings —
+  const targetRoleId = roleId != null ? Number(roleId) : null;
+  // Strict `===` previously missed matches whenever the backend serializes ids as strings —
   // coerce both sides so a real numeric id always matches regardless of wire type.
-  const matches = (batchRes?.data ?? []).filter((e) => (e.roles ?? []).some((r) => Number(r.id) === targetId));
+  const matches = (batchRes?.data ?? []).filter(
+    (e) => targetRoleId == null || (e.roles ?? []).some((r) => Number(r.id) === targetRoleId)
+  );
 
   const page = Number(employeeParams.page) || 1;
   const limit = Number(employeeParams.limit) || 10;
@@ -186,15 +204,35 @@ const realGetAllByRole = async (roleId, employeeParams) => {
 export const employeesApi = {
   getAll: async (params) => {
     if (RBAC_MOCK_ENABLED) return mockGetAll(params);
-    const { role_id, ...employeeParams } = params ?? {};
-    if (role_id) return realGetAllByRole(role_id, employeeParams);
-    return apiClient.get('/employees', { params: employeeParams }).then((r) => r.data);
+    const { role_id, business_unit_id, company_id, ...employeeParams } = params ?? {};
+    const buId = business_unit_id ?? company_id;
+    if (role_id) {
+      return realGetAllFiltered({ roleId: role_id, businessUnitId: buId }, employeeParams);
+    }
+    // explicitBuScope(null) suppresses X-Company-Id for cross-BU logins (Admin/Entity Admin/
+    // Platform Admin) so that "All Business Units" truly returns all employees, not just those
+    // scoped to whatever BU the navbar's global switcher happens to have active.
+    // explicitBuScope(undefined) would leave the interceptor's global header in place — that's
+    // the wrong behaviour when the caller explicitly asked for the unscoped list.
+    const scope = buId && buId !== 'all' ? explicitBuScope(buId) : explicitBuScope(null);
+    return apiClient
+      .get('/employees', {
+        params: { ...employeeParams, ...(buId != null && buId !== 'all' && { business_unit_id: buId }) },
+        ...scope,
+      })
+      .then((r) => r.data);
   },
 
-  getActiveList: () => {
-    if (RBAC_MOCK_ENABLED) return mockGetActiveList();
-    return apiClient.get('/employees/active/list').then((r) => r.data?.data ?? []);
+  getActiveList: (buId) => {
+    if (RBAC_MOCK_ENABLED) return mockGetActiveList(buId);
+    // explicitBuScope(null) suppresses X-Company-Id for cross-BU logins, same as getAll above.
+    const scope = buId && buId !== 'all' ? explicitBuScope(buId) : explicitBuScope(null);
+    return apiClient.get('/employees/active/list', { ...scope }).then((r) => r.data?.data ?? r.data ?? []);
   },
+
+  // NOTE: Service PO → Map Employees does NOT source its employee list from here. The generic
+  // employee endpoints scope to the caller's own team or their selected BU, which is the wrong
+  // scope for PO mapping — see employeeServicePOMapping.api.js's getServicePOOptions.
 
   getById: async (id) => {
     if (RBAC_MOCK_ENABLED) return mockGetById(id);

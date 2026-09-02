@@ -15,7 +15,7 @@ import { useActiveServicePOs } from '@/hooks/useServicePOs';
 import { useRoles } from '@/hooks/useRoles';
 import { useCompanies } from '@/hooks/useCompanies';
 import { employeesApi } from '@/api/employees.api';
-import { useCanWrite } from '@/hooks/usePermissions';
+import { useCanWrite, useCanManageEmployeeRecords } from '@/hooks/usePermissions';
 import { useAuth } from '@/hooks/useAuth';
 import { ROLE_NAMES, getAssignableRoleNames, ADDITIONAL_ROLE_NAMES, SENIOR_ROLE_NAMES } from '@/constants/roleHierarchy';
 import { useNotification } from '@/hooks/useNotification';
@@ -91,6 +91,7 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
   const [selectedRoleIds, setSelectedRoleIds] = useState([]);
   const [selectedBuIds, setSelectedBuIds] = useState([]);
   const [selectedPoIds, setSelectedPoIds] = useState([]);
+  const [poSearch, setPoSearch] = useState('');
 
   // GET /employees (list) carries no role/BU data, so the row this dialog opened from can't seed
   // the checkboxes — fetch the employee's actual mappings fresh instead (see
@@ -125,6 +126,30 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
       setSelectedPoIds(existingMapping.mapped_service_po_ids ?? []);
     }
   }, [existingMapping]);
+
+  const filteredPOs = useMemo(() => {
+    const q = poSearch.trim().toLowerCase();
+    const list = activePOs ?? [];
+    if (!q) return list;
+    return list.filter((po) =>
+      [po.service_po_name, po.service_po_code, po.client?.client_name]
+        .some((v) => (v ?? '').toLowerCase().includes(q))
+    );
+  }, [activePOs, poSearch]);
+
+  // Select-all deliberately acts on the CURRENT filter only: ticking it adds just the visible
+  // rows, clearing it removes only those. Selections hidden by the search are never touched,
+  // which is what makes "search, tick some, search again, tick more" behave the way users expect.
+  const filteredPoIds = useMemo(() => filteredPOs.map((po) => po.id), [filteredPOs]);
+  const selectedFilteredCount = filteredPoIds.filter((id) => selectedPoIds.includes(id)).length;
+  const allFilteredSelected = filteredPoIds.length > 0 && selectedFilteredCount === filteredPoIds.length;
+  const someFilteredSelected = selectedFilteredCount > 0 && !allFilteredSelected;
+
+  const toggleAllFilteredPos = (checked) => {
+    setSelectedPoIds((prev) => (checked
+      ? Array.from(new Set([...prev, ...filteredPoIds]))
+      : prev.filter((id) => !filteredPoIds.includes(id))));
+  };
 
   const toggleRole = (roleId) => {
     if (roleId === employeeRoleId) return;
@@ -177,7 +202,7 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
         </DialogHeader>
         {/* min-h-0 is what lets this flex child actually shrink and scroll instead of
             stretching the dialog past the viewport. */}
-        <div className="flex-1 min-h-0 space-y-4 overflow-y-auto">
+        <div className="flex-1 min-h-0 space-y-4 overflow-y-auto px-1 -mx-1">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <Label className="text-xs">Roles</Label>
@@ -231,11 +256,38 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
             <div className="flex items-center gap-2">
               <Label className="text-xs">Service POs</Label>
               <Badge variant="secondary" className="text-[10px]">Company-wide access</Badge>
+              {selectedPoIds.length > 0 && (
+                <span className="text-[11px] text-muted-foreground">
+                  {selectedPoIds.length} selected
+                  {/* While filtering, say how many of the VISIBLE rows are picked — otherwise the
+                      total alone looks wrong next to a short filtered list. */}
+                  {poSearch.trim() && selectedFilteredCount !== selectedPoIds.length
+                    ? ` (${selectedFilteredCount} shown)`
+                    : ''}
+                </span>
+              )}
+            </div>
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by Service PO, code or client..."
+                className="pl-9 h-9 text-sm"
+                value={poSearch}
+                onChange={(e) => setPoSearch(e.target.value)}
+              />
             </div>
             <Table containerClassName="border rounded-md max-h-[260px]">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className={cn('w-10', STICKY_HEAD)}></TableHead>
+                    <TableHead className={cn('w-10', STICKY_HEAD)}>
+                      <Checkbox
+                        checked={allFilteredSelected ? true : (someFilteredSelected ? 'indeterminate' : false)}
+                        onCheckedChange={(v) => toggleAllFilteredPos(v === true)}
+                        disabled={filteredPoIds.length === 0}
+                        aria-label="Select all Service POs"
+                        title={allFilteredSelected ? 'Clear all' : 'Select all'}
+                      />
+                    </TableHead>
                     <TableHead className={STICKY_HEAD}>Service PO</TableHead>
                     <TableHead className={STICKY_HEAD}>Client</TableHead>
                   </TableRow>
@@ -247,14 +299,16 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
                         Loading…
                       </TableCell>
                     </TableRow>
-                  ) : (activePOs ?? []).length === 0 ? (
+                  ) : filteredPOs.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={3} className="text-center text-sm text-muted-foreground py-6">
-                        No active Service POs found.
+                        {poSearch.trim()
+                          ? 'No Service POs match your search.'
+                          : 'No active Service POs found.'}
                       </TableCell>
                     </TableRow>
                   ) : (
-                    (activePOs ?? []).map((po) => (
+                    filteredPOs.map((po) => (
                       <TableRow key={po.id}>
                         <TableCell>
                           <Checkbox checked={selectedPoIds.includes(po.id)} onCheckedChange={() => togglePo(po.id)} />
@@ -315,6 +369,7 @@ const EmployeeList = () => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [roleFilter, setRoleFilter] = useState('all');
+  const [buFilter, setBuFilter] = useState('all');
   const [mappingTarget, setMappingTarget] = useState(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
@@ -327,6 +382,7 @@ const EmployeeList = () => {
     limit,
     status: statusFilter,
     ...(roleFilter !== 'all' && { role_id: roleFilter }),
+    ...(buFilter !== 'all' && { business_unit_id: buFilter }),
     ...(debouncedSearch && debouncedSearch.length >= 3 && { search: debouncedSearch }),
     ...(sorting[0] && { sortBy: sorting[0].id, sortOrder: sorting[0].desc ? 'desc' : 'asc' }),
   };
@@ -357,12 +413,30 @@ const EmployeeList = () => {
         )
       : rolesData?.data ?? [];
   const isHR = useCanWrite();
+  // BU Admin / BU Head are on this screen for the "Map Roles & Business Units" action ONLY —
+  // they may not create an employee, edit one, bulk-import, or activate/deactivate. Their role
+  // carries Read & Write (that's what grants them the mapping dialog), so isHR alone can't tell
+  // them apart — see useCanManageEmployeeRecords and the matching route guard on
+  // EMPLOYEE_NEW / EMPLOYEE_EDIT.
+  const canManageEmployees = useCanManageEmployeeRecords();
 
-  const activeFilterCount = (statusFilter !== 'all' ? 1 : 0) + (roleFilter !== 'all' ? 1 : 0);
+  // Same list already loaded for the mapping dialog's Business Units table — no extra request.
+  // Only offered as a filter when there's an actual choice to make: the backend scopes this list
+  // to the caller, so a single-BU login would otherwise get a dropdown with one option, and a
+  // BU-scoped session is already limited to that BU anyway. A multi-BU login (Admin, or a BU Head
+  // mapped to several) is exactly who needs it.
+  const buFilterOptions = companiesData?.data ?? [];
+  const showBuFilter = buFilterOptions.length > 1;
+
+  const activeFilterCount =
+    (statusFilter !== 'all' ? 1 : 0)
+    + (roleFilter !== 'all' ? 1 : 0)
+    + (buFilter !== 'all' ? 1 : 0);
 
   const clearFilters = () => {
     setStatusFilter('all');
     setRoleFilter('all');
+    setBuFilter('all');
     setPage(1);
   };
 
@@ -375,14 +449,16 @@ const EmployeeList = () => {
       cell: ({ row }) => {
         return isHR ? (
           <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-            <Button
-              size="sm"
-              title="Edit"
-              onClick={() => navigate(buildPath(ROUTES.EMPLOYEE_EDIT, { id: row.original.id }))}
-              className="h-6 w-6 p-0 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
-            >
-              <Pencil className="h-3 w-3" />
-            </Button>
+            {canManageEmployees && (
+              <Button
+                size="sm"
+                title="Edit"
+                onClick={() => navigate(buildPath(ROUTES.EMPLOYEE_EDIT, { id: row.original.id }))}
+                className="h-6 w-6 p-0 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
+              >
+                <Pencil className="h-3 w-3" />
+              </Button>
+            )}
             <Button
               size="sm"
               className="h-6 w-6 p-0 bg-teal-600 hover:bg-teal-700 text-white rounded transition-colors"
@@ -419,23 +495,24 @@ const EmployeeList = () => {
       size: 180,
       cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="160px" />,
     }),
-    columnHelper.accessor('businessUnits', {
-      header: 'Business Units',
-      size: 180,
-      cell: (info) => {
-        const list = info.row.original.businessUnits ?? [];
-        if (!list.length) return <span className="text-sm text-muted-foreground">—</span>;
-        return (
-          <div className="flex flex-wrap gap-1">
-            {list.map((bu, i) => (
-              <Badge key={bu.id ?? i} variant="outline" className="text-xs">
-                {bu.name ?? bu.company_name}
-              </Badge>
-            ))}
-          </div>
-        );
-      },
-    }),
+    // Business Units column hidden — kept here so it can be restored when needed.
+    // columnHelper.accessor('businessUnits', {
+    //   header: 'Business Units',
+    //   size: 180,
+    //   cell: (info) => {
+    //     const list = info.row.original.businessUnits ?? [];
+    //     if (!list.length) return <span className="text-sm text-muted-foreground">—</span>;
+    //     return (
+    //       <div className="flex flex-wrap gap-1">
+    //         {list.map((bu, i) => (
+    //           <Badge key={bu.id ?? i} variant="outline" className="text-xs">
+    //             {bu.name ?? bu.company_name}
+    //           </Badge>
+    //         ))}
+    //       </div>
+    //     );
+    //   },
+    // }),
     columnHelper.accessor('total_experience', {
       header: 'Total Experience',
       size: 120,
@@ -464,7 +541,11 @@ const EmployeeList = () => {
     columnHelper.accessor('status', {
       header: 'Status',
       size: 140,
-      cell: (info) => <StatusToggle employee={info.row.original} />,
+      // Activating/deactivating an employee is a change to the RECORD, not a mapping — read-only
+      // badge for a login that can't manage records, same data either way.
+      cell: (info) => (canManageEmployees
+        ? <StatusToggle employee={info.row.original} />
+        : <StatusBadge status={info.getValue()} />),
     }),
     columnHelper.accessor('is_timesheet_approval_required', {
       header: 'Timesheet Approval',
@@ -480,7 +561,7 @@ const EmployeeList = () => {
         );
       },
     }),
-  ], [navigate, isHR]);
+  ], [navigate, isHR, canManageEmployees]);
 
   const handleSearch = (e) => {
     setSearch(e.target.value);
@@ -523,7 +604,7 @@ const EmployeeList = () => {
           setIsPreviewOpen(true);
         }
       } catch (error) {
-        showError('Failed to parse Excel file');
+        showError('Failed to parse Excel file.');
       } finally {
         if (fileInputRef.current) fileInputRef.current.value = '';
       }
@@ -558,6 +639,7 @@ const EmployeeList = () => {
   const getExportParams = () => ({
     status: statusFilter,
     ...(roleFilter !== 'all' && { role_id: roleFilter }),
+    ...(buFilter !== 'all' && { business_unit_id: buFilter }),
     ...(debouncedSearch && debouncedSearch.length >= 3 && { search: debouncedSearch }),
   });
 
@@ -832,12 +914,12 @@ const EmployeeList = () => {
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
-            {isHR && (
+            {canManageEmployees && (
               <Button variant="outline" size="sm" className="h-9 gap-1.5 bg-white" onClick={handleDownloadSample}>
                 <Download className="h-4 w-4" /> Sample
               </Button>
             )}
-            {isHR && (
+            {canManageEmployees && (
               <>
                 <input
                   type="file"
@@ -858,7 +940,7 @@ const EmployeeList = () => {
                 </Button>
               </>
             )}
-            {isHR && !isPreviewOpen && !importResult && (
+            {canManageEmployees && !isPreviewOpen && !importResult && (
               <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => navigate(ROUTES.EMPLOYEE_NEW)}>
                 <Plus className="mr-1.5 h-4 w-4" /> Add Employee
               </Button>
@@ -908,6 +990,25 @@ const EmployeeList = () => {
             className="h-9 w-full text-sm bg-white"
           />
         </div>
+        {showBuFilter && (
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Business Unit</Label>
+            <SearchableSelect
+              options={[
+                { label: 'All business units', value: 'all' },
+                ...buFilterOptions.map((c) => ({
+                  label: c.company_name,
+                  value: String(c.id),
+                })),
+              ]}
+              value={buFilter}
+              onValueChange={(v) => { setBuFilter(v); setPage(1); }}
+              placeholder="All business units"
+              searchPlaceholder="Search business unit..."
+              className="h-9 w-full text-sm bg-white"
+            />
+          </div>
+        )}
       </FilterPanel>
 
       {importResult ? (
@@ -990,7 +1091,7 @@ const EmployeeList = () => {
           onSortingChange={(s) => { setSorting(s); setPage(1); }}
           onPageChange={setPage}
           onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
-          onRowClick={(row) => navigate(buildPath(ROUTES.EMPLOYEE_EDIT, { id: row.id }))}
+          onRowClick={canManageEmployees ? (row) => navigate(buildPath(ROUTES.EMPLOYEE_EDIT, { id: row.id })) : undefined}
         />
       )}
 

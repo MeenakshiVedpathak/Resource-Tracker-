@@ -14,6 +14,8 @@ import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
+import BusinessUnitFilter from '@/components/common/BusinessUnitFilter';
+import { useMasterBuFilter } from '@/hooks/useMasterBuFilter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -78,9 +80,14 @@ const ProjectList = () => {
   const [importResult, setImportResult] = useState(null);
   const [previewLimit, setPreviewLimit] = useState(5);
  
+  // Business Unit filter. Renders only for a login mapped to more than one BU, and starts on
+  // "All Business Units" — the list opens cross-BU and narrowing to one is an explicit choice.
+  const { buId, setBuId, showBuFilter, isBuFiltered, resetBuId, buParams } = useMasterBuFilter();
+
   const params = {
     page,
     limit,
+    ...buParams,
     ...(statusFilter !== 'all' && { status: statusFilter }),
     ...(debouncedSearch && { search: debouncedSearch }),
     ...(sorting[0] && { sort_by: sorting[0].id, sort_order: sorting[0].desc ? 'DESC' : 'ASC' }),
@@ -91,10 +98,11 @@ const ProjectList = () => {
   const projects = data?.data ?? [];
   const meta = data?.meta ?? {};
  
-  const activeFilterCount = statusFilter !== 'all' ? 1 : 0;
+  const activeFilterCount = (statusFilter !== 'all' ? 1 : 0) + (isBuFiltered ? 1 : 0);
  
   const clearFilters = () => {
     setStatusFilter('all');
+    resetBuId();
     setPage(1);
   };
  
@@ -206,7 +214,7 @@ const ProjectList = () => {
         const ws = wb.Sheets[wsname];
         const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
         if (data.length === 0) {
-          showError('That file has no rows to import');
+          showError('That file has no rows to import.');
           return;
         }
         setPreviewData(data);
@@ -214,7 +222,7 @@ const ProjectList = () => {
         setPreviewFile(file);
         setIsPreviewOpen(true);
       } catch (error) {
-        showError('Failed to parse Excel file');
+        showError('Failed to parse Excel file.');
       } finally {
         if (fileInputRef.current) fileInputRef.current.value = '';
       }
@@ -222,7 +230,7 @@ const ProjectList = () => {
     // Mirrors the parse path's input reset — without it, re-picking the file that just failed
     // fires no change event and the button looks dead.
     reader.onerror = () => {
-      showError('Failed to read the selected file');
+      showError('Failed to read the selected file.');
       if (fileInputRef.current) fileInputRef.current.value = '';
     };
     reader.readAsBinaryString(file);
@@ -383,6 +391,9 @@ const ProjectList = () => {
       />
  
       <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[200px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
+        {showBuFilter && (
+          <BusinessUnitFilter value={buId} onChange={(v) => { setBuId(v); setPage(1); }} />
+        )}
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Status</Label>
           <div className="flex items-center rounded-md border overflow-hidden h-9 text-sm bg-white">

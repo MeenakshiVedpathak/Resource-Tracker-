@@ -6,6 +6,7 @@ import { Upload, Info, Download, Trash2, Loader2, RefreshCw } from 'lucide-react
 import * as XLSX from 'xlsx';
 import { useTimesheetHistory, useDeleteTimesheetImport, useDeleteTimesheetImports } from '@/hooks/useTimesheets';
 import { useCanViewOriginalData } from '@/hooks/usePermissions';
+import { useAuth } from '@/hooks/useAuth';
 import { timesheetsApi } from '@/api/timesheets.api';
 import { QUERY_KEYS } from '@/constants/queryKeys';
 import { useNotification } from '@/hooks/useNotification';
@@ -34,6 +35,7 @@ const TimesheetList = () => {
   const queryClient = useQueryClient();
   const { success, error: showError } = useNotification();
   const canViewOriginal = useCanViewOriginalData();
+  const { businessUnits } = useAuth();
 
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
@@ -41,6 +43,8 @@ const TimesheetList = () => {
   const currentDate = new Date();
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
   const [isSyncDialogOpen, setIsSyncDialogOpen] = useState(false);
+  const [syncBuOpen, setSyncBuOpen] = useState(false);
+  const [syncBuId, setSyncBuId] = useState('');
   const [selectedMonth, setSelectedMonth] = useState(String(currentDate.getMonth() + 1));
   const [selectedYear, setSelectedYear] = useState(String(currentDate.getFullYear()));
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -98,6 +102,25 @@ const TimesheetList = () => {
     const currentMonth = new Date().toLocaleString('default', { month: 'short' });
     XLSX.utils.book_append_sheet(wb, ws, currentMonth);
     XLSX.writeFile(wb, 'Timesheet_Sample.xlsx');
+  };
+
+  // Work Log sync lands rows against exactly one BU (same as the Monthly Costs import), so ask
+  // which — but only when the user actually holds more than one. A single-BU user syncs against
+  // theirs implicitly; an account with none (Platform Admin/Entity Admin) is already unscoped.
+  const handleSyncClick = () => {
+    if (businessUnits.length > 1) {
+      setSyncBuId('');
+      setSyncBuOpen(true);
+      return;
+    }
+    setSyncBuId(businessUnits.length === 1 ? String(businessUnits[0].id) : '');
+    setIsSyncDialogOpen(true);
+  };
+
+  const confirmSyncBu = () => {
+    if (!syncBuId) return;
+    setSyncBuOpen(false);
+    setIsSyncDialogOpen(true);
   };
 
   const handleDelete = () => {
@@ -190,8 +213,10 @@ const TimesheetList = () => {
       },
     }),
     columnHelper.accessor('total_rows', {
-      header: 'Total',
-      size: 70,
+      // Sized to fit the label plus its sort icon — DataTable pins size as a hard width and
+      // truncates the header text inside it, so anything narrower renders as "T...".
+      header: 'Total Rows',
+      size: 130,
       cell: (info) => (
         <span className="tabular-nums text-sm">{info.getValue() ?? '—'}</span>
       ),
@@ -217,7 +242,7 @@ const TimesheetList = () => {
     // }),
     columnHelper.accessor('total_employees', {
       header: 'Employees',
-      size: 100,
+      size: 130,
       cell: (info) => {
         const v = info.getValue();
         return (
@@ -279,7 +304,7 @@ const TimesheetList = () => {
               <Download className="mr-1.5 h-4 w-4" />
               Download Sample
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setIsSyncDialogOpen(true)}>
+            <Button variant="outline" size="sm" onClick={handleSyncClick}>
               <RefreshCw className="mr-1.5 h-4 w-4" />
               Sync Employee Work Logs
             </Button>
@@ -415,7 +440,48 @@ const TimesheetList = () => {
         </DialogContent>
       </Dialog>
 
-      <SyncWorkLogsDialog open={isSyncDialogOpen} onOpenChange={setIsSyncDialogOpen} />
+      {/* Asked only when the user holds more than one BU — see handleSyncClick. Mirrors the
+          Monthly Costs "Which Business Unit?" prompt. */}
+      <Dialog open={syncBuOpen} onOpenChange={setSyncBuOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Which Business Unit?</DialogTitle>
+            <DialogDescription>
+              Employee work logs are synced into the Timesheet for this Business Unit.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-2">
+            <Label className="mb-2 block">Business Unit</Label>
+            <SearchableSelect
+              options={businessUnits.map((bu) => ({ label: bu.name, value: String(bu.id) }))}
+              value={syncBuId}
+              onValueChange={setSyncBuId}
+              placeholder="Select a Business Unit"
+              searchPlaceholder="Search business unit..."
+              showSearch={businessUnits.length > 6}
+              className="h-9 w-full text-sm"
+            />
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => setSyncBuOpen(false)}>
+              Cancel
+            </Button>
+            <Button size="sm" onClick={confirmSyncBu} disabled={!syncBuId}>
+              <RefreshCw className="mr-1.5 h-4 w-4" />
+              Continue
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <SyncWorkLogsDialog
+        open={isSyncDialogOpen}
+        onOpenChange={setIsSyncDialogOpen}
+        buId={syncBuId ? Number(syncBuId) : null}
+        buName={businessUnits.find((bu) => String(bu.id) === syncBuId)?.name ?? null}
+      />
 
       <ConfirmDialog
         open={!!deleteTarget}

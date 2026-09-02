@@ -17,7 +17,7 @@ const currentDate = new Date();
 // preview comes from the employee Work Log drafts for that month instead of a file. Reuses
 // ImportPreviewPanel and the existing confirm endpoint — both sources feed the same import
 // pipeline on the backend.
-const SyncWorkLogsDialog = ({ open, onOpenChange }) => {
+const SyncWorkLogsDialog = ({ open, onOpenChange, buId = null, buName = null }) => {
   const [month, setMonth] = useState(String(currentDate.getMonth() + 1));
   const [year, setYear] = useState(String(currentDate.getFullYear()));
   const [preview, setPreview] = useState(null);
@@ -36,7 +36,7 @@ const SyncWorkLogsDialog = ({ open, onOpenChange }) => {
   };
 
   const handleSync = () => {
-    syncMutation.mutate({ month, year }, {
+    syncMutation.mutate({ month, year, buId }, {
       onSuccess: (result) => {
         setPreview({
           importId: result?.importId,
@@ -53,7 +53,7 @@ const SyncWorkLogsDialog = ({ open, onOpenChange }) => {
   };
 
   const handleConfirm = () => {
-    confirmMutation.mutate(preview.importId, {
+    confirmMutation.mutate({ importId: preview.importId, buId }, {
       onSuccess: (res) => {
         const inserted = res?.data?.insertedRows ?? res?.insertedRows ?? preview.validCount;
         success(`${inserted} row(s) synced to the Timesheet.`);
@@ -69,7 +69,9 @@ const SyncWorkLogsDialog = ({ open, onOpenChange }) => {
         <DialogHeader>
           <DialogTitle>Sync Employee Work Logs</DialogTitle>
           <DialogDescription>
-            Pull pending employee-entered work logs into the official Timesheet for a given month.
+            {buName
+              ? `Pull pending ${buName} work logs into the official Timesheet for a given month.`
+              : 'Pull pending employee-entered work logs into the official Timesheet for a given month.'}
           </DialogDescription>
         </DialogHeader>
 

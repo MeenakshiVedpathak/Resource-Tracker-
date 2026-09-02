@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import { useActiveServicePOs } from '@/hooks/useServicePOs';
+import { useSelectableBusinessUnits } from '@/hooks/useSelectableBusinessUnits';
 import { useResourceBudgetMappedEmployees, useResourceBudgetsByServicePo, useBulkSaveResourceBudgets } from '@/hooks/useResourceBudgets';
 import { useCanWrite } from '@/hooks/usePermissions';
 import { useNotification } from '@/hooks/useNotification';
@@ -108,7 +109,27 @@ const ResourceBudgetPage = () => {
   const canManage = useCanWrite();
   const { success, error: showError } = useNotification();
 
-  const { data: servicePos = [] } = useActiveServicePOs();
+  // Business Unit → Service PO, in that order. A login with more than one selectable BU picks the
+  // BU first and the PO list is then scoped to it; a login with a single BU (or none to choose
+  // from) goes straight to the PO picker exactly as before — see hooks/useSelectableBusinessUnits.
+  const { units: businessUnits, canFilter: showBuStep } = useSelectableBusinessUnits();
+  const [buId, setBuId] = useState('');
+
+  // With the BU step on there is no meaningful PO list until a BU is chosen, so don't fetch one.
+  const buChosen = !showBuStep || !!buId;
+
+  const { data: servicePos = [] } = useActiveServicePOs(buChosen, showBuStep ? buId : undefined);
+
+  const buOptions = businessUnits.map((bu) => ({ label: bu.name, value: String(bu.id) }));
+
+  // Switching BU invalidates the current PO selection — that PO belongs to the previous BU and
+  // would otherwise keep its resource matrix on screen under the new BU's heading.
+  const handleBuChange = (v) => {
+    if (!v) return;
+    setBuId(v);
+    setServicePoId('');
+    cancelAdding();
+  };
 
   const { data: mappedEmployees = [] } = useResourceBudgetMappedEmployees(servicePoId);
   const { data: poBudgets = [], isPending: isBudgetsLoading } = useResourceBudgetsByServicePo(servicePoId);
@@ -288,7 +309,23 @@ const ResourceBudgetPage = () => {
       <PageHeader
         title="Resource Budget"
         actions={
-          <div className="flex flex-wrap items-center gap-2">
+          // Both selects share one width so the pair looks even, and stay on a single line
+          // (flex-nowrap) instead of the BU select stacking above the PO one. justify-end pins
+          // them to the header's right edge; if the header is too narrow, the parent PageHeader
+          // wraps the whole pair below the title as a unit rather than splitting the two.
+          <div className="flex flex-nowrap items-center justify-end gap-2">
+            {showBuStep && (
+              <SearchableSelect
+                options={buOptions}
+                value={buId}
+                onValueChange={handleBuChange}
+                placeholder="Select a Business Unit"
+                searchPlaceholder="Search business unit…"
+                emptyMessage="No Business Units available."
+                showSearch={buOptions.length > 6}
+                className="w-64 bg-white"
+              />
+            )}
             <SearchableSelect
               options={servicePoOptions}
               value={servicePoId}
@@ -297,10 +334,11 @@ const ResourceBudgetPage = () => {
                 setServicePoId(v);
                 cancelAdding();
               }}
+              disabled={!buChosen}
               placeholder="Select a Service PO"
               searchPlaceholder="Search Service PO…"
               emptyMessage="No Service POs available."
-              className="w-72 bg-white"
+              className="w-64 bg-white"
             />
           </div>
         }
@@ -309,8 +347,12 @@ const ResourceBudgetPage = () => {
       {!servicePoId ? (
         <EmptyState
           icon={Users}
-          title="Select a Service PO"
-          description="Choose a Service PO above to see every month resource hours have been added for it."
+          title={buChosen ? 'Select a Service PO' : 'Select a Business Unit'}
+          description={
+            buChosen
+              ? 'Choose a Service PO above to see every month resource hours have been added for it.'
+              : 'Choose a Business Unit above, then pick one of its Service POs.'
+          }
         />
       ) : (
         <DataTable

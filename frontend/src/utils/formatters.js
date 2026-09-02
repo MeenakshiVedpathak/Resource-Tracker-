@@ -37,9 +37,54 @@ export const formatHours = (hours) => {
   return `${Number(hours).toFixed(1)}h`;
 };
 
-// Plain numeric hours for dense grids (Monthly Summary table) — "0" instead of "—" for empty
-// cells, and no unnecessary trailing zeros (8, 7.5, 2.25), unlike formatHours above.
-export const formatHoursCell = (hours) => Number(Number(hours ?? 0).toFixed(2)).toString();
+// Decimal hours -> "Xh Ym", for the My Work Log page. A raw decimal (e.g. "6.69 hrs") reads
+// as base-100 and also carries JS float noise from summing (6.6899999999999995) — converting
+// to actual hours/minutes (base 60) fixes both. Kept compact (h/m, not "hrs"/"min") so it also
+// fits the small month-tile grid, not just the stat tiles.
+//
+// Both units are always shown, including the zero ones: an empty day reads "0h 0m" and a whole
+// day "8h 0m", not "0m"/"8h". Dropping the empty unit made the same tile change shape as hours
+// were entered ("0m" -> "8h 20m"), which read as a different kind of value rather than the same
+// one updating.
+export const formatHoursMinutes = (hours) => {
+  const totalMinutes = Math.round(Number(hours || 0) * 60);
+  // Sign handled up front — Math.floor(-20/60)/-20%60 would otherwise render "-1h -20m".
+  const sign = totalMinutes < 0 ? '-' : '';
+  const abs = Math.abs(totalMinutes);
+  return `${sign}${Math.floor(abs / 60)}h ${abs % 60}m`;
+};
+
+// Editable hour-cell text box parsing, shared by WorkLogEntryTable's HourStepper and
+// SummaryRow's Day View grid cells (My Work Log / Monthly Summary). The box's text reads/writes
+// "H.MM" — hours and minutes, base 60 — not a decimal fraction of an hour: the digits after the
+// dot ARE the minutes. A single fractional digit is shorthand for tens of minutes (".6" = 60min,
+// ".8" = 80min), so a value that overflows 60 minutes carries into the next hour (4.8 -> 5h20m,
+// re-displayed as "5.2"); two digits are literal minutes (".24" = 24min). Only the box's own
+// text uses this notation — parseHourMinuteInput returns real decimal hours, and callers keep
+// storing/summing/capping that real value, so the rest of the app (sums, caps, the backend
+// payload) is unaffected.
+export const parseHourMinuteInput = (raw) => {
+  const str = String(raw ?? '').trim();
+  if (str === '') return NaN;
+  const [wholeStr, fracStr = ''] = str.split('.');
+  const wholeHours = wholeStr === '' || wholeStr === '-' ? 0 : Number(wholeStr);
+  if (!Number.isFinite(wholeHours)) return NaN;
+  const fracDigits = fracStr.replace(/\D/g, '');
+  let minutes = 0;
+  if (fracDigits.length === 1) minutes = Number(fracDigits) * 10;
+  else if (fracDigits.length >= 2) minutes = Number(fracDigits.slice(0, 2));
+  const carriedHours = Math.floor(minutes / 60);
+  const remainderMinutes = minutes % 60;
+  return wholeHours + carriedHours + remainderMinutes / 60;
+};
+
+export const formatHourMinuteValue = (decimalHours) => {
+  const totalMinutes = Math.max(0, Math.round(Number(decimalHours || 0) * 60));
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  if (m === 0) return String(h);
+  return m % 10 === 0 ? `${h}.${m / 10}` : `${h}.${String(m).padStart(2, '0')}`;
+};
 
 export const formatPercentage = (value, decimals = 1) => {
   if (value == null) return '—';

@@ -40,14 +40,14 @@ export const MONTHLY_HOURS_CAP = 31 * 24;
 // value; Time-based entries compute Hours from segments instead, so that field is left optional
 // here and validated separately via validateSegments (see isTimeBased below).
 const hoursTaskSchema = z.object({
-  service_po_id: z.string().min(1, 'Service PO is required.'),
+  service_po_id: z.string().min(1, 'Service PO is required'),
   hierarchy_node_id: z.string().optional(),
   hours: z.coerce
     .number({ invalid_type_error: 'Hours is required.' })
     .gt(0, 'Hours must be greater than 0.')
-    .max(DAILY_HOURS_CAP, 'Hours cannot exceed 12 per day.'),
-  description: z.string().min(1, 'Description is required.').max(1000),
-  timesheet_date: z.string().min(1, 'Date is required.'),
+    .max(DAILY_HOURS_CAP, 'Hours cannot exceed 12 per day'),
+  description: z.string().min(1, 'Description is required').max(1000),
+  timesheet_date: z.string().min(1, 'Date is required'),
 });
 const timeBasedTaskSchema = hoursTaskSchema.extend({ hours: z.coerce.number().optional() });
 
@@ -196,11 +196,14 @@ const WorkLogEntryModal = ({ open, onOpenChange, date, task }) => {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="flex max-h-[calc(100dvh-2rem)] max-w-md flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>{isEdit ? 'Edit Work Log Entry' : 'Add Work Log Entry'}</DialogTitle>
         </DialogHeader>
 
+        {/* Only this middle band scrolls — the title above and the buttons below stay in place
+            however short the viewport is. */}
+        <div className="-mr-2 min-h-0 flex-1 space-y-4 overflow-y-auto pr-2">
         {task?.status === 'rejected' && (
           <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
             <p className="font-medium">
@@ -212,7 +215,6 @@ const WorkLogEntryModal = ({ open, onOpenChange, date, task }) => {
         )}
 
         {isMonthly ? (
-          <>
             <div className="rounded-md border bg-muted/30 p-4 text-sm text-muted-foreground">
               This is a Month-Wise entry. Edit and resubmit it from the Monthly tab on{' '}
               <Link
@@ -224,12 +226,7 @@ const WorkLogEntryModal = ({ open, onOpenChange, date, task }) => {
               </Link>
               .
             </div>
-            <DialogFooter>
-              <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>Close</Button>
-            </DialogFooter>
-          </>
         ) : (
-        <>
         <Form {...form}>
           <form className="space-y-4">
             <FormField
@@ -344,8 +341,15 @@ const WorkLogEntryModal = ({ open, onOpenChange, date, task }) => {
             />
           </form>
         </Form>
+        )}
+        </div>
 
-        <DialogFooter className="gap-2">
+        {isMonthly ? (
+          <DialogFooter className="shrink-0">
+            <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>Close</Button>
+          </DialogFooter>
+        ) : (
+        <DialogFooter className="shrink-0 gap-2">
           <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={isSaving}>
             Cancel
           </Button>
@@ -369,7 +373,6 @@ const WorkLogEntryModal = ({ open, onOpenChange, date, task }) => {
               : (isEdit && task?.status === 'rejected' ? 'Save & Resubmit' : 'Save & Close')}
           </Button>
         </DialogFooter>
-        </>
         )}
       </DialogContent>
     </Dialog>

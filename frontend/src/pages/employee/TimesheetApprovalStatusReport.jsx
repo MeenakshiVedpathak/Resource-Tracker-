@@ -13,6 +13,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { SearchableSelect } from '@/components/ui/searchable-select';
+import { ROUTES } from '@/constants/routes';
 import PageHeader from '@/components/common/PageHeader';
 import EmptyState from '@/components/common/EmptyState';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
@@ -224,6 +225,8 @@ const TimesheetApprovalStatusReport = () => {
     <div className="space-y-4">
       <PageHeader
         title="Timesheet Approval Status Report"
+        backTo={ROUTES.REPORTS}
+        backLabel="Back to Report"
         description="Hours logged and their approval status, broken down by Project → Service PO → Parent → Child. Read-only — use My Team to approve."
         actions={
           <FilterToggleButton

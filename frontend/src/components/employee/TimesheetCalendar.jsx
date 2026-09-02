@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/utils/cn';
+import { formatHourMinuteValue } from '@/utils/formatters';
 import { EXPECTED_DAILY_HOURS } from './WorkLogEntryModal';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -114,7 +115,7 @@ const TimesheetCalendar = ({ month, year, onMonthChange, calendarByDate, selecte
                 <Skeleton className="mt-0.5 h-2.5 w-8" />
               ) : inMonth && (status === 'completed' || status === 'partial' || status === 'none') ? (
                 <span className={cn('text-[10px] font-medium', isSelected && 'text-primary-foreground/85')}>
-                  {Number(dayInfo?.totalHours ?? 0)}
+                  {formatHourMinuteValue(dayInfo?.totalHours ?? 0)}
                 </span>
               ) : inMonth && status === 'weekend' ? (
                 <span className={cn('text-[9px]', isSelected && 'text-primary-foreground/85')}>—</span>

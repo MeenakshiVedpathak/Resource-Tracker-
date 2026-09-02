@@ -20,6 +20,7 @@ import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import DataTable from '@/components/common/DataTable';
+import { ROUTES } from '@/constants/routes';
 import PageHeader from '@/components/common/PageHeader';
 import EmptyState from '@/components/common/EmptyState';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
@@ -220,6 +221,8 @@ const EmployeeWorkLogTimeReport = () => {
     <div className="space-y-4">
       <PageHeader
         title="Work Log Time Report"
+        backTo={ROUTES.REPORTS}
+        backLabel="Back to Report"
         description="Individual time-stamped work log entries — one row per entry, never aggregated."
         actions={
           <div className="flex items-center gap-3">
@@ -319,7 +322,7 @@ const EmployeeWorkLogTimeReport = () => {
             value={filterValue}
             onValueChange={(v) => v && setFilterValue(v)}
             placeholder="All Projects & Service POs"
-            searchPlaceholder="Search project or service PO..."
+            searchPlaceholder="Search project or Service PO..."
             className="h-9 w-full text-sm bg-white"
           />
         </div>

@@ -213,7 +213,12 @@ const FORMS_BY_ROLE = {
   [ROLE_NAMES.PLATFORM_ADMIN]: {},
   [ROLE_NAMES.ADMIN]: { 'Entity Management': [{ id: 101, name: 'Entity Master' }, { id: 102, name: 'BU Master' }] },
   [ROLE_NAMES.ENTITY_ADMIN]: { 'Entity Management': [{ id: 101, name: 'Entity Master' }, { id: 102, name: 'BU Master' }] },
+  // 'BU Master' mirrors the Role-Form Mapping this tier gets on the real backend: a BU Admin
+  // needs to SEE the BUs they map employees against, but reaches that screen READ-ONLY — no Add
+  // BU, no edit, no activate/deactivate (see pages/companies/CompanyList.jsx's
+  // useCanManageBusinessUnits and the Admin/Entity-Admin guard on COMPANY_NEW/COMPANY_EDIT).
   [ROLE_NAMES.BU_ADMIN]: {
+    'Entity Management': [{ id: 102, name: 'BU Master' }],
     Administration: [{ id: 103, name: 'Roles' }, { id: 104, name: 'Forms' }],
     People: [{ id: 105, name: 'Employee Master' }],
   },
@@ -222,6 +227,7 @@ const FORMS_BY_ROLE = {
   // is the only mint path and its accounts are legacy `users` rows that can't log in), kept for
   // parity/robustness.
   [ROLE_NAMES.BU_HEAD]: {
+    'Entity Management': [{ id: 102, name: 'BU Master' }],
     Administration: [{ id: 103, name: 'Roles' }, { id: 104, name: 'Forms' }],
     People: [{ id: 105, name: 'Employee Master' }],
   },

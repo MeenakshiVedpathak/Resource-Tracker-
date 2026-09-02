@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import { useActiveServicePOs } from '@/hooks/useServicePOs';
+import { useSelectableBusinessUnits } from '@/hooks/useSelectableBusinessUnits';
 import { useCostBudgetsByServicePo, useCreateCostBudget } from '@/hooks/useCostBudgets';
 import { useCanWrite } from '@/hooks/usePermissions';
 import { useNotification } from '@/hooks/useNotification';
@@ -117,8 +118,30 @@ const CostBudgetList = () => {
 
   const canManage = useCanWrite();
 
-  const { data: servicePos = [] } = useActiveServicePOs();
+  // Business Unit → Service PO, in that order. A login with more than one selectable BU picks the
+  // BU first and the PO list is then scoped to it, so they never have to find one PO among every
+  // BU's. A login with a single BU (or none to choose from) skips the step entirely and goes
+  // straight to the PO picker, exactly as before — see hooks/useSelectableBusinessUnits.
+  const { units: businessUnits, canFilter: showBuStep } = useSelectableBusinessUnits();
+  const [buId, setBuId] = useState('');
+
+  // Gate: with the BU step on, there is no meaningful PO list until a BU is chosen, so don't
+  // fetch one. Without it, the PO list loads immediately as it always did.
+  const buChosen = !showBuStep || !!buId;
+
+  const { data: servicePos = [] } = useActiveServicePOs(buChosen, showBuStep ? buId : undefined);
   const selectedPo = servicePos.find((po) => String(po.id) === servicePoId);
+
+  const buOptions = businessUnits.map((bu) => ({ label: bu.name, value: String(bu.id) }));
+
+  // Switching BU invalidates the current PO selection — that PO belongs to the previous BU and
+  // would otherwise keep its budget rows on screen under the new BU's heading.
+  const handleBuChange = (v) => {
+    if (!v) return;
+    setBuId(v);
+    setServicePoId('');
+    setAddingInline(false);
+  };
 
   // Every month ever saved for this PO (active + inactive) — the whole point of this screen is
   // to show all added months at once, not force picking one month at a time.
@@ -182,7 +205,23 @@ const CostBudgetList = () => {
       <PageHeader
         title="Cost Budget"
         actions={
-          <div className="flex flex-wrap items-center gap-2">
+          // Both selects share one width so the pair looks even, and stay on a single line
+          // (flex-nowrap) instead of the BU select stacking above the PO one. justify-end pins
+          // them to the header's right edge; if the header is too narrow, the parent PageHeader
+          // wraps the whole pair below the title as a unit rather than splitting the two.
+          <div className="flex flex-nowrap items-center justify-end gap-2">
+            {showBuStep && (
+              <SearchableSelect
+                options={buOptions}
+                value={buId}
+                onValueChange={handleBuChange}
+                placeholder="Select a Business Unit"
+                searchPlaceholder="Search business unit…"
+                emptyMessage="No Business Units available."
+                showSearch={buOptions.length > 6}
+                className="w-64 bg-white"
+              />
+            )}
             <SearchableSelect
               options={servicePoOptions}
               value={servicePoId}
@@ -191,10 +230,11 @@ const CostBudgetList = () => {
                 setServicePoId(v);
                 setAddingInline(false);
               }}
+              disabled={!buChosen}
               placeholder="Select a Service PO"
               searchPlaceholder="Search Service PO…"
               emptyMessage="No Service POs available."
-              className="w-72 bg-white"
+              className="w-64 bg-white"
             />
           </div>
         }
@@ -208,8 +248,12 @@ const CostBudgetList = () => {
 
       {!servicePoId ? (
         <EmptyState
-          title="Select a Service PO"
-          description="Choose a Service PO above to see every month a cost budget has been added for it."
+          title={buChosen ? 'Select a Service PO' : 'Select a Business Unit'}
+          description={
+            buChosen
+              ? 'Choose a Service PO above to see every month a cost budget has been added for it.'
+              : 'Choose a Business Unit above, then pick one of its Service POs.'
+          }
         />
       ) : (
         <>

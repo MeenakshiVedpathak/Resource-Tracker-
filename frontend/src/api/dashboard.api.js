@@ -1,4 +1,13 @@
-import apiClient from '@/services/apiClient';
+import apiClient, { explicitBuScope } from '@/services/apiClient';
+
+// The Analytics Dashboard's Business Unit filter. `buId` is a pseudo-param, same convention as
+// Reports and the Masters: the page puts it in its params object like any other filter (so it
+// lands in the React Query key and refetches on change), but it is pulled out here and applied
+// as the request's BU scope (X-Company-Id) rather than a query-string field.
+const withBuScope = (url, params = {}) => {
+  const { buId, ...query } = params;
+  return apiClient.get(url, { params: query, ...explicitBuScope(buId) });
+};
 
 export const dashboardApi = {
   getStats: (params) =>
@@ -11,8 +20,8 @@ export const dashboardApi = {
     apiClient.get('/dashboard/top-employees-by-po', { params }).then((r) => r.data),
 
   getAnalytics: (params) =>
-    apiClient.get('/dashboard/analytics', { params }).then((r) => r.data?.data ?? {}),
+    withBuScope('/dashboard/analytics', params).then((r) => r.data?.data ?? {}),
 
   getAnalytics2: (params) =>
-    apiClient.get('/dashboard/analytics2', { params }).then((r) => r.data?.data ?? {}),
+    withBuScope('/dashboard/analytics2', params).then((r) => r.data?.data ?? {}),
 };

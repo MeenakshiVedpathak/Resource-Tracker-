@@ -1,5 +1,6 @@
 import { Clock, Timer, FolderKanban } from 'lucide-react';
 import { cn } from '@/utils/cn';
+import { formatHoursMinutes } from '@/utils/formatters';
 import { EXPECTED_DAILY_HOURS } from './WorkLogEntryModal';
 
 const StatTile = ({ icon: Icon, iconClassName, label, value, sub }) => (
@@ -28,14 +29,14 @@ const WorkLogDaySummary = ({ totalHours, activeProjectsCount }) => {
           icon={Clock}
           iconClassName="bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400"
           label="Worked"
-          value={`${totalHours} hrs`}
-          sub={`of ${EXPECTED_DAILY_HOURS} hrs`}
+          value={formatHoursMinutes(totalHours)}
+          sub={`of ${formatHoursMinutes(EXPECTED_DAILY_HOURS)}`}
         />
         <StatTile
           icon={Timer}
           iconClassName="bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400"
           label="Remaining"
-          value={`${remaining} hrs`}
+          value={formatHoursMinutes(remaining)}
           sub="to complete"
         />
         <StatTile

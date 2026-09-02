@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, Clock, Download, RotateCcw, Search } from 'l
 import PageHeader from '@/components/common/PageHeader';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
+import BusinessUnitFilter, { ALL_BUS } from '@/components/common/BusinessUnitFilter';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -41,12 +42,33 @@ const ServicePoMonthlyBudgetPage = () => {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const debouncedSearch = useDebounce(search, 400);
 
+  // Business Unit filter — the Reports-suite convention (components/common/BusinessUnitFilter +
+  // explicitBuScope), not the Masters' useMasterBuFilter: this screen is consumed by every
+  // BU-mapped login, so the filter renders whenever the login has ANY mapped BU rather than only
+  // above two. Defaults to "All Business Units", same as every report. The control hides itself
+  // for a login with no BU at all (Platform Admin/Entity Admin), which is already unscoped.
+  const [buId, setBuId] = useState(ALL_BUS);
+  const isBuFiltered = buId !== ALL_BUS;
+
   const { data: activeClients = [] } = useActiveClients();
   const { data: activePOs = [] } = useActiveServicePOs();
   const { data: activeServiceTypes = [] } = useActiveServiceTypes();
   const { data: activeServiceCategories = [] } = useActiveServiceCategories();
-  const monthSummaries = useServicePoMonthlyBudgetYearSummary(year);
-  const { data: records = [], isPending: isListLoading } = useServicePoMonthlyBudgetList(selectedMonth, year);
+  const monthSummaries = useServicePoMonthlyBudgetYearSummary(year, buId);
+  const { data: records = [], isPending: isListLoading } = useServicePoMonthlyBudgetList(selectedMonth, year, buId);
+
+  // The budget records above are BU-scoped by the request itself, but the Service PO lookups this
+  // page also relies on — the "Service PO" dropdown and the month strip's "x/y filled"
+  // denominator — come from the shared, cross-BU active-PO cache, which takes no BU parameter.
+  // Narrow them here off each PO's own company_id so a chosen BU doesn't leave the dropdown
+  // offering POs that can't appear in the grid, or an x/y ratio counting another BU's POs.
+  // Guarded on the field actually being present in the payload: if it isn't, fall back to the
+  // full list rather than silently rendering an empty dropdown and a 0 denominator.
+  const buScopedPOs = useMemo(() => {
+    if (!isBuFiltered) return activePOs;
+    if (!activePOs.some((po) => po.company_id != null)) return activePOs;
+    return activePOs.filter((po) => String(po.company_id) === String(buId));
+  }, [activePOs, isBuFiltered, buId]);
 
   const isCurrentPeriod = selectedMonth === CURRENT_MONTH && year === CURRENT_YEAR;
   const countdown = useMemo(() => getInvoiceMasterCountdown(selectedMonth, year), [selectedMonth, year]);
@@ -64,7 +86,7 @@ const ServicePoMonthlyBudgetPage = () => {
     : activeServiceTypes.filter((t) => String(t.service_category_id) === categoryFilter);
 
   // Type (or Category, if no type chosen yet) → Service PO
-  const filteredPOs = activePOs.filter((po) => {
+  const filteredPOs = buScopedPOs.filter((po) => {
     const poTypeId = po.serviceType?.id != null ? String(po.serviceType.id) : null;
     if (typeFilter !== 'all') return poTypeId === typeFilter;
     if (categoryFilter !== 'all') return poTypeId != null && typeCategoryMap.get(poTypeId) === categoryFilter;
@@ -78,7 +100,7 @@ const ServicePoMonthlyBudgetPage = () => {
       return null;
     }
     const ids = new Set();
-    for (const po of activePOs) {
+    for (const po of buScopedPOs) {
       if (poFilter !== 'all' && String(po.id) !== poFilter) continue;
       const poTypeId = po.serviceType?.id != null ? String(po.serviceType.id) : null;
       if (typeFilter !== 'all' && poTypeId !== typeFilter) continue;
@@ -86,7 +108,7 @@ const ServicePoMonthlyBudgetPage = () => {
       ids.add(po.id);
     }
     return ids;
-  }, [activePOs, categoryFilter, typeFilter, poFilter, typeCategoryMap]);
+  }, [buScopedPOs, categoryFilter, typeFilter, poFilter, typeCategoryMap]);
 
   const handleCategoryChange = (v) => {
     setCategoryFilter(v);
@@ -100,10 +122,21 @@ const ServicePoMonthlyBudgetPage = () => {
   };
 
   const activeFilterCount = [clientFilter, categoryFilter, typeFilter, poFilter]
-    .filter((v) => v !== 'all').length;
+    .filter((v) => v !== 'all').length + (isBuFiltered ? 1 : 0);
 
   const clearFilters = () => {
     setClientFilter('all');
+    setCategoryFilter('all');
+    setTypeFilter('all');
+    setPoFilter('all');
+    setBuId(ALL_BUS);
+  };
+
+  // Narrowing the BU can strand a Service PO / Type / Category selection that belongs to a BU no
+  // longer in scope, which reads as an empty grid with no obvious cause — reset the PO chain the
+  // same way changing Category resets Type and PO.
+  const handleBuChange = (v) => {
+    setBuId(v);
     setCategoryFilter('all');
     setTypeFilter('all');
     setPoFilter('all');
@@ -188,7 +221,18 @@ const ServicePoMonthlyBudgetPage = () => {
         }
       />
 
-      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[460px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
+      {/* All five filters on one row (the panel's default caps at 4 per row, which wrapped
+          Service PO onto a second line once Business Unit was added). Steps down on narrower
+          viewports rather than squeezing five selects into a phone width. */}
+      <FilterPanel
+        isOpen={filtersOpen}
+        maxHeightClass="max-h-[460px]"
+        gridClassName="grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 w-full"
+        onClear={clearFilters}
+        showClear={activeFilterCount > 0}
+      >
+        <BusinessUnitFilter value={buId} onChange={handleBuChange} className="h-9 w-full text-sm" />
+
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Client</Label>
           <SearchableSelect
@@ -260,7 +304,7 @@ const ServicePoMonthlyBudgetPage = () => {
         onSelectMonth={setSelectedMonth}
         currentMonth={CURRENT_MONTH}
         currentYear={CURRENT_YEAR}
-        totalPOCount={activePOs.length}
+        totalPOCount={buScopedPOs.length}
       />
 
       <ServicePoMonthlyBudgetList
@@ -272,6 +316,7 @@ const ServicePoMonthlyBudgetPage = () => {
         search={debouncedSearch}
         clientFilter={clientFilter}
         poFilterIds={allowedPoIds}
+        buId={buId}
         onEdit={(poId) => setEditSheet({ servicePoId: String(poId), month: selectedMonth, year })}
         onExportStateChange={handleExportStateChange}
         countdown={countdown}

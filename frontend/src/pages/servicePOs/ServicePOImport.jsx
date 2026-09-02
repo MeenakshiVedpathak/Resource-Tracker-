@@ -103,7 +103,7 @@ const ServicePOImport = () => {
     <div className="max-w-5xl">
       <PageHeader
         title="Import Service POs"
-        description="Bulk-import Service Purchase Orders from an Excel or CSV file"
+        description="Bulk-import Service POs from an Excel or CSV file"
         actions={
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={() => downloadServicePoSample(isCompanyLessActor)}>

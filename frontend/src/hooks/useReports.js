@@ -314,6 +314,37 @@ export const useMonthlyHoursTrend = (params) => {
   });
 };
 
+// Backend requires exactly one date mode: {month, year} XOR {startDate, endDate} — 422 otherwise,
+// so the request is held until exactly one is supplied. Server-paginated AND server-sorted: unlike
+// the client-paginated reports above, page/limit/sortBy/sortOrder go straight to the backend and
+// the response's `meta` drives the footer.
+export const useResourceUtilizationTrend = (params) => {
+  const hasMonthYear = !!(params?.month && params?.year);
+  const hasDateRange = !!(params?.startDate && params?.endDate);
+  return useQuery({
+    queryKey: QUERY_KEYS.REPORT_RESOURCE_UTILIZATION_TREND(params),
+    queryFn: () => reportsApi.getResourceUtilizationTrend(params),
+    enabled: hasMonthYear !== hasDateRange,
+    staleTime: 0,
+    placeholderData: (prev) => prev,
+    retry: false,
+  });
+};
+
+// Same contract as useResourceUtilizationTrend above.
+export const useServicePOHoursBudget = (params) => {
+  const hasMonthYear = !!(params?.month && params?.year);
+  const hasDateRange = !!(params?.startDate && params?.endDate);
+  return useQuery({
+    queryKey: QUERY_KEYS.REPORT_SERVICE_PO_HOURS_BUDGET(params),
+    queryFn: () => reportsApi.getServicePOHoursBudget(params),
+    enabled: hasMonthYear !== hasDateRange,
+    staleTime: 0,
+    placeholderData: (prev) => prev,
+    retry: false,
+  });
+};
+
 // Backend requires exactly one date mode: {month, year} XOR {startDate, endDate}.
 export const useEmployeeBenchPercentage = (params) => {
   const hasMonthYear = !!(params?.month && params?.year);
@@ -327,3 +358,28 @@ export const useEmployeeBenchPercentage = (params) => {
     retry: false,
   });
 };
+
+export const useEmployeeWorkLogHoursSummary = (params) => {
+  const hasDate = !!params?.date;
+  const hasMonthYear = !!(params?.month && params?.year);
+  return useQuery({
+    queryKey: QUERY_KEYS.REPORT_EMPLOYEE_WORK_LOG_HOURS_SUMMARY(params),
+    queryFn: () => reportsApi.getEmployeeWorkLogHoursSummary(params),
+    enabled: hasDate || hasMonthYear,
+    staleTime: 0,
+    placeholderData: (prev) => prev,
+  });
+};
+
+export const useEmployeeWorkLogHoursSummaryDetails = (employeeId, params, isModalOpen = true) => {
+  const hasDate = !!params?.date;
+  const hasMonthYear = !!(params?.month && params?.year);
+  return useQuery({
+    queryKey: QUERY_KEYS.REPORT_EMPLOYEE_WORK_LOG_HOURS_SUMMARY_DETAILS(employeeId, params),
+    queryFn: () => reportsApi.getEmployeeWorkLogHoursSummaryDetails(employeeId, params),
+    enabled: !!employeeId && isModalOpen && (hasDate || hasMonthYear),
+    staleTime: 0,
+    placeholderData: (prev) => prev,
+  });
+};
+

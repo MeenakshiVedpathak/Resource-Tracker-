@@ -5,11 +5,15 @@ import { QUERY_KEYS } from '@/constants/queryKeys';
 // One row per day in the month: { date, totalHours, hasEntries, futureDisabled }. totalHours
 // here is pending+synced combined — the calendar aggregate doesn't expose a per-day
 // pending/synced breakdown, so this view intentionally doesn't distinguish them (see plan).
-export const useEmployeeCalendar = (month, year) =>
+// `options` is a plain useQuery passthrough — Employee Dashboard's "Last 7 Days" strip uses it
+// to pull the PREVIOUS month only on the days where that window actually reaches back into it
+// (see EmployeeDashboard.jsx), rather than firing a second request every day of the month.
+export const useEmployeeCalendar = (month, year, options = {}) =>
   useQuery({
     queryKey: QUERY_KEYS.EMPLOYEE_WORKLOG_CALENDAR(month, year),
     queryFn: () => employeeWorkLogApi.getCalendar({ month, year }),
     placeholderData: (prev) => prev,
+    ...options,
   });
 
 // Fetched on demand for whichever date is selected.

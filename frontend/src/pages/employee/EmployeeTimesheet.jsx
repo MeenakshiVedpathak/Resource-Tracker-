@@ -12,6 +12,7 @@ import {
 } from '@/hooks/useEmployeeWorkLog';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
+import { formatHoursMinutes } from '@/utils/formatters';
 import { buildMonthlySummaryRows, buildDayEntries, validateDayEntries } from '@/utils/employeeMonthlySummary';
 import TimesheetCalendar from '@/components/employee/TimesheetCalendar';
 import MonthlyHoursCard from '@/components/employee/MonthlyHoursCard';
@@ -378,7 +379,7 @@ const EmployeeTimesheet = () => {
                 </span>
                 <h3 className="text-base font-semibold">
                   {dayjs(pseudoMonthDate(monthlyYear, selectedMonth)).format('MMMM YYYY')}
-                  <span className="ml-2 font-normal text-muted-foreground">{totalHoursThisMonth} hrs</span>
+                  <span className="ml-2 font-normal text-muted-foreground">{formatHoursMinutes(totalHoursThisMonth)}</span>
                 </h3>
               </div>
 

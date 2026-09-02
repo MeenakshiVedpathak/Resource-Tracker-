@@ -108,7 +108,12 @@ const ServicePODetail = () => {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => navigate(buildPath(ROUTES.SERVICE_PO_MAP_EMPLOYEES, { id }))}
+                // `from` tells the mapping screen's Back button to come back here rather than
+                // assuming this page as every caller's origin (the list links there too).
+                onClick={() => navigate(
+                  buildPath(ROUTES.SERVICE_PO_MAP_EMPLOYEES, { id }),
+                  { state: { from: buildPath(ROUTES.SERVICE_PO_DETAIL, { id }) } }
+                )}
               >
                 <Users className="mr-1.5 h-4 w-4" />
                 Map Employees

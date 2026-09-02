@@ -16,6 +16,7 @@ import StatusBadge from '@/components/common/StatusBadge';
 import { Badge } from '@/components/ui/badge';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
+import BusinessUnitFilter, { ALL_BUS } from '@/components/common/BusinessUnitFilter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -29,7 +30,7 @@ const exportToExcel = (rows) => {
   const header = [
     'PO Code', 'PO Name', 'Client Name', 'Service Type', 'Category', 'Status', 'Billable',
     'Invoice Freq.', 'Start Date', 'End Date', 'Account Manager', 'PO Value',
-    'Expected Hours', 'Hours Delivered Before Month', 'Available Hours',
+    'Expected Hours', 'Hours Delivered Before Month', /* 'Available Hours', */
     'Billable Amount', 'Invoiced Amount', 'Billed Amount', 'Unbilled Amount',
   ];
   const dataRows = rows.map((r) => [
@@ -47,7 +48,7 @@ const exportToExcel = (rows) => {
     r.po_value != null ? Number(r.po_value) : '',
     r.expected_man_hours != null ? Number(r.expected_man_hours) : '',
     r.hours_delivered_before_month != null ? Number(r.hours_delivered_before_month) : '',
-    r.available_hours != null ? Number(r.available_hours) : '',
+    // r.available_hours != null ? Number(r.available_hours) : '',
     r.monthly_billable_amount != null ? Number(r.monthly_billable_amount) : '',
     r.invoiced_amount != null ? Number(r.invoiced_amount) : '',
     r.billed_amount != null ? Number(r.billed_amount) : '',
@@ -144,11 +145,11 @@ const columns = [
     size: 180,
     cell: (info) => <ValueCell value={info.getValue()} format="hours" />,
   }),
-  columnHelper.accessor('available_hours', {
-    header: 'Available Hours',
-    size: 150,
-    cell: (info) => <ValueCell value={info.getValue()} format="hours" />,
-  }),
+  // columnHelper.accessor('available_hours', {
+  //   header: 'Available Hours',
+  //   size: 150,
+  //   cell: (info) => <ValueCell value={info.getValue()} format="hours" />,
+  // }),
   columnHelper.accessor('monthly_billable_amount', {
     header: 'Billable Amount',
     size: 160,
@@ -194,6 +195,7 @@ const InvoicePOSummary = () => {
   const [dateRange, setDateRange] = useState(null);
   const [search, setSearch] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [buId, setBuId] = useState(ALL_BUS);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [exporting, setExporting] = useState(false);
@@ -249,6 +251,7 @@ const InvoicePOSummary = () => {
     page,
     limit,
     ...(debouncedSearch && { search: debouncedSearch }),
+    buId,
   };
 
   const { data, isPending } = useInvoicePOSummary(params);
@@ -261,6 +264,7 @@ const InvoicePOSummary = () => {
   const meta = data?.meta ?? {};
 
   const activeFilterCount = [
+    buId !== ALL_BUS,
     dateRange !== null,
     clientId !== 'all',
     categoryId !== 'all',
@@ -271,6 +275,7 @@ const InvoicePOSummary = () => {
   ].filter(Boolean).length;
 
   const clearFilters = () => {
+    setBuId(ALL_BUS);
     setDateRange(null);
     setClientId('all');
     setCategoryId('all');
@@ -326,7 +331,9 @@ const InvoicePOSummary = () => {
       />
 
       {/* Collapsible filter panel */}
-      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[460px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[560px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
+        <BusinessUnitFilter value={buId} onChange={setBuId} />
+
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Month &amp; Year <span className="text-destructive">*</span></Label>
           <MonthYearPicker
@@ -465,7 +472,7 @@ const InvoicePOSummary = () => {
             <SummaryItem label="PO Value" value={formatCurrency(summary.total_po_value)} />
             <SummaryItem label="Exp. Hours" value={formatHours(summary.total_expected_man_hours)} />
             <SummaryItem label="Delivered Before Month" value={formatHours(summary.total_hours_delivered_before_month)} />
-            <SummaryItem label="Available Hours" value={formatHours(summary.total_available_hours)} />
+            {/* <SummaryItem label="Available Hours" value={formatHours(summary.total_available_hours)} /> */}
             <SummaryItem label="Billable Amount" value={formatCurrency(summary.total_monthly_billable_amount)} highlight />
             <SummaryItem label="Invoiced Amount" value={formatCurrency(summary.total_invoiced_amount)} highlight />
             <SummaryItem label="Billed Amount" value={formatCurrency(summary.total_billed_amount)} highlight />

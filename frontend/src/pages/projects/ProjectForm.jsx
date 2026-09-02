@@ -5,10 +5,11 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Save } from 'lucide-react';
 import { useProject, useCreateProject, useUpdateProject } from '@/hooks/useProjects';
-import { useActiveClients } from '@/hooks/useClients';
+import { useActiveClients, useClients } from '@/hooks/useClients';
 import { clientsApi } from '@/api/clients.api';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
+import { useSelectableBusinessUnits } from '@/hooks/useSelectableBusinessUnits';
 import { ROUTES } from '@/constants/routes';
 import {
   Form, FormField, FormItem, FormLabel, FormControl, FormMessage,
@@ -34,6 +35,8 @@ const projectSchema = z.object({
     .max(200, 'Project name cannot exceed 200 characters'),
   project_description: z.string().max(2000, 'Description cannot exceed 2000 characters').optional().or(z.literal('')),
   status: z.enum(['active', 'inactive']).default('active'),
+  // Only asked of a BU-scoped login mapped to more than one BU — see showBuSelector below.
+  company_id: z.string().optional(),
 });
 
 const FormSkeleton = () => (
@@ -56,6 +59,18 @@ const ProjectForm = () => {
   const updateMutation = useUpdateProject(id);
   const [isResolvingCompany, setIsResolvingCompany] = useState(false);
 
+  // Same rule as ClientForm: only a BU-scoped login mapped to MORE THAN ONE BU is asked, because
+  // only they have a choice to make.
+  //   cross-BU login (Admin/Entity Admin/Platform Admin) -> no selector; the BU is inherited from
+  //       the chosen Client, as before.
+  //   BU-scoped, 1 BU                                    -> no selector; nothing to choose, and
+  //       the X-Company-Id header already says which BU.
+  //   BU-scoped, >1 BU                                   -> REQUIRED selector; their explicit
+  //       pick is authoritative and the Client lookup below is skipped entirely.
+  const { isCrossBu, canFilter, units } = useSelectableBusinessUnits();
+  const showBuSelector = !isCrossBu && canFilter;
+  const buOptions = units.map((bu) => ({ label: bu.name, value: String(bu.id) }));
+
   const form = useForm({
     resolver: zodResolver(projectSchema),
     defaultValues: {
@@ -63,8 +78,24 @@ const ProjectForm = () => {
       project_name: '',
       project_description: '',
       status: 'active',
+      company_id: '',
     },
   });
+
+  // The Client list must be scoped to the chosen BU whenever the BU is asked for. The backend
+  // resolves the client WITHIN the company_id sent on the request, so offering clients from the
+  // login's other BUs lets the two fields disagree and the create fails with "Client not found."
+  // Held until a BU is picked — there is nothing sensible to list before then.
+  const selectedBuId = form.watch('company_id');
+  const { data: scopedClients, isPending: isLoadingScopedClients } = useClients(
+    { buId: selectedBuId, status: 'active', limit: 200 },
+    { enabled: showBuSelector && !!selectedBuId }
+  );
+
+  const clientOptions = (showBuSelector ? (scopedClients?.data ?? []) : activeClients)
+    .map((c) => ({ value: String(c.id), label: c.client_name }));
+  const clientsLoading = showBuSelector ? isLoadingScopedClients : isLoadingClients;
+  const clientDisabled = showBuSelector ? (!selectedBuId || clientsLoading) : clientsLoading;
 
   useEffect(() => {
     if (project && isEdit) {
@@ -73,18 +104,32 @@ const ProjectForm = () => {
         project_name: project.project_name ?? '',
         project_description: project.project_description ?? '',
         status: project.status ?? 'active',
+        company_id: project.company_id ? String(project.company_id) : '',
       });
     }
   }, [project, isEdit, form]);
 
   // The backend requires company_id (Business Unit) on create but a Project has no BU field of
-  // its own, so it's looked up from the selected Client's own record instead of asking again.
+  // its own. Where it comes from depends on whether the login was asked:
+  //   · asked (BU-scoped, >1 BU)  -> their explicit pick wins, and the Client lookup is skipped.
+  //   · not asked                 -> inherited from the selected Client's own record, as before.
+  // Deriving it from the Client silently produces NOTHING when that Client is itself BU-less
+  // (which is every client a cross-BU login creates), leaving the backend to fall back to the
+  // globally-active X-Company-Id — for a multi-BU login that is a coin flip between their BUs,
+  // which is why they are now asked outright.
   const onSubmit = async (values) => {
+    if (showBuSelector && !values.company_id) {
+      form.setError('company_id', { message: 'Business Unit is required.' });
+      return;
+    }
+
     const clean = Object.fromEntries(
       Object.entries(values).filter(([, v]) => v !== '' && v != null)
     );
 
-    if (!isEdit) {
+    if (showBuSelector) {
+      clean.company_id = Number(clean.company_id);
+    } else if (!isEdit) {
       try {
         setIsResolvingCompany(true);
         const client = await clientsApi.getById(values.client_id);
@@ -106,7 +151,15 @@ const ProjectForm = () => {
         success(isEdit ? 'Project updated successfully.' : 'Project created successfully.');
         handleClose();
       },
-      onError: (err) => showError(extractApiError(err)),
+      onError: (err) => {
+        const message = extractApiError(err);
+        // A cached BU list can outlive the mapping behind it ("Business Unit #X is not one of
+        // your mapped Business Units."); pin that to the field that caused it, not just a toast.
+        if (err?.response?.status === 403 && /business unit/i.test(message)) {
+          form.setError('company_id', { message });
+        }
+        showError(message);
+      },
     });
   };
 
@@ -135,6 +188,33 @@ const ProjectForm = () => {
                 <div className="space-y-2">
                   <h3 className="text-xs font-semibold text-foreground border-b pb-1">Project Details</h3>
                   <div className="grid grid-cols-1 gap-4">
+                    {/* Only for BU-scoped logins with more than one BU. Everyone else inherits
+                        the BU from the selected Client (see onSubmit). */}
+                    {showBuSelector && (
+                      <FormField
+                        control={form.control}
+                        name="company_id"
+                        render={({ field }) => (
+                          <FormItem className="space-y-1">
+                            <FormLabel className="text-[11px] text-muted-foreground font-medium">
+                              <span className="text-destructive mr-0.5">*</span> Business Unit
+                            </FormLabel>
+                            <FormControl>
+                              <SearchableSelect
+                                options={buOptions}
+                                value={field.value}
+                                onValueChange={field.onChange}
+                                placeholder="Select business unit"
+                                searchPlaceholder="Search business unit..."
+                                className="h-8 text-sm w-full"
+                              />
+                            </FormControl>
+                            <FormMessage className="text-[10px]" />
+                          </FormItem>
+                        )}
+                      />
+                    )}
+
                     <FormField
                       control={form.control}
                       name="client_id"

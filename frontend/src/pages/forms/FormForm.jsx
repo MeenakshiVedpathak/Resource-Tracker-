@@ -214,7 +214,7 @@ const FormFields = ({ id, isEdit, isModule, formRecord, onClose }) => {
                       </SelectContent>
                     </Select>
                     {!isLoadingCategories && categoryOptions.length === 0 && (
-                      <p className="text-[10px] text-muted-foreground">No Category Available — this form will sit directly under the module.</p>
+                      <p className="text-[10px] text-muted-foreground">No category available — this form will sit directly under the module.</p>
                     )}
                     <FormMessage className="text-[10px]" />
                   </FormItem>

@@ -16,6 +16,7 @@ import { formatDate, formatHours } from '@/utils/formatters';
 import PageHeader from '@/components/common/PageHeader';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
+import BusinessUnitFilter, { ALL_BUS } from '@/components/common/BusinessUnitFilter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -111,14 +112,17 @@ const getField = (row, ...keys) => {
 // Lazily fetches the employee-level hours breakdown for one Service PO, only once that PO
 // row is expanded — reuses /reports/resource-allocation (already scoped by poId/month/year)
 // rather than a new endpoint, so this needs no backend change.
-const ServicePoEmployeeBreakdown = ({ poId, monthYear, hoursSource }) => {
+const ServicePoEmployeeBreakdown = ({ poId, monthYear, hoursSource, buId }) => {
   const { data, isFetching, isError } = useQuery({
-    queryKey: ['clientServicePoHours', 'employeeBreakdown', poId, monthYear?.month, monthYear?.year, hoursSource],
+    queryKey: ['clientServicePoHours', 'employeeBreakdown', poId, monthYear?.month, monthYear?.year, hoursSource, buId],
     queryFn: () => reportsApi.getResourceAllocation({
       month: monthYear.month,
       year: monthYear.year,
       hoursSource,
       poId,
+      // Same BU scope as the parent row, so the drill-down can never resolve against a
+      // different BU than the total it is expanding.
+      buId,
       page: 1,
       limit: 500,
     }),
@@ -175,6 +179,7 @@ const ClientServicePOHoursReport = () => {
   const [serviceTypeId, setServiceTypeId] = useState('all');
   const [employeeId, setEmployeeId] = useState('all');
   const [status, setStatus] = useState('all');
+  const [buId, setBuId] = useState(ALL_BUS);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [collapsedClientIds, setCollapsedClientIds] = useState(() => new Set());
   const [expandedPoIds, setExpandedPoIds] = useState(() => new Set());
@@ -216,6 +221,7 @@ const ClientServicePOHoursReport = () => {
     ...(serviceTypeId !== 'all' && { serviceTypeId }),
     ...(employeeId !== 'all' && { employeeId }),
     ...(status !== 'all' && { status }),
+    buId,
   };
 
   const periodReady = !!(monthYear?.month && monthYear?.year);
@@ -284,6 +290,7 @@ const ClientServicePOHoursReport = () => {
     serviceTypeId !== 'all',
     employeeId !== 'all',
     status !== 'all',
+    buId !== ALL_BUS,
   ].filter(Boolean).length;
 
   const clearFilters = () => {
@@ -292,6 +299,7 @@ const ClientServicePOHoursReport = () => {
     setServiceTypeId('all');
     setEmployeeId('all');
     setStatus('all');
+    setBuId(ALL_BUS);
   };
 
   const toggleClient = (clientKey) => {
@@ -363,7 +371,9 @@ const ClientServicePOHoursReport = () => {
       />
 
       {/* Collapsible filter panel */}
-      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[520px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[620px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
+            <BusinessUnitFilter value={buId} onChange={setBuId} />
+
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs">Month &amp; Year <span className="text-destructive">*</span></Label>
               <MonthYearPicker
@@ -559,6 +569,7 @@ const ClientServicePOHoursReport = () => {
                                   poId={po.service_po_id}
                                   monthYear={monthYear}
                                   hoursSource={hoursSource}
+                                  buId={buId}
                                 />
                               </motion.div>
                             )}

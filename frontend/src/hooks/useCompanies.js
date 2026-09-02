@@ -2,12 +2,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { companiesApi } from '@/api/companies.api';
 import { QUERY_KEYS } from '@/constants/queryKeys';
 
+// `options` is spread straight into useQuery, so callers can pass `enabled`, `staleTime`, etc.
+// (useSelectableBusinessUnits relies on staleTime — it mounts on every filterable screen.)
 export const useCompanies = (params, options = {}) =>
   useQuery({
     queryKey: QUERY_KEYS.COMPANIES(params),
     queryFn: () => companiesApi.getAll(params),
     placeholderData: (prev) => prev,
-    enabled: options.enabled ?? true,
+    ...options,
   });
 
 export const useCompany = (id) =>

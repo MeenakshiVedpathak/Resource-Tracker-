@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
 import DataTable from '@/components/common/DataTable';
+import { ROUTES } from '@/constants/routes';
 import PageHeader from '@/components/common/PageHeader';
 import EmptyState from '@/components/common/EmptyState';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
@@ -111,6 +112,8 @@ const EmployeeReports = () => {
     <div className="space-y-4">
       <PageHeader
         title="PO Wise Report"
+        backTo={ROUTES.REPORTS}
+        backLabel="Back to Report"
         actions={
           <div className="flex items-center gap-3">
             <FilterToggleButton

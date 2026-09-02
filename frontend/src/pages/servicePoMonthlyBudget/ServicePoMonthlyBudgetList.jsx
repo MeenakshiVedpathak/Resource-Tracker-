@@ -18,10 +18,12 @@ const COUNTDOWN_STYLES = {
 
 const ServicePoMonthlyBudgetList = forwardRef(({
   month, year, records, isLoading, search = '', clientFilter = 'all', poFilterIds = null,
-  onEdit, onExportStateChange, countdown,
+  buId, onEdit, onExportStateChange, countdown,
 }, ref) => {
   const { success, error: showError } = useNotification();
-  const { data: servicePos = [], isPending: isServicePosLoading } = useServicePoMonthlyBudgetServicePOs();
+  // Same BU scope the page applied to `records` — the two lists are merged below into one card
+  // per PO, so they must be scoped to the same set or the grid shows POs the records can't fill.
+  const { data: servicePos = [], isPending: isServicePosLoading } = useServicePoMonthlyBudgetServicePOs(buId);
 
   // Every PO the caller can see gets a card, filled or not — `getMonthList` only returns rows
   // that were actually saved, so a PO with nothing entered yet would otherwise never appear.
@@ -60,7 +62,7 @@ const ServicePoMonthlyBudgetList = forwardRef(({
 
   const handleExportExcel = () => {
     if (filteredRecords.length === 0) {
-      showError('No data to export');
+      showError('No data to export.');
       return;
     }
     const exportData = filteredRecords.map((r) => ({
@@ -77,7 +79,7 @@ const ServicePoMonthlyBudgetList = forwardRef(({
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Monthly Budgets');
     XLSX.writeFile(wb, `Monthly_PO_Reporting_${formatMonthYear(month, year).replace(/\s+/g, '_')}.xlsx`);
-    success('Exported to Excel successfully');
+    success('Exported to Excel successfully.');
   };
 
   const loading = isLoading || isServicePosLoading;

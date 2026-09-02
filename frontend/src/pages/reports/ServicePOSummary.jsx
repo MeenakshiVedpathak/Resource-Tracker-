@@ -16,6 +16,7 @@ import PageHeader from '@/components/common/PageHeader';
 import StatusBadge from '@/components/common/StatusBadge';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
+import BusinessUnitFilter, { ALL_BUS } from '@/components/common/BusinessUnitFilter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -31,7 +32,8 @@ const exportToExcel = (rows) => {
   const header = [
     'PO Code', 'PO Name', 'Client Name', 'Service Type', 'Category', 'Start Date', 'End Date',
     'Status', 'Billable', 'Invoice Freq.', 'Account Manager', 'PO Value', 
-    'Expected Hours', 'Hours Delivered Before Month', 'Available Hours', 
+    // 'Expected Hours',
+    'Hours Delivered Before Month',
     'Billable Amount', 'Invoiced Amount', 'Billed Amount', 'Unbilled Amount'
   ];
   const dataRows = rows.map((r) => [
@@ -47,9 +49,8 @@ const exportToExcel = (rows) => {
     r.invoice_frequency ?? '',
     r.account_manager ?? '',
     r.po_value != null ? Number(r.po_value) : '',
-    r.expected_man_hours != null ? Number(r.expected_man_hours) : '',
+    // r.expected_man_hours != null ? Number(r.expected_man_hours) : '',
     r.hours_delivered_before_month != null ? Number(r.hours_delivered_before_month) : '',
-    r.available_hours != null ? Number(r.available_hours) : '',
     r.monthly_billable_amount != null ? Number(r.monthly_billable_amount) : '',
     r.invoiced_amount != null ? Number(r.invoiced_amount) : '',
     r.billed_amount != null ? Number(r.billed_amount) : '',
@@ -126,36 +127,15 @@ const columns = [
     size: 160,
     cell: (info) => <ValueCell value={info.getValue()} />,
   }),
-  columnHelper.accessor('expected_man_hours', {
-    header: 'Exp. Hours',
-    size: 140,
-    cell: (info) => <ValueCell value={info.getValue()} format="hours" />,
-  }),
+  // columnHelper.accessor('expected_man_hours', {
+  //   header: 'Exp. Hours',
+  //   size: 140,
+  //   cell: (info) => <ValueCell value={info.getValue()} format="hours" />,
+  // }),
   columnHelper.accessor('hours_delivered_before_month', {
     header: 'Delivered Before Month',
     size: 180,
     cell: (info) => <ValueCell value={info.getValue()} format="hours" />,
-  }),
-  columnHelper.accessor('available_hours', {
-    header: 'Available Hours',
-    size: 160,
-    // Negative means hours delivered before this month already exceed the PO's expected hours —
-    // a real over-allocation signal, not a sign bug, so it's kept (not floored at 0) but flagged.
-    cell: (info) => {
-      const value = info.getValue();
-      if (value == null || value === '') return <span className="text-muted-foreground">—</span>;
-      const isOverAllocated = Number(value) < 0;
-      return (
-        <div className="flex flex-col gap-0.5">
-          <span className={`tabular-nums ${isOverAllocated ? 'font-semibold text-destructive' : ''}`}>
-            {formatHours(value)}
-          </span>
-          {isOverAllocated && (
-            <span className="text-[10px] font-medium uppercase tracking-wide text-destructive">Over-allocated</span>
-          )}
-        </div>
-      );
-    },
   }),
   columnHelper.accessor('monthly_billable_amount', {
     header: 'Billable Amount',
@@ -209,6 +189,7 @@ const ServicePOSummary = () => {
   const [dateRange, setDateRange] = useState(null);
   const [search, setSearch] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [buId, setBuId] = useState(ALL_BUS);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [exporting, setExporting] = useState(false);
@@ -267,6 +248,7 @@ const ServicePOSummary = () => {
     limit,
      roleId: roleObjects[0]?.id,
     ...(debouncedSearch && { search: debouncedSearch }),
+    buId,
   };
 
   const { data, isPending } = useServicePOSummary(params);
@@ -279,6 +261,7 @@ const ServicePOSummary = () => {
   const meta    = data?.meta ?? {};
 
   const activeFilterCount = [
+    buId !== ALL_BUS,
     dateRange !== null,
     clientId !== 'all',
     categoryId !== 'all',
@@ -288,6 +271,7 @@ const ServicePOSummary = () => {
   ].filter(Boolean).length;
 
   const clearFilters = () => {
+    setBuId(ALL_BUS);
     setDateRange(null);
     setClientId('all');
     setCategoryId('all');
@@ -361,7 +345,9 @@ const ServicePOSummary = () => {
       />
 
       {/* Collapsible filter panel */}
-      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[460px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[560px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
+          <BusinessUnitFilter value={buId} onChange={setBuId} />
+
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs">Month &amp; Year <span className="text-destructive">*</span></Label>
             <MonthYearPicker
@@ -490,13 +476,8 @@ const ServicePOSummary = () => {
           <p className="mb-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Totals (all pages)</p>
           <div className="flex flex-wrap gap-x-6 gap-y-2">
             <SummaryItem label="PO Value" value={formatCurrency(summary.total_po_value)} />
-            <SummaryItem label="Exp. Hours" value={formatHours(summary.total_expected_man_hours)} />
+            {/* <SummaryItem label="Exp. Hours" value={formatHours(summary.total_expected_man_hours)} /> */}
             <SummaryItem label="Delivered Before Month" value={formatHours(summary.total_hours_delivered_before_month)} />
-            <SummaryItem
-              label="Available Hours"
-              value={formatHours(summary.total_available_hours)}
-              negative={summary.total_available_hours < 0}
-            />
             <SummaryItem label="Billable Amount" value={formatCurrency(summary.total_monthly_billable_amount)} highlight />
             <SummaryItem label="Invoiced Amount" value={formatCurrency(summary.total_invoiced_amount)} highlight />
             <SummaryItem label="Billed Amount" value={formatCurrency(summary.total_billed_amount)} highlight />

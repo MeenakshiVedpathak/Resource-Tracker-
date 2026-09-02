@@ -4,6 +4,17 @@ import { passwordSchema } from '@/utils/validators';
 // Shared Zod field schemas for "this is an Employee" data — single source of truth so
 // EmployeeForm.jsx and the BU Admin creation flow (CompanyForm.jsx, which also creates an
 // Employee record for the new BU Admin) can never drift apart on validation rules.
+// Local-timezone "today" as yyyy-MM-dd — used both as the <input type="date"> `max` (so the
+// native picker greys out future days) and by the schema below (so a typed/pasted date is
+// rejected too). Deliberately not `toISOString()`, which shifts to UTC and can hand back
+// tomorrow's date for users east of UTC.
+export const todayIsoDate = () => {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${now.getFullYear()}-${month}-${day}`;
+};
+
 export const employeeBaseFields = {
   employee_code: z.string().min(2, 'Must be at least 2 characters').max(20).regex(/^[A-Z0-9_-]+$/).transform((v) => v.toUpperCase()),
   full_name: z.string().min(2, 'Must be at least 2 characters').max(100)
@@ -13,7 +24,8 @@ export const employeeBaseFields = {
   total_experience: z.preprocess((v) => (v === '' || v == null ? null : Number(v)), z.number().min(0).max(60).nullable().optional()),
   company_experience: z.preprocess((v) => (v === '' || v == null ? null : Number(v)), z.number().min(0).max(60).nullable().optional()),
   resource_description: z.string().max(2000).optional().or(z.literal('')),
-  date_of_joining: z.string().min(1, 'Date of joining is required'),
+  date_of_joining: z.string().min(1, 'Date of joining is required')
+    .refine((v) => v <= todayIsoDate(), 'Date of joining cannot be in the future'),
   date_of_leaving: z.string().optional().or(z.literal('')),
   status: z.enum(['active', 'inactive']).default('active'),
   secondary_manager_employee_id: z.coerce.number().positive().optional().nullable(),

@@ -1,5 +1,5 @@
 import { TableRow, TableCell } from '@/components/ui/table';
-import { formatHoursCell } from '@/utils/formatters';
+import { formatHourMinuteValue } from '@/utils/formatters';
 import { FIRST_COL_WIDTH, DAY_COL_WIDTH, TOTAL_COL_WIDTH } from './summaryTableLayout';
 
 // The bottom TOTAL row — per-day column totals, plus the grand total in the bottom-right
@@ -20,7 +20,7 @@ const SummaryFooter = ({ days, columnTotals, grandTotal }) => (
         className="summary-table-foot px-1 text-center text-xs tabular-nums"
         style={{ width: DAY_COL_WIDTH, minWidth: DAY_COL_WIDTH, maxWidth: DAY_COL_WIDTH }}
       >
-        {formatHoursCell(columnTotals?.[day])}
+        {formatHourMinuteValue(columnTotals?.[day])}
       </TableCell>
     ))}
 
@@ -28,7 +28,7 @@ const SummaryFooter = ({ days, columnTotals, grandTotal }) => (
       className="summary-table-foot summary-col-pinned sticky right-0 bottom-0 text-center"
       style={{ width: TOTAL_COL_WIDTH, minWidth: TOTAL_COL_WIDTH, maxWidth: TOTAL_COL_WIDTH }}
     >
-      {formatHoursCell(grandTotal)}
+      {formatHourMinuteValue(grandTotal)}
     </TableCell>
   </TableRow>
 );

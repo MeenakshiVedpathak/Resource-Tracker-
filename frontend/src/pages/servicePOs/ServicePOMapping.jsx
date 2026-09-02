@@ -1,17 +1,19 @@
-import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, ChevronRight, Search, Inbox } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { ArrowLeft, ChevronRight, Search, Inbox, Loader2 } from 'lucide-react';
 import { useServicePO } from '@/hooks/useServicePOs';
-import { useActiveEmployees } from '@/hooks/useEmployees';
+import { useDebounce } from '@/hooks/useDebounce';
 import {
   useServicePOEmployeeMappings,
+  useServicePOEmployeeOptions,
+  useEmployeeServicePOMappingFilterOptions,
   useCreateEmployeeServicePOMapping,
   useSetEmployeeServicePOMappingStatus,
 } from '@/hooks/useEmployeeServicePOMapping';
 import { useCanWrite } from '@/hooks/usePermissions';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
-import { buildPath, ROUTES } from '@/constants/routes';
+import { ROUTES } from '@/constants/routes';
 import { cn } from '@/utils/cn';
 import PageHeader from '@/components/common/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -19,6 +21,8 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Skeleton } from '@/components/ui/skeleton';
 
 // Row shape used by both panels below: { key, name, sub, raw }. Normalizing mapping
@@ -38,6 +42,9 @@ const resolveMappingEmployee = (m) => {
   };
 };
 
+// Only the mapped panel filters client-side — it holds one PO's full mapping list. The select
+// panel's search is server-side (see useServicePOEmployeeOptions), since it only ever holds the
+// pages it has scrolled through.
 const filterRows = (rows, term) => {
   const q = term.trim().toLowerCase();
   if (!q) return rows;
@@ -46,17 +53,42 @@ const filterRows = (rows, term) => {
   );
 };
 
-const EmptyState = () => (
-  <div className="flex flex-col items-center justify-center gap-2 py-10 text-muted-foreground">
+// Pulls the next page as soon as the end of the list scrolls into view. An observer rather than a
+// scroll-offset handler because already-mapped employees are subtracted client-side: a full page
+// from the server can leave few or even zero visible rows, and that state produces no scroll event
+// to hang a handler off. The sentinel simply stays in view and keeps pulling until the panel fills
+// or the server runs out.
+const useLoadMoreOnVisible = ({ hasMore, isLoading, onLoadMore }) => {
+  const [sentinel, setSentinel] = useState(null);
+
+  useEffect(() => {
+    if (!sentinel || !hasMore || isLoading) return undefined;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) onLoadMore();
+      },
+      { rootMargin: '120px' }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [sentinel, hasMore, isLoading, onLoadMore]);
+
+  return setSentinel;
+};
+
+const EmptyState = ({ message = 'No Data' }) => (
+  <div className="flex flex-col items-center justify-center gap-2 py-10 text-center text-muted-foreground">
     <Inbox className="h-8 w-8 opacity-40" />
-    <span className="text-sm">No Data</span>
+    <span className="text-sm">{message}</span>
   </div>
 );
 
-const PanelSearchBar = ({ count, search, onSearchChange, children }) => (
+// `hasMore` renders the count as "50+": the select panel only knows what it has paged in so far,
+// so an exact total would be a lie until the last page lands.
+const PanelSearchBar = ({ count, hasMore, search, onSearchChange, disabled, children }) => (
   <div className="flex items-center gap-2 border-b bg-muted/30 px-3 py-2">
     <span className="whitespace-nowrap text-[11px] font-medium text-muted-foreground">
-      Total Record(s): {count}
+      Total Record(s): {count}{hasMore ? '+' : ''}
     </span>
     {children}
     <div className="relative ml-auto w-[160px]">
@@ -65,32 +97,58 @@ const PanelSearchBar = ({ count, search, onSearchChange, children }) => (
         value={search}
         onChange={(e) => onSearchChange(e.target.value)}
         placeholder="Search…"
+        disabled={disabled}
         className="h-7 pl-7 text-xs"
       />
     </div>
   </div>
 );
 
-// Left-hand panel: a searchable checklist of employees not yet mapped.
-const SelectPanel = ({ rows, search, onSearchChange, selectedKeys, onToggle, onToggleAll }) => {
-  const filtered = filterRows(rows, search);
-  const allChecked = filtered.length > 0 && filtered.every((r) => selectedKeys.includes(r.key));
+// Left-hand panel: a searchable checklist of employees not yet mapped. `rows` holds only the pages
+// paged in so far — search is applied server-side, and scrolling to the bottom pulls the next page.
+// `needsFilterSelection` is true before the Entity/BU filter above has been narrowed to one BU — the
+// panel deliberately shows a prompt instead of any employee data until then (see EntityBuFilterBar):
+// this endpoint's full "every employee in the caller's scope" result is expensive and rarely what an
+// admin wants to browse unfiltered.
+const SelectPanel = ({
+  rows, search, onSearchChange, selectedKeys, onToggle, onToggleAll,
+  hasMore, isLoadingMore, onLoadMore, error, needsFilterSelection, filterPromptMessage,
+}) => {
+  // Select All spans the rows currently loaded, which is all this panel can speak for — scrolling
+  // further in and ticking it again extends the selection rather than replacing it.
+  const allChecked = rows.length > 0 && rows.every((r) => selectedKeys.includes(r.key));
+  const sentinelRef = useLoadMoreOnVisible({ hasMore, isLoading: isLoadingMore, onLoadMore });
 
   return (
     <div className="flex flex-col overflow-hidden rounded-lg border bg-background">
-      <PanelSearchBar count={filtered.length} search={search} onSearchChange={onSearchChange} />
+      <PanelSearchBar
+        count={rows.length}
+        hasMore={hasMore}
+        search={search}
+        onSearchChange={onSearchChange}
+        disabled={needsFilterSelection}
+      />
       <div className="h-[20rem] overflow-y-auto">
-        {filtered.length === 0 ? (
+        {/* The options endpoint 403s a caller without Service PO mapping authority and 404s a PO
+            outside their scope — both would otherwise read as an innocuous "No Data". */}
+        {error ? (
+          <div className="flex flex-col items-center justify-center gap-2 px-6 py-10 text-center">
+            <Inbox className="h-8 w-8 opacity-40 text-muted-foreground" />
+            <span className="text-sm text-destructive">{extractApiError(error)}</span>
+          </div>
+        ) : needsFilterSelection ? (
+          <EmptyState message={filterPromptMessage} />
+        ) : rows.length === 0 && !isLoadingMore ? (
           <EmptyState />
         ) : (
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-background">
               <tr className="border-b">
-                <th className="px-3 py-2">
+                <th className="w-28 px-3 py-2">
                   <label className="flex items-center gap-1.5 whitespace-nowrap text-xs font-medium text-muted-foreground">
                     <Checkbox
                       checked={allChecked}
-                      onCheckedChange={(v) => onToggleAll(filtered.map((r) => r.key), !!v)}
+                      onCheckedChange={(v) => onToggleAll(rows.map((r) => r.key), !!v)}
                     />
                     Select All
                   </label>
@@ -99,7 +157,7 @@ const SelectPanel = ({ rows, search, onSearchChange, selectedKeys, onToggle, onT
               </tr>
             </thead>
             <tbody>
-              {filtered.map((row) => (
+              {rows.map((row) => (
                 <tr key={row.key} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
                   <td className="px-3 py-2">
                     <Checkbox
@@ -113,6 +171,16 @@ const SelectPanel = ({ rows, search, onSearchChange, selectedKeys, onToggle, onT
                   </td>
                 </tr>
               ))}
+              {(hasMore || isLoadingMore) && (
+                <tr ref={sentinelRef}>
+                  <td colSpan={2} className="px-3 py-3 text-center text-xs text-muted-foreground">
+                    <span className="inline-flex items-center gap-1.5">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      Loading more…
+                    </span>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         )}
@@ -121,7 +189,7 @@ const SelectPanel = ({ rows, search, onSearchChange, selectedKeys, onToggle, onT
   );
 };
 
-// Right-hand panel: employees already mapped, each with an "Is Mapped ?" toggle
+// Right-hand panel: employees already mapped, each with an "Is Mapped?" toggle
 // (deactivate) and a remove (delete) action.
 const MappedPanel = ({ rows, search, onSearchChange, renderToggle, selectAll }) => {
   const filtered = filterRows(rows, search);
@@ -143,7 +211,7 @@ const MappedPanel = ({ rows, search, onSearchChange, renderToggle, selectAll }) 
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-background">
               <tr className="border-b">
-                <th className="w-28 px-3 py-2 text-left text-xs font-medium text-muted-foreground">Is Mapped ?</th>
+                <th className="w-28 px-3 py-2 text-left text-xs font-medium text-muted-foreground">Is Mapped?</th>
                 <th className="px-2 py-2 text-left text-xs font-medium text-muted-foreground">Employee</th>
               </tr>
             </thead>
@@ -166,6 +234,47 @@ const MappedPanel = ({ rows, search, onSearchChange, renderToggle, selectAll }) 
     </div>
   );
 };
+
+// Left panel's own Entity → BU cascade: picking an Entity narrows the BU dropdown's options
+// (client-side, from that Entity's own BUs); picking a BU is what actually re-queries the left
+// panel's employee list, scoped server-side (see useServicePOEmployeeOptions). Neither dropdown
+// touches the right panel or the caller's ambient selected BU.
+const EntityBuFilterBar = ({
+  entities, entityId, onEntityChange,
+  businessUnits, isLoading, buId, onBuChange,
+}) => (
+  <div className="mb-3 flex flex-wrap items-end gap-3">
+    <div className="flex w-56 flex-col gap-1.5">
+      <Label className="text-xs">Entity</Label>
+      <SearchableSelect
+        options={entities.map((e) => ({ label: e.entity_name ?? e.name, value: String(e.id) }))}
+        value={entityId}
+        onValueChange={onEntityChange}
+        placeholder={isLoading ? 'Loading…' : 'All Entities'}
+        searchPlaceholder="Search entity..."
+        className="bg-white"
+        clearable
+        clearValue="all"
+      />
+    </div>
+    <div className="flex w-56 flex-col gap-1.5">
+      <Label className="text-xs">Business Unit</Label>
+      <SearchableSelect
+        options={businessUnits.map((bu) => ({ label: bu.company_name, value: String(bu.id) }))}
+        value={buId}
+        onValueChange={onBuChange}
+        disabled={entityId === 'all'}
+        placeholder={
+          entityId === 'all' ? 'Select an Entity first' : isLoading ? 'Loading…' : 'All Business Units'
+        }
+        searchPlaceholder="Search business unit..."
+        className="bg-white"
+        clearable
+        clearValue="all"
+      />
+    </div>
+  </div>
+);
 
 const MoveButton = ({ disabled, onClick, title }) => (
   <div className="flex h-[20rem] items-center justify-center">
@@ -198,22 +307,88 @@ const MappingSkeleton = () => (
 const ServicePOMapping = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { success, error: showError } = useNotification();
   const canManageResources = useCanWrite();
+
+  // Back returns to whichever screen linked here — the PO list's "Map Employees" row action or the
+  // PO detail page's button, both of which pass their own path as `state.from`. It used to hardcode
+  // the detail page, so coming from the list dropped the user on a screen they'd never opened.
+  // The fallback covers a direct URL / bookmark, where there is no origin to return to: the list is
+  // this screen's canonical parent, and no history entry is assumed (a `navigate(-1)` here could
+  // walk out of the app).
+  const backTo = location.state?.from ?? ROUTES.SERVICE_POS;
 
   const [selectedForMapping, setSelectedForMapping] = useState([]);
   const [searchLeft, setSearchLeft] = useState('');
   const [searchRight, setSearchRight] = useState('');
+  const [entityFilter, setEntityFilter] = useState('all');
+  const [buFilter, setBuFilter] = useState('all');
 
   const { data: servicePO, isPending: isLoadingPO } = useServicePO(id);
-  const { data: activeEmployees = [] } = useActiveEmployees();
+  // Entity → BU filter dropdowns above the left panel (see EntityBuFilterBar). One call returns
+  // every Entity/Business Unit within the caller's own authorized "Map Employees" scope — NOT
+  // GET /entities or GET /companies, which either 403 a BU Admin/Service PO Admin/Delivery Head or
+  // (for a BU Admin) silently return a narrower set than this screen is actually scoped to (see
+  // useEmployeeServicePOMappingFilterOptions' doc comment). Both dropdowns filter this single
+  // result client-side; only the BU choice is ever sent to the server, as `business_unit_id`.
+  const { data: filterOptions, isLoading: isLoadingFilterOptions } = useEmployeeServicePOMappingFilterOptions(canManageResources);
+  const entities = filterOptions?.entities ?? [];
+  const selectedEntityId = entityFilter !== 'all' ? Number(entityFilter) : null;
+  const businessUnitOptions = selectedEntityId
+    ? (filterOptions?.business_units ?? []).filter((bu) => bu.entity_id === selectedEntityId)
+    : [];
+  const selectedBusinessUnitId = buFilter !== 'all' ? buFilter : undefined;
+
+  const handleEntityFilterChange = (v) => {
+    setEntityFilter(v);
+    setBuFilter('all');
+  };
+  // The PO's own eligibility endpoint, NOT a generic employee list: those scope to the caller's own
+  // team or their currently-selected BU, which is why this panel used to show 4 of 18. This one is
+  // scoped server-side to the caller's entire authorized Admin/company scope — every BU they manage
+  // — so nothing here may re-narrow it by the caller's *ambient* selected BU. `selectedBusinessUnitId`
+  // is different: the panel's own explicit Entity → BU filter dropdowns, opted into here the same way
+  // `search` is. Arrives a page at a time as the panel scrolls; search is debounced because it is a
+  // request, not a client-side filter.
+  //
+  // Deliberately NOT fetched until a Business Unit is actually picked (`needsFilterSelection` below)
+  // — the unfiltered result is every employee in the caller's whole scope, which is both expensive
+  // and rarely what an admin opening this screen wants to browse. The left panel shows a prompt
+  // instead (see SelectPanel) until then.
+  const debouncedSearchLeft = useDebounce(searchLeft, 400);
+  const needsFilterSelection = !selectedBusinessUnitId;
+  const shouldLoadEligibleEmployees = canManageResources && !needsFilterSelection;
+  const filterPromptMessage = entityFilter === 'all'
+    ? 'Select an Entity and Business Unit to view employees.'
+    : 'Select a Business Unit to view employees.';
+  const {
+    data: employeeOptions,
+    isPending: isLoadingEmployees,
+    error: employeeOptionsError,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useServicePOEmployeeOptions(shouldLoadEligibleEmployees ? id : null, debouncedSearchLeft, selectedBusinessUnitId);
+  const eligibleEmployees = employeeOptions?.employees ?? [];
   const { data: mappings = [], isPending: isLoadingMappings } = useServicePOEmployeeMappings(id);
 
   const createMappingMutation = useCreateEmployeeServicePOMapping();
   const mappingStatusMutation = useSetEmployeeServicePOMappingStatus();
 
-  const mappedEmployeeIds = new Set(mappings.map((m) => m.employee_id));
-  const availableForMapping = activeEmployees.filter((e) => !mappedEmployeeIds.has(e.id));
+  // `eligible_employees` includes employees already mapped, so this two-panel transfer list moves
+  // those to the right and takes them off the left. Keyed off the PO's mapping records ALONE — the
+  // documented source of truth, and the same rows the right panel renders, so the two panels can
+  // never disagree about who is mapped. It covers deactivated mappings too: an employee toggled off
+  // still owns a mapping row and must not reappear as available, or mapping them again would 409.
+  // The response's own mapped_employee_ids is deliberately not consulted (see
+  // useServicePOEmployeeOptions).
+  //
+  // This is mapped-state filtering only — it never re-narrows by Business Unit itself. Any BU
+  // narrowing already happened server-side, via the explicit Entity/BU filter above, not by
+  // silently reapplying the caller's own scope (which is what would restore the bug).
+  const mappedEmployeeIds = new Set(mappings.map((m) => Number(m.employee_id)));
+  const availableForMapping = eligibleEmployees.filter((e) => !mappedEmployeeIds.has(Number(e.id)));
 
   const employeeSub = (e) => [e.employee_code ?? e.code, e.designation].filter(Boolean).join(' · ');
   const leftRows = availableForMapping.map((e) =>
@@ -292,7 +467,7 @@ const ServicePOMapping = () => {
           )
         }
         actions={
-          <Button variant="outline" size="sm" onClick={() => navigate(buildPath(ROUTES.SERVICE_PO_DETAIL, { id }))}>
+          <Button variant="outline" size="sm" onClick={() => navigate(backTo)}>
             <ArrowLeft className="mr-1.5 h-4 w-4" />
             Back
           </Button>
@@ -306,7 +481,19 @@ const ServicePOMapping = () => {
         )}
       </p> */}
 
-      {isLoadingPO || isLoadingMappings ? (
+      {canManageResources && !isLoadingPO && (
+        <EntityBuFilterBar
+          entities={entities}
+          entityId={entityFilter}
+          onEntityChange={handleEntityFilterChange}
+          businessUnits={businessUnitOptions}
+          isLoading={isLoadingFilterOptions}
+          buId={buFilter}
+          onBuChange={setBuFilter}
+        />
+      )}
+
+      {isLoadingPO || isLoadingMappings || (shouldLoadEligibleEmployees && isLoadingEmployees) ? (
         <MappingSkeleton />
       ) : (
         <div className={cn('grid gap-2 items-start', canManageResources ? 'grid-cols-[1fr_auto_1fr]' : 'grid-cols-1')}>
@@ -319,6 +506,12 @@ const ServicePOMapping = () => {
                 selectedKeys={selectedForMapping}
                 onToggle={toggleMappingSelection}
                 onToggleAll={toggleAllMappingSelection}
+                needsFilterSelection={needsFilterSelection}
+                filterPromptMessage={filterPromptMessage}
+                hasMore={!!hasNextPage}
+                isLoadingMore={isFetchingNextPage}
+                onLoadMore={fetchNextPage}
+                error={employeeOptionsError}
               />
               <MoveButton
                 title={createMappingMutation.isPending ? 'Mapping…' : 'Map selected'}

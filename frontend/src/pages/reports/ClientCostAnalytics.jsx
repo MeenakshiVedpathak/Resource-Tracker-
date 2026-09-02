@@ -9,6 +9,9 @@ import { formatCurrency, formatHours } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
 import EmptyState from '@/components/common/EmptyState';
+import FilterToggleButton from '@/components/common/FilterToggleButton';
+import FilterPanel from '@/components/common/FilterPanel';
+import BusinessUnitFilter, { ALL_BUS } from '@/components/common/BusinessUnitFilter';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
@@ -77,6 +80,10 @@ const ClientCostAnalytics = () => {
   const [activeTab, setActiveTab] = useState('top');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(15);
+  // This report has no other filter, so the Filters panel exists purely to host the BU picker
+  // — every other Reports page already carries one, and the BU choice belongs in the same place.
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [buId, setBuId] = useState(ALL_BUS);
 
   // Role no longer grants Original-data visibility (e.g. role reassigned mid-session) — force
   // back to Modified, same as every other report.
@@ -85,7 +92,7 @@ const ClientCostAnalytics = () => {
   }, [canViewOriginal]);
 
   // No period/date filter at all — this report is always all-time.
-  const params = { hoursSource, page, limit };
+  const params = { hoursSource, page, limit, buId };
 
   const { data, isPending, isError, error } = useClientCostAnalytics(params);
   const errorMessage = isError ? extractApiError(error) : null;
@@ -136,6 +143,11 @@ const ClientCostAnalytics = () => {
     setPage(1);
   };
 
+  const handleBuChange = (value) => {
+    setBuId(value);
+    setPage(1);
+  };
+
   return (
     <div>
       <PageHeader
@@ -162,6 +174,12 @@ const ClientCostAnalytics = () => {
                 ))}
               </div>
             )}
+            <FilterToggleButton
+              isOpen={filtersOpen}
+              onToggle={() => setFiltersOpen((p) => !p)}
+              activeCount={buId !== ALL_BUS ? 1 : 0}
+              className="h-9"
+            />
             {clients.length > 0 && (
               <Button variant="outline" size="sm" className="h-9" onClick={() => exportToExcel(clients)}>
                 <Download className="mr-1.5 h-4 w-4" />Export Excel
@@ -170,6 +188,15 @@ const ClientCostAnalytics = () => {
           </div>
         }
       />
+
+      <FilterPanel
+        isOpen={filtersOpen}
+        maxHeightClass="max-h-[160px]"
+        onClear={() => handleBuChange(ALL_BUS)}
+        showClear={buId !== ALL_BUS}
+      >
+        <BusinessUnitFilter value={buId} onChange={handleBuChange} />
+      </FilterPanel>
 
       {errorMessage && (
         <div className="mb-4 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">

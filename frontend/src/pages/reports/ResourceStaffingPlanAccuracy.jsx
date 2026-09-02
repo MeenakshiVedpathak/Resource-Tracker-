@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Download } from 'lucide-react';
+import { Download, Search } from 'lucide-react';
 import { useResourceStaffingPlanAccuracy } from '@/hooks/useReports';
 import { useDebounce } from '@/hooks/useDebounce';
 import { formatHours, formatPercentage } from '@/utils/formatters';
@@ -9,6 +9,7 @@ import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
+import BusinessUnitFilter, { ALL_BUS } from '@/components/common/BusinessUnitFilter';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -117,6 +118,8 @@ const ResourceStaffingPlanAccuracy = () => {
   const [varianceThresholdPct, setVarianceThresholdPct] = useState(String(DEFAULT_THRESHOLD_PCT));
   const [riskFilter, setRiskFilter] = useState('all');
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [buId, setBuId] = useState(ALL_BUS);
+  const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
 
@@ -131,6 +134,7 @@ const ResourceStaffingPlanAccuracy = () => {
     ...(debouncedThresholdPct !== '' && { varianceThresholdPct: Number(debouncedThresholdPct) }),
     page: 1,
     limit: MAX_RECORDS_FETCH,
+    buId,
   };
 
   const { data, isPending } = useResourceStaffingPlanAccuracy(params);
@@ -160,8 +164,21 @@ const ResourceStaffingPlanAccuracy = () => {
     return riskFilter === 'at_risk' ? !!r.at_risk : !r.at_risk;
   };
 
-  // Full, risk-filtered set the whole page/pagination/totals below are derived from.
-  const filteredRecords = displayRecords.filter(matchesRiskFilter);
+  // Search covers the identifying columns only; the hours/variance columns are left out, since
+  // substring-matching a number misleads more than it helps.
+  const matchesSearch = (r) => {
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return [r.employee_code, r.full_name, r.service_po_code, r.service_po_name]
+      .some((v) => String(v ?? '').toLowerCase().includes(q));
+  };
+
+  // Full, risk- and search-filtered set the whole page/pagination/totals below are derived from.
+  const filteredRecords = useMemo(
+    () => displayRecords.filter((r) => matchesRiskFilter(r) && matchesSearch(r)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [displayRecords, riskFilter, search]
+  );
   const pagedRecords = filteredRecords.slice((page - 1) * limit, page * limit);
 
   // Recomputed client-side from the full filtered set rather than trusted from the backend's own
@@ -175,11 +192,13 @@ const ResourceStaffingPlanAccuracy = () => {
   } : null;
 
   const activeFilterCount = [
+    buId !== ALL_BUS,
     varianceThresholdPct !== String(DEFAULT_THRESHOLD_PCT),
     riskFilter !== 'all',
   ].filter(Boolean).length;
 
   const clearFilters = () => {
+    setBuId(ALL_BUS);
     setVarianceThresholdPct(String(DEFAULT_THRESHOLD_PCT));
     setRiskFilter('all');
     setPage(1);
@@ -195,6 +214,15 @@ const ResourceStaffingPlanAccuracy = () => {
         description="Planned vs actual hours per employee/Service PO, flagged when variance exceeds a threshold."
         actions={
           <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search employee, PO…"
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                className="h-9 w-72 pl-9 text-sm"
+              />
+            </div>
             <FilterToggleButton
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((p) => !p)}
@@ -210,7 +238,9 @@ const ResourceStaffingPlanAccuracy = () => {
         }
       />
 
-      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[240px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[340px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
+        <BusinessUnitFilter value={buId} onChange={setBuId} />
+
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Month &amp; Year <span className="text-destructive">*</span></Label>
           <MonthYearPicker

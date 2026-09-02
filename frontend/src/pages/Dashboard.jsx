@@ -5,6 +5,7 @@ import {
   Clock, DollarSign, TrendingUp, TrendingDown, Users, Building2, Briefcase,
   BarChart2, RefreshCw, X, ChevronLeft, ChevronRight, CalendarDays, AlertCircle,
   Activity, Zap, Award, Calendar, IndianRupee, Table2, CalendarOff, Sparkles, ShieldAlert,
+  Landmark,
 } from 'lucide-react';
 import { ROUTES } from '@/constants/routes';
 import { useDashboardAnalytics, useDashboardAnalytics2 } from '@/hooks/useDashboard';
@@ -14,6 +15,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useActiveEmployees } from '@/hooks/useEmployees';
 import { useActiveClients } from '@/hooks/useClients';
 import { useActiveServicePOs } from '@/hooks/useServicePOs';
+import { useSelectableBusinessUnits } from '@/hooks/useSelectableBusinessUnits';
 import MonthlyHoursTrendChart from '@/components/charts/MonthlyHoursTrendChart';
 import MonthlyUtilizationTrendChart from '@/components/charts/MonthlyUtilizationTrendChart';
 import CostTrendChart from '@/components/charts/CostTrendChart';
@@ -285,6 +287,10 @@ const Dashboard = () => {
   const [fiscalYear, setFiscalYear]           = useState(currentFY);
   const [bottomMonthYear, setBottomMonthYear] = useState({ month: prevMonth.getMonth() + 1, year: prevMonth.getFullYear() });
   const [quarter, setQuarter]                 = useState(null);
+  // Business Unit filter — '' means every BU this login can reach, matching how the Employee /
+  // Client / Service PO filters below treat their own empty value. It rides into analyticsParams
+  // as a pseudo-param and is turned into the request's BU scope by dashboard.api's withBuScope.
+  const [buId, setBuId]                       = useState('');
   const [employeeId, setEmployeeId]           = useState('');
   const [clientId, setClientId]               = useState('');
   const [servicePOId, setServicePOId]         = useState('');
@@ -412,6 +418,7 @@ const Dashboard = () => {
     fiscalYear,
     hoursSource,
     roleId: roleObjects[0]?.id,
+    ...(buId        && { buId }),
     ...(quarter     && { quarter }),
     ...(employeeId  && { employeeId }),
     ...(clientId    && { clientId }),
@@ -431,6 +438,7 @@ const Dashboard = () => {
     year:  bottomMonthYear.year,
     hoursSource,
     roleId: roleObjects[0]?.id,
+    ...(buId        && { buId }),
     ...(employeeId  && { employeeId }),
     ...(clientId    && { clientId }),
     ...(servicePOId && { poId: servicePOId }),
@@ -443,6 +451,18 @@ const Dashboard = () => {
     useDashboardAnalytics2(analyticsParams, { enabled: viewMode === 'quarterly' });
   const { data: monthlyAnalytics2Raw } =
     useDashboardAnalytics2(monthlyAnalyticsParams, { enabled: viewMode === 'monthly' });
+
+  // Same source and availability rule as every other BU filter in the app (see
+  // hooks/useSelectableBusinessUnits): the BU master for an Admin/Entity Admin, the login's own
+  // mapped BUs for a BU Admin/BU Head, and nothing at all below two BUs.
+  const { units: businessUnitOptionsSource, canFilter: showBuFilter } = useSelectableBusinessUnits();
+  const buOptions = useMemo(
+    () => [
+      { label: 'All Business Units', value: '' },
+      ...businessUnitOptionsSource.map((bu) => ({ label: bu.name, value: String(bu.id) })),
+    ],
+    [businessUnitOptionsSource],
+  );
 
   const { data: employeesData } = useActiveEmployees();
   const { data: clientsData }   = useActiveClients();
@@ -602,6 +622,8 @@ const Dashboard = () => {
   const clientOptions    = (clientsData?.data    ?? clientsData    ?? []).map((c) => ({ value: String(c.client_id  ?? c.id),    label: c.client_name  ?? c.name }));
   const servicePOOptions = (servicePOsData?.data ?? servicePOsData ?? []).map((p) => ({ value: String(p.service_po_id ?? p.id), label: p.service_po_name ?? p.name }));
 
+  // Business Unit is deliberately excluded from both: it lives in the page header, not the
+  // Filters panel, so counting it would badge "Filters" for something that isn't in there.
   const hasFilters = !!(quarter || employeeId || clientId || servicePOId);
   const activeFilterCount = [quarter, employeeId, clientId, servicePOId].filter(Boolean).length;
 
@@ -739,6 +761,27 @@ const Dashboard = () => {
         </div>
 
         <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+          {/* Business Unit — a page-level scope control, deliberately ahead of the date picker
+              and OUTSIDE the Filters panel: it decides which BU's data the whole dashboard is
+              about (tiles, KPIs, every chart), where everything in Filters narrows within that.
+              Rendered inline rather than via components/common/BusinessUnitFilter because this
+              row uses the header's own control styling, not that component's stacked
+              label+field cell. Hidden below two selectable BUs, same rule as everywhere else. */}
+          {showBuFilter && (
+            <div className="flex items-center gap-1.5">
+              <Landmark className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <SearchableSelect
+                options={buOptions}
+                value={buId}
+                onValueChange={setBuId}
+                placeholder="All Business Units"
+                searchPlaceholder="Search business unit…"
+                showSearch={buOptions.length > 6}
+                className="w-48 h-9 rounded-xl text-sm"
+              />
+            </div>
+          )}
+
           {/* Contextual date picker */}
           {viewMode === 'quarterly' ? (
             <FiscalYearPicker

@@ -23,6 +23,7 @@ import {
   setAccessibleForms,
   setBusinessUnits,
   setActiveBu,
+  switchRole,
 } from '@/store/slices/authSlice';
 import { ROUTES } from '@/constants/routes';
 import { computeHomeRoute, FORM_NAMES } from '@/constants/rbacForms';
@@ -49,6 +50,25 @@ export const useAuth = () => {
 
   // true if the user has ANY of the specified roles
   const hasRole = (...requiredRoles) => roles.some((r) => requiredRoles.includes(r));
+
+  // Every role ASSIGNED to this employee, which is not the same thing as `roleObjects` above:
+  // that one holds the role(s) this SESSION is currently scoped to (what login's role picker
+  // settled on), while this is the full set the account may switch between. Normalized to
+  // { id, name } because the employee payload names it `role_name` where the session roles use
+  // `name`. Empty for an account whose employee payload predates the field — the role switcher
+  // simply stays hidden then, rather than showing a broken list.
+  const assignedRoles = (employee?.roles ?? [])
+    .map((r) => ({ id: r.id, name: r.role_name ?? r.name }))
+    .filter((r) => r.id != null && r.name);
+
+  // The session's current role. Single-active-role sessions are what /auth/select-role and
+  // /auth/switch-role produce, so this reads the first entry rather than inventing a separate
+  // "active role" field the store doesn't have.
+  const activeRoleId = roleObjects[0]?.id ?? null;
+
+  // Only meaningful for an account holding more than one role — drives whether the profile
+  // menu shows a switcher at all.
+  const canSwitchRole = assignedRoles.length > 1;
 
   // Where "back to home" should actually land — Dashboard (or, for an Employee-only account,
   // Employee Dashboard) is no longer guaranteed to be accessible to everyone (see
@@ -80,6 +100,11 @@ export const useAuth = () => {
   // refetch, same as handleLogout's queryClient.clear() above.
   const selectBu = (buId) => dispatch(setActiveBu(buId));
 
+  // Applies a role switch the backend has ALREADY confirmed — never call this with anything
+  // other than a successful /auth/switch-role response body. Callers must refetch the
+  // accessible-forms map afterwards (the reducer intentionally clears it).
+  const applyRoleSwitch = (payload) => dispatch(switchRole(payload));
+
   return {
     employee,
     isAuthenticated,
@@ -88,6 +113,9 @@ export const useAuth = () => {
     permissions,
     roleObjects,
     roleIds,
+    assignedRoles,
+    activeRoleId,
+    canSwitchRole,
     accessibleForms,
     accessibleFormsLoaded,
     isOriginalDataVisible,
@@ -106,6 +134,7 @@ export const useAuth = () => {
     setAccessibleForms: updateAccessibleForms,
     setBusinessUnits: updateBusinessUnits,
     setActiveBu: selectBu,
+    applyRoleSwitch,
   };
 };
 

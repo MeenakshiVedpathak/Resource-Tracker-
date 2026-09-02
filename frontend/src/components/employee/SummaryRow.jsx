@@ -1,10 +1,54 @@
-import { memo } from 'react';
+import { memo, useState, useEffect } from 'react';
 import { ChevronRight, ChevronDown } from 'lucide-react';
 import { TableRow, TableCell } from '@/components/ui/table';
-import { formatHoursCell } from '@/utils/formatters';
+import { parseHourMinuteInput, formatHourMinuteValue } from '@/utils/formatters';
 import { cn } from '@/utils/cn';
 import { DAILY_HOURS_CAP } from './WorkLogEntryModal';
 import { FIRST_COL_WIDTH, DAY_COL_WIDTH, TOTAL_COL_WIDTH } from './summaryTableLayout';
+
+const clampHours = (n, cap) => Math.min(cap, Math.max(0, n));
+
+// Buffers its own text so it can read/write "H.MM" (hours-and-minutes, base 60 — see
+// parseHourMinuteInput) while typing, only converting to/from the real decimal hours the rest
+// of the app uses once the cell is committed (blur), same interaction as WorkLogEntryTable's
+// HourStepper.
+const DayCellInput = ({ value, onCommit, disabled, cap, isDirty }) => {
+  const num = Number(value || 0);
+  const [inputValue, setInputValue] = useState(formatHourMinuteValue(num));
+
+  useEffect(() => {
+    setInputValue(formatHourMinuteValue(num));
+  }, [num]);
+
+  const commit = () => {
+    const parsed = parseHourMinuteInput(inputValue);
+    const next = Number.isFinite(parsed) ? clampHours(Math.round(parsed * 60) / 60, cap) : num;
+    setInputValue(formatHourMinuteValue(next));
+    if (next !== num) onCommit(next);
+  };
+
+  return (
+    <input
+      type="number"
+      step="0.5"
+      min="0"
+      max={cap}
+      value={inputValue}
+      onChange={(e) => setInputValue(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') e.currentTarget.blur();
+      }}
+      disabled={disabled}
+      className={cn(
+        'h-7 w-full rounded border bg-transparent text-center text-xs tabular-nums transition-colors',
+        '[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none',
+        'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+        isDirty && 'border-amber-400 bg-amber-50 dark:bg-amber-950/30'
+      )}
+    />
+  );
+};
 
 // One Service/Project (or nested hierarchy node) row in the Monthly Summary table. Memoized so
 // scrolling/resizing the 100+ row table doesn't re-render every row on every parent update —
@@ -58,7 +102,7 @@ const SummaryRow = ({
             className="px-1 text-center text-xs tabular-nums"
             style={{ width: DAY_COL_WIDTH, minWidth: DAY_COL_WIDTH, maxWidth: DAY_COL_WIDTH }}
           >
-            {formatHoursCell(hoursByDay?.[day])}
+            {formatHourMinuteValue(hoursByDay?.[day])}
           </TableCell>
         );
       }
@@ -69,19 +113,11 @@ const SummaryRow = ({
           className="p-1 text-center"
           style={{ width: DAY_COL_WIDTH, minWidth: DAY_COL_WIDTH, maxWidth: DAY_COL_WIDTH }}
         >
-          <input
-            type="number"
-            step="0.5"
-            min="0"
-            max={DAILY_HOURS_CAP}
+          <DayCellInput
             value={value}
-            onChange={(e) => onCellChange(day, e.target.value)}
-            className={cn(
-              'h-7 w-full rounded border bg-transparent text-center text-xs tabular-nums transition-colors',
-              '[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none',
-              'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
-              isDirty && 'border-amber-400 bg-amber-50 dark:bg-amber-950/30'
-            )}
+            onCommit={(next) => onCellChange(day, String(next))}
+            cap={DAILY_HOURS_CAP}
+            isDirty={isDirty}
           />
         </TableCell>
       );
@@ -91,7 +127,7 @@ const SummaryRow = ({
       className="summary-col-pinned sticky right-0 text-center font-semibold tabular-nums"
       style={{ width: TOTAL_COL_WIDTH, minWidth: TOTAL_COL_WIDTH, maxWidth: TOTAL_COL_WIDTH }}
     >
-      {formatHoursCell(total)}
+      {formatHourMinuteValue(total)}
     </TableCell>
   </TableRow>
 );

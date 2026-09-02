@@ -12,13 +12,16 @@ import { useEmployeeCalendar } from '@/hooks/useEmployeeWorkLog';
 import { STANDARD_MONTHLY_HOURS } from '@/components/employee/MonthlyHoursCard';
 import { ROUTES } from '@/constants/routes';
 import { cn } from '@/utils/cn';
+import { formatHoursMinutes, formatHourMinuteValue } from '@/utils/formatters';
 
 const WEEK_STRIP_LENGTH = 7;
 const WEEK_STRIP_MAX_HOURS = 10;
 
-// Everything below is derived from the one calendar aggregate the Work Log page already relies
-// on (GET /employee-timesheets/calendar) — no extra endpoints, so "This Month" here always
-// matches MonthlyHoursCard on the Work Log page instead of drifting out of sync with it.
+// Everything below is derived from the same calendar aggregate the Work Log page already relies
+// on (GET /employee-timesheets/calendar) — no other endpoints, so "This Month" here always
+// matches MonthlyHoursCard on the Work Log page instead of drifting out of sync with it. The
+// only extra call is a second month of that same aggregate, and only when the "Last 7 Days"
+// strip reaches back past the 1st (see below).
 const EmployeeDashboard = () => {
   const { employee } = useAuth();
   const today = dayjs();
@@ -28,6 +31,21 @@ const EmployeeDashboard = () => {
     data: calendarDays = [], isLoading, isError,
   } = useEmployeeCalendar(today.month() + 1, today.year());
 
+  // GET /employee-timesheets/calendar returns ONE month, so on the first six days of a month the
+  // "Last 7 Days" strip below reaches into days this response simply doesn't contain — they'd
+  // render as empty bars however many hours were actually logged (e.g. on 2 Sep, 27–31 Aug).
+  // Pull the previous month too, but only while the window genuinely crosses the boundary.
+  const windowStart = today.subtract(WEEK_STRIP_LENGTH - 1, 'day');
+  const crossesMonth = !windowStart.isSame(today, 'month');
+  const { data: prevMonthDays = [], isLoading: isPrevMonthLoading } = useEmployeeCalendar(
+    windowStart.month() + 1,
+    windowStart.year(),
+    { enabled: crossesMonth }
+  );
+  // The strip waits on both months; the stat cards above are current-month only and keep using
+  // isLoading on its own, so they don't stall behind a request they don't read.
+  const isStripLoading = isLoading || (crossesMonth && isPrevMonthLoading);
+
   const todayHours = calendarDays.find((d) => d.date === todayKey)?.totalHours ?? 0;
   const monthHours = calendarDays.reduce((sum, d) => sum + Number(d.totalHours || 0), 0);
   const daysLogged = calendarDays.filter((d) => d.date <= todayKey && d.hasEntries).length;
@@ -36,7 +54,10 @@ const EmployeeDashboard = () => {
   const weekStrip = Array.from({ length: WEEK_STRIP_LENGTH }, (_, i) => {
     const date = today.subtract(WEEK_STRIP_LENGTH - 1 - i, 'day');
     const key = date.format('YYYY-MM-DD');
-    const hours = Number(calendarDays.find((d) => d.date === key)?.totalHours ?? 0);
+    // Current month first, falling back to the previous month's response for the days before the
+    // 1st — only one of the two can ever hold a given date, so the order is just a cheap skip.
+    const day = calendarDays.find((d) => d.date === key) ?? prevMonthDays.find((d) => d.date === key);
+    const hours = Number(day?.totalHours ?? 0);
     return { key, label: date.format('dd'), dayNum: date.date(), hours, isToday: key === todayKey };
   });
 
@@ -45,12 +66,12 @@ const EmployeeDashboard = () => {
 
   const statCards = [
     {
-      key: 'today', title: "Today's Hours", icon: Clock, value: `${todayHours} hrs`,
+      key: 'today', title: "Today's Hours", icon: Clock, value: formatHoursMinutes(todayHours),
       bar: 'bg-orange-500', iconBg: 'bg-orange-50 dark:bg-orange-950/40', iconColor: 'text-orange-500',
       sub: today.format('dddd, DD MMM'),
     },
     {
-      key: 'month', title: 'This Month', icon: TrendingUp, value: `${monthHours} hrs`,
+      key: 'month', title: 'This Month', icon: TrendingUp, value: formatHoursMinutes(monthHours),
       bar: 'bg-emerald-500', iconBg: 'bg-emerald-50 dark:bg-emerald-950/40', iconColor: 'text-emerald-600',
       sub: `${monthPct}% of ${STANDARD_MONTHLY_HOURS} hr target`,
       progress: monthPct,
@@ -109,7 +130,7 @@ const EmployeeDashboard = () => {
             <BarChart3 className="h-4 w-4 text-muted-foreground" />
             <h2 className="text-sm font-semibold">Last 7 Days</h2>
           </div>
-          {isLoading ? (
+          {isStripLoading ? (
             <div className="flex items-end justify-between gap-2">
               {Array.from({ length: WEEK_STRIP_LENGTH }).map((_, i) => (
                 <Skeleton key={i} className="h-16 w-full" />
@@ -120,7 +141,7 @@ const EmployeeDashboard = () => {
               {weekStrip.map((d) => (
                 <div key={d.key} className="flex flex-1 flex-col items-center gap-1.5">
                   <span className="text-[11px] font-medium text-muted-foreground">
-                    {d.hours > 0 ? `${d.hours}h` : ''}
+                    {d.hours > 0 ? `${formatHourMinuteValue(d.hours)}h` : ''}
                   </span>
                   <div className="flex h-16 w-full items-end rounded-md bg-muted/50">
                     <div

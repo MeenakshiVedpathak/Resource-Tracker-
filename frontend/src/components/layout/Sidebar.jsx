@@ -8,7 +8,8 @@ import { cn } from '@/utils/cn';
 import { useAuth } from '@/hooks/useAuth';
 import { useFormModules, useForms } from '@/hooks/useForms';
 import { useFormCategories } from '@/hooks/useFormCategories';
-import { resolveFormRoute } from '@/constants/rbacForms';
+import { resolveFormRoute, FORM_NAMES } from '@/constants/rbacForms';
+import { useCanManageBusinessUnits, useCanManageEmployeeRecords } from '@/hooks/usePermissions';
 import { ROUTES } from '@/constants/routes';
 import { ChevronLeft, ChevronRight, ChevronDown, UserPlus, Shield, ClipboardList, Network, Folder, Plus } from 'lucide-react';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
@@ -38,6 +39,8 @@ const RESTRICTED_MODULES = ['administration'];
 // list) — their group label becomes a link into that hub instead of plain text.
 const MODULE_OVERVIEW_ROUTES = { reports: ROUTES.REPORTS };
 
+const normalizeName = (s) => (s ?? '').trim().toLowerCase();
+
 // Builds one nav group per module, one item per form — driven entirely by the RBAC
 // accessible-forms map (module -> [{ id, name }]) so a user only ever sees what their
 // roles actually grant. Section AND item order follow each row's real Form Master `seq`
@@ -53,7 +56,7 @@ const MODULE_OVERVIEW_ROUTES = { reports: ROUTES.REPORTS };
 // accessibleForms itself (POST /roles/forms) doesn't carry category_id, so the category
 // assignment is looked up from the separate GET /forms data useMenuRank already fetches
 // for sequencing (categoryOf/categoryInfo) — see below.
-const buildNavGroups = (accessibleForms, { isSuperAdmin, moduleRank, formRank, categoryOf, categoryInfo }) =>
+const buildNavGroups = (accessibleForms, { isSuperAdmin, canManageBus, canManageEmployees, moduleRank, formRank, categoryOf, categoryInfo }) =>
   Object.entries(accessibleForms ?? {})
     .filter(
       ([moduleName]) => isSuperAdmin || !RESTRICTED_MODULES.includes(moduleName.trim().toLowerCase())
@@ -69,12 +72,22 @@ const buildNavGroups = (accessibleForms, { isSuperAdmin, moduleRank, formRank, c
             );
             return null;
           }
+          // The quick-add "+" has to obey whatever permission its destination route does. Two
+          // forms differ by role, both for the BU Admin / BU Head tier: BU Master (they reach
+          // that screen read-only) and Employee Master (granted to them for the Map Roles &
+          // Business Units action, not to create employees). For those, the shortcut would land
+          // them straight on Not Authorized. Normalized compare, same as resolveFormRoute's own
+          // lookup.
+          const name = normalizeName(form.name);
+          const quickAddAllowed =
+            (name !== normalizeName(FORM_NAMES.BU_ADMIN_MASTER) || canManageBus)
+            && (name !== normalizeName(FORM_NAMES.EMPLOYEES) || canManageEmployees);
           return {
             label: form.name,
             icon: cfg.icon,
             to: cfg.to,
             exact: cfg.exact,
-            addTo: cfg.addTo,
+            addTo: quickAddAllowed ? cfg.addTo : undefined,
             addLabel: cfg.addLabel,
             categoryId: categoryOf(moduleName, form.name),
           };
@@ -319,14 +332,18 @@ const Sidebar = () => {
   // BU Head is an additive peer of BU Admin with identical form/permission access — extends the
   // same bypass BU Admin already gets, never a standalone concept.
   const isSuperAdmin = hasRole('BU Admin', 'BU Head');
+  // These two only decide whether BU Master / Employee Master get a quick-add "+" — the screens
+  // themselves are still listed for anyone the RBAC mapping grants them to.
+  const canManageBus = useCanManageBusinessUnits();
+  const canManageEmployees = useCanManageEmployeeRecords();
   const { moduleRank, formRank, categoryOf, categoryInfo } = useMenuRank();
   // isPlatformAdmin is derived from the held roles (§0) — overrides the normal
   // accessible-forms-driven nav entirely. Every other nav item comes strictly from
   // accessibleForms (the Forms API) — no role-name-based injection on top of it.
   const navGroups = useMemo(() => {
     if (isPlatformAdmin) return SUPER_ADMIN_NAV_GROUPS;
-    return buildNavGroups(accessibleForms, { isSuperAdmin, moduleRank, formRank, categoryOf, categoryInfo });
-  }, [accessibleForms, isSuperAdmin, isPlatformAdmin, moduleRank, formRank, categoryOf, categoryInfo]);
+    return buildNavGroups(accessibleForms, { isSuperAdmin, canManageBus, canManageEmployees, moduleRank, formRank, categoryOf, categoryInfo });
+  }, [accessibleForms, isSuperAdmin, canManageBus, canManageEmployees, isPlatformAdmin, moduleRank, formRank, categoryOf, categoryInfo]);
 
   // Guards navigation away from a page with unsaved changes (e.g. Timesheet
   // Import Detail's Modified Hours edits) — any page can opt in via the

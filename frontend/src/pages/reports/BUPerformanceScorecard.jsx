@@ -1,15 +1,17 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import { createColumnHelper } from '@tanstack/react-table';
-import { AlertCircle, Download } from 'lucide-react';
+import { AlertCircle, Download, Search } from 'lucide-react';
 import { useBUPerformanceScorecard } from '@/hooks/useReports';
 import { extractApiError } from '@/services/apiClient';
 import { formatCurrency, formatPercentage } from '@/utils/formatters';
 import PageHeader from '@/components/common/PageHeader';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
+import BusinessUnitFilter, { ALL_BUS } from '@/components/common/BusinessUnitFilter';
 import DataTable from '@/components/common/DataTable';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
 
@@ -34,7 +36,7 @@ const exportToExcel = (rows) => {
     r.total_invoiced != null ? Number(r.total_invoiced) : '',
     r.total_delivery_cost != null ? Number(r.total_delivery_cost) : '',
     r.total_margin != null ? Number(r.total_margin) : '',
-    r.avg_utilization_pct != null ? Number(r.avg_utilization_pct) * 100 : '',
+    r.avg_utilization_pct != null ? Number(r.avg_utilization_pct) : '',
   ]);
   const ws = XLSX.utils.aoa_to_sheet([header, ...dataRows]);
   const wb = XLSX.utils.book_new();
@@ -103,12 +105,14 @@ const columns = [
   columnHelper.accessor('avg_utilization_pct', {
     header: 'Avg Utilization %',
     size: 150,
-    // Sample data shows "0.47" as a 0–1 ratio, not an already-scaled percentage — scaling by
-    // 100 here; confirm against real backend data once available.
+    // The API returns this already on a 0–100 scale (6.12 means 6.12%), verified against the
+    // live endpoint. It was previously scaled by 100 here on the strength of sample data that
+    // looked like a 0–1 ratio, which rendered 6.12% as "612.0%". formatPercentage only appends
+    // the sign — it does no scaling of its own — so the raw value goes in as-is.
     cell: (info) => {
       const value = info.getValue();
       if (value == null || value === '') return <span className="text-muted-foreground">—</span>;
-      return <span className="tabular-nums">{formatPercentage(Number(value) * 100)}</span>;
+      return <span className="tabular-nums">{formatPercentage(Number(value))}</span>;
     },
   }),
 ];
@@ -127,7 +131,9 @@ const BUPerformanceScorecard = () => {
     month: prevMonth.getMonth() + 1,
     year: prevMonth.getFullYear(),
   });
+  const [search, setSearch] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [buId, setBuId] = useState(ALL_BUS);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
 
@@ -135,25 +141,39 @@ const BUPerformanceScorecard = () => {
     ...(monthYear && { month: monthYear.month, year: monthYear.year }),
     page: 1,
     limit: MAX_RECORDS_FETCH,
+    buId,
   };
 
   const { data, isPending, isError, error } = useBUPerformanceScorecard(params);
 
   const records = data?.data?.records ?? [];
-  const pagedRecords = records.slice((page - 1) * limit, page * limit);
+
+  // Applied in memory — the whole matching set is already here (see MAX_RECORDS_FETCH), so there
+  // is nothing to gain from a round-trip. Covers the identifying columns only; the numeric
+  // metric columns are left out, since substring-matching a count or an amount misleads more
+  // than it helps.
+  const filteredRecords = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return records;
+    return records.filter((r) => [r.company_code, r.company_name, r.entity_id]
+      .some((v) => String(v ?? '').toLowerCase().includes(q)));
+  }, [records, search]);
+
+  const pagedRecords = filteredRecords.slice((page - 1) * limit, page * limit);
   const errorMessage = isError ? extractApiError(error) : null;
 
   // Recomputed client-side from the full matching set rather than trusted from the backend's own
   // `summary` — its `total_invoiced_amount` field doesn't even match the row-level field
   // (`total_invoiced`) the table columns render, a copy-paste mismatch from another report.
-  const summary = records.length > 0 ? {
-    total_invoiced: records.reduce((sum, r) => sum + (Number(r.total_invoiced) || 0), 0),
-    total_delivery_cost: records.reduce((sum, r) => sum + (Number(r.total_delivery_cost) || 0), 0),
-    total_margin: records.reduce((sum, r) => sum + (Number(r.total_margin) || 0), 0),
+  const summary = filteredRecords.length > 0 ? {
+    total_invoiced: filteredRecords.reduce((sum, r) => sum + (Number(r.total_invoiced) || 0), 0),
+    total_delivery_cost: filteredRecords.reduce((sum, r) => sum + (Number(r.total_delivery_cost) || 0), 0),
+    total_margin: filteredRecords.reduce((sum, r) => sum + (Number(r.total_margin) || 0), 0),
   } : null;
 
   // Already have the full matching set in memory — no need for a second network round-trip.
-  const handleExport = () => exportToExcel(records);
+  // Exports what the search actually leaves on screen, not the unfiltered set.
+  const handleExport = () => exportToExcel(filteredRecords);
 
   return (
     <div>
@@ -162,13 +182,22 @@ const BUPerformanceScorecard = () => {
         description="Per-company scorecard of active employees, POs, and margin. Visible to Entity Admin and Admin roles only."
         actions={
           <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search Company Code, Name, Entity ID…"
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                className="h-9 w-72 pl-9 text-sm"
+              />
+            </div>
             <FilterToggleButton
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((p) => !p)}
-              activeCount={0}
+              activeCount={buId !== ALL_BUS ? 1 : 0}
               className="h-9"
             />
-            {!errorMessage && records.length > 0 && (
+            {!errorMessage && filteredRecords.length > 0 && (
               <Button variant="outline" size="sm" className="h-9" onClick={handleExport}>
                 <Download className="mr-1.5 h-4 w-4" />Export Excel
               </Button>
@@ -178,7 +207,9 @@ const BUPerformanceScorecard = () => {
       />
 
       {/* Collapsible filter panel */}
-      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[200px]">
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[300px]" onClear={() => setBuId(ALL_BUS)} showClear={buId !== ALL_BUS}>
+        <BusinessUnitFilter value={buId} onChange={setBuId} />
+
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Month &amp; Year <span className="text-destructive">*</span></Label>
           <MonthYearPicker
@@ -205,7 +236,7 @@ const BUPerformanceScorecard = () => {
             columns={columns}
             data={pagedRecords}
             isLoading={isPending}
-            pagination={{ page, limit, total: records.length }}
+            pagination={{ page, limit, total: filteredRecords.length }}
             onPageChange={setPage}
             onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
           />

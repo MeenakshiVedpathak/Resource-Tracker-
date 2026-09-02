@@ -13,6 +13,7 @@ import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
+import BusinessUnitFilter, { ALL_BUS } from '@/components/common/BusinessUnitFilter';
 import EmptyState from '@/components/common/EmptyState';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -78,6 +79,7 @@ const ClientWiseAnalytics = () => {
   const [poId, setPoId] = useState('all');
 
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [buId, setBuId] = useState(ALL_BUS);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [sortBy, setSortBy] = useState(null);
@@ -120,6 +122,7 @@ const ClientWiseAnalytics = () => {
     ...(sortBy && { sortBy, sortOrder }),
     page,
     limit,
+    buId,
   };
 
   const { data, isPending } = useClientWiseAnalytics(params);
@@ -128,6 +131,7 @@ const ClientWiseAnalytics = () => {
   const meta = data?.meta ?? {};
 
   const activeFilterCount = [
+    buId !== ALL_BUS,
     employeeId !== 'all',
     clientId !== 'all',
     serviceTypeId !== 'all',
@@ -135,6 +139,7 @@ const ClientWiseAnalytics = () => {
   ].filter(Boolean).length;
 
   const clearFilters = () => {
+    setBuId(ALL_BUS);
     setEmployeeId('all');
     setClientId('all');
     setServiceTypeId('all');
@@ -243,11 +248,16 @@ const ClientWiseAnalytics = () => {
         }
       />
 
-      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[360px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
-        <div className="col-span-2 md:col-span-4 flex flex-col gap-1.5">
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[460px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
+        <BusinessUnitFilter value={buId} onChange={setBuId} />
+
+        {/* Spans 2 of the 4 columns so it shares row 1 with Business Unit and Employee rather
+            than taking a whole row to itself. The mode toggle sits in the control row beside
+            the picker, matching the plain label + h-9 control of every neighbouring cell. */}
+        <div className="col-span-2 flex flex-col gap-1.5">
           <Label className="text-xs">Period <span className="text-destructive">*</span></Label>
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-0.5 p-0.5 rounded-xl bg-muted border shrink-0">
+            <div className="flex h-9 shrink-0 items-center gap-0.5 rounded-lg border bg-muted p-1">
               {[
                 { value: 'month', label: 'Month' },
                 { value: 'range', label: 'Date Range' },
@@ -256,8 +266,8 @@ const ClientWiseAnalytics = () => {
                   key={value}
                   type="button"
                   onClick={() => handlePeriodModeChange(value)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 whitespace-nowrap ${
-                    periodMode === value ? 'bg-card shadow-sm text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground hover:text-foreground'
+                  className={`flex h-full items-center rounded-md px-3 text-xs font-semibold transition-all duration-150 whitespace-nowrap ${
+                    periodMode === value ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   {label}
@@ -270,14 +280,14 @@ const ClientWiseAnalytics = () => {
                 onChange={(val) => { setMonthYear(val); setPage(1); }}
                 placeholder="Select month"
                 clearable={false}
-                className="w-full sm:w-auto"
+                className="w-full flex-1 sm:w-auto sm:min-w-[10rem]"
               />
             ) : (
               <DateRangePicker
                 value={dateRange}
                 onChange={(val) => { setDateRange(val); setPage(1); }}
                 placeholder="Select date range"
-                className="w-full sm:w-auto"
+                className="w-full flex-1 sm:w-auto sm:min-w-[14rem]"
               />
             )}
           </div>

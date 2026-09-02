@@ -1,20 +1,53 @@
+import { createContext, useContext } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/utils/cn';
 
-const PageHeader = ({ title, description, actions, className, children }) => (
-  <div className={cn('mb-4 flex flex-wrap items-start justify-between gap-x-4 gap-y-2', className)}>
-    <div className="min-w-0">
-      <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
-      {description && (
-        <p className="mt-1 text-sm text-muted-foreground">{description}</p>
-      )}
-      {children}
-    </div>
-    {actions && (
-      <div className="flex shrink-0 items-center gap-2">
-        {actions}
+// A layout (e.g. ReportsLayout) can register a "back" destination here so every PageHeader
+// rendered beneath it shows an inline back arrow next to its title, without each individual
+// page having to pass the prop down. A `backTo` prop on PageHeader overrides it.
+const PageHeaderBackContext = createContext(null);
+
+export const PageHeaderBackProvider = PageHeaderBackContext.Provider;
+
+const PageHeader = ({ title, description, actions, backTo, backLabel, className, children }) => {
+  const navigate = useNavigate();
+  const inherited = useContext(PageHeaderBackContext);
+  const backTarget = backTo ?? inherited?.to ?? null;
+  const label = backLabel ?? inherited?.label ?? 'Back';
+
+  return (
+    <div className={cn('mb-4 flex flex-wrap items-start justify-between gap-x-4 gap-y-2', className)}>
+      <div className="min-w-0">
+        <div className="flex items-center gap-2">
+          {backTarget && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="-ml-1 shrink-0"
+              onClick={() => navigate(backTarget)}
+              aria-label={label}
+              title={label}
+            >
+              <ArrowLeft />
+            </Button>
+          )}
+          <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+        </div>
+        {description && (
+          <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+        )}
+        {children}
       </div>
-    )}
-  </div>
-);
+      {actions && (
+        <div className="flex shrink-0 items-center gap-2">
+          {actions}
+        </div>
+      )}
+    </div>
+  );
+};
 
 export default PageHeader;

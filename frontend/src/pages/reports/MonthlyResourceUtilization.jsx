@@ -11,6 +11,7 @@ import { formatMonthYear } from '@/utils/formatters';
 import PageHeader from '@/components/common/PageHeader';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
+import BusinessUnitFilter, { ALL_BUS } from '@/components/common/BusinessUnitFilter';
 import { Button } from '@/components/ui/button';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
@@ -129,6 +130,7 @@ const MonthlyResourceUtilization = () => {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [buId, setBuId] = useState(ALL_BUS);
   const [exporting, setExporting] = useState(false);
 
   const { data: activeEmployees = [] }         = useActiveEmployees();
@@ -147,6 +149,7 @@ const MonthlyResourceUtilization = () => {
     page,
     limit,
     ...(search.trim() && { search: search.trim() }),
+    buId,
   } : undefined;
 
   const { data, isPending } = useMonthlyResourceUtilization(params);
@@ -279,9 +282,11 @@ const MonthlyResourceUtilization = () => {
     employeeId !== 'all' ? 1 : 0,
     serviceCategoryId !== 'all' ? 1 : 0,
     serviceTypeId !== 'all' ? 1 : 0,
+    buId !== ALL_BUS ? 1 : 0,
   ].reduce((a, b) => a + b, 0);
 
   const clearFilters = () => {
+    setBuId(ALL_BUS);
     setEmployeeId('all');
     setServiceCategoryId('all');
     setServiceTypeId('all');
@@ -340,7 +345,17 @@ const MonthlyResourceUtilization = () => {
       />
 
       {/* ── Collapsible Filters Panel ── */}
-      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[260px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
+      {/* All five filters on one row at xl (the panel's default caps at 4 per row, which wrapped
+          Service Type onto a second line once Business Unit was added). Steps down on narrower
+          viewports; max-h is sized for the mobile single-column stack so nothing clips. */}
+      <FilterPanel
+        isOpen={filtersOpen}
+        maxHeightClass="max-h-[460px]"
+        gridClassName="grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 w-full"
+        onClear={clearFilters}
+        showClear={activeFilterCount > 0}
+      >
+        <BusinessUnitFilter value={buId} onChange={setBuId} />
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs font-medium">Month &amp; Year <span className="text-destructive">*</span></Label>
             <MonthYearPicker

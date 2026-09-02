@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import * as XLSX from 'xlsx';
-import { Download } from 'lucide-react';
+import { Download, Search } from 'lucide-react';
 import { useServicePOResourceReport, useResourceAllocationAllRows } from '@/hooks/useReports';
 import { useCanViewOriginalData } from '@/hooks/usePermissions';
 import { reportsApi } from '@/api/reports.api';
@@ -13,6 +13,7 @@ import { formatMonthYear } from '@/utils/formatters';
 import PageHeader from '@/components/common/PageHeader';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
+import BusinessUnitFilter, { ALL_BUS } from '@/components/common/BusinessUnitFilter';
 import { Button } from '@/components/ui/button';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -44,6 +45,22 @@ const getField = (row, ...keys) => {
   }
   return null;
 };
+
+// The columns worth searching, each as the same key-alias list groupRows/exportToExcel use —
+// the API's field names vary by backend version, so search has to look through exactly the
+// aliases the table renders from or it would miss rows that are plainly visible. Time (hrs) is
+// deliberately absent: substring-matching a number is more confusing than useful.
+const SEARCHABLE_KEYS = [
+  ['customer_name', 'client_name', 'client'],                 // Customer Name
+  ['po_name', 'service_po_name', 'po_summary', 'po_title'],   // Service PO Summary
+  ['service_type_name', 'service_type', 'po_type', 'type'],   // Service Type
+  ['employee_name', 'full_name', 'resource_name'],            // Resource
+  ['employee_code'],                                          // Resource code
+  ['remarks'],                                                // Remarks
+];
+
+const rowMatchesSearch = (row, q) =>
+  SEARCHABLE_KEYS.some((keys) => String(getField(row, ...keys) ?? '').toLowerCase().includes(q));
 
 // Group flat rows by customer → po_name
 const groupRows = (rows) => {
@@ -121,9 +138,11 @@ const ServicePOResource = () => {
     if (!canViewOriginal) setHoursSource('M');
   }, [canViewOriginal]);
 
+  const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [buId, setBuId] = useState(ALL_BUS);
   const [exporting, setExporting] = useState(false);
 
   const { data: activeEmployees = [] } = useActiveEmployees();
@@ -177,6 +196,7 @@ const ServicePOResource = () => {
     ...(clientId !== 'all' && { clientId }),
     page,
     limit,
+    buId,
   };
 
   const { data, isPending } = useServicePOResourceReport(params);
@@ -188,14 +208,40 @@ const ServicePOResource = () => {
 
   const rows   = data?.data ?? [];
   const meta   = data?.meta ?? {};
-  const groups = useMemo(() => groupRows(rows), [rows]);
+
+  // Search deliberately spans the whole result set rather than the page on screen: the full
+  // dataset is already in memory for Total Hours, so there is nothing to fetch, and a search
+  // that only looked at the current 10 rows would report "not found" for records that exist.
+  // While a search is active the server's page boundaries no longer describe the result, so
+  // paging switches to client-side over the matches; with no search, nothing changes.
+  const trimmedSearch = search.trim().toLowerCase();
+  const isSearching = trimmedSearch.length > 0;
+
+  const searchedRows = useMemo(
+    () => (isSearching ? (fullRows ?? rows).filter((r) => rowMatchesSearch(r, trimmedSearch)) : null),
+    [isSearching, trimmedSearch, fullRows, rows]
+  );
+
+  const visibleRows = isSearching ? searchedRows.slice((page - 1) * limit, page * limit) : rows;
+  const groups = useMemo(() => groupRows(visibleRows), [visibleRows]);
+
+  // One pagination view-model so the footer reads the same whether the server or the search is
+  // doing the paging.
+  const pageCount    = isSearching ? Math.max(1, Math.ceil(searchedRows.length / limit)) : (meta.totalPages ?? 1);
+  const recordCount  = isSearching ? searchedRows.length : meta.total;
+  const currentPage  = isSearching ? page : (meta.page ?? page);
+  const canPrev      = isSearching ? page > 1 : !!(meta.hasPrev || meta.hasPrevPage);
+  const canNext      = isSearching ? page < pageCount : !!(meta.hasNext || meta.hasNextPage);
 
   // Export pulls every matching record (not just the current page); reuses the
   // already-fetched full dataset above when available instead of firing a new request.
   const handleExport = async () => {
     setExporting(true);
     try {
-      const all = fullRows ?? await reportsApi.fetchAllResourceAllocationRows(params);
+      // Exports what the search actually leaves on screen, not the unfiltered set.
+      const all = isSearching
+        ? searchedRows
+        : (fullRows ?? await reportsApi.fetchAllResourceAllocationRows(params));
       exportToExcel(all, monthYear?.month, monthYear?.year);
     } finally {
       setExporting(false);
@@ -203,12 +249,13 @@ const ServicePOResource = () => {
   };
 
   const monthLabel  = monthYear ? formatMonthYear(monthYear.month, monthYear.year) : '';
-  const totalHours  = (fullRows ?? rows).reduce((sum, r) => {
+  const totalHours  = (isSearching ? searchedRows : (fullRows ?? rows)).reduce((sum, r) => {
     const h = getField(r, 'total_hours_logged', 'hours_logged', 'hours', 'time_in_hrs');
     return sum + (h ? Number(h) : 0);
   }, 0);
 
   const activeFilterCount = [
+    buId !== ALL_BUS ? 1 : 0,
     employeeId !== 'all' ? 1 : 0,
     categoryId !== 'all' ? 1 : 0,
     typeId !== 'all' ? 1 : 0,
@@ -217,6 +264,7 @@ const ServicePOResource = () => {
   ].reduce((a, b) => a + b, 0);
 
   const clearFilters = () => {
+    setBuId(ALL_BUS);
     setEmployeeId('all');
     setCategoryId('all');
     setTypeId('all');
@@ -251,13 +299,22 @@ const ServicePOResource = () => {
                 ))}
               </div>
             )}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search customer, PO, type, resource…"
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                className="h-9 w-72 pl-9 text-sm"
+              />
+            </div>
             <FilterToggleButton
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((o) => !o)}
               activeCount={activeFilterCount}
               className="h-9"
             />
-            {rows.length > 0 && (
+            {visibleRows.length > 0 && (
               <Button variant="outline" size="sm" className="h-9" onClick={handleExport} disabled={exporting}>
                 <Download className="mr-1.5 h-4 w-4" />{exporting ? 'Exporting…' : 'Export Excel'}
               </Button>
@@ -267,7 +324,9 @@ const ServicePOResource = () => {
       />
 
       {/* ── Collapsible Filter Panel ── */}
-      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[460px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[560px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
+          <BusinessUnitFilter value={buId} onChange={setBuId} />
+
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs font-medium">Month &amp; Year</Label>
             <MonthYearPicker
@@ -376,9 +435,11 @@ const ServicePOResource = () => {
             <Skeleton key={i} className="h-10 w-full" />
           ))}
         </div>
-      ) : rows.length === 0 ? (
+      ) : visibleRows.length === 0 ? (
         <div className="rounded-lg border py-20 text-center">
-          <p className="text-sm text-muted-foreground">No allocation data found.</p>
+          <p className="text-sm text-muted-foreground">
+            {isSearching ? `No rows match “${search.trim()}”.` : 'No allocation data found.'}
+          </p>
         </div>
       ) : (
         <>
@@ -504,9 +565,9 @@ const ServicePOResource = () => {
 
           <div className="mt-3 flex items-center justify-between gap-2">
             <p className="text-xs text-muted-foreground">
-              {meta.total != null
-                ? `${meta.total} record${meta.total !== 1 ? 's' : ''} · page ${meta.page ?? page} of ${meta.totalPages ?? 1}`
-                : `${groups.length} service PO${groups.length !== 1 ? 's' : ''} · ${rows.length} resource row${rows.length !== 1 ? 's' : ''}`}
+              {recordCount != null
+                ? `${recordCount} record${recordCount !== 1 ? 's' : ''} · page ${currentPage} of ${pageCount}`
+                : `${groups.length} service PO${groups.length !== 1 ? 's' : ''} · ${visibleRows.length} resource row${visibleRows.length !== 1 ? 's' : ''}`}
               {monthLabel ? ` · ${monthLabel}` : ''}
             </p>
                         <div className="flex items-center gap-3">
@@ -521,23 +582,23 @@ const ServicePOResource = () => {
                   </SelectContent>
                 </Select>
               </div>
-              {(meta.totalPages ?? 1) > 1 && (
+              {pageCount > 1 && (
               <div className="flex items-center gap-1">
                 <Button
                   variant="outline" size="sm"
                   className="h-7 px-2 text-xs"
-                  disabled={!(meta.hasPrev || meta.hasPrevPage)}
+                  disabled={!canPrev}
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                 >
                   Previous
                 </Button>
                 <span className="text-xs text-muted-foreground px-1">
-                  {meta.page ?? page} / {meta.totalPages}
+                  {currentPage} / {pageCount}
                 </span>
                 <Button
                   variant="outline" size="sm"
                   className="h-7 px-2 text-xs"
-                  disabled={!(meta.hasNext || meta.hasNextPage)}
+                  disabled={!canNext}
                   onClick={() => setPage((p) => p + 1)}
                 >
                   Next

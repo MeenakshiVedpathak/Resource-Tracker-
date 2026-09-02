@@ -99,6 +99,46 @@ const authSlice = createSlice({
       saveAccessibleForms(forms);
       state.accessibleFormsLoaded = true;
     },
+    // Mid-session role switch (POST /auth/switch-role). Deliberately NOT setCredentials:
+    // that resets businessUnits/activeBuId for a brand-new session, whereas a role switch must
+    // leave the employee's BU mappings and their current BU selection exactly as they were —
+    // the BU switcher keeps working across the switch. Only ever dispatched AFTER the backend
+    // has confirmed the switch; the frontend never flips the active role on its own.
+    switchRole: (state, action) => {
+      const { accessToken, refreshToken, roles, employee } = action.payload ?? {};
+
+      // The session is re-scoped to the new role, so the backend normally re-issues the access
+      // token. Only replace what it actually sent — a response that rotates the access token
+      // but not the refresh token must keep the existing refresh token, not blank it.
+      if (accessToken) {
+        const nextRefreshToken = refreshToken ?? state.refreshToken;
+        state.accessToken = accessToken;
+        state.refreshToken = nextRefreshToken;
+        // saveTokens writes both keys, so only persist when there's a real refresh token to
+        // write alongside — otherwise the literal string "null" lands in localStorage.
+        if (nextRefreshToken) saveTokens(accessToken, nextRefreshToken);
+      }
+
+      // The switched-to role set is authoritative — overwrite, never merge with the old one.
+      const nextRoles = roles ?? [];
+      state.roles = nextRoles;
+      saveRoles(nextRoles);
+
+      // Only if the response re-serialized the employee. Its `roles[]` is the full assigned-role
+      // list that drives the switcher itself, so a stale one would silently shrink the menu.
+      if (employee) {
+        state.employee = employee;
+        saveEmployee(employee);
+      }
+
+      // Accessible forms are role-derived: drop the previous role's map so no menu entry from
+      // the old role survives the switch. accessibleFormsLoaded=false keeps ProtectedRoute on
+      // its loader instead of reading the now-empty map as "not authorized" mid-switch — the
+      // caller repopulates it from POST /roles/forms for the new role.
+      state.accessibleForms = {};
+      saveAccessibleForms({});
+      state.accessibleFormsLoaded = false;
+    },
     // Switching BU updates the global selection only — no re-login, no full page reload.
     // Callers (UserMenu's BU switcher) are responsible for invalidating React Query so
     // BU-scoped screens refetch against the newly-selected BU rather than showing stale data
@@ -125,7 +165,8 @@ const authSlice = createSlice({
 });
 
 export const {
-  setCredentials, setTokens, setRoles, setAccessibleForms, setBusinessUnits, setActiveBu, logout,
+  setCredentials, setTokens, setRoles, setAccessibleForms, setBusinessUnits, setActiveBu,
+  switchRole, logout,
 } = authSlice.actions;
 
 const EMPTY_PERMISSIONS = [];

@@ -7,7 +7,7 @@ import { useCreateBuHead } from '@/hooks/useBuHeads';
 import { useCompanies } from '@/hooks/useCompanies';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
-import { employeeBaseFields, employeePasswordField } from '@/constants/employeeFormSchema';
+import { employeeBaseFields, employeePasswordField, todayIsoDate } from '@/constants/employeeFormSchema';
 import {
   Form, FormField, FormItem, FormLabel, FormControl, FormMessage,
 } from '@/components/ui/form';
@@ -36,7 +36,7 @@ import {
 const buHeadSchema = z
   .object({
     ...employeeBaseFields,
-    company_ids: z.array(z.coerce.number()).min(1, 'Select at least one BU'),
+    company_ids: z.array(z.coerce.number()).min(1, 'Select at least one business unit'),
     password: z.union([z.literal(''), employeePasswordField]),
     confirmPassword: z.string(),
   })
@@ -328,7 +328,7 @@ const BuHeadForm = ({ open, onOpenChange }) => {
                       <FormItem className="space-y-1">
                         <FormLabel className="text-[11px] text-muted-foreground font-medium"><span className="text-destructive mr-0.5">*</span> Date of Joining</FormLabel>
                         <FormControl>
-                          <Input type="date" {...field} className="h-8 text-sm border-gray-200" />
+                          <Input type="date" max={todayIsoDate()} {...field} className="h-8 text-sm border-gray-200" />
                         </FormControl>
                         <FormMessage className="text-[10px]" />
                       </FormItem>

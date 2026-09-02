@@ -72,13 +72,19 @@ export const useUploadTimesheets = () =>
 // Preview only — no cache invalidation here, that happens on useConfirmImport below.
 export const useSyncEmployeeWorkLogs = () =>
   useMutation({
-    mutationFn: ({ month, year }) => timesheetsApi.syncEmployeeWorkLogs(month, year),
+    mutationFn: ({ month, year, buId = null }) => timesheetsApi.syncEmployeeWorkLogs(month, year, buId),
   });
 
 export const useConfirmImport = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (importId) => timesheetsApi.confirm(importId),
+    // Accepts either a bare importId (the Excel-upload flow) or { importId, buId } (the Work Log
+    // sync flow, which pins the confirm to the same BU its preview was generated against).
+    mutationFn: (arg) => {
+      const { importId, buId } =
+        typeof arg === 'object' && arg !== null ? arg : { importId: arg, buId: null };
+      return timesheetsApi.confirm(importId, buId);
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['timesheets'] }),
   });
 };

@@ -4,6 +4,7 @@ import { createColumnHelper } from '@tanstack/react-table';
 import { Trash2, Calculator, Download, Upload } from 'lucide-react';
 import { useMonthlyCostSummary } from '@/hooks/useReports';
 import { useDeleteMonthlyCostPeriods, useCalculateMonthlyCosts } from '@/hooks/useMonthlyCosts';
+import { useAuth } from '@/hooks/useAuth';
 import { useCanWrite } from '@/hooks/usePermissions';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
@@ -15,9 +16,12 @@ import PageHeader from '@/components/common/PageHeader';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
+import BusinessUnitFilter from '@/components/common/BusinessUnitFilter';
+import { useMasterBuFilter } from '@/hooks/useMasterBuFilter';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import {
   Dialog,
@@ -44,6 +48,7 @@ const sortByMap = {
 const MonthlyCostList = () => {
   const navigate = useNavigate();
   const { success, error: showError } = useNotification();
+  const { businessUnits } = useAuth();
 
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
@@ -52,6 +57,9 @@ const MonthlyCostList = () => {
   const [selectedKeys, setSelectedKeys] = useState([]);
   const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+
+  const [uploadBuOpen, setUploadBuOpen] = useState(false);
+  const [uploadBuId, setUploadBuId] = useState('');
 
   const [calcOpen, setCalcOpen] = useState(false);
   const [calcMonthYear, setCalcMonthYear] = useState(() => {
@@ -63,9 +71,12 @@ const MonthlyCostList = () => {
 
   const canManage = useCanWrite();
 
+  const { buId, setBuId, showBuFilter, isBuFiltered, resetBuId, buParams } = useMasterBuFilter();
+
   const params = {
     page,
     limit,
+    ...buParams,
     ...(monthYearFilter && { month: monthYearFilter.month, year: monthYearFilter.year }),
     ...(sorting[0] && { sortBy: sortByMap[sorting[0].id] ?? sorting[0].id, sortOrder: sorting[0].desc ? 'DESC' : 'ASC' }),
   };
@@ -84,8 +95,19 @@ const MonthlyCostList = () => {
 
   const clearSelection = () => setSelectedKeys([]);
 
+  const activeFilterCount = (monthYearFilter ? 1 : 0) + (isBuFiltered ? 1 : 0);
+
   const clearFilters = () => {
     setMonthYearFilter(null);
+    resetBuId();
+    setPage(1);
+    clearSelection();
+  };
+
+  // Narrowing the BU changes which periods (and which rows inside them) are on screen, so a
+  // selection made against the previous scope must not survive into a bulk delete.
+  const handleBuChange = (v) => {
+    setBuId(v);
     setPage(1);
     clearSelection();
   };
@@ -104,7 +126,7 @@ const MonthlyCostList = () => {
   };
 
   const handleDelete = () => {
-    deletePeriodsMutation.mutate([{ month: deleteTarget.month, year: deleteTarget.year }], {
+    deletePeriodsMutation.mutate({ periods: [{ month: deleteTarget.month, year: deleteTarget.year }], buId: buParams.buId }, {
       onSuccess: () => {
         success(`${formatMonthYear(deleteTarget.month, deleteTarget.year)} records deleted.`);
         setDeleteTarget(null);
@@ -121,7 +143,7 @@ const MonthlyCostList = () => {
       .filter((r) => selectedKeys.includes(periodKey(r)))
       .map((r) => ({ month: r.month, year: r.year }));
     const count = periods.length;
-    deletePeriodsMutation.mutate(periods, {
+    deletePeriodsMutation.mutate({ periods, buId: buParams.buId }, {
       onSuccess: () => {
         success(`${count} period${count !== 1 ? 's' : ''} deleted.`);
         clearSelection();
@@ -206,6 +228,25 @@ const MonthlyCostList = () => {
     }),
   ];
 
+  // Monthly costs are imported against exactly one BU, so the upload has to know which. Asking
+  // is only meaningful when the user actually holds more than one — a single-BU user has no
+  // choice to make, and an account with none (Platform Admin/Entity Admin) is already unscoped,
+  // so both go straight to the import screen and the BU is resolved there.
+  const handleUploadClick = () => {
+    if (businessUnits.length > 1) {
+      setUploadBuId('');
+      setUploadBuOpen(true);
+      return;
+    }
+    navigate(ROUTES.MONTHLY_COST_IMPORT);
+  };
+
+  const confirmUploadBu = () => {
+    if (!uploadBuId) return;
+    setUploadBuOpen(false);
+    navigate(`${ROUTES.MONTHLY_COST_IMPORT}?buId=${encodeURIComponent(uploadBuId)}`);
+  };
+
   return (
     <div className="space-y-4">
       <PageHeader
@@ -216,7 +257,7 @@ const MonthlyCostList = () => {
             <FilterToggleButton
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((prev) => !prev)}
-              activeCount={monthYearFilter ? 1 : 0}
+              activeCount={activeFilterCount}
             />
             <Button variant="outline" size="sm" onClick={downloadMonthlyCostSample}>
               <Download className="mr-1.5 h-4 w-4" />
@@ -228,7 +269,7 @@ const MonthlyCostList = () => {
                   <Calculator className="mr-1.5 h-4 w-4" />
                   Calculate
                 </Button> */}
-                <Button size="sm" onClick={() => navigate(ROUTES.MONTHLY_COST_IMPORT)}>
+                <Button size="sm" onClick={handleUploadClick}>
                   <Upload className="mr-1.5 h-4 w-4" />
                   Upload Excel
                 </Button>
@@ -243,8 +284,11 @@ const MonthlyCostList = () => {
         maxHeightClass="max-h-[140px]"
         gridClassName="grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 w-full"
         onClear={clearFilters}
-        showClear={!!monthYearFilter}
+        showClear={activeFilterCount > 0}
       >
+        {showBuFilter && (
+          <BusinessUnitFilter value={buId} onChange={handleBuChange} />
+        )}
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Month &amp; Year</Label>
           <MonthYearPicker
@@ -310,6 +354,41 @@ const MonthlyCostList = () => {
         onConfirm={handleBulkDelete}
         isLoading={deletePeriodsMutation.isPending}
       />
+
+      {/* Asked only when the user holds more than one BU — see handleUploadClick. */}
+      <Dialog open={uploadBuOpen} onOpenChange={setUploadBuOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Which Business Unit?</DialogTitle>
+            <DialogDescription>
+              Every row in the file you upload is imported against this Business Unit.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-2">
+            <Label className="mb-2 block">Business Unit</Label>
+            <SearchableSelect
+              options={businessUnits.map((bu) => ({ label: bu.name, value: String(bu.id) }))}
+              value={uploadBuId}
+              onValueChange={setUploadBuId}
+              placeholder="Select a Business Unit"
+              searchPlaceholder="Search business unit..."
+              showSearch={businessUnits.length > 6}
+              className="h-9 w-full text-sm"
+            />
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => setUploadBuOpen(false)}>
+              Cancel
+            </Button>
+            <Button size="sm" onClick={confirmUploadBu} disabled={!uploadBuId}>
+              <Upload className="mr-1.5 h-4 w-4" />
+              Continue
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={calcOpen} onOpenChange={setCalcOpen}>
         <DialogContent className="max-w-sm">

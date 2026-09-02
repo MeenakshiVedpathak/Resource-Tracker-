@@ -8,7 +8,7 @@ import { useEmployee, useCreateEmployee, useUpdateEmployee, useAssignableManager
 import { useRoles } from '@/hooks/useRoles';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
-import { employeeBaseFields, employeePasswordField } from '@/constants/employeeFormSchema';
+import { employeeBaseFields, employeePasswordField, todayIsoDate } from '@/constants/employeeFormSchema';
 import { ROUTES } from '@/constants/routes';
 import { ROLE_NAMES } from '@/constants/roleHierarchy';
 import {
@@ -424,7 +424,7 @@ const EmployeeForm = () => {
                         <FormItem className="space-y-1">
                           <FormLabel className="text-[11px] text-muted-foreground font-medium"><span className="text-destructive mr-0.5">*</span> Date of Joining</FormLabel>
                           <FormControl>
-                            <Input type="date" {...field} className="h-8 text-sm border-gray-200" />
+                            <Input type="date" max={todayIsoDate()} {...field} className="h-8 text-sm border-gray-200" />
                           </FormControl>
                           <FormMessage className="text-[10px]" />
                         </FormItem>

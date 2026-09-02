@@ -2,11 +2,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { clientsApi } from '@/api/clients.api';
 import { QUERY_KEYS } from '@/constants/queryKeys';
 
-export const useClients = (params) =>
+// `options.enabled` lets a caller hold the request until its params are meaningful — e.g. a form
+// that scopes clients to a Business Unit the user has not picked yet. Same shape as useCompanies.
+export const useClients = (params, options = {}) =>
   useQuery({
     queryKey: QUERY_KEYS.CLIENTS(params),
     queryFn: () => clientsApi.getAll(params),
     placeholderData: (prev) => prev,
+    enabled: options.enabled ?? true,
   });
 
 export const useActiveClients = () =>

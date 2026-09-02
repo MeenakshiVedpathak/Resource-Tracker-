@@ -115,6 +115,15 @@ export const authApi = {
   selectRole: (loginTicket, roleId) =>
     apiClient.post('/auth/select-role', { loginTicket, roleId }).then((r) => r.data),
 
+  // Mid-session role switch for an account that holds more than one role — the same effect as
+  // login's /auth/select-role, but on an already-authenticated session: no re-login, no logout,
+  // and the response re-issues the session scoped to the newly-selected role. Real-only, like
+  // selectRole above — the mock DB models roles as one flat simultaneous set, so it has no
+  // single-active-role session to switch between. The backend re-validates that the role
+  // actually belongs to the caller; the roleId sent here is only a request, never authorization.
+  switchRole: (roleId) =>
+    apiClient.post('/auth/switch-role', { roleId }).then((r) => r.data),
+
   // Microsoft Entra ID SSO — the backend re-derives the employee from the verified ID token
   // itself, so only the raw token is sent (no email/name/claims from the MSAL result). Response
   // shape is identical to /auth/login, including the multi-role `requiresRoleSelection` case.

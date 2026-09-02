@@ -29,7 +29,7 @@ import { MicrosoftSignInButton } from '@/components/auth/MicrosoftSignInButton';
 // POST /auth/microsoft (ACCOUNT_INACTIVE, ROLE_INACTIVE, INVALID_MICROSOFT_TOKEN,
 // MICROSOFT_EMAIL_CLAIM_MISSING) is shown verbatim via extractApiError instead.
 const MICROSOFT_ERROR_COPY = {
-  EMAIL_NOT_REGISTERED: "This Microsoft account isn't linked to a RUT Portal employee. Contact your administrator to get access.",
+  EMAIL_NOT_REGISTERED: "This Microsoft account isn't linked to a Trackio employee. Contact your administrator to get access.",
   MICROSOFT_SSO_NOT_CONFIGURED: "Microsoft sign-in isn't available right now. Please use your email and password.",
 };
 const MICROSOFT_POPUP_CANCELLED = 'Sign-in was cancelled. Please try again — or check that pop-ups are allowed for this site.';
@@ -267,7 +267,7 @@ const Login = () => {
       <div className="mb-8">
         <h2 className="text-2xl font-bold tracking-tight">Welcome back</h2>
         <p className="mt-1.5 text-sm text-muted-foreground">
-          Sign in to your Finance Portal account
+          Sign in to your Trackio account
         </p>
       </div>
 

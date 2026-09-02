@@ -1,14 +1,17 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Download } from 'lucide-react';
+import { Download, Search } from 'lucide-react';
 import { useServicePOTimelineRisk } from '@/hooks/useReports';
-import { formatCurrency, formatHours, formatPercentage, formatDate } from '@/utils/formatters';
+// formatCurrency is only needed by the hidden PO Value column — re-add it to this import when
+// that column is restored (see the HIDDEN COLUMNS note below).
+import { formatHours, formatPercentage, formatDate } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
 import StatusBadge from '@/components/common/StatusBadge';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
+import BusinessUnitFilter, { ALL_BUS } from '@/components/common/BusinessUnitFilter';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -42,11 +45,24 @@ const RiskLevelBadge = ({ value }) => {
   );
 };
 
+// ── HIDDEN COLUMNS ────────────────────────────────────────────────────────────────────────────
+// po_value, expected_man_hours, consumed_hours_pct and projected_exhaustion_date come back null
+// on EVERY record from GET /reports/service-po-timeline-risk, so all four rendered as a solid
+// column of "—" in both the table and the export. The first two are stored Service PO fields the
+// endpoint simply isn't selecting (po_value is accepted by the Service PO import and rendered by
+// Service PO Master's own list); the other two are derived from them, which is why they're null
+// too. Commented out rather than deleted — same convention as ServicePOSummary's own
+// expected_man_hours column — so restoring them is an uncomment once the backend returns them.
+// Note that risk_level, still shown, is elapsed-time-only until consumed_hours_pct exists.
+// ──────────────────────────────────────────────────────────────────────────────────────────────
 const exportToExcel = (rows) => {
   const header = [
-    'PO Code', 'PO Name', 'Client', 'Status', 'Start Date', 'End Date', 'PO Value',
-    'Expected Man Hours', 'Hours Delivered To Date', 'Elapsed Time %', 'Consumed Hours %',
-    'Risk Level', 'Projected Exhaustion Date',
+    'PO Code', 'PO Name', 'Client', 'Status', 'Start Date', 'End Date',
+    // 'PO Value', 'Expected Man Hours',
+    'Hours Delivered To Date', 'Elapsed Time %',
+    // 'Consumed Hours %',
+    'Risk Level',
+    // 'Projected Exhaustion Date',
   ];
   const dataRows = rows.map((r) => [
     r.service_po_code ?? '',
@@ -55,13 +71,13 @@ const exportToExcel = (rows) => {
     r.status ?? '',
     r.start_date ? formatDate(r.start_date) : '',
     r.end_date ? formatDate(r.end_date) : '',
-    r.po_value != null ? Number(r.po_value) : '',
-    r.expected_man_hours != null ? Number(r.expected_man_hours) : '',
+    // r.po_value != null ? Number(r.po_value) : '',
+    // r.expected_man_hours != null ? Number(r.expected_man_hours) : '',
     r.hours_delivered_to_date != null ? Number(r.hours_delivered_to_date) : '',
     r.elapsed_time_pct != null ? Number(r.elapsed_time_pct) : '',
-    r.consumed_hours_pct != null ? Number(r.consumed_hours_pct) : '',
+    // r.consumed_hours_pct != null ? Number(r.consumed_hours_pct) : '',
     RISK_LEVEL_CONFIG[r.risk_level]?.label ?? r.risk_level ?? '',
-    r.projected_exhaustion_date ? formatDate(r.projected_exhaustion_date) : '',
+    // r.projected_exhaustion_date ? formatDate(r.projected_exhaustion_date) : '',
   ]);
   const ws = XLSX.utils.aoa_to_sheet([header, ...dataRows]);
   const wb = XLSX.utils.book_new();
@@ -106,16 +122,17 @@ const columns = [
     size: 120,
     cell: (info) => formatDate(info.getValue()),
   }),
-  columnHelper.accessor('po_value', {
-    header: 'PO Value',
-    size: 150,
-    cell: (info) => <span className="tabular-nums">{formatCurrency(info.getValue())}</span>,
-  }),
-  columnHelper.accessor('expected_man_hours', {
-    header: 'Expected Man Hours',
-    size: 170,
-    cell: (info) => <span className="tabular-nums">{formatHours(info.getValue())}</span>,
-  }),
+  // Hidden — see the HIDDEN COLUMNS note above.
+  // columnHelper.accessor('po_value', {
+  //   header: 'PO Value',
+  //   size: 150,
+  //   cell: (info) => <span className="tabular-nums">{formatCurrency(info.getValue())}</span>,
+  // }),
+  // columnHelper.accessor('expected_man_hours', {
+  //   header: 'Expected Man Hours',
+  //   size: 170,
+  //   cell: (info) => <span className="tabular-nums">{formatHours(info.getValue())}</span>,
+  // }),
   columnHelper.accessor('hours_delivered_to_date', {
     header: 'Hours Delivered To Date',
     size: 190,
@@ -126,24 +143,26 @@ const columns = [
     size: 140,
     cell: (info) => <span className="tabular-nums">{formatPercentage(info.getValue())}</span>,
   }),
-  columnHelper.accessor('consumed_hours_pct', {
-    header: 'Consumed Hours %',
-    size: 150,
-    cell: (info) => <span className="tabular-nums">{formatPercentage(info.getValue())}</span>,
-  }),
+  // Hidden — see the HIDDEN COLUMNS note above.
+  // columnHelper.accessor('consumed_hours_pct', {
+  //   header: 'Consumed Hours %',
+  //   size: 150,
+  //   cell: (info) => <span className="tabular-nums">{formatPercentage(info.getValue())}</span>,
+  // }),
   columnHelper.accessor('risk_level', {
     header: 'Risk Level',
     size: 130,
     cell: (info) => <RiskLevelBadge value={info.getValue()} />,
   }),
-  columnHelper.accessor('projected_exhaustion_date', {
-    header: 'Projected Exhaustion Date',
-    size: 190,
-    cell: (info) => {
-      const value = info.getValue();
-      return value ? formatDate(value) : <span className="text-muted-foreground">—</span>;
-    },
-  }),
+  // Hidden — see the HIDDEN COLUMNS note above.
+  // columnHelper.accessor('projected_exhaustion_date', {
+  //   header: 'Projected Exhaustion Date',
+  //   size: 190,
+  //   cell: (info) => {
+  //     const value = info.getValue();
+  //     return value ? formatDate(value) : <span className="text-muted-foreground">—</span>;
+  //   },
+  // }),
 ];
 
 const SummaryItem = ({ label, value }) => (
@@ -156,6 +175,8 @@ const SummaryItem = ({ label, value }) => (
 const ServicePOTimelineRisk = () => {
   const [asOfDate, setAsOfDate] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [buId, setBuId] = useState(ALL_BUS);
+  const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
 
@@ -163,22 +184,34 @@ const ServicePOTimelineRisk = () => {
     ...(asOfDate && { asOfDate }),
     page: 1,
     limit: MAX_RECORDS_FETCH,
+    buId,
   };
 
   const { data, isPending } = useServicePOTimelineRisk(params);
 
   const records = data?.data?.records ?? [];
-  const pagedRecords = records.slice((page - 1) * limit, page * limit);
 
-  const activeFilterCount = asOfDate ? 1 : 0;
+  // Applied in memory — the whole matching set is already here, so there is nothing to gain from
+  // a round-trip. Covers the identifying columns only; the numeric/metric columns are left out,
+  // since substring-matching an amount or a count misleads more than it helps.
+  const filteredRecords = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return records;
+    return records.filter((r) => [r.service_po_code, r.service_po_name, r.client_name]
+      .some((v) => String(v ?? '').toLowerCase().includes(q)));
+  }, [records, search]);
+  const pagedRecords = filteredRecords.slice((page - 1) * limit, page * limit);
+
+  const activeFilterCount = (asOfDate ? 1 : 0) + (buId !== ALL_BUS ? 1 : 0);
 
   const clearFilters = () => {
+    setBuId(ALL_BUS);
     setAsOfDate('');
     setPage(1);
   };
 
   // Already have the full matching set in memory — no need for a second network round-trip.
-  const handleExport = () => exportToExcel(records);
+  const handleExport = () => exportToExcel(filteredRecords);
 
   return (
     <div>
@@ -187,13 +220,22 @@ const ServicePOTimelineRisk = () => {
         description="Burn-rate risk per Service PO based on elapsed time vs hours consumed."
         actions={
           <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search PO Code, PO Name, Client…"
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                className="h-9 w-72 pl-9 text-sm"
+              />
+            </div>
             <FilterToggleButton
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((p) => !p)}
               activeCount={activeFilterCount}
               className="h-9"
             />
-            {records.length > 0 && (
+            {filteredRecords.length > 0 && (
               <Button variant="outline" size="sm" className="h-9" onClick={handleExport}>
                 <Download className="mr-1.5 h-4 w-4" />Export Excel
               </Button>
@@ -206,7 +248,9 @@ const ServicePOTimelineRisk = () => {
         )}
       </PageHeader>
 
-      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[240px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[340px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
+        <BusinessUnitFilter value={buId} onChange={setBuId} />
+
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">As Of Date</Label>
           <Input
@@ -223,7 +267,7 @@ const ServicePOTimelineRisk = () => {
         columns={columns}
         data={pagedRecords}
         isLoading={isPending}
-        pagination={{ page, limit, total: records.length }}
+        pagination={{ page, limit, total: filteredRecords.length }}
         onPageChange={setPage}
         onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
       />
@@ -238,9 +282,9 @@ const ServicePOTimelineRisk = () => {
               the backend's own _on_page aggregates, which came back 0 regardless of how many rows
               actually had each risk_level.
             */}
-            <SummaryItem label="Overdue" value={records.filter((r) => r.risk_level === 'overdue').length} />
-            <SummaryItem label="Critical" value={records.filter((r) => r.risk_level === 'critical').length} />
-            <SummaryItem label="At Risk" value={records.filter((r) => r.risk_level === 'at_risk').length} />
+            <SummaryItem label="Overdue" value={filteredRecords.filter((r) => r.risk_level === 'overdue').length} />
+            <SummaryItem label="Critical" value={filteredRecords.filter((r) => r.risk_level === 'critical').length} />
+            <SummaryItem label="At Risk" value={filteredRecords.filter((r) => r.risk_level === 'at_risk').length} />
           </div>
         </div>
       )}

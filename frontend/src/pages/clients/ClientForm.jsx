@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -8,6 +9,7 @@ import { Save } from 'lucide-react';
 import { useClient, useCreateClient, useUpdateClient } from '@/hooks/useClients';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
+import { useSelectableBusinessUnits } from '@/hooks/useSelectableBusinessUnits';
 import { ROUTES } from '@/constants/routes';
 import {
   Form, FormField, FormItem, FormLabel, FormControl, FormMessage,
@@ -16,12 +18,9 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/utils/cn';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetFooter,
+  Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter,
 } from "@/components/ui/sheet";
 
 const clientSchema = z.object({
@@ -31,6 +30,9 @@ const clientSchema = z.object({
     .max(100, 'Client name cannot exceed 100 characters'),
   industry: z.string().max(100).optional().or(z.literal('')),
   status: z.enum(['active', 'inactive']).default('active'),
+  // Only relevant for BU-scoped logins mapped to multiple BUs (e.g. BU Head, multi-BU BU Admin).
+  // Admin/Entity Admin/Platform Admin never send this — their clients are always BU-less.
+  company_id: z.string().optional(),
 });
 
 const FormSkeleton = () => (
@@ -47,6 +49,22 @@ const ClientForm = () => {
   const isEdit = !!id;
   const { success, error: showError } = useNotification();
 
+  const queryClient = useQueryClient();
+
+  // BU selector logic:
+  //   Admin / Entity Admin / Platform Admin  → isCrossBu → NO selector. Their clients are always
+  //       created BU-less: company_id is simply never sent, so the backend saves null.
+  //   BU Admin / BU Head with 1 BU           → NO selector — nothing to choose, and the
+  //       X-Company-Id header already says which BU.
+  //   BU Admin / BU Head with multiple BUs   → REQUIRED selector, listing only their mapped BUs.
+  //
+  // What is picked here is independent of the global BU switcher: the header keeps carrying
+  // whatever BU is active app-wide, so a user browsing under BU "A" can still file a client
+  // under BU "B".
+  const { units, isCrossBu, canFilter } = useSelectableBusinessUnits();
+  const showBuSelector = !isCrossBu && canFilter;
+  const buOptions = units.map((bu) => ({ label: bu.name, value: String(bu.id) }));
+
   const { data: client, isPending: isLoadingClient } = useClient(id);
   const createMutation = useCreateClient();
   const updateMutation = useUpdateClient(id);
@@ -57,6 +75,7 @@ const ClientForm = () => {
       client_name: '',
       industry: '',
       status: 'active',
+      company_id: '',
     },
   });
 
@@ -66,14 +85,25 @@ const ClientForm = () => {
         client_name: client.client_name ?? '',
         industry: client.industry ?? '',
         status: client.status ?? 'active',
+        company_id: client.company_id ? String(client.company_id) : '',
       });
     }
   }, [client, isEdit, form]);
 
   const onSubmit = (values) => {
+    // Multi-BU BU Admin/BU Head must pick a BU before saving.
+    if (showBuSelector && !values.company_id) {
+      form.setError('company_id', { message: 'Business Unit is required.' });
+      return;
+    }
+
     const clean = Object.fromEntries(
       Object.entries(values).filter(([, v]) => v !== '' && v != null)
     );
+    // Send company_id as a number; absent for a cross-BU login, which the empty-string filter
+    // above already strips — a BU-less client is created by the ABSENCE of the field, not by
+    // sending null.
+    if (clean.company_id) clean.company_id = Number(clean.company_id);
 
     const mutation = isEdit ? updateMutation : createMutation;
     mutation.mutate(clean, {
@@ -81,7 +111,19 @@ const ClientForm = () => {
         success(isEdit ? 'Client updated successfully.' : 'Client created successfully.');
         handleClose();
       },
-      onError: (err) => showError(extractApiError(err)),
+      onError: (err) => {
+        const message = extractApiError(err);
+        // A cached BU list can outlive the mapping behind it, letting someone submit a BU the
+        // backend no longer accepts ("Business Unit #X is not one of your mapped Business
+        // Units."). Pin that 403 to the field that caused it instead of leaving it as a toast
+        // the sheet scrolls past, and drop the cached list so reopening the form shows the
+        // BUs that are actually still mapped.
+        if (err?.response?.status === 403 && /business unit/i.test(message)) {
+          form.setError('company_id', { message });
+          queryClient.invalidateQueries({ queryKey: ['companies'] });
+        }
+        showError(message);
+      },
     });
   };
 
@@ -110,6 +152,35 @@ const ClientForm = () => {
                 <div className="space-y-2">
                   <h3 className="text-xs font-semibold text-foreground border-b pb-1">Client Details</h3>
                   <div className="grid grid-cols-1 gap-4">
+
+                    {/* BU selector — only for BU-scoped logins with more than one BU.
+                        Admin/Entity Admin always create BU-less clients (no field sent);
+                        single-BU logins rely on the X-Company-Id header the interceptor sends. */}
+                    {showBuSelector && (
+                      <FormField
+                        control={form.control}
+                        name="company_id"
+                        render={({ field }) => (
+                          <FormItem className="space-y-1">
+                            <FormLabel className="text-[11px] text-muted-foreground font-medium">
+                              <span className="text-destructive mr-0.5">*</span> Business Unit
+                            </FormLabel>
+                            <FormControl>
+                              <SearchableSelect
+                                options={buOptions}
+                                value={field.value}
+                                onValueChange={field.onChange}
+                                placeholder="Select business unit"
+                                searchPlaceholder="Search business unit..."
+                                className="h-8 text-sm border-gray-200 w-full"
+                              />
+                            </FormControl>
+                            <FormMessage className="text-[10px]" />
+                          </FormItem>
+                        )}
+                      />
+                    )}
+
                     <FormField
                       control={form.control}
                       name="client_name"

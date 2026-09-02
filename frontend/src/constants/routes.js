@@ -147,6 +147,9 @@ export const ROUTES = {
   REPORT_CLIENT_WISE_ANALYTICS: '/reports/client-wise-analytics',
   REPORT_MONTHLY_HOURS_TREND: '/reports/monthly-hours-trend',
   REPORT_EMPLOYEE_BENCH_PERCENTAGE: '/reports/employee-bench-percentage',
+  REPORT_RESOURCE_UTILIZATION_TREND: '/reports/resource-utilization-trend',
+  REPORT_SERVICE_PO_HOURS_BUDGET: '/reports/service-po-hours-budget',
+  REPORT_EMPLOYEE_WORK_LOG_HOURS_SUMMARY: '/reports/employee-work-log-hours-summary',
 
   // Team Mapping — Service PO Admin self-service (§7)
   TEAM_MAPPINGS: '/team-mappings',

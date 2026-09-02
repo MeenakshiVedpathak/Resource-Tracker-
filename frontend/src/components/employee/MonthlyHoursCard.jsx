@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { formatHoursMinutes } from '@/utils/formatters';
 
 const RADIUS = 22;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
@@ -27,7 +28,7 @@ const MonthlyHoursCard = ({ calendarDays }) => {
       <div>
         <p className="text-xs text-muted-foreground">This Month</p>
         <p className="text-lg font-bold leading-tight">
-          {workedHours} / {targetHours} <span className="text-xs font-normal text-muted-foreground">hrs</span>
+          {formatHoursMinutes(workedHours)} / {formatHoursMinutes(targetHours)}
         </p>
         <p className="text-xs text-muted-foreground">Logged</p>
       </div>

@@ -14,6 +14,7 @@ import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
+import BusinessUnitFilter, { ALL_BUS } from '@/components/common/BusinessUnitFilter';
 import EmptyState from '@/components/common/EmptyState';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -151,6 +152,7 @@ const MonthlyHoursTrend = () => {
   const [poId, setPoId] = useState('all');
   const [serviceTypeId, setServiceTypeId] = useState('all');
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [buId, setBuId] = useState(ALL_BUS);
 
   const canViewOriginal = useCanViewOriginalData();
   const [hoursSource, setHoursSource] = useState('M');
@@ -189,6 +191,7 @@ const MonthlyHoursTrend = () => {
     ...(clientId !== 'all' && { clientId }),
     ...(poId !== 'all' && { poId }),
     ...(serviceTypeId !== 'all' && { serviceTypeId }),
+    buId,
   };
 
   const { data, isPending } = useMonthlyHoursTrend(params);
@@ -238,6 +241,7 @@ const MonthlyHoursTrend = () => {
   })), [leaveTrend, noWorkTrend]);
 
   const activeFilterCount = [
+    buId !== ALL_BUS,
     employeeId !== 'all',
     clientId !== 'all',
     poId !== 'all',
@@ -245,6 +249,7 @@ const MonthlyHoursTrend = () => {
   ].filter(Boolean).length;
 
   const clearFilters = () => {
+    setBuId(ALL_BUS);
     setEmployeeId('all');
     setClientId('all');
     setPoId('all');
@@ -294,11 +299,16 @@ const MonthlyHoursTrend = () => {
         }
       />
 
-      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[320px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
-        <div className="flex flex-col gap-1.5 md:col-span-2">
-          <div className="flex items-center justify-between">
-            <Label className="text-xs">Period <span className="text-destructive">*</span></Label>
-            <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-muted border shrink-0">
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[420px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
+        <BusinessUnitFilter value={buId} onChange={setBuId} />
+
+        {/* The mode toggle sits in the control row beside the picker, NOT in the label row:
+            a taller label row here would push this cell's input out of line with the plain
+            label + h-9 select of every neighbouring cell. */}
+        <div className="col-span-2 flex flex-col gap-1.5">
+          <Label className="text-xs">Period <span className="text-destructive">*</span></Label>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex h-9 shrink-0 items-center gap-0.5 rounded-lg border bg-muted p-1">
               {[
                 { value: 'month', label: 'Month' },
                 { value: 'range', label: 'Date Range' },
@@ -307,7 +317,7 @@ const MonthlyHoursTrend = () => {
                   key={value}
                   type="button"
                   onClick={() => setPeriodMode(value)}
-                  className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all duration-150 whitespace-nowrap ${
+                  className={`flex h-full items-center rounded-md px-3 text-xs font-semibold transition-all duration-150 whitespace-nowrap ${
                     periodMode === value ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
@@ -315,23 +325,23 @@ const MonthlyHoursTrend = () => {
                 </button>
               ))}
             </div>
+            {periodMode === 'month' ? (
+              <MonthYearPicker
+                value={monthYear}
+                onChange={setMonthYear}
+                placeholder="Select month"
+                clearable={false}
+                className="w-full flex-1 sm:w-auto sm:min-w-[10rem]"
+              />
+            ) : (
+              <DateRangePicker
+                value={dateRange}
+                onChange={setDateRange}
+                placeholder="Select date range"
+                className="w-full flex-1 sm:w-auto sm:min-w-[14rem]"
+              />
+            )}
           </div>
-          {periodMode === 'month' ? (
-            <MonthYearPicker
-              value={monthYear}
-              onChange={setMonthYear}
-              placeholder="Select month"
-              clearable={false}
-              className="w-full"
-            />
-          ) : (
-            <DateRangePicker
-              value={dateRange}
-              onChange={setDateRange}
-              placeholder="Select date range"
-              className="w-full"
-            />
-          )}
         </div>
 
         <div className="flex flex-col gap-1.5">

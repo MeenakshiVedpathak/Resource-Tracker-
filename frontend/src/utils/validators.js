@@ -30,5 +30,5 @@ export const passwordPolicySchema = z
   .string()
   .min(1, 'Password is required')
   .refine((v) => PASSWORD_POLICY_RULES.every((rule) => rule.test(v)), {
-    message: 'Password does not meet the required policy.',
+    message: 'Password does not meet the required policy',
   });

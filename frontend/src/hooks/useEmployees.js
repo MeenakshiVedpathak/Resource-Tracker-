@@ -9,12 +9,17 @@ export const useEmployees = (params) =>
     placeholderData: (prev) => prev,
   });
 
-export const useActiveEmployees = () =>
+export const useActiveEmployees = (buId) =>
   useQuery({
-    queryKey: QUERY_KEYS.EMPLOYEES_ACTIVE,
-    queryFn: employeesApi.getActiveList,
+    queryKey: [QUERY_KEYS.EMPLOYEES_ACTIVE, buId],
+    queryFn: () => employeesApi.getActiveList(buId),
     staleTime: 1000 * 60 * 10,
   });
+
+// NOTE: Service PO → Map Employees' left panel is NOT served from here. Every hook in this file
+// reads the generic employee endpoints, which scope to the caller's own team or their selected BU —
+// the wrong scope for PO mapping, and the reason that screen only ever showed a fraction of the
+// list. It uses useServicePOEmployeeOptions in useEmployeeServicePOMapping.js instead.
 
 // Service PO create/edit's Delivery Head dropdown — response envelope not yet confirmed against
 // the exact shape the new backend endpoint returns, so `select` defensively unwraps either

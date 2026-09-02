@@ -1,4 +1,4 @@
-import apiClient from '@/services/apiClient';
+import apiClient, { explicitBuScope } from '@/services/apiClient';
 
 export const timesheetsApi = {
   getAll: (params) => apiClient.get('/timesheets', { params }).then((r) => r.data),
@@ -16,8 +16,11 @@ export const timesheetsApi = {
       })
       .then((r) => r.data?.data);
   },
-  confirm: (importId) =>
-    apiClient.post(`/timesheets/confirm/${importId}`).then((r) => r.data),
+  // `buId` pins the confirm to the same BU the preview/import was generated against (the Work Log
+  // sync flow passes it); the Excel-upload flow calls this with just an importId, so it defaults to
+  // null and leaves the interceptor's global-BU header untouched.
+  confirm: (importId, buId = null) =>
+    apiClient.post(`/timesheets/confirm/${importId}`, null, explicitBuScope(buId ?? undefined)).then((r) => r.data),
   getHistory: (params) =>
     apiClient.get('/timesheets/import/history', { params }).then((r) => r.data),
   getImportById: (id) =>
@@ -32,6 +35,16 @@ export const timesheetsApi = {
     apiClient.put(`/timesheets/import/${timesheetImportId}/publish`).then((r) => r.data),
   // Preview call — returns the same shape as upload()'s preview response. Confirming reuses
   // the existing confirm() above, since both sources feed the same import pipeline.
-  syncEmployeeWorkLogs: (month, year) =>
-    apiClient.post('/timesheets/sync-employee-worklogs', { month, year }).then((r) => r.data?.data),
+  //
+  // BU-scoped exactly like the Monthly Costs import: the chosen id rides X-Company-Id (via
+  // explicitBuScope) and also goes in the body as business_unit_id, both carrying the same id so
+  // the backend can read either. A null id (a single-BU user, or an unscoped Platform/Entity Admin)
+  // sends neither and leaves the interceptor's global-BU header untouched.
+  syncEmployeeWorkLogs: (month, year, buId = null) => {
+    const body = { month, year };
+    if (buId != null) body.business_unit_id = buId;
+    return apiClient
+      .post('/timesheets/sync-employee-worklogs', body, explicitBuScope(buId ?? undefined))
+      .then((r) => r.data?.data);
+  },
 };

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -20,9 +20,11 @@ import {
   useServicePoMonthlyBudgetRecord,
   useSaveServicePoMonthlyBudget,
 } from '@/hooks/useServicePoMonthlyBudget';
+import { useCostBudgetsByServicePo } from '@/hooks/useCostBudgets';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import { formatMonthYear, formatDateTime, getStatusColor } from '@/utils/formatters';
+import { toApiMonth } from '@/utils/monthApi';
 import {
   isInvoiceMasterPeriodWritable, getInvoiceMasterCountdown,
   INVOICE_MASTER_LOCK_MESSAGE, INVOICE_MASTER_WINDOW_MESSAGE,
@@ -35,7 +37,7 @@ const requiredAmount = (label) =>
     (v) => (v === '' || v == null ? undefined : Number(v)),
     z
       .number({ required_error: `${label} is required.`, invalid_type_error: `${label} must be a number.` })
-      .min(0, 'Amount cannot be negative.')
+      .min(0, 'Amount cannot be negative')
   );
 
 const formSchema = z.object({
@@ -47,8 +49,11 @@ const formSchema = z.object({
 
 const EMPTY_VALUES = { invoice_amount: '', invoice_description: '', billed_amount: '', billed_remark: '' };
 
-const toFormValues = (record) =>
-  record
+// Invoice Amount mirrors the Cost Budget for this PO+month when one exists (see
+// `costBudgetAmount` below); everything else comes from the saved Monthly PO record.
+// `invoiceAmountOverride != null` — not truthiness — so a legitimate ₹0 budget still seeds.
+const toFormValues = (record, invoiceAmountOverride) => {
+  const base = record
     ? {
         invoice_amount: record.invoice_amount ?? '',
         invoice_description: record.invoice_description ?? '',
@@ -56,6 +61,10 @@ const toFormValues = (record) =>
         billed_remark: record.billed_remark ?? '',
       }
     : EMPTY_VALUES;
+  return invoiceAmountOverride != null
+    ? { ...base, invoice_amount: invoiceAmountOverride }
+    : base;
+};
 
 const CurrencyInput = ({ disabled, ...props }) => (
   <div className="relative">
@@ -79,7 +88,23 @@ const ServicePoBudgetEntrySheet = ({ open, onOpenChange, month, year, initialSer
 
   const { data: servicePos = [], isPending: isServicePosLoading } = useServicePoMonthlyBudgetServicePOs();
   const { data: record, isFetching: isRecordLoading } = useServicePoMonthlyBudgetRecord(servicePoId, month, year);
+  // The Cost Budget for the same PO — shares its cache with the Cost Budget screen. Its amount
+  // for this month seeds the Invoice Amount field below, always overriding any saved report value.
+  const { data: costBudgets = [], isLoading: isCostBudgetLoading } = useCostBudgetsByServicePo(servicePoId);
   const saveMutation = useSaveServicePoMonthlyBudget();
+
+  // Derived as a primitive so it only changes when the budgeted amount actually changes — a
+  // background refetch returning the same value won't retrigger the re-seed effect. Only an
+  // active row seeds; a deactivated Cost Budget is treated as absent. `?? null` keeps a real ₹0.
+  const costBudgetAmount = useMemo(() => {
+    const key = toApiMonth({ month, year });
+    const match = costBudgets.find((c) => c.month === key && c.status === 'active');
+    return match?.invoice_amount ?? null;
+  }, [costBudgets, month, year]);
+
+  // Fields re-seed until both the saved record and the Cost Budget have settled; disabling the
+  // whole form during that window keeps `form.reset` from clobbering an in-flight edit.
+  const isSeeding = isRecordLoading || isCostBudgetLoading;
 
   const form = useForm({ resolver: zodResolver(formSchema), defaultValues: EMPTY_VALUES });
 
@@ -94,9 +119,9 @@ const ServicePoBudgetEntrySheet = ({ open, onOpenChange, month, year, initialSer
 
   useEffect(() => {
     if (!open || !servicePoId) return;
-    form.reset(toFormValues(record));
+    form.reset(toFormValues(record, costBudgetAmount));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, record, servicePoId]);
+  }, [open, record, servicePoId, costBudgetAmount]);
 
   const options = servicePos.map((po) => ({
     value: String(po.service_po_id),
@@ -223,7 +248,7 @@ const ServicePoBudgetEntrySheet = ({ open, onOpenChange, month, year, initialSer
               <Separator />
               <Form {...form}>
                 <form id={FORM_ID} onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                  <div className={isRecordLoading ? 'animate-pulse space-y-4 opacity-60' : 'space-y-4'}>
+                  <div className={isSeeding ? 'animate-pulse space-y-4 opacity-60' : 'space-y-4'}>
                     <FormField
                       control={form.control}
                       name="invoice_amount"
@@ -231,8 +256,11 @@ const ServicePoBudgetEntrySheet = ({ open, onOpenChange, month, year, initialSer
                         <FormItem>
                           <FormLabel>Invoice Amount <span className="text-destructive">*</span></FormLabel>
                           <FormControl>
-                            <CurrencyInput placeholder="1,00,000" disabled={isRecordLoading || !isWindowOpen} {...field} />
+                            <CurrencyInput placeholder="1,00,000" disabled={isSeeding || !isWindowOpen} {...field} />
                           </FormControl>
+                          {costBudgetAmount != null && (
+                            <p className="text-xs text-muted-foreground">Prefilled from Cost Budget — edit if needed.</p>
+                          )}
                           <FormMessage />
                         </FormItem>
                       )}
@@ -244,7 +272,7 @@ const ServicePoBudgetEntrySheet = ({ open, onOpenChange, month, year, initialSer
                         <FormItem>
                           <FormLabel>Invoice Description</FormLabel>
                           <FormControl>
-                            <Input placeholder="e.g. August milestone invoice" disabled={isRecordLoading || !isWindowOpen} {...field} />
+                            <Input placeholder="e.g. August milestone invoice" disabled={isSeeding || !isWindowOpen} {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -257,7 +285,7 @@ const ServicePoBudgetEntrySheet = ({ open, onOpenChange, month, year, initialSer
                         <FormItem>
                           <FormLabel>Billable Amount <span className="text-destructive">*</span></FormLabel>
                           <FormControl>
-                            <CurrencyInput placeholder="95,000" disabled={isRecordLoading || !isWindowOpen} {...field} />
+                            <CurrencyInput placeholder="95,000" disabled={isSeeding || !isWindowOpen} {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -271,7 +299,7 @@ const ServicePoBudgetEntrySheet = ({ open, onOpenChange, month, year, initialSer
                         <FormItem>
                           <FormLabel>Billable Remark</FormLabel>
                           <FormControl>
-                            <Input placeholder="e.g. Partial payment received" disabled={isRecordLoading || !isWindowOpen} {...field} />
+                            <Input placeholder="e.g. Partial payment received" disabled={isSeeding || !isWindowOpen} {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -293,7 +321,7 @@ const ServicePoBudgetEntrySheet = ({ open, onOpenChange, month, year, initialSer
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>
             Cancel
           </Button>
-          <Button type="submit" form={FORM_ID} disabled={isSaving || isRecordLoading || !servicePoId || !isWindowOpen}>
+          <Button type="submit" form={FORM_ID} disabled={isSaving || isSeeding || !servicePoId || !isWindowOpen}>
             <Save className="mr-1.5 h-4 w-4" />
             {isSaving ? 'Saving…' : 'Save'}
           </Button>

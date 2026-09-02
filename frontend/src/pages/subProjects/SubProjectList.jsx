@@ -11,6 +11,8 @@ import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
+import BusinessUnitFilter from '@/components/common/BusinessUnitFilter';
+import { useMasterBuFilter } from '@/hooks/useMasterBuFilter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -63,9 +65,14 @@ const SubProjectList = () => {
 
   const [sorting, setSorting] = useState([]);
 
+  // Business Unit filter. Renders only for a login mapped to more than one BU, and starts on
+  // "All Business Units" — the list opens cross-BU and narrowing to one is an explicit choice.
+  const { buId, setBuId, showBuFilter, isBuFiltered, resetBuId, buParams } = useMasterBuFilter();
+
   const params = {
     page,
     limit,
+    ...buParams,
     ...(statusFilter !== 'all' && { status: statusFilter }),
     ...(poFilter !== 'all' && { service_po_id: poFilter }),
     ...(debouncedSearch && { search: debouncedSearch }),
@@ -81,11 +88,13 @@ const SubProjectList = () => {
   const activeFilterCount = [
     poFilter !== 'all' ? 1 : 0,
     statusFilter !== 'all' ? 1 : 0,
+    isBuFiltered ? 1 : 0,
   ].reduce((a, b) => a + b, 0);
 
   const clearFilters = () => {
     setPoFilter('all');
     setStatusFilter('all');
+    resetBuId();
     setPage(1);
   };
 
@@ -162,6 +171,9 @@ const SubProjectList = () => {
       />
 
       <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[200px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
+        {showBuFilter && (
+          <BusinessUnitFilter value={buId} onChange={(v) => { setBuId(v); setPage(1); }} />
+        )}
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Service PO</Label>
           <SearchableSelect
@@ -184,13 +196,13 @@ const SubProjectList = () => {
           <SearchableSelect
             showSearch={false}
             options={[
-              { label: "All status", value: "all" },
+              { label: "All statuses", value: "all" },
               { label: "Active", value: "active" },
               { label: "Inactive", value: "inactive" },
             ]}
             value={statusFilter}
             onValueChange={(v) => { setStatusFilter(v); setPage(1); }}
-            placeholder="All status"
+            placeholder="All statuses"
             className="h-9 w-full text-sm bg-white"
           />
         </div>

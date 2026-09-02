@@ -1,6 +1,7 @@
 import { Lock } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/utils/cn';
+import { formatHoursMinutes } from '@/utils/formatters';
 
 const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -38,7 +39,7 @@ const MonthSelector = ({ selectedMonth, onSelectMonth, monthStats = {} }) => (
             <Skeleton className="h-2.5 w-8" />
           ) : (
             <span className={cn('text-[11px]', isSelected ? 'text-primary-foreground/85' : 'text-muted-foreground')}>
-              {Number(stat?.hours ?? 0)} hrs
+              {formatHoursMinutes(stat?.hours)}
             </span>
           )}
         </button>

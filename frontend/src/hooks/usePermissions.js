@@ -1,4 +1,5 @@
 import { useAuth } from '@/hooks/useAuth';
+import { ROLE_NAMES } from '@/constants/roleHierarchy';
 
 // Read vs Read & Write gating. Permission is carried by the ROLE itself (not per-form/module —
 // the backend contract has no per-form permission field), so this is a single check per user:
@@ -30,6 +31,42 @@ export const useHasForm = (formName) => {
   return Object.values(accessibleForms ?? {})
     .flat()
     .some((f) => f.name === formName);
+};
+
+// Who may CREATE/EDIT an employee RECORD, as opposed to merely MAPPING roles & Business Units
+// onto one that already exists. Employee Master is granted to the BU-scoped senior tier (BU
+// Admin / BU Head) purely so they can run that mapping for their own BU — the record itself
+// (identity, login, manager, joining/leaving dates, active status, bulk import) stays with
+// HR / Admin / Entity Admin.
+//
+// Note this can't be expressed with useCanWrite alone: a BU Admin's role DOES carry
+// "Read & Write", which is what gets them the mapping dialog in the first place — the
+// distinction here is over WHICH object, not read vs write.
+//
+// Frontend affordance only; the real enforcement is the RequireEmployeeRecordAccess guard on
+// EMPLOYEE_NEW / EMPLOYEE_EDIT (routes/index.jsx) plus the backend's own checks.
+export const useCanManageEmployeeRecords = () => {
+  const { hasRole } = useAuth();
+  const canWrite = useCanWrite();
+  // A Platform Admin holds no roles at all, so hasRole is false for it and canWrite is true —
+  // it falls through to `true` here without a special case.
+  return canWrite && !hasRole(ROLE_NAMES.BU_ADMIN, ROLE_NAMES.BU_HEAD);
+};
+
+// Who may CREATE/EDIT a Business Unit, as opposed to merely LOOKING at the BU Master list.
+// A BU is an Entity-tier object: only Admin / Entity Admin (and Platform Admin, which sits above
+// the per-company RBAC system entirely) may add one, rename one, or activate/deactivate one.
+// BU Master itself is reachable read-only by the BU-scoped senior tier — a BU Admin / BU Head
+// needs to SEE the BUs they map employees against — so this is deliberately narrower than
+// "can this login open the screen" (route guard) and than useCanWrite (a BU Admin's role does
+// carry Read & Write, just not over BUs themselves).
+//
+// Frontend affordance only: the real enforcement is the Admin/Entity-Admin route guard on
+// COMPANY_NEW / COMPANY_EDIT (routes/index.jsx) plus the backend's own checks on
+// POST/PATCH /companies.
+export const useCanManageBusinessUnits = () => {
+  const { hasRole, isPlatformAdmin } = useAuth();
+  return isPlatformAdmin || hasRole(ROLE_NAMES.ADMIN, ROLE_NAMES.ENTITY_ADMIN);
 };
 
 // Gates the Modified/Original hours-source toggle in Reports & Dashboard, and the Modified

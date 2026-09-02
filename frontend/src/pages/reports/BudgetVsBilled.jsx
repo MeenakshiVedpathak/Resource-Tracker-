@@ -1,7 +1,10 @@
 import { useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { createColumnHelper } from '@tanstack/react-table';
-import { AlertCircle, ChevronDown, ChevronsUpDown, ChevronUp, Download } from 'lucide-react';
+import {
+  AlertCircle, ChevronDown, ChevronsUpDown, ChevronUp, Download,
+  Wallet, ReceiptText, CircleArrowDown, CircleArrowUp, PieChart, TrendingUp, TrendingDown, Table2,
+} from 'lucide-react';
 import { useBudgetVsBilled } from '@/hooks/useReports';
 import { reportsApi } from '@/api/reports.api';
 import { useActiveClients } from '@/hooks/useClients';
@@ -13,6 +16,7 @@ import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
+import BusinessUnitFilter, { ALL_BUS } from '@/components/common/BusinessUnitFilter';
 import EmptyState from '@/components/common/EmptyState';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -65,15 +69,6 @@ const SortableHeader = ({ label, column, sortBy, sortOrder, onSort }) => {
   );
 };
 
-const SummaryItem = ({ label, value, negative = false }) => (
-  <div className="flex flex-col gap-0.5">
-    <span className="text-[11px] text-muted-foreground">{label}</span>
-    <span className={`text-sm font-semibold tabular-nums ${negative ? 'text-destructive' : 'text-foreground'}`}>
-      {value}
-    </span>
-  </div>
-);
-
 const BudgetVsBilled = () => {
   const [periodMode, setPeriodMode] = useState('month');
   const [monthYear, setMonthYear] = useState({
@@ -86,6 +81,7 @@ const BudgetVsBilled = () => {
   const [serviceTypeId, setServiceTypeId] = useState('all');
   const [poId, setPoId] = useState('all');
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [buId, setBuId] = useState(ALL_BUS);
 
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
@@ -139,6 +135,7 @@ const BudgetVsBilled = () => {
     ...(sortBy && { sortBy, sortOrder }),
     page,
     limit,
+    buId,
   };
 
   const { data, isPending, isError, error } = useBudgetVsBilled(params);
@@ -157,12 +154,14 @@ const BudgetVsBilled = () => {
   const sheetTitle = sheetKind === 'over' ? 'Over Budget Service POs' : 'Under Budget Service POs';
 
   const activeFilterCount = [
+    buId !== ALL_BUS,
     clientId !== 'all',
     serviceTypeId !== 'all',
     poId !== 'all',
   ].filter(Boolean).length;
 
   const clearFilters = () => {
+    setBuId(ALL_BUS);
     setClientId('all');
     setServiceTypeId('all');
     setPoId('all');
@@ -199,6 +198,7 @@ const BudgetVsBilled = () => {
         <SortableHeader label="Budget Cost" column="budget_cost" sortBy={sortBy} sortOrder={sortOrder} onSort={handleSort} />
       ),
       size: 160,
+      meta: { align: 'right' },
       enableSorting: false,
       cell: (info) => <span className="tabular-nums">{formatCurrency(info.getValue())}</span>,
     }),
@@ -207,6 +207,7 @@ const BudgetVsBilled = () => {
         <SortableHeader label="Billed Amount" column="billed_amount" sortBy={sortBy} sortOrder={sortOrder} onSort={handleSort} />
       ),
       size: 160,
+      meta: { align: 'right' },
       enableSorting: false,
       cell: (info) => <span className="tabular-nums">{formatCurrency(info.getValue())}</span>,
     }),
@@ -215,6 +216,7 @@ const BudgetVsBilled = () => {
         <SortableHeader label="Variance" column="variance" sortBy={sortBy} sortOrder={sortOrder} onSort={handleSort} />
       ),
       size: 160,
+      meta: { align: 'right' },
       enableSorting: false,
       cell: (info) => {
         const value = info.getValue();
@@ -230,6 +232,7 @@ const BudgetVsBilled = () => {
         <SortableHeader label="Variance %" column="variance_pct" sortBy={sortBy} sortOrder={sortOrder} onSort={handleSort} />
       ),
       size: 130,
+      meta: { align: 'right' },
       enableSorting: false,
       cell: (info) => {
         const value = info.getValue();
@@ -254,10 +257,52 @@ const BudgetVsBilled = () => {
     }
   };
 
+  // Summary tiles — same four totals as before, now rendered as icon cards. Colour and icon
+  // follow the value's sign so a negative variance reads red/down and a surplus reads green/up.
+  const summaryCards = summary ? [
+    {
+      label: 'Total Budget Cost',
+      value: formatCurrency(summary.total_budget_cost),
+      valueClass: 'text-blue-600 dark:text-blue-400',
+      Icon: Wallet,
+      iconWrap: 'bg-blue-50 dark:bg-blue-500/10',
+      iconClass: 'text-blue-600 dark:text-blue-400',
+    },
+    {
+      label: 'Total Billed Amount',
+      value: formatCurrency(summary.total_billed_amount),
+      valueClass: 'text-foreground',
+      Icon: ReceiptText,
+      iconWrap: 'bg-emerald-50 dark:bg-emerald-500/10',
+      iconClass: 'text-emerald-600 dark:text-emerald-400',
+    },
+    {
+      label: 'Total Variance',
+      value: formatCurrency(summary.total_variance),
+      valueClass: summary.total_variance < 0 ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-400',
+      Icon: summary.total_variance < 0 ? CircleArrowDown : CircleArrowUp,
+      iconWrap: summary.total_variance < 0 ? 'bg-red-50 dark:bg-red-500/10' : 'bg-emerald-50 dark:bg-emerald-500/10',
+      iconClass: summary.total_variance < 0 ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-400',
+    },
+    {
+      label: 'Overall Variance %',
+      value: formatPercentage(summary.total_variance_pct),
+      valueClass: summary.total_variance_pct < 0 ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-400',
+      Icon: PieChart,
+      iconWrap: 'bg-violet-50 dark:bg-violet-500/10',
+      iconClass: 'text-violet-600 dark:text-violet-400',
+    },
+  ] : [];
+
   return (
     <div>
       <PageHeader
-        title="Budget vs Billed"
+        title={
+          <span className="inline-flex items-center gap-2">
+            Budget vs Billed
+            <TrendingUp className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+          </span>
+        }
         description="Budget cost vs billed amount per Service PO, with a monthly trend and over/under-budget breakdown."
         actions={
           <div className="flex items-center gap-2">
@@ -276,7 +321,9 @@ const BudgetVsBilled = () => {
         }
       />
 
-      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[360px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[460px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
+        <BusinessUnitFilter value={buId} onChange={setBuId} />
+
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Period <span className="text-destructive">*</span></Label>
           <div className="flex items-center gap-0.5 p-0.5 rounded-xl bg-muted border w-fit shrink-0">
@@ -371,55 +418,70 @@ const BudgetVsBilled = () => {
         </div>
       )}
 
-      {summary && (
-        <div className="mb-4 rounded-lg border bg-muted/40 px-4 py-3">
-          <p className="mb-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Totals</p>
-          <div className="flex flex-wrap gap-x-6 gap-y-2">
-            <SummaryItem label="Total Budget Cost" value={formatCurrency(summary.total_budget_cost)} />
-            <SummaryItem label="Total Billed Amount" value={formatCurrency(summary.total_billed_amount)} />
-            <SummaryItem
-              label="Total Variance"
-              value={formatCurrency(summary.total_variance)}
-              negative={summary.total_variance < 0}
-            />
-            <SummaryItem
-              label="Overall Variance %"
-              value={formatPercentage(summary.total_variance_pct)}
-              negative={summary.total_variance_pct < 0}
-            />
-          </div>
+      {summaryCards.length > 0 && (
+        <div className="mb-3 grid grid-cols-1 rounded-xl border bg-card shadow-sm lg:grid-cols-4">
+          {summaryCards.map(({ label, value, valueClass, Icon, iconWrap, iconClass }, i) => (
+            <div
+              key={label}
+              className={cn(
+                'flex items-center justify-between gap-3 px-5 py-4',
+                i > 0 && 'border-t lg:border-t-0 lg:border-l'
+              )}
+            >
+              <div className="min-w-0">
+                <p className="text-[13px] text-muted-foreground">{label}</p>
+                <p className={cn('mt-1 text-xl font-bold tabular-nums', valueClass)}>{value}</p>
+              </div>
+              <div className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-xl', iconWrap)}>
+                <Icon className={cn('h-5 w-5', iconClass)} />
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
-      <div className="mb-4 grid grid-cols-2 gap-3 sm:w-96">
+      <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:max-w-2xl">
         <button
           type="button"
           onClick={() => setSheetKind('over')}
-          className="flex flex-col items-start gap-1 rounded-lg border bg-card px-4 py-3 text-left hover:bg-muted/40 transition-colors"
+          className="flex items-center justify-between gap-4 rounded-xl border bg-card shadow-sm px-5 py-4 text-left transition-colors hover:bg-muted/40"
         >
-          <span className="text-[11px] text-muted-foreground uppercase tracking-wide">Over Budget</span>
-          <span className="text-lg font-semibold tabular-nums text-destructive">{overBudget.length}</span>
+          <div>
+            <p className="text-[13px] text-muted-foreground">Over Budget</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-destructive">{overBudget.length}</p>
+          </div>
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-50 dark:bg-red-500/10">
+            <TrendingUp className="h-5 w-5 text-red-500 dark:text-red-400" />
+          </div>
         </button>
         <button
           type="button"
           onClick={() => setSheetKind('under')}
-          className="flex flex-col items-start gap-1 rounded-lg border bg-card px-4 py-3 text-left hover:bg-muted/40 transition-colors"
+          className="flex items-center justify-between gap-4 rounded-xl border bg-card shadow-sm px-5 py-4 text-left transition-colors hover:bg-muted/40"
         >
-          <span className="text-[11px] text-muted-foreground uppercase tracking-wide">Under Budget</span>
-          <span className="text-lg font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">{underBudget.length}</span>
+          <div>
+            <p className="text-[13px] text-muted-foreground">Under Budget</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{underBudget.length}</p>
+          </div>
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-50 dark:bg-emerald-500/10">
+            <TrendingDown className="h-5 w-5 text-emerald-500 dark:text-emerald-400" />
+          </div>
         </button>
       </div>
 
-      <p className="mb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Monthly Trend</p>
-      <div className="mb-4 rounded-lg border overflow-hidden">
-        <Table containerClassName="max-h-[280px] overflow-auto">
+      <div className="mb-2 flex items-center gap-2">
+        <TrendingUp className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+        <h2 className="text-[15px] font-semibold text-foreground">Monthly Trend</h2>
+      </div>
+      <div className="mb-4 rounded-xl border bg-card shadow-sm overflow-hidden">
+        <Table containerClassName="max-h-[220px] overflow-auto">
           <TableHeader className="sticky top-0 z-10 bg-slate-50 shadow-[0_1px_3px_0_rgb(0,0,0,0.1)]">
             <TableRow className="hover:bg-transparent border-b bg-slate-50">
               <TableHead>Month</TableHead>
-              <TableHead>Budget Cost</TableHead>
-              <TableHead>Billed Amount</TableHead>
-              <TableHead>Variance</TableHead>
-              <TableHead>Variance %</TableHead>
+              <TableHead className="text-right">Budget Cost</TableHead>
+              <TableHead className="text-right">Billed Amount</TableHead>
+              <TableHead className="text-right">Variance</TableHead>
+              <TableHead className="text-right">Variance %</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -443,12 +505,12 @@ const BudgetVsBilled = () => {
               monthly.map((m, i) => (
                 <TableRow key={i}>
                   <TableCell className="font-medium whitespace-nowrap">{m.month}</TableCell>
-                  <TableCell className="tabular-nums">{formatCurrency(m.budget_cost)}</TableCell>
-                  <TableCell className="tabular-nums">{formatCurrency(m.billed_amount)}</TableCell>
-                  <TableCell className={`tabular-nums ${m.variance < 0 ? 'text-destructive' : ''}`}>
+                  <TableCell className="text-right tabular-nums">{formatCurrency(m.budget_cost)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{formatCurrency(m.billed_amount)}</TableCell>
+                  <TableCell className={`text-right tabular-nums ${m.variance < 0 ? 'text-destructive' : ''}`}>
                     {formatCurrency(m.variance)}
                   </TableCell>
-                  <TableCell className={`tabular-nums ${m.variance_pct < 0 ? 'text-destructive' : ''}`}>
+                  <TableCell className={`text-right tabular-nums ${m.variance_pct < 0 ? 'text-destructive' : ''}`}>
                     {formatPercentage(m.variance_pct)}
                   </TableCell>
                 </TableRow>
@@ -458,9 +520,12 @@ const BudgetVsBilled = () => {
         </Table>
       </div>
 
-      <p className="mb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide">By Service PO</p>
+      <div className="mb-2 flex items-center gap-2">
+        <Table2 className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+        <h2 className="text-[15px] font-semibold text-foreground">By Service PO</h2>
+      </div>
       <DataTable
-        tableContainerClassName="max-h-[50vh]"
+        tableContainerClassName="rounded-xl shadow-sm max-h-[42vh]"
         columns={columns}
         data={byServicePO}
         isLoading={showLoading}

@@ -16,6 +16,7 @@ import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
+import BusinessUnitFilter, { ALL_BUS } from '@/components/common/BusinessUnitFilter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -210,6 +211,7 @@ const ResourceAllocation = () => {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [buId, setBuId] = useState(ALL_BUS);
   const [exporting, setExporting] = useState(false);
 
   const debouncedSearch = useDebounce(search, 400);
@@ -265,6 +267,7 @@ const ResourceAllocation = () => {
     ...(categoryId !== 'all' && { serviceCategoryId: categoryId }),
     ...(serviceTypeId !== 'all' && { serviceTypeId }),
     ...(debouncedSearch && { search: debouncedSearch }),
+    buId,
   };
 
   const { data, isPending } = useResourceAllocationReport(params);
@@ -318,6 +321,7 @@ const ResourceAllocation = () => {
   };
 
   const activeFilterCount = [
+    buId !== ALL_BUS ? 1 : 0,
     employeeId !== 'all' ? 1 : 0,
     poId !== 'all' ? 1 : 0,
     clientId !== 'all' ? 1 : 0,
@@ -327,6 +331,7 @@ const ResourceAllocation = () => {
   ].reduce((a, b) => a + b, 0);
 
   const clearFilters = () => {
+    setBuId(ALL_BUS);
     setEmployeeId('all');
     setPoId('all');
     setClientId('all');
@@ -387,7 +392,9 @@ const ResourceAllocation = () => {
       />
 
       {/* Collapsible filter panel */}
-      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[460px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[560px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
+          <BusinessUnitFilter value={buId} onChange={setBuId} />
+
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs">Month &amp; Year</Label>
             <MonthYearPicker
@@ -492,7 +499,7 @@ const ResourceAllocation = () => {
             <Label className="text-xs">PO Status</Label>
             <SearchableSelect showSearch={false}
               options={[
-                { label: "All status", value: "all" },
+                { label: "All statuses", value: "all" },
                 { label: "In Progress", value: "in-progress" },
                 { label: "Completed", value: "completed" },
                 { label: "On Hold", value: "on-hold" },
@@ -502,7 +509,7 @@ const ResourceAllocation = () => {
               ]}
               value={poStatus}
               onValueChange={(v) => { setPoStatus(v); setPage(1); }}
-              placeholder="All status"
+              placeholder="All statuses"
               className="h-9 text-sm w-full"
             />
           </div>

@@ -61,9 +61,11 @@ export const useDeleteMonthlyCosts = () => {
 export const useDeleteMonthlyCostPeriods = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (periods) => {
+    // `buId` is the list's own Business Unit filter — it has to reach getIdsForPeriod so the
+    // delete covers exactly the rows the user is looking at, not every BU's rows for that period.
+    mutationFn: async ({ periods, buId }) => {
       const idLists = await Promise.all(
-        periods.map(({ month, year }) => monthlyCostsApi.getIdsForPeriod(month, year))
+        periods.map(({ month, year }) => monthlyCostsApi.getIdsForPeriod(month, year, buId))
       );
       const ids = idLists.flat();
       if (ids.length === 0) return { deletedCount: 0 };

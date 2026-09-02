@@ -1,14 +1,16 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Download, AlertCircle } from 'lucide-react';
+import { Download, AlertCircle, Search } from 'lucide-react';
 import { useInvoiceRealizationTrend } from '@/hooks/useReports';
 import { formatCurrency, formatMonthYear } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
+import BusinessUnitFilter, { ALL_BUS } from '@/components/common/BusinessUnitFilter';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -112,6 +114,8 @@ const InvoiceRealizationTrend = () => {
     year: prevMonth.getFullYear(),
   });
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [buId, setBuId] = useState(ALL_BUS);
+  const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [selectedRow, setSelectedRow] = useState(null);
@@ -121,25 +125,36 @@ const InvoiceRealizationTrend = () => {
     ...(toMonthYear && { endMonth: toMonthYear.month, endYear: toMonthYear.year }),
     page: 1,
     limit: MAX_RECORDS_FETCH,
+    buId,
   };
 
   const { data, isPending } = useInvoiceRealizationTrend(params);
 
   const records = data?.data?.records ?? [];
-  const pagedRecords = records.slice((page - 1) * limit, page * limit);
+
+  // Applied in memory — the whole matching set is already here, so there is nothing to gain from
+  // a round-trip. Covers the identifying columns only; the numeric/metric columns are left out,
+  // since substring-matching an amount or a count misleads more than it helps.
+  const filteredRecords = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return records;
+    return records.filter((r) => [r.service_po_code, r.service_po_name, r.client_name]
+      .some((v) => String(v ?? '').toLowerCase().includes(q)));
+  }, [records, search]);
+  const pagedRecords = filteredRecords.slice((page - 1) * limit, page * limit);
 
   // Recomputed client-side from the full matching set rather than trusted from the backend's
   // direct `total_invoiced_amount`/`total_billed_amount`/`total_unbilled_amount` fields — those
   // names don't even match the row-level fields (`total_invoiced`/`total_billed`/`total_unbilled`)
   // the table columns render, a copy-paste mismatch from another report.
-  const summary = records.length > 0 ? {
-    total_invoiced: records.reduce((sum, r) => sum + (Number(r.total_invoiced) || 0), 0),
-    total_billed: records.reduce((sum, r) => sum + (Number(r.total_billed) || 0), 0),
-    total_unbilled: records.reduce((sum, r) => sum + (Number(r.total_unbilled) || 0), 0),
+  const summary = filteredRecords.length > 0 ? {
+    total_invoiced: filteredRecords.reduce((sum, r) => sum + (Number(r.total_invoiced) || 0), 0),
+    total_billed: filteredRecords.reduce((sum, r) => sum + (Number(r.total_billed) || 0), 0),
+    total_unbilled: filteredRecords.reduce((sum, r) => sum + (Number(r.total_unbilled) || 0), 0),
   } : null;
 
   // Already have the full matching set in memory — no need for a second network round-trip.
-  const handleExport = () => exportToExcel(records);
+  const handleExport = () => exportToExcel(filteredRecords);
 
   return (
     <div>
@@ -148,13 +163,22 @@ const InvoiceRealizationTrend = () => {
         description="Invoiced vs billed amounts per Service PO across a month range, with a monthly trend drill-down."
         actions={
           <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search PO Code, PO Name, Client…"
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                className="h-9 w-72 pl-9 text-sm"
+              />
+            </div>
             <FilterToggleButton
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((p) => !p)}
-              activeCount={0}
+              activeCount={buId !== ALL_BUS ? 1 : 0}
               className="h-9"
             />
-            {records.length > 0 && (
+            {filteredRecords.length > 0 && (
               <Button variant="outline" size="sm" className="h-9" onClick={handleExport}>
                 <Download className="mr-1.5 h-4 w-4" />Export Excel
               </Button>
@@ -163,7 +187,9 @@ const InvoiceRealizationTrend = () => {
         }
       />
 
-      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[200px]">
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[300px]" onClear={() => setBuId(ALL_BUS)} showClear={buId !== ALL_BUS}>
+        <BusinessUnitFilter value={buId} onChange={setBuId} />
+
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">From <span className="text-destructive">*</span></Label>
           <MonthYearPicker
@@ -185,7 +211,7 @@ const InvoiceRealizationTrend = () => {
         </div>
       </FilterPanel>
 
-      {records.length > 0 && (
+      {filteredRecords.length > 0 && (
         <div className="mb-4 flex items-start gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2.5 text-xs text-sky-800">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           {/*
@@ -201,7 +227,7 @@ const InvoiceRealizationTrend = () => {
         columns={columns}
         data={pagedRecords}
         isLoading={isPending}
-        pagination={{ page, limit, total: records.length }}
+        pagination={{ page, limit, total: filteredRecords.length }}
         onPageChange={setPage}
         onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
         onRowClick={(row) => setSelectedRow(row)}

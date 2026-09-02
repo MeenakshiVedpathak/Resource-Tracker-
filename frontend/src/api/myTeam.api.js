@@ -1,4 +1,4 @@
-import apiClient from '@/services/apiClient';
+import apiClient, { explicitBuScope } from '@/services/apiClient';
 import { RBAC_MOCK_ENABLED } from '@/mocks/rbacMockConfig';
 import {
   delay, getDb, persist, nextId, findEmployeeById, getCurrentMockEmployee, mockError,
@@ -16,15 +16,20 @@ const serializeEmployee = (e) => ({
   full_name: e.full_name,
   designation: e.designation,
   status: e.status,
+  business_unit_ids: e.business_unit_ids ?? [],
   mapping_type: e.primary_manager_employee_id === e.__actorId ? 'PRIMARY' : 'SECONDARY',
 });
 
-const mockGetEmployees = async () => {
+const mockGetEmployees = async (params) => {
   await delay();
   const actor = requireActor();
-  return getDb().employees
-    .filter((e) => e.primary_manager_employee_id === actor.id || e.secondary_manager_employee_id === actor.id)
-    .map((e) => serializeEmployee({ ...e, __actorId: actor.id }));
+  let list = getDb().employees
+    .filter((e) => e.primary_manager_employee_id === actor.id || e.secondary_manager_employee_id === actor.id);
+  if (params?.buId && params.buId !== 'all') {
+    const targetBuId = Number(params.buId);
+    list = list.filter((e) => (e.business_unit_ids ?? []).includes(targetBuId));
+  }
+  return list.map((e) => serializeEmployee({ ...e, __actorId: actor.id }));
 };
 
 const mockGetServicePos = async () => {
@@ -92,12 +97,25 @@ const mockRevokeServicePo = async (employeeId, servicePOId) => {
   return { success: true, message: 'Service PO grant revoked.' };
 };
 
+// Largest page size the approval-summary endpoint is asked for in one go, plus a hard page cap so
+// a backend that ignores `page` can never spin this into an unbounded loop.
+const APPROVAL_SUMMARY_MAX_LIMIT = 100;
+const APPROVAL_SUMMARY_MAX_PAGES = 50;
+
+const fetchApprovalSummaryPage = (params) =>
+  apiClient.get('/my-team/timesheets/approval-summary', { params }).then((r) => r.data);
+
 // Manager self-service (§8). GET employees/service-pos existed pre-redesign; POST/DELETE
 // employees (claim/release the Secondary-manager slot) are net-new.
 export const myTeamApi = {
-  getEmployees: () => {
-    if (RBAC_MOCK_ENABLED) return mockGetEmployees();
-    return apiClient.get('/my-team/employees').then((r) => r.data?.data ?? []);
+  getEmployees: (params) => {
+    if (RBAC_MOCK_ENABLED) return mockGetEmployees(params);
+    const { buId, ...restParams } = params || {};
+    const scope = buId && buId !== 'all' ? explicitBuScope(buId) : {};
+    return apiClient.get('/my-team/employees', {
+      params: { ...restParams, ...(buId && buId !== 'all' ? { business_unit_id: buId } : {}) },
+      ...scope,
+    }).then((r) => r.data?.data ?? []);
   },
   // Manager Timesheet Access & Approval — real backend only, no mock (RBAC_MOCK_ENABLED is
   // false in this environment and the mock db has no timesheet fixtures).
@@ -106,8 +124,28 @@ export const myTeamApi = {
   // drawer needs no separate fetch). approval_status is 'pending'|'approved'; approval_required
   // mirrors the Employee's is_timesheet_approval_required (false there means status is always
   // 'approved'). Never reads `drafts` — an Employee's own unsynced entries are not approval-eligible.
-  getApprovalSummary: (params) =>
-    apiClient.get('/my-team/timesheets/approval-summary', { params }).then((r) => r.data),
+  getApprovalSummary: (params) => fetchApprovalSummaryPage(params),
+  // Every bucket for the given Employee + filters, ignoring the table's display page size — the
+  // backing set for "select all", which must cover the whole filtered range and not just the
+  // rendered page. One request at APPROVAL_SUMMARY_MAX_LIMIT already covers any normal range
+  // (daily buckets cap at ~31 per month, monthly at 12 per year), but a multi-month backlog can
+  // exceed that, so keep paging until the reported total is in hand rather than silently
+  // truncating. Returns a flat, pagination-ordered bucket array (no meta) — the caller derives
+  // which display page a bucket falls on from its index.
+  getAllApprovalSummary: async (params) => {
+    const buckets = [];
+    for (let page = 1; page <= APPROVAL_SUMMARY_MAX_PAGES; page += 1) {
+      // Sequential by necessity — the page count isn't known until the first response lands.
+      // eslint-disable-next-line no-await-in-loop
+      const res = await fetchApprovalSummaryPage({ ...params, page, limit: APPROVAL_SUMMARY_MAX_LIMIT });
+      const chunk = res?.data ?? [];
+      buckets.push(...chunk);
+      const total = Number(res?.meta?.total);
+      // Also stops on a short page, which covers a backend that reports no/!finite total.
+      if (chunk.length < APPROVAL_SUMMARY_MAX_LIMIT || !Number.isFinite(total) || buckets.length >= total) break;
+    }
+    return buckets;
+  },
   // Single endpoint for single-row, bulk-daily, and monthly approval alike — pass exactly one of
   // `dates` (array) or `months` (array of {month,year}); a single-element array covers the
   // "approve this one date/month" case, so no separate single-approve call is needed.

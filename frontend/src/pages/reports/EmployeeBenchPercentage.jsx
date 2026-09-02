@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import { createColumnHelper } from '@tanstack/react-table';
-import { ChevronDown, ChevronUp, ChevronsUpDown, Download } from 'lucide-react';
+import { ChevronDown, ChevronUp, ChevronsUpDown, Download, Search } from 'lucide-react';
 import { useEmployeeBenchPercentage } from '@/hooks/useReports';
 import { useActiveEmployees } from '@/hooks/useEmployees';
 import { useActiveClients } from '@/hooks/useClients';
@@ -12,8 +12,10 @@ import PageHeader from '@/components/common/PageHeader';
 import EmptyState from '@/components/common/EmptyState';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
+import BusinessUnitFilter, { ALL_BUS } from '@/components/common/BusinessUnitFilter';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
@@ -152,6 +154,8 @@ const EmployeeBenchPercentage = () => {
   const [clientId, setClientId] = useState('all');
   const [poId, setPoId] = useState('all');
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [buId, setBuId] = useState(ALL_BUS);
+  const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [sortBy, setSortBy] = useState('bench_pct');
@@ -177,26 +181,39 @@ const EmployeeBenchPercentage = () => {
     sortOrder,
     page: 1,
     limit: MAX_RECORDS_FETCH,
+    buId,
   };
 
   const { data, isPending } = useEmployeeBenchPercentage(params);
 
   const records = Array.isArray(data?.data) ? data.data : [];
-  const pagedRecords = records.slice((page - 1) * limit, page * limit);
+
+  // Applied in memory — the whole matching set is already here, so there is nothing to gain from
+  // a round-trip. Covers the identifying columns only; the numeric/metric columns are left out,
+  // since substring-matching an amount or a count misleads more than it helps.
+  const filteredRecords = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return records;
+    return records.filter((r) => [r.employee_code, r.full_name]
+      .some((v) => String(v ?? '').toLowerCase().includes(q)));
+  }, [records, search]);
+  const pagedRecords = filteredRecords.slice((page - 1) * limit, page * limit);
   const showLoading = periodReady && isPending;
 
   const avgBenchPct =
-    records.length > 0
-      ? records.reduce((sum, r) => sum + (Number(r.bench_pct) || 0), 0) / records.length
+    filteredRecords.length > 0
+      ? filteredRecords.reduce((sum, r) => sum + (Number(r.bench_pct) || 0), 0) / filteredRecords.length
       : null;
 
   const activeFilterCount = [
+    buId !== ALL_BUS,
     employeeId !== 'all',
     clientId !== 'all',
     poId !== 'all',
   ].filter(Boolean).length;
 
   const clearFilters = () => {
+    setBuId(ALL_BUS);
     setEmployeeId('all');
     setClientId('all');
     setPoId('all');
@@ -219,7 +236,7 @@ const EmployeeBenchPercentage = () => {
   };
 
   // Already have the full matching set in memory — no need for a second network round-trip.
-  const handleExport = () => exportToExcel(records);
+  const handleExport = () => exportToExcel(filteredRecords);
 
   const columns = getColumns(sortBy, sortOrder, handleSort);
 
@@ -230,13 +247,22 @@ const EmployeeBenchPercentage = () => {
         description="Share of each employee's hours that went unbilled (bench) for the selected period."
         actions={
           <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search code, name…"
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                className="h-9 w-72 pl-9 text-sm"
+              />
+            </div>
             <FilterToggleButton
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((p) => !p)}
               activeCount={activeFilterCount}
               className="h-9"
             />
-            {records.length > 0 && (
+            {filteredRecords.length > 0 && (
               <Button variant="outline" size="sm" className="h-9" onClick={handleExport}>
                 <Download className="mr-1.5 h-4 w-4" />Export Excel
               </Button>
@@ -245,7 +271,9 @@ const EmployeeBenchPercentage = () => {
         }
       />
 
-      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[340px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[440px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
+        <BusinessUnitFilter value={buId} onChange={setBuId} />
+
         <div className="flex flex-col gap-1.5 md:col-span-2">
           <Label className="text-xs">Period <span className="text-destructive">*</span></Label>
           <div className="flex items-center gap-2">
@@ -341,12 +369,12 @@ const EmployeeBenchPercentage = () => {
             <EmptyState title="Select a period" description="Choose a month or a date range to load the bench percentage report." />
           ) : undefined
         }
-        pagination={periodReady ? { page, limit, total: records.length } : undefined}
+        pagination={periodReady ? { page, limit, total: filteredRecords.length } : undefined}
         onPageChange={setPage}
         onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
       />
 
-      {periodReady && records.length > 0 && (
+      {periodReady && filteredRecords.length > 0 && (
         <div className="mt-4 rounded-lg border bg-muted/40 px-4 py-3">
           <p className="mb-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Summary</p>
           <div className="flex flex-wrap gap-x-6 gap-y-2">

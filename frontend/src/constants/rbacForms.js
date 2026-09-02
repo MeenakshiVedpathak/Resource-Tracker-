@@ -139,6 +139,10 @@ export const FORM_NAMES = {
   REPORT_CLIENT_WISE_ANALYTICS: 'Client Wise Analytics',
   REPORT_MONTHLY_HOURS_TREND: 'Monthly Hours Trend',
   REPORT_EMPLOYEE_BENCH_PERCENTAGE: 'Employee Bench Percentage',
+  REPORT_EMPLOYEE_WORK_LOG_HOURS_SUMMARY: 'Employee Work Log Hours Summary',
+  // Same caveat as the block above — guessed names pending real Form Master rows.
+  REPORT_RESOURCE_UTILIZATION_TREND: 'Resource Utilization Trend',
+  REPORT_SERVICE_PO_HOURS_BUDGET: 'PO Hours & Budget',
 };
 
 // form_name (lowercased/trimmed) -> { to, icon, exact, addTo?, addLabel? }. Icons are used by
@@ -204,6 +208,9 @@ export const FORM_ROUTE_CONFIG = {
   [FORM_NAMES.REPORT_CLIENT_WISE_ANALYTICS]: { to: ROUTES.REPORT_CLIENT_WISE_ANALYTICS, icon: Building },
   [FORM_NAMES.REPORT_MONTHLY_HOURS_TREND]: { to: ROUTES.REPORT_MONTHLY_HOURS_TREND, icon: Activity },
   [FORM_NAMES.REPORT_EMPLOYEE_BENCH_PERCENTAGE]: { to: ROUTES.REPORT_EMPLOYEE_BENCH_PERCENTAGE, icon: Armchair },
+  [FORM_NAMES.REPORT_EMPLOYEE_WORK_LOG_HOURS_SUMMARY]: { to: ROUTES.REPORT_EMPLOYEE_WORK_LOG_HOURS_SUMMARY, icon: FileBarChart2 },
+  [FORM_NAMES.REPORT_RESOURCE_UTILIZATION_TREND]: { to: ROUTES.REPORT_RESOURCE_UTILIZATION_TREND, icon: LineChart },
+  [FORM_NAMES.REPORT_SERVICE_PO_HOURS_BUDGET]: { to: ROUTES.REPORT_SERVICE_PO_HOURS_BUDGET, icon: Wallet },
 };
 
 const NORMALIZED_CONFIG = Object.fromEntries(

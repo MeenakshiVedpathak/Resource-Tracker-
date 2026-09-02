@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { SearchableSelect } from '@/components/ui/searchable-select';
+import { ROUTES } from '@/constants/routes';
 import PageHeader from '@/components/common/PageHeader';
 import EmptyState from '@/components/common/EmptyState';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
@@ -191,6 +192,8 @@ const EmployeeProjectHoursReport = () => {
     <div className="space-y-4">
       <PageHeader
         title="Project Hours Report"
+        backTo={ROUTES.REPORTS}
+        backLabel="Back to Report"
         description="Hours you've logged against your mapped Projects/Service POs, broken down by hierarchy."
         actions={
           <FilterToggleButton
@@ -256,7 +259,7 @@ const EmployeeProjectHoursReport = () => {
             value={filterValue}
             onValueChange={(v) => v && setFilterValue(v)}
             placeholder="All Projects & Service POs"
-            searchPlaceholder="Search project or service PO..."
+            searchPlaceholder="Search project or Service PO..."
             className="h-9 w-full text-sm bg-white"
           />
         </div>

@@ -4,6 +4,7 @@ import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import EmptyState from '@/components/common/EmptyState';
 import { cn } from '@/utils/cn';
+import { formatHoursMinutes, parseHourMinuteInput, formatHourMinuteValue } from '@/utils/formatters';
 import { DAILY_HOURS_CAP } from './WorkLogEntryModal';
 
 const STEP = 0.5;
@@ -31,16 +32,16 @@ const clampHours = (n, cap) => Math.min(cap, Math.max(0, n));
 // whole month's total, not one day's.
 const HourStepper = ({ value, onChange, disabled, hoursCap = DAILY_HOURS_CAP }) => {
   const num = Number(value || 0);
-  const [inputValue, setInputValue] = useState(String(num));
+  const [inputValue, setInputValue] = useState(formatHourMinuteValue(num));
 
   useEffect(() => {
-    setInputValue(String(num));
+    setInputValue(formatHourMinuteValue(num));
   }, [num]);
 
   const commit = () => {
-    const parsed = Number(inputValue);
-    const next = Number.isFinite(parsed) ? clampHours(parsed, hoursCap) : num;
-    setInputValue(String(next));
+    const parsed = parseHourMinuteInput(inputValue);
+    const next = Number.isFinite(parsed) ? clampHours(Math.round(parsed * 60) / 60, hoursCap) : num;
+    setInputValue(formatHourMinuteValue(next));
     if (next !== num) onChange(next);
   };
 
@@ -122,7 +123,7 @@ const ProjectGroup = ({
           <Folder className="h-3 w-3" />
         </span>
         <span className="flex-1 truncate text-xs font-semibold">{poRow.label}</span>
-        <span className="text-xs font-semibold text-primary">{groupTotal} {groupTotal === 1 ? 'hr' : 'hrs'}</span>
+        <span className="text-xs font-semibold text-primary">{formatHoursMinutes(groupTotal)}</span>
         {isOpen ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
       </button>
 
@@ -157,7 +158,7 @@ const ProjectGroup = ({
                     {canEditRow ? (
                       <HourStepper value={value} onChange={(v) => onCellChange(row.rowKey, day, String(v))} hoursCap={hoursCap} />
                     ) : (
-                      <span className="text-xs font-medium tabular-nums text-muted-foreground">{value} hrs</span>
+                      <span className="text-xs font-medium tabular-nums text-muted-foreground">{formatHoursMinutes(value)}</span>
                     )}
                   </div>
                 </div>

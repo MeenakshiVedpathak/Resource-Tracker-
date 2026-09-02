@@ -10,6 +10,8 @@ import { useNotification } from '@/hooks/useNotification';
 import { useDebounce } from '@/hooks/useDebounce';
 import { extractApiError } from '@/services/apiClient';
 import { buildPath, ROUTES } from '@/constants/routes';
+import BusinessUnitFilter from '@/components/common/BusinessUnitFilter';
+import { useMasterBuFilter } from '@/hooks/useMasterBuFilter';
 import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
@@ -68,9 +70,30 @@ const ClientList = () => {
 
   const [sorting, setSorting] = useState([]);
 
+  // BU filter, from the same shared hook every other Master screen uses (ProjectList,
+  // ServicePOList, SubProjectList, ...) so availability can't drift between them.
+  //
+  // This screen previously gated the filter on canScopeAcrossBus() alone, which offered it to
+  // Admin/Entity Admin only and sourced its options from GET /companies. That silently excluded
+  // BU-SCOPED logins mapped to several BUs (BU Head, multi-BU BU Admin, Service PO Admin /
+  // Delivery head): useCompanies is not theirs to read, so their option list was empty and the
+  // control never rendered — even though, having more than one BU, they are exactly the users
+  // with a choice to make. useMasterBuFilter resolves options per login kind (the BU master for
+  // cross-BU logins, the login's own businessUnits[] for BU-scoped ones) and shows the control
+  // whenever there is more than one BU to pick between.
+  //
+  // `buId` stays a pseudo-param: it rides inside the params object so it lands in the React
+  // Query key and refetches on change, and clients.api.js turns it into ?company_id=<id>
+  // (omitted for 'all'), which the backend accepts for BU-scoped callers too — narrowing to one
+  // of their own mapped BUs.
+  const { buId, setBuId, showBuFilter, isBuFiltered, resetBuId, buParams } = useMasterBuFilter();
+
   const params = {
     page,
     limit,
+    // Only present while the filter is available; otherwise no company_id is sent at all and
+    // the backend resolves scope from the token + X-Company-Id header as before.
+    ...buParams,
     status: statusFilter,
     ...(debouncedSearch && { search: debouncedSearch }),
     ...(sorting[0] && { sortBy: sorting[0].id, sortOrder: sorting[0].desc ? 'desc' : 'asc' }),
@@ -90,10 +113,11 @@ const ClientList = () => {
   const clients = data?.data ?? [];
   const meta = data?.meta ?? {};
 
-  const activeFilterCount = statusFilter !== 'all' ? 1 : 0;
+  const activeFilterCount = (statusFilter !== 'all' ? 1 : 0) + (isBuFiltered ? 1 : 0);
 
   const clearFilters = () => {
     setStatusFilter('all');
+    resetBuId();
     setPage(1);
   };
 
@@ -176,10 +200,11 @@ const ClientList = () => {
     try {
       const data = await fetchAllClientsForExport({
         status: statusFilter,
+        ...buParams,
         ...(debouncedSearch && { search: debouncedSearch }),
       });
       if (data.length === 0) {
-        showError('No data to export');
+        showError('No data to export.');
         return;
       }
       const exportData = data.map((c) => ({
@@ -192,10 +217,10 @@ const ClientList = () => {
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Clients');
       XLSX.writeFile(wb, 'clients_export.xlsx');
-      success('Exported to Excel successfully');
+      success('Exported to Excel successfully.');
     } catch (error) {
       console.error('Excel Export Error:', error);
-      showError('Failed to export Excel');
+      showError('Failed to export Excel.');
     }
   };
 
@@ -218,7 +243,7 @@ const ClientList = () => {
           setIsPreviewOpen(true);
         }
       } catch (error) {
-        showError('Failed to parse Excel file');
+        showError('Failed to parse Excel file.');
       } finally {
         if (fileInputRef.current) fileInputRef.current.value = '';
       }
@@ -383,6 +408,9 @@ const ClientList = () => {
       />
 
       <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[200px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
+        {showBuFilter && (
+          <BusinessUnitFilter value={buId} onChange={(v) => { setBuId(v); setPage(1); }} />
+        )}
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Status</Label>
           <div className="flex items-center rounded-md border overflow-hidden h-9 text-sm bg-white">

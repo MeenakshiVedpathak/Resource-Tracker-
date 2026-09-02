@@ -79,7 +79,11 @@ export const QUERY_KEYS = {
 
   // Service POs
   SERVICE_POS: (params) => ['service-pos', params],
-  SERVICE_POS_ACTIVE: ['service-pos', 'active'],
+  // `buId` is optional — undefined for the cross-BU callers that make up most of the app (they
+  // all share one cache entry), a BU id only for screens that narrow the picker to one BU first
+  // (Cost Budget, Resource Budget). Still under the 'service-pos' prefix every mutation
+  // invalidates.
+  SERVICE_POS_ACTIVE: (buId) => ['service-pos', 'active', buId],
   SERVICE_PO: (id) => ['service-pos', id],
   SERVICE_PO_UTILISATION: (id) => ['service-pos', id, 'utilisation'],
   SERVICE_PO_HIERARCHY: (id) => ['service-pos', id, 'hierarchy'],
@@ -102,8 +106,12 @@ export const QUERY_KEYS = {
   MONTHLY_COST: (id) => ['monthly-costs', id],
 
   // Service PO Monthly Budget ("Monthly PO Reporting" in the UI, was "Invoice Master")
-  SERVICE_PO_MONTHLY_BUDGET_SERVICE_POS: ['service-po-monthly-budget', 'service-pos'],
-  SERVICE_PO_MONTHLY_BUDGET_LIST: (month, year) => ['service-po-monthly-budget', 'list', month, year],
+  SERVICE_PO_MONTHLY_BUDGET_SERVICE_POS: (buId) => ['service-po-monthly-budget', 'service-pos', buId],
+  // `buId` is the page's own Business Unit filter (undefined for a single-BU login, which keeps
+  // following the global header). It MUST stay in the key: the month grid and the 12-month
+  // summary strip share these cache entries, so without it a BU switch would serve the previous
+  // BU's records to both.
+  SERVICE_PO_MONTHLY_BUDGET_LIST: (month, year, buId) => ['service-po-monthly-budget', 'list', month, year, buId],
   SERVICE_PO_MONTHLY_BUDGET_RECORD: (servicePoId, month, year) =>
     ['service-po-monthly-budget', 'record', servicePoId, month, year],
 
@@ -150,6 +158,10 @@ export const QUERY_KEYS = {
   REPORT_CLIENT_WISE_ANALYTICS: (params) => ['reports', 'client-wise-analytics', params],
   REPORT_MONTHLY_HOURS_TREND: (params) => ['reports', 'monthly-hours-trend', params],
   REPORT_EMPLOYEE_BENCH_PERCENTAGE: (params) => ['reports', 'employee-bench-percentage', params],
+  REPORT_RESOURCE_UTILIZATION_TREND: (params) => ['reports', 'resource-utilization-trend', params],
+  REPORT_SERVICE_PO_HOURS_BUDGET: (params) => ['reports', 'service-po-hours-budget', params],
+  REPORT_EMPLOYEE_WORK_LOG_HOURS_SUMMARY: (params) => ['reports', 'employee-work-log-hours-summary', params],
+  REPORT_EMPLOYEE_WORK_LOG_HOURS_SUMMARY_DETAILS: (employeeId, params) => ['reports', 'employee-work-log-hours-summary', employeeId, 'details', params],
 
   // Notifications
   NOTIFICATIONS: (params) => ['notifications', params],
@@ -166,6 +178,15 @@ export const QUERY_KEYS = {
   EMPLOYEE_SERVICEPO_MAPPING_BY_EMPLOYEE: (employeeId) => ['employee-servicepo-mapping', 'employee', employeeId],
   EMPLOYEE_SERVICEPO_MAPPING_BY_SERVICE_PO: (servicePOId) => ['employee-servicepo-mapping', 'service-po', servicePOId],
   EMPLOYEE_SERVICEPO_MAPPING_OPTIONS: (employeeId) => ['employee-servicepo-mapping', 'options', employeeId],
+  // Service PO → Map Employees' left panel. `search` and `businessUnitId` are part of the key
+  // because both are applied server-side — a new value is a different paged result set, not a
+  // client-side filter of this one. Prefix-matched by ['employee-servicepo-mapping'], so the
+  // existing map/unmap invalidations reach it and the panel's mapped_employee_ids refresh after a save.
+  EMPLOYEE_SERVICEPO_MAPPING_SERVICE_PO_OPTIONS: (servicePOId, search, businessUnitId) =>
+    ['employee-servicepo-mapping', 'service-po', servicePOId, 'options', search ?? '', businessUnitId ?? ''],
+  // Map Employees' Entity → BU filter bar — same for every Service PO the caller can open this
+  // screen for, so no servicePOId in the key.
+  EMPLOYEE_SERVICEPO_MAPPING_FILTER_OPTIONS: ['employee-servicepo-mapping', 'filter-options'],
 
   // Employee Reports
   EMPLOYEE_REPORT_DAILY: (date) => ['employee-report', 'daily', date],

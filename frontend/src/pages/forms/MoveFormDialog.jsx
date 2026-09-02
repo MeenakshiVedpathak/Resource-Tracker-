@@ -93,7 +93,7 @@ const MoveFormDialog = ({ form, open, onOpenChange }) => {
               </SelectContent>
             </Select>
             {!isLoadingCategories && categoryOptions.length === 0 && (
-              <p className="text-[10px] text-muted-foreground">No Category Available — the form will sit directly under the module.</p>
+              <p className="text-[10px] text-muted-foreground">No category available — the form will sit directly under the module.</p>
             )}
           </div>
         </div>

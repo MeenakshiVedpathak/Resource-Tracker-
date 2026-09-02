@@ -1,15 +1,29 @@
 import { lazy, Suspense } from 'react';
-import { Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes } from 'react-router-dom';
 import { ROUTES } from '@/constants/routes';
 import { FORM_NAMES } from '@/constants/rbacForms';
 import { ROLE_NAMES } from '@/constants/roleHierarchy';
 import { useAuth } from '@/hooks/useAuth';
+import { useCanManageEmployeeRecords } from '@/hooks/usePermissions';
 import ProtectedRoute from './ProtectedRoute';
 import AuthLayout from '@/layouts/AuthLayout';
 import MainLayout from '@/layouts/MainLayout';
 import EmployeeLayout from '@/layouts/EmployeeLayout';
 import ForgotPasswordLayout from '@/layouts/ForgotPasswordLayout';
 import LoadingScreen from '@/components/common/LoadingScreen';
+
+// Employee Master is granted to BU Admin / BU Head for the "Map Roles & Business Units" row
+// action only — the Add/Edit Employee form behind it stays with HR / Admin / Entity Admin (see
+// useCanManageEmployeeRecords). EmployeeList already hides every button that navigates here;
+// this stops a hand-typed URL or a stale bookmark from reaching the form regardless.
+//
+// A plain ProtectedRoute `allowedRoles` can't express this: the rule is "everyone the form is
+// mapped to EXCEPT this one tier", and enumerating the allowed side would silently lock out any
+// role added to the mapping later.
+const RequireEmployeeRecordAccess = ({ children }) => {
+  const canManage = useCanManageEmployeeRecords();
+  return canManage ? children : <Navigate to={ROUTES.NOT_AUTHORIZED} replace />;
+};
 
 // ── Auth pages ──
 const Login = lazy(() => import('@/pages/auth/Login'));
@@ -114,6 +128,9 @@ const ClientCostAnalytics = lazy(() => import('@/pages/reports/ClientCostAnalyti
 const ClientWiseAnalytics = lazy(() => import('@/pages/reports/ClientWiseAnalytics'));
 const MonthlyHoursTrend = lazy(() => import('@/pages/reports/MonthlyHoursTrend'));
 const EmployeeBenchPercentage = lazy(() => import('@/pages/reports/EmployeeBenchPercentage'));
+const ResourceUtilizationTrend = lazy(() => import('@/pages/reports/ResourceUtilizationTrend'));
+const ServicePOHoursBudget = lazy(() => import('@/pages/reports/ServicePOHoursBudget'));
+const EmployeeWorkLogHoursSummaryReport = lazy(() => import('@/pages/reports/EmployeeWorkLogHoursSummaryReport'));
 
 // ── AI Copilot (new pages, launched from the floating AI Copilot widget) ──
 const RootCauseView = lazy(() => import('@/pages/ai/RootCauseView'));
@@ -222,8 +239,8 @@ const AppRoutes = () => {
 
         {/* Employees */}
         <Route path={ROUTES.EMPLOYEES} element={<ProtectedRoute formName={FORM_NAMES.EMPLOYEES}><EmployeeList /></ProtectedRoute>}>
-          <Route path="new" element={<EmployeeForm />} />
-          <Route path=":id/edit" element={<EmployeeForm />} />
+          <Route path="new" element={<RequireEmployeeRecordAccess><EmployeeForm /></RequireEmployeeRecordAccess>} />
+          <Route path=":id/edit" element={<RequireEmployeeRecordAccess><EmployeeForm /></RequireEmployeeRecordAccess>} />
         </Route>
 
         {/* Roles — form-mapping is a per-row action on this same page, not a separate menu item */}
@@ -302,10 +319,17 @@ const AppRoutes = () => {
 
         {/* Company Management — Admin (platform-wide) and Entity Admin (own Entities) both reach
             this, reached via a button on Entity Master / BU Admin Master. No Form Master row of
-            its own, so it's gated by role name directly rather than formName. */}
-        <Route path={ROUTES.COMPANIES} element={<ProtectedRoute allowedRoles={['Admin', 'Entity Admin']}><CompanyList /></ProtectedRoute>}>
-          <Route path="new" element={<CompanyForm />} />
-          <Route path=":id/edit" element={<CompanyForm />} />
+            its own, so it's gated by role name directly rather than formName.
+
+            BU Admin / BU Head are on the LIST only, and only read-only: once "BU Master" is
+            mapped to the BU Admin role they need to see the BUs they map employees against, but
+            a BU is an Entity-tier object they may never create or change. Same split Entity
+            Master above already uses — the list is open, `new`/`:id/edit` carry their own
+            Admin/Entity-Admin guard so a deep link (or a stale bookmark) can't reach the form
+            that the hidden buttons in CompanyList no longer navigate to. */}
+        <Route path={ROUTES.COMPANIES} element={<ProtectedRoute allowedRoles={['Admin', 'Entity Admin', 'BU Admin', 'BU Head']}><CompanyList /></ProtectedRoute>}>
+          <Route path="new" element={<ProtectedRoute allowedRoles={['Admin', 'Entity Admin']}><CompanyForm /></ProtectedRoute>} />
+          <Route path=":id/edit" element={<ProtectedRoute allowedRoles={['Admin', 'Entity Admin']}><CompanyForm /></ProtectedRoute>} />
         </Route>
 
         {/* Clients */}
@@ -383,6 +407,9 @@ const AppRoutes = () => {
           <Route path={ROUTES.REPORT_CLIENT_WISE_ANALYTICS} element={<ProtectedRoute formName={FORM_NAMES.REPORT_CLIENT_WISE_ANALYTICS}><ClientWiseAnalytics /></ProtectedRoute>} />
           <Route path={ROUTES.REPORT_MONTHLY_HOURS_TREND} element={<ProtectedRoute formName={FORM_NAMES.REPORT_MONTHLY_HOURS_TREND}><MonthlyHoursTrend /></ProtectedRoute>} />
           <Route path={ROUTES.REPORT_EMPLOYEE_BENCH_PERCENTAGE} element={<ProtectedRoute formName={FORM_NAMES.REPORT_EMPLOYEE_BENCH_PERCENTAGE}><EmployeeBenchPercentage /></ProtectedRoute>} />
+          <Route path={ROUTES.REPORT_RESOURCE_UTILIZATION_TREND} element={<ProtectedRoute formName={FORM_NAMES.REPORT_RESOURCE_UTILIZATION_TREND}><ResourceUtilizationTrend /></ProtectedRoute>} />
+          <Route path={ROUTES.REPORT_SERVICE_PO_HOURS_BUDGET} element={<ProtectedRoute formName={FORM_NAMES.REPORT_SERVICE_PO_HOURS_BUDGET}><ServicePOHoursBudget /></ProtectedRoute>} />
+          <Route path={ROUTES.REPORT_EMPLOYEE_WORK_LOG_HOURS_SUMMARY} element={<ProtectedRoute formName={FORM_NAMES.REPORT_EMPLOYEE_WORK_LOG_HOURS_SUMMARY} allowIfNoFormsMapped><EmployeeWorkLogHoursSummaryReport /></ProtectedRoute>} />
         </Route>
 
         {/* AI Copilot — new, additive pages. No RBAC form rows exist for these yet (they're

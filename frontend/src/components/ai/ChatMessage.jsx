@@ -59,7 +59,7 @@ const ChatMessage = ({ message, isLast, onRegenerate }) => {
     try {
       await navigator.clipboard.writeText(message.text ?? '');
       setCopied(true);
-      success('Copied to clipboard');
+      success('Copied to clipboard.');
       setTimeout(() => setCopied(false), 1500);
     } catch {
       // clipboard API unavailable — silently ignore, not worth surfacing an error toast

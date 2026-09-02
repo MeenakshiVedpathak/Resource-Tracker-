@@ -9,10 +9,13 @@ export const useServicePOs = (params) =>
     placeholderData: (prev) => prev,
   });
 
-export const useActiveServicePOs = (enabled = true) =>
+// `buId` narrows the list to one Business Unit — passed only by screens that gate the Service PO
+// picker behind a BU choice. Left undefined by every other caller, who then share a single
+// cross-BU cache entry exactly as before.
+export const useActiveServicePOs = (enabled = true, buId) =>
   useQuery({
-    queryKey: QUERY_KEYS.SERVICE_POS_ACTIVE,
-    queryFn: servicePOsApi.getActiveList,
+    queryKey: QUERY_KEYS.SERVICE_POS_ACTIVE(buId),
+    queryFn: () => servicePOsApi.getActiveList(buId),
     staleTime: 1000 * 60 * 10,
     enabled,
   });
