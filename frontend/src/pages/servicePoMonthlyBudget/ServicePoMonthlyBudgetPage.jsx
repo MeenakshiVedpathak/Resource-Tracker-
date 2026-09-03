@@ -4,6 +4,7 @@ import PageHeader from '@/components/common/PageHeader';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
 import BusinessUnitFilter, { ALL_BUS } from '@/components/common/BusinessUnitFilter';
+import EntityFilter, { ALL_ENTITIES } from '@/components/common/EntityFilter';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -47,6 +48,8 @@ const ServicePoMonthlyBudgetPage = () => {
   // BU-mapped login, so the filter renders whenever the login has ANY mapped BU rather than only
   // above two. Defaults to "All Business Units", same as every report. The control hides itself
   // for a login with no BU at all (Platform Admin/Entity Admin), which is already unscoped.
+  const [entityId, setEntityId] = useState(ALL_ENTITIES);
+  const isEntityFiltered = entityId !== ALL_ENTITIES;
   const [buId, setBuId] = useState(ALL_BUS);
   const isBuFiltered = buId !== ALL_BUS;
 
@@ -122,14 +125,25 @@ const ServicePoMonthlyBudgetPage = () => {
   };
 
   const activeFilterCount = [clientFilter, categoryFilter, typeFilter, poFilter]
-    .filter((v) => v !== 'all').length + (isBuFiltered ? 1 : 0);
+    .filter((v) => v !== 'all').length + (isEntityFiltered ? 1 : 0) + (isBuFiltered ? 1 : 0);
 
   const clearFilters = () => {
     setClientFilter('all');
     setCategoryFilter('all');
     setTypeFilter('all');
     setPoFilter('all');
+    setEntityId(ALL_ENTITIES);
     setBuId(ALL_BUS);
+  };
+
+  // Picking a different Entity can strand a BU (and everything chained off it) that no longer
+  // belongs to the new Entity — reset the whole chain the same way changing BU does below.
+  const handleEntityChange = (v) => {
+    setEntityId(v);
+    setBuId(ALL_BUS);
+    setCategoryFilter('all');
+    setTypeFilter('all');
+    setPoFilter('all');
   };
 
   // Narrowing the BU can strand a Service PO / Type / Category selection that belongs to a BU no
@@ -231,7 +245,9 @@ const ServicePoMonthlyBudgetPage = () => {
         onClear={clearFilters}
         showClear={activeFilterCount > 0}
       >
-        <BusinessUnitFilter value={buId} onChange={handleBuChange} className="h-9 w-full text-sm" />
+        <EntityFilter value={entityId} onChange={handleEntityChange} className="h-9 w-full text-sm" />
+
+        <BusinessUnitFilter value={buId} entityId={entityId} onChange={handleBuChange} className="h-9 w-full text-sm" />
 
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Client</Label>

@@ -9,6 +9,7 @@ import {
 } from '@/components/ui/dialog';
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { SearchableSelect } from '@/components/ui/searchable-select';
@@ -236,7 +237,12 @@ const WorkLogEntryModal = ({ open, onOpenChange, date, task }) => {
                 <FormItem>
                   <FormLabel>Date</FormLabel>
                   <FormControl>
-                    <Input type="date" max={today} disabled={isSaving} {...field} />
+                    <DatePicker
+                      value={field.value || ''}
+                      onChange={field.onChange}
+                      max={today}
+                      disabled={isSaving}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

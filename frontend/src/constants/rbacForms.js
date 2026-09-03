@@ -76,6 +76,10 @@ export const FORM_NAMES = {
   EMPLOYEE_TIME_ENTRY: 'Time Entry',
   EMPLOYEE_MONTHLY_SUMMARY: 'Monthly Summary',
   EMPLOYEE_REPORTS: 'PO Wise Report',
+  // Hub page — a category-browser landing page for all employee-side reports, mirroring the
+  // admin ReportsCenter. Needs a real Form Master row named exactly this and mapped to the
+  // Employee role via Role Form Mapping (guessed name — confirm once seeded).
+  EMPLOYEE_REPORTS_CENTER: 'Employee Reports Center',
   // Guessed name — same caveat as the rest of this file's Employee self-service entries; confirm
   // against the actual Form Master row once one is seeded for this new report.
   EMPLOYEE_PROJECT_HOURS_REPORT: 'Project Hours Report',
@@ -140,6 +144,7 @@ export const FORM_NAMES = {
   REPORT_MONTHLY_HOURS_TREND: 'Monthly Hours Trend',
   REPORT_EMPLOYEE_BENCH_PERCENTAGE: 'Employee Bench Percentage',
   REPORT_EMPLOYEE_WORK_LOG_HOURS_SUMMARY: 'Employee Work Log Hours Summary',
+  REPORT_EMPLOYEE_WORK_LOG_COMPLIANCE: 'Employee Work Log Compliance',
   // Same caveat as the block above — guessed names pending real Form Master rows.
   REPORT_RESOURCE_UTILIZATION_TREND: 'Resource Utilization Trend',
   REPORT_SERVICE_PO_HOURS_BUDGET: 'PO Hours & Budget',
@@ -182,6 +187,9 @@ export const FORM_ROUTE_CONFIG = {
   [FORM_NAMES.EMPLOYEE_TIME_ENTRY]: { to: ROUTES.EMPLOYEE_TIME_ENTRY, icon: Hourglass, exact: true },
   [FORM_NAMES.EMPLOYEE_MONTHLY_SUMMARY]: { to: ROUTES.EMPLOYEE_MONTHLY_SUMMARY, icon: Table2 },
   [FORM_NAMES.EMPLOYEE_REPORTS]: { to: ROUTES.EMPLOYEE_REPORTS, icon: FileBarChart2 },
+  // Hub page — points to the Reports Center landing page; exact: true so only /employee/reports-center
+  // itself is highlighted active (not every child report route under /employee/*).
+  [FORM_NAMES.EMPLOYEE_REPORTS_CENTER]: { to: ROUTES.EMPLOYEE_REPORTS_CENTER, icon: FolderOpen, exact: true },
   [FORM_NAMES.EMPLOYEE_PROJECT_HOURS_REPORT]: { to: ROUTES.EMPLOYEE_PROJECT_HOURS_REPORT, icon: ListTree },
   [FORM_NAMES.EMPLOYEE_TIMESHEET_APPROVAL_STATUS_REPORT]: { to: ROUTES.EMPLOYEE_TIMESHEET_APPROVAL_STATUS_REPORT, icon: ListChecks },
   [FORM_NAMES.EMPLOYEE_WORK_LOG_TIME_REPORT]: { to: ROUTES.EMPLOYEE_WORK_LOG_TIME_REPORT, icon: Timer },
@@ -209,6 +217,7 @@ export const FORM_ROUTE_CONFIG = {
   [FORM_NAMES.REPORT_MONTHLY_HOURS_TREND]: { to: ROUTES.REPORT_MONTHLY_HOURS_TREND, icon: Activity },
   [FORM_NAMES.REPORT_EMPLOYEE_BENCH_PERCENTAGE]: { to: ROUTES.REPORT_EMPLOYEE_BENCH_PERCENTAGE, icon: Armchair },
   [FORM_NAMES.REPORT_EMPLOYEE_WORK_LOG_HOURS_SUMMARY]: { to: ROUTES.REPORT_EMPLOYEE_WORK_LOG_HOURS_SUMMARY, icon: FileBarChart2 },
+  [FORM_NAMES.REPORT_EMPLOYEE_WORK_LOG_COMPLIANCE]: { to: ROUTES.REPORT_EMPLOYEE_WORK_LOG_COMPLIANCE, icon: ClipboardList },
   [FORM_NAMES.REPORT_RESOURCE_UTILIZATION_TREND]: { to: ROUTES.REPORT_RESOURCE_UTILIZATION_TREND, icon: LineChart },
   [FORM_NAMES.REPORT_SERVICE_PO_HOURS_BUDGET]: { to: ROUTES.REPORT_SERVICE_PO_HOURS_BUDGET, icon: Wallet },
 };

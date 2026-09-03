@@ -10,6 +10,7 @@ import PageHeader from '@/components/common/PageHeader';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
 import BusinessUnitFilter, { ALL_BUS } from '@/components/common/BusinessUnitFilter';
+import EntityFilter, { ALL_ENTITIES } from '@/components/common/EntityFilter';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -125,6 +126,7 @@ const EmployeeCapacityForecast = () => {
   const [benchThresholdHours, setBenchThresholdHours] = useState(String(DEFAULT_BENCH_THRESHOLD_HOURS));
   const [search, setSearch] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [entityId, setEntityId] = useState(ALL_ENTITIES);
   const [buId, setBuId] = useState(ALL_BUS);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
@@ -157,11 +159,13 @@ const EmployeeCapacityForecast = () => {
   const pagedRecords = filteredRecords.slice((page - 1) * limit, page * limit);
 
   const activeFilterCount = [
+    entityId !== ALL_ENTITIES,
     buId !== ALL_BUS,
     Number(benchThresholdHours) !== DEFAULT_BENCH_THRESHOLD_HOURS,
   ].filter(Boolean).length;
 
   const clearFilters = () => {
+    setEntityId(ALL_ENTITIES);
     setBuId(ALL_BUS);
     setBenchThresholdHours(String(DEFAULT_BENCH_THRESHOLD_HOURS));
     setPage(1);
@@ -203,7 +207,9 @@ const EmployeeCapacityForecast = () => {
       />
 
       <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[380px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
-        <BusinessUnitFilter value={buId} onChange={setBuId} />
+        <EntityFilter value={entityId} onChange={(v) => { setEntityId(v); setBuId(ALL_BUS); }} />
+
+        <BusinessUnitFilter value={buId} entityId={entityId} onChange={setBuId} />
 
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Month &amp; Year <span className="text-destructive">*</span></Label>

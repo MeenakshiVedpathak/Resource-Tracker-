@@ -16,13 +16,14 @@ export const useEntities = (params) =>
 // staleTime below is fine for avoiding duplicate fetches within one mount, but must not let a
 // cached empty result (e.g. fetched before any Entity existed) silently persist into a later
 // mount and hide real options with no error and no visible network call.
-export const useActiveEntities = () =>
+export const useActiveEntities = (options = {}) =>
   useQuery({
     queryKey: QUERY_KEYS.ENTITIES_ACTIVE,
     queryFn: () => entitiesApi.getAll({ status: 'active', limit: 200 }),
     select: (data) => (Array.isArray(data?.data) ? data.data : []),
     staleTime: 1000 * 60 * 10,
     refetchOnMount: 'always',
+    ...options,
   });
 
 export const useEntity = (id) =>

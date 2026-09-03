@@ -55,20 +55,68 @@ const SummaryTable = ({ month, year, rows, isLoading, edits, onCellChange }) => 
     return edited !== undefined ? Number(edited || 0) : Number(row.hoursByDay?.[day] ?? 0);
   };
 
-  // Row/column/grand totals are always derived from the per-day cells themselves, never taken
-  // as separate backend fields — one source of truth, so totals can't drift from what's shown.
-  // Every row's `hoursByDay` is that row's own hours only (a Parent/PO can carry its own hours
-  // *and* have a breakdown underneath at the same time), so no row's total is a duplicate of
-  // another's — every row counts toward the column/grand totals, not just depth-0 ones.
+  // rowKey -> every row beneath it at any depth. Lets a collapsed parent stand in for its whole
+  // subtree, since the rows actually carrying those hours are hidden at that point.
+  const descendantsByKey = useMemo(() => {
+    const map = new Map();
+    rows.forEach((row) => {
+      (row.ancestorKeys ?? []).forEach((key) => {
+        if (!map.has(key)) map.set(key, []);
+        map.get(key).push(row);
+      });
+    });
+    return map;
+  }, [rows]);
+
+  // Row totals are always derived from the per-day cells themselves, never taken as separate
+  // backend fields — one source of truth, so a total can't drift from what's on screen.
+  //
+  // Every row's `hoursByDay` is that row's OWN hours only (a Parent/PO can carry its own hours
+  // *and* have a breakdown underneath at the same time). Shown as-is, a collapsed parent
+  // therefore read 0 while its hidden children held the hours — the month total said 9 and the
+  // only visible row said 0, with no hint that expanding would explain it.
+  //
+  // So a collapsed parent displays its SUBTREE (own + all descendants) and an expanded one
+  // displays its own hours, with the children accounting for the rest right below it. The
+  // rolled-up figure is read-only on purpose: it isn't a single editable quantity, and letting
+  // it be typed into would write the subtree's sum onto the parent's own hours, double-counting
+  // it against the children that are still there. Expand the row to edit its own hours.
   const rowsWithTotals = useMemo(
-    () => rows.map((row) => ({
-      ...row,
-      total: days.reduce((sum, day) => sum + cellValue(row, day), 0),
-    })),
+    () => rows.map((row) => {
+      const isRolledUp = row.hasChildren && !expandedKeys.has(row.rowKey);
+
+      if (!isRolledUp) {
+        return {
+          ...row,
+          isRolledUp: false,
+          displayHoursByDay: row.hoursByDay,
+          total: days.reduce((sum, day) => sum + cellValue(row, day), 0),
+        };
+      }
+
+      const descendants = descendantsByKey.get(row.rowKey) ?? [];
+      const displayHoursByDay = {};
+      days.forEach((day) => {
+        displayHoursByDay[day] = cellValue(row, day)
+          + descendants.reduce((sum, d) => sum + cellValue(d, day), 0);
+      });
+
+      return {
+        ...row,
+        isRolledUp: true,
+        subtreeCount: descendants.length,
+        displayHoursByDay,
+        total: days.reduce((sum, day) => sum + displayHoursByDay[day], 0),
+      };
+    }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [rows, days, edits]
+    [rows, days, edits, expandedKeys, descendantsByKey]
   );
 
+  // Deliberately summed from every row's OWN hours across the full `rows` list — never from the
+  // rolled-up display values above, and never from `visibleRows`. A collapsed parent's display
+  // value already contains its descendants' hours, so adding both would double-count, and
+  // expanding a row must not change the column or grand total.
   const columnTotals = useMemo(() => {
     const totals = {};
     days.forEach((day) => {
@@ -159,9 +207,11 @@ const SummaryTable = ({ month, year, rows, isLoading, edits, onCellChange }) => 
               isExpanded={expandedKeys.has(row.rowKey)}
               onToggleExpand={() => toggleExpanded(row.rowKey)}
               days={days}
-              hoursByDay={row.hoursByDay}
+              hoursByDay={row.displayHoursByDay}
               total={row.total}
-              editable={!!row.editable}
+              editable={!!row.editable && !row.isRolledUp}
+              isRolledUp={row.isRolledUp}
+              subtreeCount={row.subtreeCount}
               editableDays={editableDays}
               cellEdits={edits?.[row.rowKey]}
               onCellChange={(day, value) => onCellChange(row.rowKey, day, value)}

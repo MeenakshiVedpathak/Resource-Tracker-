@@ -19,6 +19,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import {
@@ -225,7 +226,14 @@ const SubProjectForm = () => {
                       render={({ field }) => (
                         <FormItem className="space-y-1">
                           <FormLabel className="text-[11px] text-muted-foreground font-medium">Start Date</FormLabel>
-                          <FormControl><Input type="date" className="h-8 text-sm border-gray-200" {...field} /></FormControl>
+                          <FormControl>
+                            <DatePicker
+                              value={field.value || ''}
+                              onChange={field.onChange}
+                              clearable
+                              className="h-8 text-sm border-gray-200"
+                            />
+                          </FormControl>
                           <FormMessage className="text-[10px]" />
                         </FormItem>
                       )}
@@ -237,7 +245,14 @@ const SubProjectForm = () => {
                       render={({ field }) => (
                         <FormItem className="space-y-1">
                           <FormLabel className="text-[11px] text-muted-foreground font-medium">End Date</FormLabel>
-                          <FormControl><Input type="date" className="h-8 text-sm border-gray-200" {...field} /></FormControl>
+                          <FormControl>
+                            <DatePicker
+                              value={field.value || ''}
+                              onChange={field.onChange}
+                              clearable
+                              className="h-8 text-sm border-gray-200"
+                            />
+                          </FormControl>
                           <FormMessage className="text-[10px]" />
                         </FormItem>
                       )}

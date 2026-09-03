@@ -32,6 +32,7 @@ const TimesheetUpload = () => {
   const currentDate = new Date();
   const month = location.state?.month || String(currentDate.getMonth() + 1);
   const year = location.state?.year || String(currentDate.getFullYear());
+  const buId = location.state?.buId || null;
 
   const confirmMutation = useConfirmImport();
 
@@ -132,7 +133,7 @@ const TimesheetUpload = () => {
     if (!selectedFile) return;
     setIsUploading(true);
     try {
-      const result = await timesheetsApi.upload(selectedFile, month, year);
+      const result = await timesheetsApi.upload(selectedFile, month, year, buId);
       setPreview({
         importId:   result?.importId,
         totalRows:  result?.totalRows  ?? 0,
@@ -152,7 +153,7 @@ const TimesheetUpload = () => {
 
   // ── Step 2 → Confirm ────────────────────────────────────────────────────────
   const handleConfirm = () => {
-    confirmMutation.mutate(preview.importId, {
+    confirmMutation.mutate({ importId: preview.importId, buId }, {
       onSuccess: () => {
         success('Timesheets imported successfully.');
         navigate(ROUTES.TIMESHEETS);

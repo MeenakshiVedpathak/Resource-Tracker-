@@ -58,13 +58,13 @@ export function MonthYearPicker({
           variant="outline"
           size="sm"
           className={cn(
-            'h-9 min-w-0 px-3 text-sm bg-white font-normal justify-between gap-1.5',
+            'h-9 min-w-0 px-3 text-sm font-normal justify-between gap-1.5',
             !value && 'text-muted-foreground',
             className
           )}
         >
           <span className="flex items-center gap-1.5 min-w-0">
-            <CalendarDays className="h-3.5 w-3.5 shrink-0" />
+            <CalendarDays className="h-4 w-4 shrink-0" />
             <span className="truncate">{label}</span>
           </span>
           {clearable && value && (

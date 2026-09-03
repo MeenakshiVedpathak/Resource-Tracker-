@@ -7,11 +7,12 @@ import { useCreateBuHead } from '@/hooks/useBuHeads';
 import { useCompanies } from '@/hooks/useCompanies';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
-import { employeeBaseFields, employeePasswordField, todayIsoDate } from '@/constants/employeeFormSchema';
+import { employeeBaseFields, employeePasswordField, todayIsoDate, refineEmploymentDates } from '@/constants/employeeFormSchema';
 import {
   Form, FormField, FormItem, FormLabel, FormControl, FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { MultiSelect } from '@/components/ui/multi-select';
@@ -33,17 +34,22 @@ import {
 // shown to the admin before the sheet closes). `company_ids` is required (min 1) — the backend
 // creates the initial BU mapping in this same call, so the BU picker lives here rather than
 // only in the separate Map BU action.
-const buHeadSchema = z
-  .object({
-    ...employeeBaseFields,
-    company_ids: z.array(z.coerce.number()).min(1, 'Select at least one business unit'),
-    password: z.union([z.literal(''), employeePasswordField]),
-    confirmPassword: z.string(),
-  })
-  .refine((d) => !d.password || d.password === d.confirmPassword, {
-    message: 'Passwords do not match',
-    path: ['confirmPassword'],
-  });
+// refineEmploymentDates carries the cross-field Date of Leaving rule. This form has no leaving
+// date input today (the field is always ''), so it's a no-op here -- applied anyway so the two
+// employee-creating schemas can't drift apart, which is the whole point of the shared module.
+const buHeadSchema = refineEmploymentDates(
+  z
+    .object({
+      ...employeeBaseFields,
+      company_ids: z.array(z.coerce.number()).min(1, 'Select at least one business unit'),
+      password: z.union([z.literal(''), employeePasswordField]),
+      confirmPassword: z.string(),
+    })
+    .refine((d) => !d.password || d.password === d.confirmPassword, {
+      message: 'Passwords do not match',
+      path: ['confirmPassword'],
+    })
+);
 
 const BuHeadForm = ({ open, onOpenChange }) => {
   const { success, error: showError } = useNotification();
@@ -328,7 +334,12 @@ const BuHeadForm = ({ open, onOpenChange }) => {
                       <FormItem className="space-y-1">
                         <FormLabel className="text-[11px] text-muted-foreground font-medium"><span className="text-destructive mr-0.5">*</span> Date of Joining</FormLabel>
                         <FormControl>
-                          <Input type="date" max={todayIsoDate()} {...field} className="h-8 text-sm border-gray-200" />
+                          <DatePicker
+                            value={field.value || ''}
+                            onChange={field.onChange}
+                            max={todayIsoDate()}
+                            className="h-8 text-sm border-gray-200"
+                          />
                         </FormControl>
                         <FormMessage className="text-[10px]" />
                       </FormItem>

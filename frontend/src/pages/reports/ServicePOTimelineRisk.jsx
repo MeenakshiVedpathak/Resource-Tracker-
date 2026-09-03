@@ -12,9 +12,11 @@ import StatusBadge from '@/components/common/StatusBadge';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
 import BusinessUnitFilter, { ALL_BUS } from '@/components/common/BusinessUnitFilter';
+import EntityFilter, { ALL_ENTITIES } from '@/components/common/EntityFilter';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Label } from '@/components/ui/label';
 
 const columnHelper = createColumnHelper();
@@ -176,6 +178,7 @@ const ServicePOTimelineRisk = () => {
   const [asOfDate, setAsOfDate] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [buId, setBuId] = useState(ALL_BUS);
+  const [entityId, setEntityId] = useState(ALL_ENTITIES);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
@@ -202,9 +205,10 @@ const ServicePOTimelineRisk = () => {
   }, [records, search]);
   const pagedRecords = filteredRecords.slice((page - 1) * limit, page * limit);
 
-  const activeFilterCount = (asOfDate ? 1 : 0) + (buId !== ALL_BUS ? 1 : 0);
+  const activeFilterCount = (asOfDate ? 1 : 0) + (buId !== ALL_BUS ? 1 : 0) + (entityId !== ALL_ENTITIES ? 1 : 0);
 
   const clearFilters = () => {
+    setEntityId(ALL_ENTITIES);
     setBuId(ALL_BUS);
     setAsOfDate('');
     setPage(1);
@@ -249,15 +253,16 @@ const ServicePOTimelineRisk = () => {
       </PageHeader>
 
       <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[340px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
-        <BusinessUnitFilter value={buId} onChange={setBuId} />
+        <EntityFilter value={entityId} onChange={(v) => { setEntityId(v); setBuId(ALL_BUS); }} />
+
+        <BusinessUnitFilter value={buId} entityId={entityId} onChange={setBuId} />
 
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">As Of Date</Label>
-          <Input
-            type="date"
+          <DatePicker
             value={asOfDate}
-            onChange={(e) => { setAsOfDate(e.target.value); setPage(1); }}
-            className="h-9 w-full text-sm"
+            onChange={(d) => { setAsOfDate(d); setPage(1); }}
+            className="w-full text-sm"
           />
         </div>
       </FilterPanel>

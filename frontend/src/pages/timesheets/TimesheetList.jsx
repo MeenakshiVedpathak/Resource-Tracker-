@@ -1,12 +1,13 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQueries } from '@tanstack/react-query';
 import { createColumnHelper } from '@tanstack/react-table';
 import { Upload, Info, Download, Trash2, Loader2, RefreshCw } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useTimesheetHistory, useDeleteTimesheetImport, useDeleteTimesheetImports } from '@/hooks/useTimesheets';
 import { useCanViewOriginalData } from '@/hooks/usePermissions';
 import { useAuth } from '@/hooks/useAuth';
+import { useCompanies } from '@/hooks/useCompanies';
 import { timesheetsApi } from '@/api/timesheets.api';
 import { QUERY_KEYS } from '@/constants/queryKeys';
 import { useNotification } from '@/hooks/useNotification';
@@ -18,6 +19,9 @@ import PageHeader from '@/components/common/PageHeader';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
+import EntityFilter from '@/components/common/EntityFilter';
+import BusinessUnitFilter from '@/components/common/BusinessUnitFilter';
+import { useSelectableBusinessUnits } from '@/hooks/useSelectableBusinessUnits';
 import SyncWorkLogsDialog from '@/components/timesheets/SyncWorkLogsDialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -37,45 +41,193 @@ const TimesheetList = () => {
   const canViewOriginal = useCanViewOriginalData();
   const { businessUnits } = useAuth();
 
+  // The login's own BU mapping (GET /employees/:id/business-units) doesn't carry entity info —
+  // confirmed live, an Entity dropdown built straight off it came back empty. The company master
+  // does, so it's looked up here and merged in. Safe for any login this query 403s for: it just
+  // comes back empty and every BU's entity_id stays null, same as before this lookup existed.
+  const { data: companiesForEntityLookup } = useCompanies(
+    { status: 'active', limit: 200 },
+    { staleTime: 1000 * 60 * 10 }
+  );
+  // Sync/Upload must only offer BUs that are still active. The login's own BU mapping never
+  // carries a `status` field at all (the backend endpoint behind useAuth().businessUnits strips
+  // it before it reaches the frontend), so the old `(bu.status ?? 'active') === 'active'` check
+  // here was a permanent no-op — every mapped BU passed, active or not. companiesForEntityLookup
+  // above IS genuinely status-filtered server-side, so intersect its ids instead. Guarded: when
+  // it hasn't returned any rows yet (still loading, or a 403 for a login without company-listing
+  // standing), fall back to the unfiltered mapping rather than blanking both dialogs.
+  const activeCompanyIds = useMemo(
+    () => new Set((companiesForEntityLookup?.data ?? []).map((c) => String(c.id))),
+    [companiesForEntityLookup]
+  );
+  const rawActiveBusinessUnits = useMemo(
+    () => (activeCompanyIds.size === 0
+      ? businessUnits
+      : businessUnits.filter((bu) => activeCompanyIds.has(String(bu.id)))),
+    [businessUnits, activeCompanyIds]
+  );
+  const entityByBuId = useMemo(() => {
+    const map = new Map();
+    (companiesForEntityLookup?.data ?? []).forEach((c) => {
+      const id = c.entity_id ?? c.entity?.id;
+      const name = c.entity?.entity_name;
+      if (id != null) map.set(String(c.id), { id, name });
+    });
+    return map;
+  }, [companiesForEntityLookup]);
+  const activeBusinessUnits = useMemo(
+    () => rawActiveBusinessUnits.map((bu) => {
+      const looked = entityByBuId.get(String(bu.id));
+      return {
+        ...bu,
+        entity_id: bu.entity_id ?? bu.entityId ?? looked?.id ?? null,
+        entity_name: bu.entity_name ?? bu.entityName ?? looked?.name ?? null,
+      };
+    }),
+    [rawActiveBusinessUnits, entityByBuId]
+  );
+
+  // Distinct Entities across this login's own mapped BUs — feeds the Entity step in the Sync/
+  // Upload dialogs below, which (unlike the list's EntityFilter/BusinessUnitFilter pair) can only
+  // ever target a BU this login is actually mapped to, not the full company master.
+  const buEntityOptions = useMemo(() => {
+    const byId = new Map();
+    activeBusinessUnits.forEach((bu) => {
+      const id = bu.entity_id ?? bu.entityId;
+      const name = bu.entity_name ?? bu.entityName;
+      if (id != null && name && !byId.has(id)) byId.set(id, { id, name });
+    });
+    return Array.from(byId.values());
+  }, [activeBusinessUnits]);
+
+  const buOptionsForEntity = (entityId) =>
+    entityId && entityId !== 'all'
+      ? activeBusinessUnits.filter((bu) => String(bu.entity_id ?? bu.entityId) === String(entityId))
+      : activeBusinessUnits;
+
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
 
   const currentDate = new Date();
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
+  const [uploadEntityId, setUploadEntityId] = useState('all');
+  const [uploadBuId, setUploadBuId] = useState('');
   const [isSyncDialogOpen, setIsSyncDialogOpen] = useState(false);
-  const [syncBuOpen, setSyncBuOpen] = useState(false);
-  const [syncBuId, setSyncBuId] = useState('');
-  const [selectedMonth, setSelectedMonth] = useState(String(currentDate.getMonth() + 1));
-  const [selectedYear, setSelectedYear] = useState(String(currentDate.getFullYear()));
+  const [uploadMonthYear, setUploadMonthYear] = useState({ month: currentDate.getMonth() + 1, year: currentDate.getFullYear() });
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [selectedIds, setSelectedIds] = useState([]);
   const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
   const [monthYearFilter, setMonthYearFilter] = useState(null);
+  const [entityFilter, setEntityFilter] = useState('all');
+  const [buFilter, setBuFilter] = useState('all');
   const [openingId, setOpeningId] = useState(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const [sorting, setSorting] = useState([]);
 
+  // The Entity filter only ever narrows which BUs BusinessUnitFilter offers — it was never itself
+  // forwarded to the request (this endpoint has no entity_id concept), so picking an Entity while
+  // "All Business Units" stayed selected silently left the query unscoped and mixed in every other
+  // Entity's imports too (confirmed live: BUs from an unrelated Entity kept showing). Fixed by
+  // fanning out one GET /timesheets/import/history call per BU under the selected Entity
+  // (entityBuUnits, from useSelectableBusinessUnits) and merging the results — same pattern as
+  // useMyTeamEmployeesAcrossBus for the equivalent "All Business Units" undercount.
+  const { units: entityBuUnits } = useSelectableBusinessUnits(entityFilter);
+  const shouldFanOutByEntity = entityFilter !== 'all' && buFilter === 'all' && entityBuUnits.length > 1;
+
   const params = {
     page,
     limit,
+    buId: buFilter,
     ...(monthYearFilter && { month: monthYearFilter.month, year: monthYearFilter.year }),
     ...(sorting[0] && { sortBy: sorting[0].id, sortOrder: sorting[0].desc ? 'desc' : 'asc' }),
   };
 
-  const { data, isPending } = useTimesheetHistory(params);
+  const { data, isPending: isSinglePending, isError: isSingleError } =
+    useTimesheetHistory(params, { enabled: !shouldFanOutByEntity });
+
+  // One request per BU in the selected Entity, merged client-side. Each per-BU response omits
+  // `company` (the backend only attaches it for a genuinely multi-BU request), so it's stamped
+  // back on here from the BU that request was scoped to — keeps the Business Unit column working
+  // for this fanned-out view too.
+  const fanOutQueries = useQueries({
+    queries: shouldFanOutByEntity
+      ? entityBuUnits.map((bu) => {
+          const buParams = { ...params, buId: String(bu.id) };
+          return {
+            queryKey: QUERY_KEYS.TIMESHEET_IMPORT_HISTORY(buParams),
+            queryFn: () => timesheetsApi.getHistory(buParams),
+            placeholderData: (prev) => prev,
+          };
+        })
+      : [],
+  });
+
+  const fanOutRecords = shouldFanOutByEntity
+    ? fanOutQueries.flatMap((q, i) => {
+        const bu = entityBuUnits[i];
+        return (Array.isArray(q.data?.data) ? q.data.data : []).map((r) => ({
+          ...r,
+          company: r.company ?? { id: bu.id, company_name: bu.name },
+        }));
+      })
+    : [];
+
+  const isPending = shouldFanOutByEntity ? fanOutQueries.some((q) => q.isPending) : isSinglePending;
+  const isError = shouldFanOutByEntity ? fanOutQueries.some((q) => q.isError) : isSingleError;
+
   const deleteMutation = useDeleteTimesheetImport();
   const bulkDeleteMutation = useDeleteTimesheetImports();
 
+  const activeFilterCount =
+    (monthYearFilter ? 1 : 0) + (entityFilter !== 'all' ? 1 : 0) + (buFilter !== 'all' ? 1 : 0);
+
   const clearFilters = () => {
     setMonthYearFilter(null);
+    setEntityFilter('all');
+    setBuFilter('all');
     setPage(1);
     setSelectedIds([]);
   };
 
-  const allRecords = Array.isArray(data?.data) ? data.data : [];
-  const records    = allRecords.filter((r) => r.status === 'completed');
-  const meta       = data?.meta ?? {};
+  const rawAllRecords = shouldFanOutByEntity ? fanOutRecords : (Array.isArray(data?.data) ? data.data : []);
+  // Each fanned-out BU response is independently sorted server-side; re-sort the merged set
+  // client-side so a chosen sort column stays correct across BUs. A no-op outside fan-out mode.
+  const allRecords = useMemo(() => {
+    if (!shouldFanOutByEntity || !sorting[0]) return rawAllRecords;
+    const { id, desc } = sorting[0];
+    return [...rawAllRecords].sort((a, b) => {
+      const av = a[id];
+      const bv = b[id];
+      if (av == null && bv == null) return 0;
+      if (av == null) return desc ? 1 : -1;
+      if (bv == null) return desc ? -1 : 1;
+      if (av < bv) return desc ? 1 : -1;
+      if (av > bv) return desc ? -1 : 1;
+      return 0;
+    });
+  }, [rawAllRecords, shouldFanOutByEntity, sorting]);
+  const records = allRecords.filter((r) => r.status === 'completed');
+  const meta    = data?.meta ?? {};
+
+  // Backend only attaches `company` per row when the list spans more than one Business
+  // Unit (e.g. "All BU"); a single-BU-scoped fetch omits it entirely. Detect that from the
+  // actual response rather than the buFilter value so this stays correct however the
+  // backend ends up deciding "more than one BU".
+  const hasCompanyColumn = allRecords.some((r) => r.company != null);
+
+  // The Business Unit column had a flat 150px size, which clipped anything longer than
+  // ~15 characters (e.g. "Software Solutions-UVTECH") behind an ellipsis. BU names vary wildly in
+  // length across tenants, so size the column to the longest name actually on this page instead of
+  // a fixed guess — clamped so one outlier name can't blow out the whole table (DataTable renders
+  // `table-fixed`, so every column still needs a real number; see its own comment on that).
+  const businessUnitColumnWidth = useMemo(() => {
+    const longestName = allRecords.reduce((max, r) => {
+      const name = r.company?.company_name ?? r.company?.company_code ?? '';
+      return Math.max(max, name.length);
+    }, 0);
+    return Math.min(320, Math.max(150, (longestName * 7.5) + 40));
+  }, [allRecords]);
 
   const allSelected = records.length > 0 && records.every((r) => selectedIds.includes(r.id));
   const toggleSelectAll = () => setSelectedIds(allSelected ? [] : records.map((r) => r.id));
@@ -104,23 +256,12 @@ const TimesheetList = () => {
     XLSX.writeFile(wb, 'Timesheet_Sample.xlsx');
   };
 
-  // Work Log sync lands rows against exactly one BU (same as the Monthly Costs import), so ask
-  // which — but only when the user actually holds more than one. A single-BU user syncs against
-  // theirs implicitly; an account with none (Platform Admin/Entity Admin) is already unscoped.
-  const handleSyncClick = () => {
-    if (businessUnits.length > 1) {
-      setSyncBuId('');
-      setSyncBuOpen(true);
-      return;
-    }
-    setSyncBuId(businessUnits.length === 1 ? String(businessUnits[0].id) : '');
-    setIsSyncDialogOpen(true);
-  };
-
-  const confirmSyncBu = () => {
-    if (!syncBuId) return;
-    setSyncBuOpen(false);
-    setIsSyncDialogOpen(true);
+  // Excel upload lands rows against exactly one BU — asked up front
+  // in the "Select Period" dialog instead of a separate step since that dialog is a single screen.
+  const handleUploadClick = () => {
+    setUploadEntityId('all');
+    setUploadBuId(activeBusinessUnits.length === 1 ? String(activeBusinessUnits[0].id) : '');
+    setIsUploadDialogOpen(true);
   };
 
   const handleDelete = () => {
@@ -197,6 +338,20 @@ const TimesheetList = () => {
         </div>
       ),
     }),
+    ...(hasCompanyColumn ? [columnHelper.display({
+      id: 'business_unit',
+      header: 'Business Unit',
+      size: businessUnitColumnWidth,
+      cell: ({ row }) => {
+        const company = row.original.company;
+        const name = company?.company_name ?? company?.company_code;
+        return name ? (
+          <span className="text-sm truncate" title={name}>{name}</span>
+        ) : (
+          <span className="text-sm text-muted-foreground">—</span>
+        );
+      },
+    })] : []),
     columnHelper.accessor('importer', {
       header: 'Imported By',
       size: 200,
@@ -285,7 +440,7 @@ const TimesheetList = () => {
             <FilterToggleButton
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((prev) => !prev)}
-              activeCount={monthYearFilter ? 1 : 0}
+              activeCount={activeFilterCount}
             />
             <TooltipProvider>
               <Tooltip>
@@ -304,12 +459,12 @@ const TimesheetList = () => {
               <Download className="mr-1.5 h-4 w-4" />
               Download Sample
             </Button>
-            <Button variant="outline" size="sm" onClick={handleSyncClick}>
+            <Button variant="outline" size="sm" onClick={() => setIsSyncDialogOpen(true)}>
               <RefreshCw className="mr-1.5 h-4 w-4" />
               Sync Employee Work Logs
             </Button>
             {canViewOriginal && (
-              <Button size="sm" onClick={() => setIsUploadDialogOpen(true)}>
+              <Button size="sm" onClick={handleUploadClick}>
                 <Upload className="mr-1.5 h-4 w-4" />
                 Upload Excel
               </Button>
@@ -323,8 +478,17 @@ const TimesheetList = () => {
         maxHeightClass="max-h-[140px]"
         gridClassName="grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 w-full"
         onClear={clearFilters}
-        showClear={!!monthYearFilter}
+        showClear={activeFilterCount > 0}
       >
+        <EntityFilter
+          value={entityFilter}
+          onChange={(v) => { setEntityFilter(v); setBuFilter('all'); setPage(1); setSelectedIds([]); }}
+        />
+        <BusinessUnitFilter
+          value={buFilter}
+          entityId={entityFilter}
+          onChange={(v) => { setBuFilter(v); setPage(1); setSelectedIds([]); }}
+        />
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Month &amp; Year</Label>
           <MonthYearPicker
@@ -335,6 +499,13 @@ const TimesheetList = () => {
           />
         </div>
       </FilterPanel>
+
+      {isError && (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+          Unable to load timesheet imports for the current filters. If "All Business Units" is
+          selected, try picking a specific Business Unit instead, or try again.
+        </div>
+      )}
 
       {selectedIds.length > 0 && (
         <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-3 py-2">
@@ -400,76 +571,52 @@ const TimesheetList = () => {
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label>Month</Label>
-              <SearchableSelect showSearch={false}
-                options={Array.from({ length: 12 }, (_, i) => {
-                  const m = i + 1;
-                  return { label: new Date(0, m - 1).toLocaleString('default', { month: 'long' }), value: String(m) };
-                })}
-                value={selectedMonth}
-                onValueChange={setSelectedMonth}
-                placeholder="Select month"
-                searchPlaceholder="Search month..."
-              />
+              <Label>Month &amp; Year</Label>
+              <MonthYearPicker value={uploadMonthYear} onChange={setUploadMonthYear} clearable={false} className="w-full" />
             </div>
-            <div className="grid gap-2">
-              <Label>Year</Label>
-              <SearchableSelect showSearch={false}
-                options={Array.from({ length: 5 }, (_, i) => {
-                  const y = currentDate.getFullYear() - 2 + i;
-                  return { label: String(y), value: String(y) };
-                })}
-                value={selectedYear}
-                onValueChange={setSelectedYear}
-                placeholder="Select year"
-                searchPlaceholder="Search year..."
-              />
-            </div>
+            {/* Same "which BU does this land in" question as Sync's dialog, asked inline here
+                since Upload is already a single-step dialog — only shown when there's an actual
+                choice to make (see handleUploadClick). */}
+            {activeBusinessUnits.length > 1 && (
+              <>
+                {buEntityOptions.length > 1 && (
+                  <div className="grid gap-2">
+                    <Label>Entity</Label>
+                    <SearchableSelect
+                      options={[{ label: 'All Entities', value: 'all' }, ...buEntityOptions.map((e) => ({ label: e.name, value: String(e.id) }))]}
+                      value={uploadEntityId}
+                      onValueChange={(v) => { setUploadEntityId(v ?? 'all'); setUploadBuId(''); }}
+                      placeholder="All Entities"
+                      searchPlaceholder="Search entity..."
+                      showSearch={buEntityOptions.length > 6}
+                    />
+                  </div>
+                )}
+                <div className="grid gap-2">
+                  <Label>Business Unit</Label>
+                  <SearchableSelect
+                    options={buOptionsForEntity(uploadEntityId).map((bu) => ({ label: bu.name, value: String(bu.id) }))}
+                    value={uploadBuId}
+                    onValueChange={setUploadBuId}
+                    placeholder="Select a Business Unit"
+                    searchPlaceholder="Search business unit..."
+                    showSearch={activeBusinessUnits.length > 6}
+                  />
+                </div>
+              </>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsUploadDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={() => {
-              setIsUploadDialogOpen(false);
-              navigate(ROUTES.TIMESHEET_UPLOAD, { state: { month: selectedMonth, year: selectedYear } });
-            }}>
-              Continue
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Asked only when the user holds more than one BU — see handleSyncClick. Mirrors the
-          Monthly Costs "Which Business Unit?" prompt. */}
-      <Dialog open={syncBuOpen} onOpenChange={setSyncBuOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Which Business Unit?</DialogTitle>
-            <DialogDescription>
-              Employee work logs are synced into the Timesheet for this Business Unit.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="py-2">
-            <Label className="mb-2 block">Business Unit</Label>
-            <SearchableSelect
-              options={businessUnits.map((bu) => ({ label: bu.name, value: String(bu.id) }))}
-              value={syncBuId}
-              onValueChange={setSyncBuId}
-              placeholder="Select a Business Unit"
-              searchPlaceholder="Search business unit..."
-              showSearch={businessUnits.length > 6}
-              className="h-9 w-full text-sm"
-            />
-          </div>
-
-          <DialogFooter className="gap-2">
-            <Button variant="outline" size="sm" onClick={() => setSyncBuOpen(false)}>
-              Cancel
-            </Button>
-            <Button size="sm" onClick={confirmSyncBu} disabled={!syncBuId}>
-              <RefreshCw className="mr-1.5 h-4 w-4" />
+            <Button
+              disabled={activeBusinessUnits.length > 1 && !uploadBuId}
+              onClick={() => {
+                setIsUploadDialogOpen(false);
+                navigate(ROUTES.TIMESHEET_UPLOAD, { state: { month: uploadMonthYear.month, year: uploadMonthYear.year, buId: uploadBuId || null } });
+              }}
+            >
               Continue
             </Button>
           </DialogFooter>
@@ -479,8 +626,7 @@ const TimesheetList = () => {
       <SyncWorkLogsDialog
         open={isSyncDialogOpen}
         onOpenChange={setIsSyncDialogOpen}
-        buId={syncBuId ? Number(syncBuId) : null}
-        buName={businessUnits.find((bu) => String(bu.id) === syncBuId)?.name ?? null}
+        activeBusinessUnits={activeBusinessUnits}
       />
 
       <ConfirmDialog

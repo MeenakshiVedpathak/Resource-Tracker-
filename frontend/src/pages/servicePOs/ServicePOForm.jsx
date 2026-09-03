@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { Save } from 'lucide-react';
 import { useServicePO, useCreateServicePO, useUpdateServicePO } from '@/hooks/useServicePOs';
 import { useAuth } from '@/hooks/useAuth';
-import { NO_COMPANY_ROLES } from '@/constants/roleHierarchy';
+import { NO_COMPANY_ROLES, ROLE_NAMES } from '@/constants/roleHierarchy';
 import { useActiveClients } from '@/hooks/useClients';
 import { useCompanies } from '@/hooks/useCompanies';
 import { useProjectsByClient } from '@/hooks/useProjects';
@@ -19,6 +19,7 @@ import {
   Form, FormField, FormItem, FormLabel, FormControl, FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { SearchableSelect } from '@/components/ui/searchable-select';
@@ -147,6 +148,10 @@ const ServicePOForm = () => {
   // works inside one BU at a time, so the picker would be noise — theirs comes from the global
   // switcher, the same way the Excel import assigns BU server-side.
   const isCompanyLessActor = hasRole(...NO_COMPANY_ROLES);
+  // "Is Centralised" auto-maps every future Employee to this Service PO and drops its BU
+  // requirement — a tenant-wide policy decision, so only Admin gets to flip it. Everyone else's
+  // is_centralised stays at its `false` default; they can't toggle it on.
+  const isAdmin = hasRole(ROLE_NAMES.ADMIN);
   const { data: companiesData, isPending: isLoadingCompanies } = useCompanies({ limit: 200 });
   const activeCompanies = companiesData?.data ?? [];
   const { data: activeClients = [], isPending: isLoadingClients } = useActiveClients();
@@ -512,10 +517,14 @@ const ServicePOForm = () => {
                 render={({ field }) => (
                   <FormItem className="space-y-1">
                     <FormLabel className="text-[13px]">
-                      <span className="text-destructive">*</span> Start Date 
+                      <span className="text-destructive">*</span> Start Date
                     </FormLabel>
                     <FormControl>
-                      <Input type="date" className="h-8 text-sm" {...field} />
+                      <DatePicker
+                        value={field.value || ''}
+                        onChange={field.onChange}
+                        className="h-8 text-sm"
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -531,7 +540,13 @@ const ServicePOForm = () => {
                       {!isCentralised && <span className="text-destructive">*</span>} End Date
                     </FormLabel>
                     <FormControl>
-                      <Input type="date" className="h-8 text-sm" {...field} />
+                      <DatePicker
+                        value={field.value || ''}
+                        onChange={field.onChange}
+                        placeholder={isCentralised ? 'Ongoing (no end date)' : 'Select date'}
+                        clearable
+                        className="h-8 text-sm"
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -563,35 +578,37 @@ const ServicePOForm = () => {
                 )}
               />
 
-              <FormField
-                control={form.control}
-                name="is_centralised"
-                render={({ field }) => (
-                  <FormItem className="space-y-1 sm:col-span-2">
-                    <div className="flex items-center justify-between rounded-md border px-3 py-2">
-                      <div className="space-y-0.5">
-                        <FormLabel className="text-[13px]">Is Centralised</FormLabel>
-                        <p className="text-[11px] text-muted-foreground">
-                          New employees are automatically mapped to this PO going forward. A
-                          Centralised PO does not require a Business Unit.
-                        </p>
+              {isAdmin && (
+                <FormField
+                  control={form.control}
+                  name="is_centralised"
+                  render={({ field }) => (
+                    <FormItem className="space-y-1 sm:col-span-2">
+                      <div className="flex items-center justify-between rounded-md border px-3 py-2">
+                        <div className="space-y-0.5">
+                          <FormLabel className="text-[13px]">Is Centralised</FormLabel>
+                          <p className="text-[11px] text-muted-foreground">
+                            New employees are automatically mapped to this PO going forward. A
+                            Centralised PO does not require a Business Unit.
+                          </p>
+                        </div>
+                        <FormControl>
+                          <Switch
+                            checked={field.value}
+                            onCheckedChange={(checked) => {
+                              field.onChange(checked);
+                              // Centralised has no BU — clear whatever was picked so a stale value
+                              // never lingers behind the now-disabled field.
+                              if (checked) form.setValue('company_id', '', { shouldValidate: true });
+                            }}
+                          />
+                        </FormControl>
                       </div>
-                      <FormControl>
-                        <Switch
-                          checked={field.value}
-                          onCheckedChange={(checked) => {
-                            field.onChange(checked);
-                            // Centralised has no BU — clear whatever was picked so a stale value
-                            // never lingers behind the now-disabled field.
-                            if (checked) form.setValue('company_id', '', { shouldValidate: true });
-                          }}
-                        />
-                      </FormControl>
-                    </div>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
 
                   </div>
                 </div>

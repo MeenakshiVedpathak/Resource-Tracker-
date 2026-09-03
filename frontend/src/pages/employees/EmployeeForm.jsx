@@ -8,13 +8,14 @@ import { useEmployee, useCreateEmployee, useUpdateEmployee, useAssignableManager
 import { useRoles } from '@/hooks/useRoles';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
-import { employeeBaseFields, employeePasswordField, todayIsoDate } from '@/constants/employeeFormSchema';
+import { employeeBaseFields, employeePasswordField, todayIsoDate, nextDayIsoDate, refineEmploymentDates } from '@/constants/employeeFormSchema';
 import { ROUTES } from '@/constants/routes';
 import { ROLE_NAMES } from '@/constants/roleHierarchy';
 import {
   Form, FormField, FormItem, FormLabel, FormControl, FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -33,25 +34,29 @@ const passwordField = employeePasswordField;
 // all — every new employee is sent to the backend with the plain "Employee" role by default
 // (see onSubmit), and both Roles and Business Units are managed afterwards via the "Map Roles &
 // Business Units" table action on Employee List.
-const createSchema = z
-  .object({
-    ...baseFields,
-    primary_manager_employee_id: z.coerce.number().positive().optional().nullable(),
-    password: passwordField,
-    confirmPassword: z.string(),
-  })
-  .refine((d) => d.password === d.confirmPassword, {
-    message: 'Passwords do not match',
-    path: ['confirmPassword'],
-  });
+const createSchema = refineEmploymentDates(
+  z
+    .object({
+      ...baseFields,
+      primary_manager_employee_id: z.coerce.number().positive().optional().nullable(),
+      password: passwordField,
+      confirmPassword: z.string(),
+    })
+    .refine((d) => d.password === d.confirmPassword, {
+      message: 'Passwords do not match',
+      path: ['confirmPassword'],
+    })
+);
 
 // Manager reassignment is optional on update — password is never editable here (use the
 // Employee List's Reset Password action instead). Roles/Business Units are edited exclusively
 // via Employee List's mapping table, not this form, so they're neither shown nor submitted here.
-const editSchema = z.object({
-  ...baseFields,
-  primary_manager_employee_id: z.coerce.number().positive().optional().nullable(),
-});
+const editSchema = refineEmploymentDates(
+  z.object({
+    ...baseFields,
+    primary_manager_employee_id: z.coerce.number().positive().optional().nullable(),
+  })
+);
 
 const FormSkeleton = () => (
   <div className="space-y-4 p-4">
@@ -424,7 +429,12 @@ const EmployeeForm = () => {
                         <FormItem className="space-y-1">
                           <FormLabel className="text-[11px] text-muted-foreground font-medium"><span className="text-destructive mr-0.5">*</span> Date of Joining</FormLabel>
                           <FormControl>
-                            <Input type="date" max={todayIsoDate()} {...field} className="h-8 text-sm border-gray-200" />
+                            <DatePicker
+                              value={field.value || ''}
+                              onChange={field.onChange}
+                              max={todayIsoDate()}
+                              className="h-8 text-sm border-gray-200"
+                            />
                           </FormControl>
                           <FormMessage className="text-[10px]" />
                         </FormItem>
@@ -438,7 +448,22 @@ const EmployeeForm = () => {
                         <FormItem className="space-y-1">
                           <FormLabel className="text-[11px] text-muted-foreground font-medium">Date of Leaving</FormLabel>
                           <FormControl>
-                            <Input type="date" {...field} className="h-8 text-sm border-gray-200" />
+                            <DatePicker
+                              value={field.value || ''}
+                              onChange={field.onChange}
+                              // Selectable range is joining + 1 day through today: leaving on or
+                              // before the joining date isn't an employment span, and a future
+                              // leaving date isn't a fact yet. Both bounds are re-checked in the
+                              // schema so a value that predates a later edit of Date of Joining
+                              // is still caught. Disabled until joining is set, since without it
+                              // there is no valid range to pick from.
+                              min={nextDayIsoDate(dateOfJoining)}
+                              max={todayIsoDate()}
+                              disabled={!dateOfJoining}
+                              placeholder={dateOfJoining ? 'Not applicable' : 'Set joining date first'}
+                              clearable
+                              className="h-8 text-sm border-gray-200"
+                            />
                           </FormControl>
                           <FormMessage className="text-[10px]" />
                         </FormItem>

@@ -12,7 +12,7 @@ import { extractApiError } from '@/services/apiClient';
 import { downloadBlob } from '@/utils/download';
 import { formatDate } from '@/utils/formatters';
 import { cn } from '@/utils/cn';
-import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
@@ -20,7 +20,6 @@ import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import DataTable from '@/components/common/DataTable';
-import { ROUTES } from '@/constants/routes';
 import PageHeader from '@/components/common/PageHeader';
 import EmptyState from '@/components/common/EmptyState';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
@@ -221,8 +220,6 @@ const EmployeeWorkLogTimeReport = () => {
     <div className="space-y-4">
       <PageHeader
         title="Work Log Time Report"
-        backTo={ROUTES.REPORTS}
-        backLabel="Back to Report"
         description="Individual time-stamped work log entries — one row per entry, never aggregated."
         actions={
           <div className="flex items-center gap-3">
@@ -291,12 +288,11 @@ const EmployeeWorkLogTimeReport = () => {
         {periodType === 'daily' && (
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs">Date</Label>
-            <Input
-              type="date"
+            <DatePicker
               value={date}
               max={dayjs().format('YYYY-MM-DD')}
-              onChange={(e) => setDate(e.target.value)}
-              className="h-9 w-full text-sm bg-white"
+              onChange={setDate}
+              className="w-full bg-white text-sm"
             />
           </div>
         )}

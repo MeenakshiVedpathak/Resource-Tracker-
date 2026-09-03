@@ -169,6 +169,15 @@ const EmployeeTimesheet = () => {
   // Monthly mode — fetches all 12 months of the selected year in parallel so the Month
   // Selector strip can show every month's total hours at once; switching the selected month
   // just re-reads the same already-fetched array (no extra request) unless the year changes.
+  //
+  // ⚠️ KNOWN BACKEND GAP — Monthly hours read as 0. GET /employee-timesheets/monthly returns the
+  // mapped Service PO tree with correct names but `hours: 0` on every node, even for a month
+  // that clearly has time logged in Daily mode (e.g. 16h across August shows as "0h 0m" both
+  // here and on every Month Selector tile). Nothing below is at fault: pseudoMonthDate builds
+  // "YYYY-MM-01" and buildMonthlySummaryRows buckets it via dayNumberOf -> 1, which is exactly
+  // MONTH_DAY_KEY, so the numbers are read from the right bucket — the endpoint is simply not
+  // aggregating the month's daily entries. It needs fixing server-side; there is no client-side
+  // source for per-Service-PO monthly totals to substitute here.
   const monthlyYearQueries = useEmployeeMonthlyYearOverview(monthlyYear, mode === 'monthly');
 
   const monthRowsByMonth = useMemo(() => {
@@ -208,7 +217,11 @@ const EmployeeTimesheet = () => {
   };
 
   const totalHoursThisMonth = monthlyRows.reduce((sum, row) => sum + monthlyCellValue(row), 0);
-  const hasExistingMonthlyEntries = monthlyRows.some((r) => Number(r.hoursByDay?.[MONTH_DAY_KEY] ?? 0) > 0);
+  // Deliberately NOT gated on "this month already shows hours". GET /employee-timesheets/monthly
+  // currently returns the mapped Service PO tree with hours: 0 even for months that do have
+  // logged time (see the Monthly-hours note below), so keying the Clear All button off those
+  // numbers hid it exactly when it was needed. Clearing a month that turns out to be empty is a
+  // harmless no-op, so the button is offered whenever the month is editable at all.
   const monthlyEditedCount = Object.values(monthlyEdits).reduce((n, byDay) => n + Object.keys(byDay).length, 0);
 
   const handleSelectMonth = (nextMonth) => {
@@ -251,7 +264,7 @@ const EmployeeTimesheet = () => {
     setIsMonthlyDeleting(true);
     try {
       await deleteMonthMutation.mutateAsync({ month: selectedMonth, year: monthlyYear });
-      success('Monthly work log deleted.');
+      success('All work log entries cleared for this month.');
       setMonthlyEdits({});
       setConfirmDeleteOpen(false);
       qc.invalidateQueries({ queryKey: ['employee-worklog'] });
@@ -409,7 +422,7 @@ const EmployeeTimesheet = () => {
               <span className="mr-auto text-xs text-muted-foreground">
                 {monthlyEditedCount > 0 ? `${monthlyEditedCount} unsaved change${monthlyEditedCount === 1 ? '' : 's'}` : 'No changes to save'}
               </span>
-              {hasExistingMonthlyEntries && !isMonthlyIneligible && (
+              {!isMonthlyIneligible && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -418,7 +431,7 @@ const EmployeeTimesheet = () => {
                   disabled={isMonthlyDeleting || isMonthlySaving}
                 >
                   <Trash2 className="mr-1.5 h-4 w-4" />
-                  Delete
+                  {isMonthlyDeleting ? 'Clearing…' : 'Clear All'}
                 </Button>
               )}
               <Button variant="outline" size="sm" onClick={handleMonthlyDiscard} disabled={monthlyEditedCount === 0 || isMonthlySaving}>
@@ -450,9 +463,9 @@ const EmployeeTimesheet = () => {
           <ConfirmDialog
             open={confirmDeleteOpen}
             onOpenChange={setConfirmDeleteOpen}
-            title="Delete Monthly Work Log?"
-            description={`This will delete the Monthly Work Log for ${dayjs(pseudoMonthDate(monthlyYear, selectedMonth)).format('MMMM YYYY')}.`}
-            confirmLabel="Delete"
+            title="Clear all work log entries?"
+            description={`Every work log entry for ${dayjs(pseudoMonthDate(monthlyYear, selectedMonth)).format('MMMM YYYY')} will be permanently removed, including hours logged day by day in Daily mode. This cannot be undone.`}
+            confirmLabel="Yes, clear all"
             cancelLabel="Cancel"
             variant="destructive"
             onConfirm={handleDeleteMonthConfirmed}

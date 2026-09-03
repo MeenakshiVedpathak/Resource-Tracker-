@@ -18,6 +18,7 @@ import { SearchableSelect } from '@/components/ui/searchable-select';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
 import BusinessUnitFilter from '@/components/common/BusinessUnitFilter';
+import EntityFilter from '@/components/common/EntityFilter';
 import { useMasterBuFilter } from '@/hooks/useMasterBuFilter';
 import { cn } from '@/utils/cn';
 
@@ -64,7 +65,10 @@ const ServiceTypeList = () => {
 
   // Business Unit filter. Renders only for a login mapped to more than one BU, and starts on
   // "All Business Units" — the list opens cross-BU and narrowing to one is an explicit choice.
-  const { buId, setBuId, showBuFilter, isBuFiltered, resetBuId, buParams } = useMasterBuFilter();
+  const {
+    entityId, setEntityId, showEntityFilter, isEntityFiltered, resetEntityId,
+    buId, setBuId, showBuFilter, isBuFiltered, resetBuId, buParams,
+  } = useMasterBuFilter();
 
   const params = {
     page,
@@ -83,10 +87,11 @@ const ServiceTypeList = () => {
   const total = meta.total ?? rows.length;
   const paginatedRows = rows.slice((page - 1) * limit, page * limit);
 
-  const activeFilterCount = (categoryFilter !== 'all' ? 1 : 0) + (isBuFiltered ? 1 : 0);
+  const activeFilterCount = (categoryFilter !== 'all' ? 1 : 0) + (isEntityFiltered ? 1 : 0) + (isBuFiltered ? 1 : 0);
 
   const clearFilters = () => {
     setCategoryFilter('all');
+    resetEntityId();
     resetBuId();
     setPage(1);
   };
@@ -174,8 +179,11 @@ const ServiceTypeList = () => {
       />
 
       <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[200px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
+        {showEntityFilter && (
+          <EntityFilter value={entityId} onChange={(v) => { setEntityId(v); setPage(1); }} />
+        )}
         {showBuFilter && (
-          <BusinessUnitFilter value={buId} onChange={(v) => { setBuId(v); setPage(1); }} />
+          <BusinessUnitFilter value={buId} entityId={entityId} onChange={(v) => { setBuId(v); setPage(1); }} />
         )}
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Service Category</Label>

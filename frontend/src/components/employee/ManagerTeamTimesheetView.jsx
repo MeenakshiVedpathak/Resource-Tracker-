@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
 import dayjs from 'dayjs';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Check, X, ChevronRight, Loader2 } from 'lucide-react';
+import { Check, X, ChevronRight } from 'lucide-react';
 import {
-  useMyTeamApprovalSummary, useApproveMyTeamTimesheets, useFetchAllApprovalBuckets,
+  useMyTeamApprovalSummary, useApproveMyTeamTimesheets,
   useRejectMyTeamTimesheetEntry, useApproveMyTeamTimesheetEntry,
 } from '@/hooks/useMyTeam';
 import { useAuth } from '@/hooks/useAuth';
@@ -30,18 +30,8 @@ const columnHelper = createColumnHelper();
 // `hours_logged`/`modified_hours`, that's only the shape of the separate flat-list endpoint.
 const effectiveHours = (entry) => entry.modified_hours ?? entry.hours_logged ?? entry.hours;
 
-// Daily rows are keyed by date; Monthly rows have no single date, only month+year. Works on a full
-// summary row and on the trimmed selection descriptor below alike — both carry the key fields.
+// Daily rows are keyed by date; Monthly rows have no single date, only month+year.
 const rowKeyOf = (logType, row) => (logType === 'daily' ? row.date : `${row.year}-${row.month}`);
-
-// What a selected row is remembered by. Selection outlives the page that made it (and the rows
-// currently in memory), so it stores exactly what POST .../approve needs — plus the row's absolute
-// index in the filtered set, which is what lets the banner say how far the selection reaches.
-// Index rather than page number: the display page it maps to is index/pageSize, so the count stays
-// right when the Manager changes rows-per-page instead of having to throw the selection away.
-const selectionValueOf = (logType, row, index) => (logType === 'daily'
-  ? { date: row.date, index }
-  : { month: row.month, year: row.year, index });
 
 // The live approval-summary response names this field `approval_status`, not `status` — despite
 // the documented contract's sample calling it `status`; confirmed by inspecting the real network
@@ -88,7 +78,7 @@ const rejectedByLabel = (entry, currentEmployee) => {
 };
 
 const ManagerTeamTimesheetView = ({ employeeId, employeeName }) => {
-  const { success, error: showError, info } = useNotification();
+  const { success, error: showError } = useNotification();
   const { employee: currentEmployee } = useAuth();
 
   const [logType, setLogType] = useState('daily');
@@ -96,10 +86,7 @@ const ManagerTeamTimesheetView = ({ employeeId, employeeName }) => {
   const [year, setYear] = useState(String(dayjs().year()));
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
-  // Map<rowKey, selection descriptor> rather than a Set of keys: "select all" reaches pending
-  // buckets on pages that were never rendered, so the approve payload has to be rebuildable from
-  // the selection alone, without looking anything up in the current page's `rows`.
-  const [selected, setSelected] = useState(new Map());
+  const [selected, setSelected] = useState(new Set());
   const [drillDownRow, setDrillDownRow] = useState(null);
   const [rejectTarget, setRejectTarget] = useState(null); // { entries: [...] } being rejected, or null
   // Tracked separately from rejectEntryMutation.isPending — a row-level reject fires one PUT per
@@ -107,39 +94,28 @@ const ManagerTeamTimesheetView = ({ employeeId, employeeName }) => {
   // as the FIRST of several concurrent calls settles, prematurely re-enabling the dialog's Submit.
   const [isRejecting, setIsRejecting] = useState(false);
 
-  const resetSelection = () => setSelected(new Map());
+  const resetSelection = () => setSelected(new Set());
 
-  // Everything that defines *which* buckets are in scope, with no page/limit — the table's page
-  // narrows the display only, so "select all" reuses these filters at the full-set page size.
-  const filterParams = useMemo(() => ({
+  const summaryParams = useMemo(() => ({
     employee_id: employeeId,
     log_type: logType,
+    page,
+    limit,
     ...(logType === 'daily'
       ? (dateRange?.startDate ? { startDate: dateRange.startDate, endDate: dateRange.endDate } : {})
       : { startDate: `${year}-01-01`, endDate: `${year}-12-31` }),
-  }), [employeeId, logType, dateRange, year]);
-
-  const summaryParams = useMemo(() => ({ ...filterParams, page, limit }), [filterParams, page, limit]);
+  }), [employeeId, logType, page, limit, dateRange, year]);
 
   const { data, isLoading, isError, error, refetch } = useMyTeamApprovalSummary(summaryParams);
-  const fetchAllBuckets = useFetchAllApprovalBuckets();
   const approveMutation = useApproveMyTeamTimesheets();
   const rejectEntryMutation = useRejectMyTeamTimesheetEntry();
   const approveEntryMutation = useApproveMyTeamTimesheetEntry();
 
   const rows = data?.data ?? [];
   const meta = data?.meta;
-  const pageSize = meta?.limit ?? limit;
   const selectableRows = rows.filter(isApprovable);
-  const anySelected = selected.size > 0;
-  const pageSelectedCount = selectableRows.filter((r) => selected.has(rowKeyOf(logType, r))).length;
-  // Vacuously true when this page has nothing selectable but a selection exists elsewhere — so the
-  // header checkbox still reads as "on" and one more click clears the whole selection.
-  const pageFullySelected = anySelected && pageSelectedCount === selectableRows.length;
-  const offPageSelectedCount = selected.size - pageSelectedCount;
-  // Each descriptor remembers its absolute position in the filtered set, so this counts the pages
-  // the selection actually spans rather than the pages the filtered set happens to have.
-  const selectedPageCount = new Set(Array.from(selected.values(), (v) => Math.floor(v.index / pageSize) + 1)).size;
+  const someSelected = selectableRows.some((r) => selected.has(rowKeyOf(logType, r)));
+  const allSelected = selectableRows.length > 0 && selectableRows.every((r) => selected.has(rowKeyOf(logType, r)));
 
   const handleLogTypeChange = (next) => {
     setLogType(next);
@@ -159,76 +135,47 @@ const ManagerTeamTimesheetView = ({ employeeId, employeeName }) => {
     resetSelection();
   };
 
-  // Paging deliberately does NOT clear the selection any more — it now spans the whole filtered
-  // set, and wiping it on navigation would silently undo a select-all the moment the Manager
-  // looked at page 2. Changing a filter still resets it: that changes which buckets are in scope.
   const handlePageChange = (p) => {
     setPage(p);
+    resetSelection();
   };
 
-  // Selection survives a page-size change too — descriptors are stored by absolute index, so the
-  // pages they map to just get recomputed against the new size.
   const handlePageSizeChange = (size) => {
     setLimit(size);
     setPage(1);
-  };
-
-  // Select-all means every pending bucket in the current Employee + filter scope, not just the ten
-  // rows that happen to be rendered: it refetches the summary at the full-set page size (the table
-  // stays on its own page size for display) and selects every pending bucket that comes back.
-  // Ordering matches the paginated query, so a bucket's index gives the display page it lives on.
-  const selectAllPending = async () => {
-    try {
-      const allBuckets = await fetchAllBuckets.mutateAsync(filterParams);
-      const next = new Map();
-      allBuckets.forEach((bucket, index) => {
-        if (!isApprovable(bucket)) return;
-        next.set(rowKeyOf(logType, bucket), selectionValueOf(logType, bucket, index));
-      });
-      if (next.size === 0) {
-        info(`No pending ${logType === 'daily' ? 'dates' : 'months'} to select in this range.`);
-        return;
-      }
-      setSelected(next);
-    } catch (err) {
-      showError(extractApiError(err));
-    }
+    resetSelection();
   };
 
   const toggleAll = () => {
-    if (pageFullySelected) {
-      resetSelection();
-      return;
-    }
-    selectAllPending();
-  };
-
-  // `rowIndex` is the row's index on the current page; offsetting it by the page turns it into the
-  // absolute index in the filtered set, matching what selectAllPending records.
-  const toggleOne = (row, rowIndex) => {
-    const key = rowKeyOf(logType, row);
     setSelected((prev) => {
-      const next = new Map(prev);
-      if (next.has(key)) next.delete(key);
-      else next.set(key, selectionValueOf(logType, row, ((page - 1) * pageSize) + rowIndex));
+      if (allSelected) return new Set();
+      const next = new Set(prev);
+      selectableRows.forEach((r) => next.add(rowKeyOf(logType, r)));
       return next;
     });
   };
 
-  // `targets` are summary rows or selection descriptors interchangeably — both carry date (daily)
-  // or month+year (monthly), which is all the endpoint takes. Exactly one of dates/months goes out.
-  const approvalPayloadFor = (targets) =>
-    logType === 'daily'
-      ? { employeeId, dates: targets.map((t) => t.date) }
-      : { employeeId, months: targets.map((t) => ({ month: t.month, year: t.year })) };
+  const toggleOne = (row) => {
+    const key = rowKeyOf(logType, row);
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
 
-  const runApprove = (targets, successMessage) => {
-    approveMutation.mutate(approvalPayloadFor(targets), {
+  const approvalPayloadFor = (targetRows) =>
+    logType === 'daily'
+      ? { employeeId, dates: targetRows.map((r) => r.date) }
+      : { employeeId, months: targetRows.map((r) => ({ month: r.month, year: r.year })) };
+
+  const runApprove = (targetRows, successMessage) => {
+    approveMutation.mutate(approvalPayloadFor(targetRows), {
       onSuccess: () => {
         success(successMessage);
         setSelected((prev) => {
-          const next = new Map(prev);
-          targets.forEach((t) => next.delete(rowKeyOf(logType, t)));
+          const next = new Set(prev);
+          targetRows.forEach((r) => next.delete(rowKeyOf(logType, r)));
           return next;
         });
         setDrillDownRow(null);
@@ -252,15 +199,11 @@ const ManagerTeamTimesheetView = ({ employeeId, employeeName }) => {
     setRejectTarget({ entries: pendingEntries });
   };
 
-  // Approves the entire selection in one POST, including buckets on pages that aren't rendered —
-  // this used to filter `rows` (the current page) and silently dropped everything else. The
-  // mutation invalidates every approval-summary query afterwards, so all pages come back showing
-  // the new status, not just this one.
   const handleApproveSelected = () => {
-    const targets = Array.from(selected.values());
-    if (targets.length === 0) return;
+    const targetRows = rows.filter((r) => selected.has(rowKeyOf(logType, r)));
+    if (targetRows.length === 0) return;
     const unit = logType === 'daily' ? 'date' : 'month';
-    runApprove(targets, `${targets.length} ${unit}${targets.length === 1 ? '' : 's'} approved.`);
+    runApprove(targetRows, `${targetRows.length} ${unit}${targetRows.length === 1 ? '' : 's'} approved.`);
   };
 
   // A 409 means someone else (another Manager session, or a bulk action) already acted on this
@@ -319,23 +262,19 @@ const ManagerTeamTimesheetView = ({ employeeId, employeeName }) => {
   const columns = [
     columnHelper.display({
       id: 'select',
-      // Enabled even when this page has no pending rows — the pending buckets it selects may all
-      // live on other pages, which is exactly the case this control exists to cover.
-      header: () => (fetchAllBuckets.isPending ? (
-        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-label="Selecting all pending entries" />
-      ) : (
+      header: () => (
         <Checkbox
-          checked={pageFullySelected ? true : (anySelected ? 'indeterminate' : false)}
+          checked={someSelected ? (allSelected ? true : 'indeterminate') : false}
           onCheckedChange={toggleAll}
-          disabled={isLoading || (rows.length === 0 && !anySelected)}
-          aria-label="Select all pending entries in the current filter"
+          disabled={selectableRows.length === 0}
+          aria-label="Select all"
         />
-      )),
+      ),
       size: 40,
       cell: ({ row }) => (
         <Checkbox
           checked={selected.has(rowKeyOf(logType, row.original))}
-          onCheckedChange={() => toggleOne(row.original, row.index)}
+          onCheckedChange={() => toggleOne(row.original)}
           disabled={!isApprovable(row.original)}
           onClick={(e) => e.stopPropagation()}
           aria-label="Select row"
@@ -449,26 +388,15 @@ const ManagerTeamTimesheetView = ({ employeeId, employeeName }) => {
         </div>
       </div>
 
-      {/* Spells out the reach of the selection — page-only vs. spanning pages — so a select-all
-          that covers a backlog the Manager can't see isn't indistinguishable from one that only
-          covers the ten visible rows. */}
-      {anySelected && (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-muted/40 px-3 py-2">
+      {someSelected && (
+        <div className="flex items-center justify-between rounded-lg border bg-muted/40 px-3 py-2">
           <span className="text-sm text-muted-foreground">
-            <span className="font-medium text-foreground">{selected.size}</span> pending{' '}
-            {logType === 'daily' ? 'date' : 'month'}{selected.size === 1 ? '' : 's'} selected
-            {selectedPageCount > 1 && ` across ${selectedPageCount} pages`}
-            {offPageSelectedCount > 0 && ` — ${offPageSelectedCount} not on this page`}
+            {selected.size} {logType === 'daily' ? 'date' : 'month'}{selected.size === 1 ? '' : 's'} selected
           </span>
-          <div className="flex items-center gap-1.5">
-            <Button variant="ghost" size="sm" className="h-7" onClick={resetSelection} disabled={approveMutation.isPending}>
-              Clear
-            </Button>
-            <Button size="sm" className="h-7 gap-1" onClick={handleApproveSelected} disabled={approveMutation.isPending}>
-              {approveMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-              Approve Selected
-            </Button>
-          </div>
+          <Button size="sm" className="h-7 gap-1" onClick={handleApproveSelected} disabled={approveMutation.isPending}>
+            <Check className="h-3.5 w-3.5" />
+            Approve Selected
+          </Button>
         </div>
       )}
 

@@ -24,6 +24,7 @@ import StatusBadge from '@/components/common/StatusBadge';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
 import BusinessUnitFilter from '@/components/common/BusinessUnitFilter';
+import EntityFilter from '@/components/common/EntityFilter';
 import ServicePOHierarchyDrawer from './ServicePOHierarchyDrawer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -133,7 +134,10 @@ const ServicePOList = () => {
   // to more than one BU gets the standard master BU filter here. An Admin is excluded: their list
   // is deliberately cross-BU (crossBuScopeForAdmin) and they narrow with the ?company_id filter
   // below instead — running both would fight over the same axis.
-  const { buId, setBuId, showBuFilter, isBuFiltered, resetBuId, buParams } = useMasterBuFilter({ enabled: !isAdminActor });
+  const {
+    entityId, setEntityId, showEntityFilter, isEntityFiltered, resetEntityId,
+    buId, setBuId, showBuFilter, isBuFiltered, resetBuId, buParams,
+  } = useMasterBuFilter({ enabled: !isAdminActor });
 
   const params = {
     page,
@@ -208,6 +212,7 @@ const ServicePOList = () => {
     poFilter !== 'all' ? 1 : 0,
     statusFilter !== 'all' ? 1 : 0,
     isAdminActor && buFilter !== 'all' ? 1 : 0,
+    isEntityFiltered ? 1 : 0,
     isBuFiltered ? 1 : 0,
   ].reduce((a, b) => a + b, 0);
 
@@ -218,6 +223,7 @@ const ServicePOList = () => {
     setPoFilter('all');
     setStatusFilter('all');
     setBuFilter('all');
+    resetEntityId();
     resetBuId();
     setPage(1);
   };
@@ -460,8 +466,11 @@ const ServicePOList = () => {
               />
             </div>
           )}
+          {showEntityFilter && (
+            <EntityFilter value={entityId} onChange={(v) => { setEntityId(v); setPage(1); }} />
+          )}
           {showBuFilter && (
-            <BusinessUnitFilter value={buId} onChange={(v) => { setBuId(v); setPage(1); }} />
+            <BusinessUnitFilter value={buId} entityId={entityId} onChange={(v) => { setBuId(v); setPage(1); }} />
           )}
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs">Client</Label>

@@ -17,6 +17,7 @@ import PageHeader from '@/components/common/PageHeader';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
 import BusinessUnitFilter, { ALL_BUS } from '@/components/common/BusinessUnitFilter';
+import EntityFilter, { ALL_ENTITIES } from '@/components/common/EntityFilter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -211,6 +212,7 @@ const ResourceAllocation = () => {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [entityId, setEntityId] = useState(ALL_ENTITIES);
   const [buId, setBuId] = useState(ALL_BUS);
   const [exporting, setExporting] = useState(false);
 
@@ -321,6 +323,7 @@ const ResourceAllocation = () => {
   };
 
   const activeFilterCount = [
+    entityId !== ALL_ENTITIES ? 1 : 0,
     buId !== ALL_BUS ? 1 : 0,
     employeeId !== 'all' ? 1 : 0,
     poId !== 'all' ? 1 : 0,
@@ -331,6 +334,7 @@ const ResourceAllocation = () => {
   ].reduce((a, b) => a + b, 0);
 
   const clearFilters = () => {
+    setEntityId(ALL_ENTITIES);
     setBuId(ALL_BUS);
     setEmployeeId('all');
     setPoId('all');
@@ -393,7 +397,9 @@ const ResourceAllocation = () => {
 
       {/* Collapsible filter panel */}
       <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[560px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
-          <BusinessUnitFilter value={buId} onChange={setBuId} />
+          <EntityFilter value={entityId} onChange={(v) => { setEntityId(v); setBuId(ALL_BUS); }} />
+
+          <BusinessUnitFilter value={buId} entityId={entityId} onChange={setBuId} />
 
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs">Month &amp; Year</Label>

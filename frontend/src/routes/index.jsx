@@ -38,6 +38,8 @@ const EmployeeTimesheet = lazy(() => import('@/pages/employee/EmployeeTimesheet'
 const EmployeeTimeEntry = lazy(() => import('@/pages/employee/EmployeeTimeEntry'));
 const EmployeeMonthlySummary = lazy(() => import('@/pages/employee/EmployeeMonthlySummary'));
 const EmployeeReports = lazy(() => import('@/pages/employee/EmployeeReports'));
+const EmployeeReportsCenter = lazy(() => import('@/pages/employee/EmployeeReportsCenter'));
+const EmployeeReportsLayout = lazy(() => import('@/pages/employee/EmployeeReportsLayout'));
 const EmployeeProjectHoursReport = lazy(() => import('@/pages/employee/EmployeeProjectHoursReport'));
 const TimesheetApprovalStatusReport = lazy(() => import('@/pages/employee/TimesheetApprovalStatusReport'));
 const EmployeeWorkLogTimeReport = lazy(() => import('@/pages/employee/EmployeeWorkLogTimeReport'));
@@ -131,6 +133,7 @@ const EmployeeBenchPercentage = lazy(() => import('@/pages/reports/EmployeeBench
 const ResourceUtilizationTrend = lazy(() => import('@/pages/reports/ResourceUtilizationTrend'));
 const ServicePOHoursBudget = lazy(() => import('@/pages/reports/ServicePOHoursBudget'));
 const EmployeeWorkLogHoursSummaryReport = lazy(() => import('@/pages/reports/EmployeeWorkLogHoursSummaryReport'));
+const EmployeeWorkLogComplianceReport = lazy(() => import('@/pages/reports/EmployeeWorkLogComplianceReport'));
 
 // ── AI Copilot (new pages, launched from the floating AI Copilot widget) ──
 const RootCauseView = lazy(() => import('@/pages/ai/RootCauseView'));
@@ -180,10 +183,27 @@ const employeeSelfServiceRoutes = () => (
     <Route path={ROUTES.EMPLOYEE_TIMESHEET} element={<ProtectedRoute formName={FORM_NAMES.EMPLOYEE_WORK_LOG}><EmployeeTimesheet /></ProtectedRoute>} />
     <Route path={ROUTES.EMPLOYEE_TIME_ENTRY} element={<ProtectedRoute formName={FORM_NAMES.EMPLOYEE_TIME_ENTRY}><EmployeeTimeEntry /></ProtectedRoute>} />
     <Route path={ROUTES.EMPLOYEE_MONTHLY_SUMMARY} element={<ProtectedRoute formName={FORM_NAMES.EMPLOYEE_MONTHLY_SUMMARY}><EmployeeMonthlySummary /></ProtectedRoute>} />
-    <Route path={ROUTES.EMPLOYEE_REPORTS} element={<ProtectedRoute formName={FORM_NAMES.EMPLOYEE_REPORTS}><EmployeeReports /></ProtectedRoute>} />
-    <Route path={ROUTES.EMPLOYEE_PROJECT_HOURS_REPORT} element={<ProtectedRoute formName={FORM_NAMES.EMPLOYEE_PROJECT_HOURS_REPORT}><EmployeeProjectHoursReport /></ProtectedRoute>} />
-    <Route path={ROUTES.EMPLOYEE_TIMESHEET_APPROVAL_STATUS_REPORT} element={<ProtectedRoute formName={FORM_NAMES.EMPLOYEE_TIMESHEET_APPROVAL_STATUS_REPORT}><TimesheetApprovalStatusReport /></ProtectedRoute>} />
-    <Route path={ROUTES.EMPLOYEE_WORK_LOG_TIME_REPORT} element={<ProtectedRoute formName={FORM_NAMES.EMPLOYEE_WORK_LOG_TIME_REPORT}><EmployeeWorkLogTimeReport /></ProtectedRoute>} />
+    {/* Employee reports sit under their own pathless layout route, mirroring how the admin
+        reports nest under ReportsLayout: the layout supplies the inherited "Back to Report"
+        arrow and the mobile tab strip, so each report page passes no backTo of its own. Pathless
+        means the URLs are unchanged — only the shell around them is. Each child keeps its own
+        formName guard; the layout adds no gating. */}
+    <Route element={<EmployeeReportsLayout />}>
+      <Route path={ROUTES.EMPLOYEE_REPORTS} element={<ProtectedRoute formName={FORM_NAMES.EMPLOYEE_REPORTS}><EmployeeReports /></ProtectedRoute>} />
+      {/* No formName guard, deliberately — parity with the admin hub, which is likewise
+          unguarded (`<Route index element={<ReportsCenter />} />` under ROUTES.REPORTS).
+          Authentication still comes from the parent layout route either way.
+
+          This page is a navigation aid, not a data screen: it lists ONLY the reports already in
+          the caller's own accessibleForms, so an account with none sees an empty list rather than
+          anything it shouldn't. Guarding it on an "Employee Reports Center" Form Master row
+          instead made the sidebar's REPORTS header link dead-end at Not Authorized on every
+          tenant where that row (a guessed name — see rbacForms.js) was never seeded. */}
+      <Route path={ROUTES.EMPLOYEE_REPORTS_CENTER} element={<EmployeeReportsCenter />} />
+      <Route path={ROUTES.EMPLOYEE_PROJECT_HOURS_REPORT} element={<ProtectedRoute formName={FORM_NAMES.EMPLOYEE_PROJECT_HOURS_REPORT}><EmployeeProjectHoursReport /></ProtectedRoute>} />
+      <Route path={ROUTES.EMPLOYEE_TIMESHEET_APPROVAL_STATUS_REPORT} element={<ProtectedRoute formName={FORM_NAMES.EMPLOYEE_TIMESHEET_APPROVAL_STATUS_REPORT}><TimesheetApprovalStatusReport /></ProtectedRoute>} />
+      <Route path={ROUTES.EMPLOYEE_WORK_LOG_TIME_REPORT} element={<ProtectedRoute formName={FORM_NAMES.EMPLOYEE_WORK_LOG_TIME_REPORT}><EmployeeWorkLogTimeReport /></ProtectedRoute>} />
+    </Route>
     <Route path={ROUTES.EMPLOYEE_REJECTED_ENTRIES} element={<ProtectedRoute formName={FORM_NAMES.EMPLOYEE_REJECTED_ENTRIES}><EmployeeRejectedEntries /></ProtectedRoute>} />
   </>
 );
@@ -410,6 +430,10 @@ const AppRoutes = () => {
           <Route path={ROUTES.REPORT_RESOURCE_UTILIZATION_TREND} element={<ProtectedRoute formName={FORM_NAMES.REPORT_RESOURCE_UTILIZATION_TREND}><ResourceUtilizationTrend /></ProtectedRoute>} />
           <Route path={ROUTES.REPORT_SERVICE_PO_HOURS_BUDGET} element={<ProtectedRoute formName={FORM_NAMES.REPORT_SERVICE_PO_HOURS_BUDGET}><ServicePOHoursBudget /></ProtectedRoute>} />
           <Route path={ROUTES.REPORT_EMPLOYEE_WORK_LOG_HOURS_SUMMARY} element={<ProtectedRoute formName={FORM_NAMES.REPORT_EMPLOYEE_WORK_LOG_HOURS_SUMMARY} allowIfNoFormsMapped><EmployeeWorkLogHoursSummaryReport /></ProtectedRoute>} />
+          {/* No formName gate — reachable by any authenticated login regardless of Role-Form
+              Mapping, since Manager Timesheet Approval's "Check Pending & Remind" button links
+              here directly and a Manager role may not have this form explicitly granted. */}
+          <Route path={ROUTES.REPORT_EMPLOYEE_WORK_LOG_COMPLIANCE} element={<ProtectedRoute><EmployeeWorkLogComplianceReport /></ProtectedRoute>} />
         </Route>
 
         {/* AI Copilot — new, additive pages. No RBAC form rows exist for these yet (they're

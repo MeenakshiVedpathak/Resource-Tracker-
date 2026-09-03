@@ -10,6 +10,7 @@ import PageHeader from '@/components/common/PageHeader';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
 import BusinessUnitFilter, { ALL_BUS } from '@/components/common/BusinessUnitFilter';
+import EntityFilter, { ALL_ENTITIES } from '@/components/common/EntityFilter';
 import EmptyState from '@/components/common/EmptyState';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -125,6 +126,7 @@ const ServiceLineBusinessMix = () => {
   });
   const [compareMonthYear, setCompareMonthYear] = useState(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [entityId, setEntityId] = useState(ALL_ENTITIES);
   const [buId, setBuId] = useState(ALL_BUS);
 
   const params = {
@@ -141,9 +143,10 @@ const ServiceLineBusinessMix = () => {
   const records = data?.data?.data ?? [];
   const comparisonPeriod = data?.data?.comparison_period ?? null;
 
-  const activeFilterCount = [compareMonthYear !== null, buId !== ALL_BUS].filter(Boolean).length;
+  const activeFilterCount = [compareMonthYear !== null, entityId !== ALL_ENTITIES, buId !== ALL_BUS].filter(Boolean).length;
 
   const clearFilters = () => {
+    setEntityId(ALL_ENTITIES);
     setBuId(ALL_BUS);
     setCompareMonthYear(null);
   };
@@ -173,7 +176,9 @@ const ServiceLineBusinessMix = () => {
       />
 
       <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[300px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
-        <BusinessUnitFilter value={buId} onChange={setBuId} />
+        <EntityFilter value={entityId} onChange={(v) => { setEntityId(v); setBuId(ALL_BUS); }} />
+
+        <BusinessUnitFilter value={buId} entityId={entityId} onChange={setBuId} />
 
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Month &amp; Year <span className="text-destructive">*</span></Label>

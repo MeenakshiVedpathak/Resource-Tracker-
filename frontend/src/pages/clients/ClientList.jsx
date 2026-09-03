@@ -11,6 +11,7 @@ import { useDebounce } from '@/hooks/useDebounce';
 import { extractApiError } from '@/services/apiClient';
 import { buildPath, ROUTES } from '@/constants/routes';
 import BusinessUnitFilter from '@/components/common/BusinessUnitFilter';
+import EntityFilter from '@/components/common/EntityFilter';
 import { useMasterBuFilter } from '@/hooks/useMasterBuFilter';
 import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
@@ -86,7 +87,10 @@ const ClientList = () => {
   // Query key and refetches on change, and clients.api.js turns it into ?company_id=<id>
   // (omitted for 'all'), which the backend accepts for BU-scoped callers too — narrowing to one
   // of their own mapped BUs.
-  const { buId, setBuId, showBuFilter, isBuFiltered, resetBuId, buParams } = useMasterBuFilter();
+  const {
+    entityId, setEntityId, showEntityFilter, isEntityFiltered, resetEntityId,
+    buId, setBuId, showBuFilter, isBuFiltered, resetBuId, buParams,
+  } = useMasterBuFilter();
 
   const params = {
     page,
@@ -113,10 +117,11 @@ const ClientList = () => {
   const clients = data?.data ?? [];
   const meta = data?.meta ?? {};
 
-  const activeFilterCount = (statusFilter !== 'all' ? 1 : 0) + (isBuFiltered ? 1 : 0);
+  const activeFilterCount = (statusFilter !== 'all' ? 1 : 0) + (isEntityFiltered ? 1 : 0) + (isBuFiltered ? 1 : 0);
 
   const clearFilters = () => {
     setStatusFilter('all');
+    resetEntityId();
     resetBuId();
     setPage(1);
   };
@@ -408,8 +413,11 @@ const ClientList = () => {
       />
 
       <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[200px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
+        {showEntityFilter && (
+          <EntityFilter value={entityId} onChange={(v) => { setEntityId(v); setPage(1); }} />
+        )}
         {showBuFilter && (
-          <BusinessUnitFilter value={buId} onChange={(v) => { setBuId(v); setPage(1); }} />
+          <BusinessUnitFilter value={buId} entityId={entityId} onChange={(v) => { setBuId(v); setPage(1); }} />
         )}
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Status</Label>

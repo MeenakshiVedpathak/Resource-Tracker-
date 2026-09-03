@@ -101,7 +101,20 @@ const TimeSegmentsInput = ({
     onChange(segments.map((s, i) => (i === index ? { ...s, ...patch } : s)));
   };
   const addSegment = () => onChange([...segments, BLANK_SEGMENT]);
-  const removeSegment = (index) => onChange(segments.filter((_, i) => i !== index));
+
+  // Every row carries a remove control, the only row included — a one-block form still needs a way
+  // to undo what was typed. Dropping that last row would break this component's own ≥1-row
+  // contract (the parent seeds BLANK_SEGMENT once and nothing re-seeds it afterwards), so on the
+  // only row this resets the fields rather than removing it; the button says which it will do.
+  const isOnlySegment = segments.length === 1;
+  const removeSegment = (index) => {
+    if (isOnlySegment) {
+      onChange([BLANK_SEGMENT]);
+      return;
+    }
+    onChange(segments.filter((_, i) => i !== index));
+  };
+  const removeLabel = isOnlySegment ? 'Clear this time block' : 'Remove this time block';
 
   const addButton = showAddButton ? <AddTimeBlockButton onClick={addSegment} disabled={disabled} /> : null;
 
@@ -165,19 +178,16 @@ const TimeSegmentsInput = ({
                       </span>
                     </div>
 
-                    {segments.length > 1 ? (
-                      <button
-                        type="button"
-                        onClick={() => removeSegment(index)}
-                        disabled={disabled}
-                        title="Remove this time block"
-                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border text-destructive transition-colors hover:border-destructive/40 hover:bg-destructive/10 disabled:pointer-events-none disabled:opacity-40"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    ) : (
-                      <span className="w-9" aria-hidden="true" />
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => removeSegment(index)}
+                      disabled={disabled}
+                      title={removeLabel}
+                      aria-label={`${isOnlySegment ? 'Clear' : 'Remove'} time block ${index + 1}`}
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border text-destructive transition-colors hover:border-destructive/40 hover:bg-destructive/10 disabled:pointer-events-none disabled:opacity-40"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
                   </div>
 
                   {isPartial && (
@@ -251,17 +261,16 @@ const TimeSegmentsInput = ({
                 </div>
               </div>
 
-              {segments.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => removeSegment(index)}
-                  disabled={disabled}
-                  title="Remove this time block"
-                  className="mb-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-md border text-destructive transition-colors hover:border-destructive/40 hover:bg-destructive/10 disabled:pointer-events-none disabled:opacity-40"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => removeSegment(index)}
+                disabled={disabled}
+                title={removeLabel}
+                aria-label={`${isOnlySegment ? 'Clear' : 'Remove'} time block ${index + 1}`}
+                className="mb-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-md border text-destructive transition-colors hover:border-destructive/40 hover:bg-destructive/10 disabled:pointer-events-none disabled:opacity-40"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
             </div>
 
             {isPartial && (

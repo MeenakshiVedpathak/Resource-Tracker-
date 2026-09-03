@@ -10,6 +10,7 @@ import PageHeader from '@/components/common/PageHeader';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
 import BusinessUnitFilter, { ALL_BUS } from '@/components/common/BusinessUnitFilter';
+import EntityFilter, { ALL_ENTITIES } from '@/components/common/EntityFilter';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -118,6 +119,7 @@ const ResourceStaffingPlanAccuracy = () => {
   const [varianceThresholdPct, setVarianceThresholdPct] = useState(String(DEFAULT_THRESHOLD_PCT));
   const [riskFilter, setRiskFilter] = useState('all');
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [entityId, setEntityId] = useState(ALL_ENTITIES);
   const [buId, setBuId] = useState(ALL_BUS);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -192,12 +194,14 @@ const ResourceStaffingPlanAccuracy = () => {
   } : null;
 
   const activeFilterCount = [
+    entityId !== ALL_ENTITIES,
     buId !== ALL_BUS,
     varianceThresholdPct !== String(DEFAULT_THRESHOLD_PCT),
     riskFilter !== 'all',
   ].filter(Boolean).length;
 
   const clearFilters = () => {
+    setEntityId(ALL_ENTITIES);
     setBuId(ALL_BUS);
     setVarianceThresholdPct(String(DEFAULT_THRESHOLD_PCT));
     setRiskFilter('all');
@@ -239,7 +243,9 @@ const ResourceStaffingPlanAccuracy = () => {
       />
 
       <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[340px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
-        <BusinessUnitFilter value={buId} onChange={setBuId} />
+        <EntityFilter value={entityId} onChange={(v) => { setEntityId(v); setBuId(ALL_BUS); }} />
+
+        <BusinessUnitFilter value={buId} entityId={entityId} onChange={setBuId} />
 
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Month &amp; Year <span className="text-destructive">*</span></Label>

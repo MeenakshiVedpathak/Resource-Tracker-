@@ -9,10 +9,12 @@ const MONTH_NAMES = [
 ];
 const DAY_NAMES = ['Su','Mo','Tu','We','Th','Fr','Sa'];
 
+// "27 Aug 2026" — zero-padded day + year, matching DatePicker's label format so a single date and
+// a range endpoint never disagree about how a date is written.
 function formatDate(dateStr) {
   if (!dateStr) return '';
-  const [, month, day] = dateStr.split('-').map(Number);
-  return `${MONTH_NAMES[month - 1].slice(0, 3)} ${day}`;
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return `${String(day).padStart(2, '0')} ${MONTH_NAMES[month - 1].slice(0, 3)} ${year}`;
 }
 
 function getDaysInMonth(year, month) {
@@ -140,7 +142,7 @@ export function DateRangePicker({
           <button
             type="button"
             onClick={prevMonth}
-            className="rounded p-1 hover:bg-muted transition-colors"
+            className="rounded p-1 hover:bg-accent transition-colors"
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
@@ -150,7 +152,7 @@ export function DateRangePicker({
           <button
             type="button"
             onClick={nextMonth}
-            className="rounded p-1 hover:bg-muted transition-colors"
+            className="rounded p-1 hover:bg-accent transition-colors"
           >
             <ChevronRight className="h-4 w-4" />
           </button>
@@ -191,7 +193,7 @@ export function DateRangePicker({
                   'h-8 w-8 text-xs flex items-center justify-center transition-colors relative',
                   (start || end) && 'bg-primary text-primary-foreground font-semibold rounded-full z-10',
                   inRange && 'bg-primary/15 text-foreground rounded-none',
-                  !start && !end && !inRange && 'hover:bg-muted rounded-full'
+                  !start && !end && !inRange && 'hover:bg-accent rounded-full'
                 )}
               >
                 {day}

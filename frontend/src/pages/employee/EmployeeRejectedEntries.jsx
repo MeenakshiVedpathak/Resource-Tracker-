@@ -10,7 +10,7 @@ import EmptyState from '@/components/common/EmptyState';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import WorkLogEntryModal from '@/components/employee/WorkLogEntryModal';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 
@@ -100,19 +100,21 @@ const EmployeeRejectedEntries = () => {
             searchPlaceholder="Search projects…"
           />
         </div>
-        <Input
-          type="date"
+        <DatePicker
           value={filters.startDate}
-          onChange={(e) => updateFilter({ startDate: e.target.value })}
-          className="w-auto"
-          aria-label="From date"
+          onChange={(d) => updateFilter({ startDate: d })}
+          placeholder="From date"
+          ariaLabel="From date"
+          clearable
+          className="w-auto min-w-[9.5rem]"
         />
-        <Input
-          type="date"
+        <DatePicker
           value={filters.endDate}
-          onChange={(e) => updateFilter({ endDate: e.target.value })}
-          className="w-auto"
-          aria-label="To date"
+          onChange={(d) => updateFilter({ endDate: d })}
+          placeholder="To date"
+          ariaLabel="To date"
+          clearable
+          className="w-auto min-w-[9.5rem]"
         />
         {hasActiveFilters && (
           <Button variant="ghost" size="sm" onClick={() => updateFilter(emptyFilters)}>

@@ -17,6 +17,7 @@ import PageHeader from '@/components/common/PageHeader';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
 import BusinessUnitFilter, { ALL_BUS } from '@/components/common/BusinessUnitFilter';
+import EntityFilter, { ALL_ENTITIES } from '@/components/common/EntityFilter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -179,6 +180,7 @@ const ClientServicePOHoursReport = () => {
   const [serviceTypeId, setServiceTypeId] = useState('all');
   const [employeeId, setEmployeeId] = useState('all');
   const [status, setStatus] = useState('all');
+  const [entityId, setEntityId] = useState(ALL_ENTITIES);
   const [buId, setBuId] = useState(ALL_BUS);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [collapsedClientIds, setCollapsedClientIds] = useState(() => new Set());
@@ -290,6 +292,7 @@ const ClientServicePOHoursReport = () => {
     serviceTypeId !== 'all',
     employeeId !== 'all',
     status !== 'all',
+    entityId !== ALL_ENTITIES,
     buId !== ALL_BUS,
   ].filter(Boolean).length;
 
@@ -299,6 +302,7 @@ const ClientServicePOHoursReport = () => {
     setServiceTypeId('all');
     setEmployeeId('all');
     setStatus('all');
+    setEntityId(ALL_ENTITIES);
     setBuId(ALL_BUS);
   };
 
@@ -372,7 +376,9 @@ const ClientServicePOHoursReport = () => {
 
       {/* Collapsible filter panel */}
       <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[620px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
-            <BusinessUnitFilter value={buId} onChange={setBuId} />
+            <EntityFilter value={entityId} onChange={(v) => { setEntityId(v); setBuId(ALL_BUS); }} />
+
+            <BusinessUnitFilter value={buId} entityId={entityId} onChange={setBuId} />
 
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs">Month &amp; Year <span className="text-destructive">*</span></Label>

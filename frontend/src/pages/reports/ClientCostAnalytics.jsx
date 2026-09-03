@@ -12,6 +12,7 @@ import EmptyState from '@/components/common/EmptyState';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
 import BusinessUnitFilter, { ALL_BUS } from '@/components/common/BusinessUnitFilter';
+import EntityFilter, { ALL_ENTITIES } from '@/components/common/EntityFilter';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
@@ -83,6 +84,7 @@ const ClientCostAnalytics = () => {
   // This report has no other filter, so the Filters panel exists purely to host the BU picker
   // — every other Reports page already carries one, and the BU choice belongs in the same place.
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [entityId, setEntityId] = useState(ALL_ENTITIES);
   const [buId, setBuId] = useState(ALL_BUS);
 
   // Role no longer grants Original-data visibility (e.g. role reassigned mid-session) — force
@@ -148,6 +150,14 @@ const ClientCostAnalytics = () => {
     setPage(1);
   };
 
+  // Picking a different Entity can strand a BU that no longer belongs to it — reset the BU
+  // state the same way changing BU itself resets the page.
+  const handleEntityChange = (value) => {
+    setEntityId(value);
+    setBuId(ALL_BUS);
+    setPage(1);
+  };
+
   return (
     <div>
       <PageHeader
@@ -177,7 +187,7 @@ const ClientCostAnalytics = () => {
             <FilterToggleButton
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((p) => !p)}
-              activeCount={buId !== ALL_BUS ? 1 : 0}
+              activeCount={(entityId !== ALL_ENTITIES ? 1 : 0) + (buId !== ALL_BUS ? 1 : 0)}
               className="h-9"
             />
             {clients.length > 0 && (
@@ -192,10 +202,12 @@ const ClientCostAnalytics = () => {
       <FilterPanel
         isOpen={filtersOpen}
         maxHeightClass="max-h-[160px]"
-        onClear={() => handleBuChange(ALL_BUS)}
-        showClear={buId !== ALL_BUS}
+        onClear={() => { setEntityId(ALL_ENTITIES); handleBuChange(ALL_BUS); }}
+        showClear={entityId !== ALL_ENTITIES || buId !== ALL_BUS}
       >
-        <BusinessUnitFilter value={buId} onChange={handleBuChange} />
+        <EntityFilter value={entityId} onChange={handleEntityChange} />
+
+        <BusinessUnitFilter value={buId} entityId={entityId} onChange={handleBuChange} />
       </FilterPanel>
 
       {errorMessage && (

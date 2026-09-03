@@ -13,6 +13,7 @@ import EmptyState from '@/components/common/EmptyState';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
 import BusinessUnitFilter, { ALL_BUS } from '@/components/common/BusinessUnitFilter';
+import EntityFilter, { ALL_ENTITIES } from '@/components/common/EntityFilter';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,6 +21,7 @@ import { Label } from '@/components/ui/label';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/utils/cn';
 
 const columnHelper = createColumnHelper();
@@ -31,6 +33,10 @@ const MAX_RECORDS_FETCH = 5000;
 
 const now = new Date();
 const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+// Filter labels read as uppercase micro-labels, echoing the data table's own column headers so
+// the panel and the table below it look like one surface (same treatment as ClientWiseAnalytics).
+const FILTER_LABEL = 'text-[11px] font-semibold uppercase tracking-wider text-muted-foreground';
 
 const PERIOD_MODES = [
   { value: 'month', label: 'Month' },
@@ -155,6 +161,7 @@ const EmployeeBenchPercentage = () => {
   const [poId, setPoId] = useState('all');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [buId, setBuId] = useState(ALL_BUS);
+  const [entityId, setEntityId] = useState(ALL_ENTITIES);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
@@ -206,6 +213,7 @@ const EmployeeBenchPercentage = () => {
       : null;
 
   const activeFilterCount = [
+    entityId !== ALL_ENTITIES,
     buId !== ALL_BUS,
     employeeId !== 'all',
     clientId !== 'all',
@@ -213,6 +221,7 @@ const EmployeeBenchPercentage = () => {
   ].filter(Boolean).length;
 
   const clearFilters = () => {
+    setEntityId(ALL_ENTITIES);
     setBuId(ALL_BUS);
     setEmployeeId('all');
     setClientId('all');
@@ -271,47 +280,67 @@ const EmployeeBenchPercentage = () => {
         }
       />
 
-      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[440px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
-        <BusinessUnitFilter value={buId} onChange={setBuId} />
+      <FilterPanel
+        isOpen={filtersOpen}
+        maxHeightClass="max-h-[440px]"
+        gridClassName="items-end gap-x-4 gap-y-5 rounded-xl border-slate-200/80 bg-slate-50/70 p-5 shadow-sm"
+        onClear={clearFilters}
+        showClear={activeFilterCount > 0}
+      >
+        <EntityFilter
+          value={entityId}
+          onChange={(v) => { setEntityId(v); setBuId(ALL_BUS); }}
+          labelClassName={FILTER_LABEL}
+        />
 
-        <div className="flex flex-col gap-1.5 md:col-span-2">
-          <Label className="text-xs">Period <span className="text-destructive">*</span></Label>
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-0.5 p-0.5 rounded-xl bg-muted border shrink-0">
+        <BusinessUnitFilter value={buId} entityId={entityId} onChange={setBuId} labelClassName={FILTER_LABEL} />
+
+        {/* Period mode and its picker take one grid cell each, rather than sharing a single
+            md:col-span-2 cell: a picker stretched across two columns dwarfed every neighbouring
+            control, and split this way all six filters sit on the same column rhythm. */}
+        <div className="flex flex-col gap-1.5">
+          <Label className={FILTER_LABEL}>Period</Label>
+          <Tabs value={periodMode} onValueChange={handlePeriodModeChange}>
+            <TabsList className="grid w-full grid-cols-2 border border-input bg-slate-100">
               {PERIOD_MODES.map(({ value, label }) => (
-                <button
+                <TabsTrigger
                   key={value}
-                  type="button"
-                  onClick={() => handlePeriodModeChange(value)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 whitespace-nowrap ${
-                    periodMode === value ? 'bg-card shadow-sm text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground hover:text-foreground'
-                  }`}
+                  value={value}
+                  className="text-xs font-semibold data-[state=active]:bg-white"
                 >
                   {label}
-                </button>
+                </TabsTrigger>
               ))}
-            </div>
-            {periodMode === 'month' ? (
-              <MonthYearPicker
-                value={monthYear}
-                onChange={(val) => { setMonthYear(val); setPage(1); }}
-                placeholder="Select month"
-                clearable={false}
-                className="flex-1"
-              />
-            ) : (
-              <DateRangePicker
-                value={dateRange}
-                onChange={(val) => { setDateRange(val); setPage(1); }}
-                placeholder="Select date range"
-                className="flex-1"
-              />
-            )}
-          </div>
+            </TabsList>
+          </Tabs>
+        </div>
+
+        {/* The required marker belongs on the value, not the mode toggle above — the toggle
+            always holds one of its two values, so it is the picker that can be left unset. */}
+        <div className="flex flex-col gap-1.5">
+          <Label className={FILTER_LABEL}>
+            {periodMode === 'month' ? 'Month & Year' : 'Date Range'} <span className="text-destructive">*</span>
+          </Label>
+          {periodMode === 'month' ? (
+            <MonthYearPicker
+              value={monthYear}
+              onChange={(val) => { setMonthYear(val); setPage(1); }}
+              placeholder="Select month"
+              clearable={false}
+              className="w-full"
+            />
+          ) : (
+            <DateRangePicker
+              value={dateRange}
+              onChange={(val) => { setDateRange(val); setPage(1); }}
+              placeholder="Select date range"
+              className="w-full"
+            />
+          )}
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">Employee</Label>
+          <Label className={FILTER_LABEL}>Employee</Label>
           <SearchableSelect
             options={[
               { label: 'All Employees', value: 'all' },
@@ -326,7 +355,7 @@ const EmployeeBenchPercentage = () => {
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">Client</Label>
+          <Label className={FILTER_LABEL}>Client</Label>
           <SearchableSelect
             options={[
               { label: 'All Clients', value: 'all' },
@@ -341,7 +370,7 @@ const EmployeeBenchPercentage = () => {
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">Project (Service PO)</Label>
+          <Label className={FILTER_LABEL}>Project (Service PO)</Label>
           <SearchableSelect
             options={[
               { label: 'All Projects', value: 'all' },

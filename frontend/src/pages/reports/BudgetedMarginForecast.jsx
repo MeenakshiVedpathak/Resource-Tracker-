@@ -11,6 +11,7 @@ import StatusBadge from '@/components/common/StatusBadge';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
 import BusinessUnitFilter, { ALL_BUS } from '@/components/common/BusinessUnitFilter';
+import EntityFilter, { ALL_ENTITIES } from '@/components/common/EntityFilter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -128,6 +129,7 @@ const SummaryItem = ({ label, value, negative = false }) => (
 const BudgetedMarginForecast = () => {
   const [monthYear, setMonthYear] = useState(defaultMonthYear);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [entityId, setEntityId] = useState(ALL_ENTITIES);
   const [buId, setBuId] = useState(ALL_BUS);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -173,6 +175,7 @@ const BudgetedMarginForecast = () => {
   })() : null;
 
   const activeFilterCount = [
+    entityId !== ALL_ENTITIES,
     buId !== ALL_BUS,
     monthYear?.month !== defaultMonthYear.month || monthYear?.year !== defaultMonthYear.year,
   ].filter(Boolean).length;
@@ -213,7 +216,9 @@ const BudgetedMarginForecast = () => {
 
       {/* Collapsible filter panel */}
       <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[300px]">
-        <BusinessUnitFilter value={buId} onChange={setBuId} />
+        <EntityFilter value={entityId} onChange={(v) => { setEntityId(v); setBuId(ALL_BUS); }} />
+
+        <BusinessUnitFilter value={buId} entityId={entityId} onChange={setBuId} />
 
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Month &amp; Year <span className="text-destructive">*</span></Label>

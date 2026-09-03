@@ -13,6 +13,7 @@ import PageHeader from '@/components/common/PageHeader';
 import FilterPanel from '@/components/common/FilterPanel';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import BusinessUnitFilter, { ALL_BUS } from '@/components/common/BusinessUnitFilter';
+import EntityFilter, { ALL_ENTITIES } from '@/components/common/EntityFilter';
 import DataTable from '@/components/common/DataTable';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,7 +29,10 @@ import {
 } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import EmptyState from '@/components/common/EmptyState';
-import { cn } from '@/utils/cn';
+
+// Filter labels read as uppercase micro-labels, echoing the data table's own column headers so
+// the panel and the table below it look like one surface (same treatment as ClientWiseAnalytics).
+const FILTER_LABEL = 'text-[11px] font-semibold uppercase tracking-wider text-muted-foreground';
 
 const now = dayjs();
 const columnHelper = createColumnHelper();
@@ -275,6 +279,7 @@ const EmployeeWorkLogHoursSummaryReport = () => {
     year: now.year(),
   });
   const [companyId, setCompanyId] = useState(ALL_BUS);
+  const [entityId, setEntityId] = useState(ALL_ENTITIES);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const debouncedSearch = useDebounce(searchInput, 300);
@@ -371,6 +376,7 @@ const EmployeeWorkLogHoursSummaryReport = () => {
 
   const activeFilterCount = [
     periodMode !== 'date',
+    entityId !== ALL_ENTITIES,
     companyId !== ALL_BUS,
     selectedEmployeeId !== '',
   ].filter(Boolean).length;
@@ -385,6 +391,7 @@ const EmployeeWorkLogHoursSummaryReport = () => {
     setPeriodMode('date');
     setSelectedDate(now.format('YYYY-MM-DD'));
     setMonthYear({ month: now.month() + 1, year: now.year() });
+    setEntityId(ALL_ENTITIES);
     setCompanyId(ALL_BUS);
     setSelectedEmployeeId('');
     setSearchInput('');
@@ -455,7 +462,7 @@ const EmployeeWorkLogHoursSummaryReport = () => {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search by employee name or code..."
+                placeholder="Search by name or code..."
                 value={searchInput}
                 onChange={(e) => {
                   setSearchInput(e.target.value);
@@ -487,68 +494,78 @@ const EmployeeWorkLogHoursSummaryReport = () => {
       {/* Standard Collapsible Filter Panel */}
       <FilterPanel
         isOpen={showFilters}
-        maxHeightClass="max-h-[220px]"
+        maxHeightClass="max-h-[240px]"
+        gridClassName="items-end gap-x-4 gap-y-5 rounded-xl border-slate-200/80 bg-slate-50/70 p-5 shadow-sm"
         onClear={handleResetFilters}
         showClear={activeFilterCount > 0}
       >
-        {/* Period (Mode Toggle + Picker in single col-span-2 cell) */}
-        <div className="col-span-2 flex flex-col gap-1.5">
-          <Label className="text-xs">Period</Label>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex h-9 shrink-0 items-center gap-0.5 rounded-lg border bg-muted p-1">
-              {[
-                { value: 'date', label: 'Single Date' },
-                { value: 'month', label: 'Month / Year' },
-              ].map(({ value, label }) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => {
-                    setPeriodMode(value);
-                    setPage(1);
-                  }}
-                  className={cn(
-                    'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all duration-150 whitespace-nowrap',
-                    periodMode === value
-                      ? 'bg-card shadow-sm text-foreground'
-                      : 'text-muted-foreground hover:text-foreground'
-                  )}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            {periodMode === 'date' ? (
-              <DatePicker
-                value={selectedDate}
-                onChange={(d) => {
-                  if (d) {
-                    setSelectedDate(d);
-                    setPage(1);
-                  }
-                }}
-                className="h-9 flex-1 bg-white text-sm min-w-[10rem]"
-              />
-            ) : (
-              <MonthYearPicker
-                value={monthYear}
-                onChange={(val) => {
-                  if (val) {
-                    setMonthYear(val);
-                    setPage(1);
-                  }
-                }}
-                placeholder="Select month"
-                clearable={false}
-                className="h-9 flex-1 bg-white min-w-[10rem]"
-              />
-            )}
-          </div>
+        {/* Period mode — kept in its own grid cell (rather than sharing one wide cell with the
+            picker) so all four filters line up on the same column rhythm at every width. */}
+        <div className="flex flex-col gap-1.5">
+          <Label className={FILTER_LABEL}>Period</Label>
+          <Tabs
+            value={periodMode}
+            onValueChange={(value) => {
+              setPeriodMode(value);
+              setPage(1);
+            }}
+          >
+            <TabsList className="grid w-full grid-cols-2 border border-input bg-slate-100">
+              <TabsTrigger value="date" className="text-xs font-semibold data-[state=active]:bg-white">
+                Single Date
+              </TabsTrigger>
+              <TabsTrigger value="month" className="text-xs font-semibold data-[state=active]:bg-white">
+                Month / Year
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
+
+        {/* Period value — picker swapped to match the selected mode, label names the granularity */}
+        <div className="flex flex-col gap-1.5">
+          <Label className={FILTER_LABEL}>{periodMode === 'date' ? 'Date' : 'Month & Year'}</Label>
+          {periodMode === 'date' ? (
+            <DatePicker
+              value={selectedDate}
+              onChange={(d) => {
+                if (d) {
+                  setSelectedDate(d);
+                  setPage(1);
+                }
+              }}
+              className="w-full text-sm"
+            />
+          ) : (
+            <MonthYearPicker
+              value={monthYear}
+              onChange={(val) => {
+                if (val) {
+                  setMonthYear(val);
+                  setPage(1);
+                }
+              }}
+              placeholder="Select month"
+              clearable={false}
+              className="w-full text-sm"
+            />
+          )}
+        </div>
+
+        <EntityFilter
+          labelClassName={FILTER_LABEL}
+          value={entityId}
+          onChange={(val) => {
+            setEntityId(val);
+            setCompanyId(ALL_BUS);
+            setPage(1);
+          }}
+        />
 
         {/* Business Unit Selector */}
         <BusinessUnitFilter
+          labelClassName={FILTER_LABEL}
           value={companyId}
+          entityId={entityId}
           onChange={(val) => {
             setCompanyId(val);
             setPage(1);
@@ -557,7 +574,7 @@ const EmployeeWorkLogHoursSummaryReport = () => {
 
         {/* Employee Dropdown Selector (BU-filtered) */}
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">Employee</Label>
+          <Label className={FILTER_LABEL}>Employee</Label>
           <SearchableSelect
             options={employeeOptions}
             value={selectedEmployeeId}

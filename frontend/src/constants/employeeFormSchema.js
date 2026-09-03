@@ -4,8 +4,8 @@ import { passwordSchema } from '@/utils/validators';
 // Shared Zod field schemas for "this is an Employee" data — single source of truth so
 // EmployeeForm.jsx and the BU Admin creation flow (CompanyForm.jsx, which also creates an
 // Employee record for the new BU Admin) can never drift apart on validation rules.
-// Local-timezone "today" as yyyy-MM-dd — used both as the <input type="date"> `max` (so the
-// native picker greys out future days) and by the schema below (so a typed/pasted date is
+// Local-timezone "today" as yyyy-MM-dd — used both as the DatePicker's `max` (so the calendar
+// greys out future days) and by the schema below (so a date that arrives some other way is
 // rejected too). Deliberately not `toISOString()`, which shifts to UTC and can hand back
 // tomorrow's date for users east of UTC.
 export const todayIsoDate = () => {
@@ -13,6 +13,21 @@ export const todayIsoDate = () => {
   const month = String(now.getMonth() + 1).padStart(2, '0');
   const day = String(now.getDate()).padStart(2, '0');
   return `${now.getFullYear()}-${month}-${day}`;
+};
+
+// One calendar day after `iso` (yyyy-MM-dd), or '' when there is nothing to advance. Backs the
+// Date of Leaving picker's lower bound: leaving must fall AFTER joining, so the earliest
+// selectable day is joining + 1. Built from local date parts and handed to the Date constructor
+// as (y, m-1, d+1) so month/year rollover is handled for us, without the UTC shift toISOString()
+// would introduce -- same reasoning as todayIsoDate above.
+export const nextDayIsoDate = (iso) => {
+  if (!iso) return '';
+  const [year, month, day] = iso.split('-').map(Number);
+  if (!year || !month || !day) return '';
+  const next = new Date(year, month - 1, day + 1);
+  const nextMonth = String(next.getMonth() + 1).padStart(2, '0');
+  const nextDay = String(next.getDate()).padStart(2, '0');
+  return `${next.getFullYear()}-${nextMonth}-${nextDay}`;
 };
 
 export const employeeBaseFields = {
@@ -26,7 +41,10 @@ export const employeeBaseFields = {
   resource_description: z.string().max(2000).optional().or(z.literal('')),
   date_of_joining: z.string().min(1, 'Date of joining is required')
     .refine((v) => v <= todayIsoDate(), 'Date of joining cannot be in the future'),
-  date_of_leaving: z.string().optional().or(z.literal('')),
+  // Optional, but when present it must be a real past-or-today date. The "after joining" half of
+  // the rule reads a second field, so it can't live here -- see refineEmploymentDates below.
+  date_of_leaving: z.string().optional().or(z.literal(''))
+    .refine((v) => !v || v <= todayIsoDate(), 'Date of leaving cannot be in the future'),
   status: z.enum(['active', 'inactive']).default('active'),
   secondary_manager_employee_id: z.coerce.number().positive().optional().nullable(),
   is_timesheet_approval_required: z.boolean(),
@@ -43,3 +61,23 @@ export const employeePasswordField = passwordSchema
   .regex(/[a-z]/, 'Must contain at least one lowercase letter')
   .regex(/[0-9]/, 'Must contain at least one digit')
   .regex(/[^A-Za-z0-9]/, 'Must contain at least one special character');
+
+// Cross-field employment-date rule, applied at the object level because it reads both dates:
+// Date of Leaving must fall strictly AFTER Date of Joining. Same-day is rejected on purpose --
+// joining and leaving on one date is not an employment span, so the earliest valid value is
+// joining + 1 day (the same bound nextDayIsoDate gives the picker).
+//
+// Every schema that spreads employeeBaseFields must pipe through this to get the rule, since a
+// field-level schema cannot see its siblings. Takes and returns a schema so it composes after a
+// .refine() chain (e.g. the password-match rule) rather than having to come first.
+export const refineEmploymentDates = (schema) =>
+  schema.superRefine((data, ctx) => {
+    if (!data.date_of_leaving || !data.date_of_joining) return;
+    if (data.date_of_leaving <= data.date_of_joining) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['date_of_leaving'],
+        message: 'Date of leaving must be after date of joining',
+      });
+    }
+  });

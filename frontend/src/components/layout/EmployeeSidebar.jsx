@@ -9,8 +9,24 @@ import { useFormModules, useForms } from '@/hooks/useForms';
 import { useEmployeeEntries } from '@/hooks/useEmployeeWorkLog';
 import { resolveFormRoute } from '@/constants/rbacForms';
 import { ROUTES } from '@/constants/routes';
-import { ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, Folder } from 'lucide-react';
 import ScrollOnHoverText from '@/components/common/ScrollOnHoverText';
+
+// Modules whose group label becomes a direct link to a hub/landing page instead of a plain
+// collapsible header — same pattern as Sidebar.jsx's MODULE_OVERVIEW_ROUTES. The key is the
+// module name lowercased/trimmed (matched against accessibleForms module keys at render time).
+// When a module both has a hub route here AND has at least one form assigned to a category in
+// the Form Master, the sidebar collapses to only the module link — browsing by category
+// happens on the hub page instead.
+const MODULE_OVERVIEW_ROUTES = {
+  // The Form Master module name for employee-side reports may vary (e.g. "Resources",
+  // "My Reports") — add the actual lowercased name once confirmed from GET /roles/forms.
+  // The hub page itself (EmployeeReportsCenter) filters by known form names rather than
+  // module name, so whatever the admin calls this module, the hub still shows the right reports.
+  reports: ROUTES.EMPLOYEE_REPORTS_CENTER,
+  'my reports': ROUTES.EMPLOYEE_REPORTS_CENTER,
+  'employee reports': ROUTES.EMPLOYEE_REPORTS_CENTER,
+};
 
 // Real module/form ordering, sourced from the same Form Master data the /forms screen
 // manages (GET /forms/modules for module seq, GET /forms for per-module form seq) — see the
@@ -25,9 +41,12 @@ const useMenuRank = () => {
     (moduleRows ?? []).forEach((m) => moduleSeq.set(m.form_name.trim().toLowerCase(), m.seq));
 
     const formSeq = new Map();
+    const formCategoryId = new Map();
     (formsList?.data ?? []).forEach((f) => {
       if (f.module_name != null) {
-        formSeq.set(`${f.module_name.trim().toLowerCase()}::${f.form_name.trim().toLowerCase()}`, f.seq);
+        const key = `${f.module_name.trim().toLowerCase()}::${f.form_name.trim().toLowerCase()}`;
+        formSeq.set(key, f.seq);
+        if (f.category_id != null) formCategoryId.set(key, f.category_id);
       }
     });
 
@@ -35,6 +54,10 @@ const useMenuRank = () => {
       moduleRank: (moduleName) => moduleSeq.get(moduleName.trim().toLowerCase()) ?? Number.MAX_SAFE_INTEGER,
       formRank: (moduleName, formName) =>
         formSeq.get(`${moduleName.trim().toLowerCase()}::${formName.trim().toLowerCase()}`) ?? Number.MAX_SAFE_INTEGER,
+      // Returns the category_id (or null) for a given module+form pair — used by buildNavGroups
+      // to detect whether a module has any categorised forms (which triggers the hub-link mode).
+      categoryOf: (moduleName, formName) =>
+        formCategoryId.get(`${moduleName.trim().toLowerCase()}::${formName.trim().toLowerCase()}`) ?? null,
     };
   }, [moduleRows, formsList]);
 };
@@ -44,7 +67,10 @@ const useMenuRank = () => {
 // than a hardcoded name list. Used to be a hardcoded NAV_GROUPS array shown to every Employee
 // regardless of any Form Master mapping; now an Employee only sees what's actually mapped to
 // them, in the order an admin actually arranged.
-const buildNavGroups = (accessibleForms, { moduleRank, formRank }) =>
+// categoryOf is used solely to set a `hasCategory` flag on each item so the group-level check
+// `items.some(i => i.hasCategory)` can detect hub-link mode — the actual category grouping
+// (sub-headers etc.) is handled by the hub page itself, not in this sidebar.
+const buildNavGroups = (accessibleForms, { moduleRank, formRank, categoryOf }) =>
   Object.entries(accessibleForms ?? {})
     .map(([moduleName, forms]) => ({
       label: moduleName,
@@ -58,7 +84,13 @@ const buildNavGroups = (accessibleForms, { moduleRank, formRank }) =>
             );
             return null;
           }
-          return { label: form.name, icon: cfg.icon, to: cfg.to, exact: cfg.exact };
+          return {
+            label: form.name,
+            icon: cfg.icon,
+            to: cfg.to,
+            exact: cfg.exact,
+            hasCategory: categoryOf(moduleName, form.name) != null,
+          };
         })
         .filter(Boolean)
         .sort((a, b) => formRank(moduleName, a.label) - formRank(moduleName, b.label)),
@@ -113,8 +145,8 @@ const EmployeeSidebar = () => {
   const collapsed = useSelector(selectSidebarCollapsed);
   const { pathname } = useLocation();
   const { accessibleForms } = useAuth();
-  const { moduleRank, formRank } = useMenuRank();
-  const navGroups = useMemo(() => buildNavGroups(accessibleForms, { moduleRank, formRank }), [accessibleForms, moduleRank, formRank]);
+  const { moduleRank, formRank, categoryOf } = useMenuRank();
+  const navGroups = useMemo(() => buildNavGroups(accessibleForms, { moduleRank, formRank, categoryOf }), [accessibleForms, moduleRank, formRank, categoryOf]);
 
   const hasRejectedEntriesTab = useMemo(
     () => navGroups.some((g) => g.items.some((i) => i.to === ROUTES.EMPLOYEE_REJECTED_ENTRIES)),
@@ -187,7 +219,12 @@ const EmployeeSidebar = () => {
 
         <nav className="flex-1 overflow-y-auto overflow-x-hidden py-2 px-2 space-y-2 scrollbar-thin">
           {navGroups.map((group) => {
-            const moduleCollapsed = !expandedModules.has(group.label);
+            const overviewRoute = MODULE_OVERVIEW_ROUTES[group.label.trim().toLowerCase()];
+            const hasCategories = group.items.some((item) => item.hasCategory);
+            // A module with categories and its own hub page collapses to a single module-label
+            // link — browsing by category happens on the hub page (same as admin Sidebar).
+            const onlyModuleLink = hasCategories && !!overviewRoute;
+            const moduleCollapsed = !onlyModuleLink && !expandedModules.has(group.label);
             // Rejected-entries badge is the only one in this nav; surfaced on the header while
             // the module is folded away so a collapsed group can't hide it.
             const groupBadge = group.items.some((i) => i.to === ROUTES.EMPLOYEE_REJECTED_ENTRIES)
@@ -196,32 +233,55 @@ const EmployeeSidebar = () => {
             return (
             <div key={group.label} className="space-y-px">
               {!collapsed && (
-                <button
-                  type="button"
-                  onClick={() => toggleModule(group.label)}
-                  className="flex w-full items-center gap-1 px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/30 whitespace-nowrap hover:text-sidebar-foreground/60 transition-colors"
-                >
-                  {moduleCollapsed
-                    ? <ChevronRight className="h-3 w-3 shrink-0 transition-transform duration-150" />
-                    : <ChevronDown className="h-3 w-3 shrink-0 transition-transform duration-150" />}
-                  <span className="truncate">{group.label}</span>
-                  {moduleCollapsed && groupBadge > 0 && (
-                    <span className="ml-auto shrink-0 rounded-full bg-destructive px-1.5 py-0.5 text-[10px] font-semibold leading-none text-destructive-foreground">
-                      {groupBadge > 99 ? '99+' : groupBadge}
-                    </span>
-                  )}
-                </button>
+                overviewRoute ? (
+                  // Hub-page module — label is a link to the hub, no chevron, no expanded list.
+                  <Link
+                    to={overviewRoute}
+                    className="flex w-full items-center gap-1 px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/30 whitespace-nowrap hover:text-sidebar-foreground/60 transition-colors"
+                  >
+                    <Folder className="h-3 w-3 shrink-0" />
+                    <span className="truncate">{group.label}</span>
+                  </Link>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => toggleModule(group.label)}
+                    className="flex w-full items-center gap-1 px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/30 whitespace-nowrap hover:text-sidebar-foreground/60 transition-colors"
+                  >
+                    {moduleCollapsed
+                      ? <ChevronRight className="h-3 w-3 shrink-0 transition-transform duration-150" />
+                      : <ChevronDown className="h-3 w-3 shrink-0 transition-transform duration-150" />}
+                    <span className="truncate">{group.label}</span>
+                    {moduleCollapsed && groupBadge > 0 && (
+                      <span className="ml-auto shrink-0 rounded-full bg-destructive px-1.5 py-0.5 text-[10px] font-semibold leading-none text-destructive-foreground">
+                        {groupBadge > 99 ? '99+' : groupBadge}
+                      </span>
+                    )}
+                  </button>
+                )
               )}
-              {/* Icon rail has no group headers to fold, so it always lists every item. */}
-              {(collapsed || !moduleCollapsed) && group.items.map((item) => (
-                <EmployeeNavItem
-                  key={item.to}
-                  item={item}
-                  active={isActive(item.to, pathname, item.exact)}
-                  collapsed={collapsed}
-                  badgeCount={item.to === ROUTES.EMPLOYEE_REJECTED_ENTRIES ? rejectedCount : 0}
-                />
-              ))}
+              {/* Hub-link mode: in the icon rail, show only the hub's own icon-link. */}
+              {onlyModuleLink ? (
+                collapsed && (
+                  <EmployeeNavItem
+                    item={{ label: group.label, icon: Folder, to: overviewRoute, exact: true }}
+                    active={isActive(overviewRoute, pathname, true)}
+                    collapsed={collapsed}
+                    badgeCount={0}
+                  />
+                )
+              ) : (
+                /* Icon rail has no group headers to fold, so it always lists every item. */
+                (collapsed || !moduleCollapsed) && group.items.map((item) => (
+                  <EmployeeNavItem
+                    key={item.to}
+                    item={item}
+                    active={isActive(item.to, pathname, item.exact)}
+                    collapsed={collapsed}
+                    badgeCount={item.to === ROUTES.EMPLOYEE_REJECTED_ENTRIES ? rejectedCount : 0}
+                  />
+                ))
+              )}
             </div>
             );
           })}

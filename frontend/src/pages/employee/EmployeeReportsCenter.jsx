@@ -4,19 +4,28 @@ import { Search, Folder, ChevronRight } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useForms } from '@/hooks/useForms';
 import { useFormCategories } from '@/hooks/useFormCategories';
-import { resolveFormRoute } from '@/constants/rbacForms';
+import { resolveFormRoute, FORM_NAMES } from '@/constants/rbacForms';
 import PageHeader from '@/components/common/PageHeader';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/utils/cn';
 
-const REPORTS_MODULE = 'reports';
+// The set of form names that belong to the employee self-service reports section.
+// Used to filter the full GET /forms list down to just the reports this hub should show,
+// regardless of which module_name the Form Master admin assigns them to. Add new employee
+// report form names here as they are seeded in the Form Master.
+const EMPLOYEE_REPORT_FORM_NAMES = new Set([
+  FORM_NAMES.EMPLOYEE_REPORTS,
+  FORM_NAMES.EMPLOYEE_PROJECT_HOURS_REPORT,
+  FORM_NAMES.EMPLOYEE_TIMESHEET_APPROVAL_STATUS_REPORT,
+  FORM_NAMES.EMPLOYEE_WORK_LOG_TIME_REPORT,
+]);
 
-// Landing page for the Reports module — a Zoho-style category browser (folder list on the
-// left, that category's reports on the right) sitting on top of the same underlying data
-// ReportsLayout's sidebar nav and the Form Master screen use: GET /forms (module_name +
-// category_id per row) joined against the current user's own accessible-forms map so a user
-// only ever sees reports they're actually granted, same gating as the sidebar links.
-const ReportsCenter = () => {
+// Landing page for employee-side reports — a category-browser hub (folder list on the left,
+// that category's reports on the right) identical in layout to the admin ReportsCenter.
+// Driven by the same RBAC accessible-forms data + GET /forms category/seq metadata, so an
+// employee only ever sees reports their role is actually mapped to, in the order an admin
+// arranged them via the Form Master seq.
+const EmployeeReportsCenter = () => {
   const navigate = useNavigate();
   const { accessibleForms } = useAuth();
   const { data: formsList } = useForms({ status: 'active' });
@@ -24,37 +33,55 @@ const ReportsCenter = () => {
   const [search, setSearch] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState(null); // null = "All Reports"
 
-  // Granted form IDs, not names — a form_name is not unique across the Form Master, so matching
-  // on it can render two rows for one granted report (see the fuller note in
-  // pages/employee/EmployeeReportsCenter.jsx, which hit exactly that). `status !== false` honours
-  // the per-row flag POST /roles/forms returns.
-  const accessibleReportIds = useMemo(() => {
-    const entry = Object.entries(accessibleForms ?? {}).find(
-      ([moduleName]) => moduleName.trim().toLowerCase() === REPORTS_MODULE
+  // The granted form IDs, not their names. Matching on name looks equivalent but isn't: a
+  // form_name is not unique across the Form Master, so two rows in different modules can share
+  // one (a real case: "Timesheet Approval Status Report" exists as id 61 under Reports AND id 96
+  // under Employee Self-Service). Name matching then rendered BOTH rows for the one report — the
+  // categorised one under its category, the other under a null category — so a hub with 3 granted
+  // reports listed 4. Ids are unique, so one granted report can only ever produce one row.
+  //
+  // `status !== false` honours the flag POST /roles/forms returns per row; the old name-based set
+  // never looked at it, so a disabled mapping still contributed its name and kept the row visible.
+  // EMPLOYEE_REPORT_FORM_NAMES still decides WHICH granted forms count as employee reports (the
+  // module name is deliberately not used for that — see the note on the constant).
+  const accessibleEmployeeReportIds = useMemo(() => {
+    const allForms = Object.values(accessibleForms ?? {}).flat();
+    return new Set(
+      allForms
+        .filter((f) => f?.status !== false && EMPLOYEE_REPORT_FORM_NAMES.has(f?.name))
+        .map((f) => f.id)
     );
-    return new Set((entry?.[1] ?? []).filter((f) => f?.status !== false).map((f) => f.id));
   }, [accessibleForms]);
 
   const categoryLookup = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
 
+  // Filter GET /forms down to just employee report rows the current user can access,
+  // resolve each to its frontend route, and sort by the Form Master seq.
   const reportRows = useMemo(() =>
     (formsList?.data ?? [])
-      .filter((f) => f.module_name?.trim().toLowerCase() === REPORTS_MODULE && accessibleReportIds.has(f.id))
+      .filter((f) => accessibleEmployeeReportIds.has(f.id))
       .map((f) => {
         const cfg = resolveFormRoute(f.form_name);
         if (!cfg) return null;
-        return { id: f.id, name: f.form_name, to: cfg.to, icon: cfg.icon, categoryId: f.category_id ?? null, seq: f.seq ?? 0 };
+        return {
+          id: f.id,
+          name: f.form_name,
+          to: cfg.to,
+          icon: cfg.icon,
+          categoryId: f.category_id ?? null,
+          seq: f.seq ?? 0,
+        };
       })
       .filter(Boolean)
       .sort((a, b) => a.seq - b.seq),
-    [formsList, accessibleReportIds]
+    [formsList, accessibleEmployeeReportIds]
   );
 
+  // Group report rows by category, enriching each bucket with the category's name and seq.
   // Only real Form Master categories get a folder. A report with a null category_id is skipped
   // here rather than collected into an invented "Other Reports" bucket — it stays reachable under
   // "All Reports", which is the unfiltered list, not a category. The folder list therefore mirrors
-  // GET /forms/categories exactly, with nothing in it the API didn't return. Kept in step with
-  // pages/employee/EmployeeReportsCenter.jsx, which mirrors this screen.
+  // GET /forms/categories exactly, with nothing in it the API didn't return.
   const categoryFolders = useMemo(() => {
     const byCategory = new Map();
     reportRows.forEach((r) => {
@@ -73,22 +100,25 @@ const ReportsCenter = () => {
   }, [reportRows, categoryLookup]);
 
   const visibleRows = useMemo(() => {
-    const base = selectedCategoryId == null
-      ? reportRows
-      : categoryFolders.find((c) => c.id === selectedCategoryId)?.items ?? [];
+    const base =
+      selectedCategoryId == null
+        ? reportRows
+        : categoryFolders.find((c) => c.id === selectedCategoryId)?.items ?? [];
     const q = search.trim().toLowerCase();
     return q ? base.filter((r) => r.name.toLowerCase().includes(q)) : base;
   }, [selectedCategoryId, categoryFolders, reportRows, search]);
 
-  const activeLabel = selectedCategoryId == null
-    ? 'All Reports'
-    : categoryFolders.find((c) => c.id === selectedCategoryId)?.name ?? 'Reports';
+  const activeLabel =
+    selectedCategoryId == null
+      ? 'All Reports'
+      : categoryFolders.find((c) => c.id === selectedCategoryId)?.name ?? 'Reports';
 
   return (
     <div className="flex flex-col h-[calc(100vh-8.5rem)]">
       <PageHeader title="Reports Center" description="Browse reports by category" />
 
       <div className="flex flex-1 gap-4 overflow-hidden">
+        {/* Left panel — category folder list */}
         <div className="w-64 shrink-0 flex flex-col rounded-lg border bg-white overflow-hidden">
           <div className="p-3 border-b">
             <div className="relative">
@@ -103,12 +133,15 @@ const ReportsCenter = () => {
           </div>
 
           <div className="flex-1 overflow-y-auto py-2">
+            {/* "All Reports" bucket — always shown at the top */}
             <button
               type="button"
               onClick={() => setSelectedCategoryId(null)}
               className={cn(
                 'flex w-full items-center gap-2 px-3 py-2 text-sm text-left transition-colors',
-                selectedCategoryId == null ? 'bg-primary/10 text-primary font-medium' : 'text-foreground hover:bg-muted'
+                selectedCategoryId == null
+                  ? 'bg-primary/10 text-primary font-medium'
+                  : 'text-foreground hover:bg-muted'
               )}
             >
               <Folder className="h-4 w-4 shrink-0" />
@@ -121,6 +154,7 @@ const ReportsCenter = () => {
                 Report Category
               </p>
             )}
+
             {categoryFolders.map((cat) => (
               <button
                 type="button"
@@ -128,7 +162,9 @@ const ReportsCenter = () => {
                 onClick={() => setSelectedCategoryId(cat.id)}
                 className={cn(
                   'flex w-full items-center gap-2 px-3 py-2 text-sm text-left transition-colors',
-                  selectedCategoryId === cat.id ? 'bg-primary/10 text-primary font-medium' : 'text-foreground hover:bg-muted'
+                  selectedCategoryId === cat.id
+                    ? 'bg-primary/10 text-primary font-medium'
+                    : 'text-foreground hover:bg-muted'
                 )}
               >
                 <Folder className="h-4 w-4 shrink-0" />
@@ -139,6 +175,7 @@ const ReportsCenter = () => {
           </div>
         </div>
 
+        {/* Right panel — report list for the selected category */}
         <div className="flex-1 flex flex-col rounded-lg border bg-white overflow-hidden">
           <div className="flex items-center gap-2 px-5 py-4 border-b">
             <h2 className="text-lg font-semibold">{activeLabel}</h2>
@@ -175,4 +212,4 @@ const ReportsCenter = () => {
   );
 };
 
-export default ReportsCenter;
+export default EmployeeReportsCenter;

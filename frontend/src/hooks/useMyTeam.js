@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueries, useMutation, useQueryClient } from '@tanstack/react-query';
 import { myTeamApi } from '@/api/myTeam.api';
 import { QUERY_KEYS } from '@/constants/queryKeys';
 
@@ -8,6 +8,39 @@ export const useMyTeamEmployees = (params = {}, { enabled = true } = {}) =>
     queryFn: () => myTeamApi.getEmployees(params),
     enabled,
   });
+
+// "All Business Units" has no single X-Company-Id header confirmed to mean "every BU this login
+// can see" — see apiClient's explicitBuScope — so a plain useMyTeamEmployees({}) call there can
+// silently fall back to whichever BU happens to be globally active, or to whatever a header-less
+// call resolves to for this particular role, hiding Employees mapped only under a different BU.
+// Confirmed live even for a nominally "cross-BU" Admin login (an Employee mapped under one
+// specific BU was missing under "All Business Units" but appeared once that BU was picked
+// explicitly), so this is used for ANY login with more than one selectable BU, not only BU-scoped
+// multi-BU ones — see the call site in ManagerTimesheetApproval.jsx for the exact condition. Fans
+// out one GET /my-team/employees call per BU (`units`, from useSelectableBusinessUnits) and merges
+// the results, deduped by id. Each per-BU query shares its cache entry with
+// useMyTeamEmployees({ buId }) above (same query key shape), so picking that same BU from the
+// dropdown elsewhere never re-fetches it.
+export const useMyTeamEmployeesAcrossBus = (units, { enabled = true } = {}) => {
+  const queries = useQueries({
+    queries: units.map((bu) => ({
+      queryKey: [QUERY_KEYS.MY_TEAM_EMPLOYEES, { buId: bu.id }],
+      queryFn: () => myTeamApi.getEmployees({ buId: bu.id }),
+      enabled: enabled && !!bu.id,
+    })),
+  });
+
+  const seen = new Map();
+  queries.forEach((q) => (q.data ?? []).forEach((emp) => {
+    if (!seen.has(emp.id)) seen.set(emp.id, emp);
+  }));
+
+  return {
+    data: Array.from(seen.values()),
+    isLoading: queries.some((q) => q.isLoading),
+    isError: queries.some((q) => q.isError),
+  };
+};
 
 export const useMyTeamServicePos = () =>
   useQuery({
@@ -54,20 +87,43 @@ export const useRevokeMyTeamServicePo = () => {
   });
 };
 
-export const useMyTeamApprovalSummary = (params) =>
-  useQuery({
-    queryKey: QUERY_KEYS.MY_TEAM_APPROVAL_SUMMARY(params),
-    queryFn: () => myTeamApi.getApprovalSummary(params),
+// Manager Timesheet Approval's default landing table — every mapped Employee's approval-summary
+// buckets in one combined list, tagged with which Employee each row belongs to, so the Manager
+// never has to open an Employee individually just to see whether they have anything pending.
+// There's no "every Employee at once" backend endpoint, so this fans out one request per Employee
+// (useQueries) and flattens the results client-side. Each request is capped to the summary
+// endpoint's normal first page (100 buckets) rather than looping through every page — doing that
+// here would mean up to 50 sequential requests PER Employee just to render the default page. 100
+// daily/monthly buckets for one Employee within a single filtered range comfortably covers real
+// use; an Employee past that cap can still be drilled into via the Employee filter above the table.
+export const useMyTeamAllEmployeesApprovalSummary = (employees, filterParams) => {
+  const queries = useQueries({
+    queries: employees.map((emp) => {
+      const params = { ...filterParams, employee_id: emp.id, page: 1, limit: 100 };
+      return {
+        queryKey: QUERY_KEYS.MY_TEAM_APPROVAL_SUMMARY(params),
+        queryFn: () => myTeamApi.getApprovalSummary(params),
+        enabled: !!emp.id,
+      };
+    }),
   });
 
-// Imperative (not on-render) full-set fetch behind the approval table's "select all": the header
-// checkbox must select every pending bucket in the current filter, not just the page in view, so
-// it pulls the whole filtered set on demand rather than reading the paginated query's cache.
-// Modelled as a mutation purely for the imperative mutateAsync + isPending pair — it only reads.
-export const useFetchAllApprovalBuckets = () =>
-  useMutation({
-    mutationFn: myTeamApi.getAllApprovalSummary,
+  const rows = queries.flatMap((q, i) => {
+    const emp = employees[i];
+    return (q.data?.data ?? []).map((row) => ({
+      ...row,
+      employeeId: emp.id,
+      employeeName: emp.full_name || emp.name || `Employee #${emp.id}`,
+    }));
   });
+
+  return {
+    rows,
+    isLoading: queries.some((q) => q.isLoading),
+    isError: queries.some((q) => q.isError),
+    error: queries.find((q) => q.isError)?.error,
+  };
+};
 
 export const useApproveMyTeamTimesheets = () => {
   const qc = useQueryClient();

@@ -12,9 +12,15 @@ import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
 import StatusBadge from '@/components/common/StatusBadge';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
+import FilterToggleButton from '@/components/common/FilterToggleButton';
+import FilterPanel from '@/components/common/FilterPanel';
+import EntityFilter from '@/components/common/EntityFilter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { cn } from '@/utils/cn';
+
+const ALL = 'all';
 
 const columnHelper = createColumnHelper();
 
@@ -44,19 +50,38 @@ const CompanyList = () => {
   const [search, setSearch] = useState('');
   const [sorting, setSorting] = useState([]);
   const [statusTarget, setStatusTarget] = useState(null); // { company, nextStatus }
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState(ALL);
+  // Only meaningful when there's no entityIdParam — a BU list already scoped to one Entity (via
+  // the Entity list's "Manage BUs" action) has nothing left to narrow by Entity.
+  const [entityFilter, setEntityFilter] = useState(ALL);
 
   const debouncedSearch = useDebounce(search, 400);
+
+  const effectiveEntityId = entityIdParam || (entityFilter !== ALL ? entityFilter : null);
 
   const params = {
     page,
     limit,
-    ...(entityIdParam && { entity_id: entityIdParam }),
+    ...(effectiveEntityId && { entity_id: effectiveEntityId }),
+    // Always sent, 'all' included: GET /companies defaults `status` to 'active' when the param is
+    // absent, so omitting it on the All tab silently hid every inactive BU. 'all' is an accepted
+    // value there and means "no status filter".
+    status: statusFilter,
     ...(debouncedSearch && { search: debouncedSearch }),
     ...(sorting[0] && { sort_by: sorting[0].id, sort_order: sorting[0].desc ? 'DESC' : 'ASC' }),
   };
 
   const { data, isPending } = useCompanies(params);
   const updateMutation = useUpdateCompany(statusTarget?.company?.id);
+
+  const activeFilterCount = [!entityIdParam && entityFilter !== ALL, statusFilter !== ALL].filter(Boolean).length;
+
+  const clearFilters = () => {
+    setEntityFilter(ALL);
+    setStatusFilter(ALL);
+    setPage(1);
+  };
 
   const companies = data?.data ?? [];
   const meta = data?.meta ?? {};
@@ -166,6 +191,11 @@ const CompanyList = () => {
                 onChange={(e) => { setSearch(e.target.value); setPage(1); }}
               />
             </div>
+            <FilterToggleButton
+              isOpen={filtersOpen}
+              onToggle={() => setFiltersOpen((prev) => !prev)}
+              activeCount={activeFilterCount}
+            />
             {canManage && (
               <Button
                 size="sm"
@@ -178,6 +208,36 @@ const CompanyList = () => {
           </div>
         }
       />
+
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[200px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
+        {!entityIdParam && (
+          <EntityFilter value={entityFilter} onChange={(v) => { setEntityFilter(v ?? ALL); setPage(1); }} />
+        )}
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Status</Label>
+          <div className="flex items-center rounded-md border overflow-hidden h-9 text-sm bg-white">
+            {[
+              { label: 'All', value: ALL },
+              { label: 'Active', value: 'active' },
+              { label: 'Inactive', value: 'inactive' },
+            ].map(({ label, value }) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => { setStatusFilter(value); setPage(1); }}
+                className={cn(
+                  'flex-1 px-3 h-full font-medium text-center transition-colors border-r last:border-r-0',
+                  statusFilter === value
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-background text-muted-foreground hover:bg-muted'
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </FilterPanel>
 
       <DataTable
         columns={columns}

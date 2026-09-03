@@ -58,9 +58,15 @@ const DayCellInput = ({ value, onCommit, disabled, cap, isDirty }) => {
 // it (`hasChildren`) — a Service PO or Parent node can carry directly-logged hours *and* have
 // children logging their own hours at the same time. `editableDays` caps editing at today,
 // same as My Work Log's date picker.
+// `isRolledUp` marks a COLLAPSED parent, whose `hoursByDay`/`total` the table has replaced with
+// its whole subtree's hours (own + every descendant) so the row isn't showing a bare 0 while the
+// rows holding those hours sit hidden beneath it. Such a row renders read-only — the figure is an
+// aggregate, not one editable quantity, and typing into it would write the subtree's sum onto the
+// parent's own hours on top of the children still carrying them. Expanding restores the row to
+// its own editable hours. `subtreeCount` only feeds the explanatory tooltip.
 const SummaryRow = ({
   label, depth = 0, hasChildren, isExpanded, onToggleExpand,
-  days, hoursByDay, total, editable, cellEdits, editableDays, onCellChange,
+  days, hoursByDay, total, editable, isRolledUp, subtreeCount, cellEdits, editableDays, onCellChange,
 }) => (
   // A table row can't literally become a Card, but shading nested rows and accenting an
   // expandable header's left edge gives the same "card accordion" grouping cue My Work Log
@@ -99,8 +105,13 @@ const SummaryRow = ({
         return (
           <TableCell
             key={day}
-            className="px-1 text-center text-xs tabular-nums"
+            className={cn(
+              'px-1 text-center text-xs tabular-nums',
+              // Muted so an aggregate never reads as a value you could have typed there.
+              isRolledUp && 'italic text-muted-foreground'
+            )}
             style={{ width: DAY_COL_WIDTH, minWidth: DAY_COL_WIDTH, maxWidth: DAY_COL_WIDTH }}
+            title={isRolledUp ? `Total of ${subtreeCount} sub-item${subtreeCount === 1 ? '' : 's'} — expand to edit` : undefined}
           >
             {formatHourMinuteValue(hoursByDay?.[day])}
           </TableCell>
@@ -126,6 +137,7 @@ const SummaryRow = ({
     <TableCell
       className="summary-col-pinned sticky right-0 text-center font-semibold tabular-nums"
       style={{ width: TOTAL_COL_WIDTH, minWidth: TOTAL_COL_WIDTH, maxWidth: TOTAL_COL_WIDTH }}
+      title={isRolledUp ? `Total of ${subtreeCount} sub-item${subtreeCount === 1 ? '' : 's'} — expand to edit` : undefined}
     >
       {formatHourMinuteValue(total)}
     </TableCell>

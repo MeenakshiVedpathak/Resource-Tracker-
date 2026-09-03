@@ -794,7 +794,7 @@ const Dashboard = () => {
               value={bottomMonthYear}
               onChange={(v) => { if (v) { setBottomMonthYear(v); setBillablePage(1); } }}
               clearable={false}
-              className="w-44 h-9 text-sm"
+              className="w-44 h-9 rounded-xl text-sm"
             />
           )}
           {/* View mode toggle */}

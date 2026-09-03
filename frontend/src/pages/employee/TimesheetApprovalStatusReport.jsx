@@ -1,19 +1,21 @@
 import { useMemo, useState } from 'react';
 import dayjs from 'dayjs';
 import { AnimatePresence, motion } from 'framer-motion';
-import { AlertCircle, ChevronDown, ChevronRight } from 'lucide-react';
+import { AlertCircle, BellRing, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
 import { useTimesheetApprovalStatusReport } from '@/hooks/useTimesheetApprovalStatusReport';
 import { useMyTeamEmployees } from '@/hooks/useMyTeam';
+import { useNotification } from '@/hooks/useNotification';
+import { employeeWorkLogApi } from '@/api/employeeWorkLog.api';
 import { extractApiError } from '@/services/apiClient';
 import { formatHours, formatDate, formatMonthYear } from '@/utils/formatters';
 import { cn } from '@/utils/cn';
+import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Checkbox } from '@/components/ui/checkbox';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { SearchableSelect } from '@/components/ui/searchable-select';
-import { ROUTES } from '@/constants/routes';
 import PageHeader from '@/components/common/PageHeader';
 import EmptyState from '@/components/common/EmptyState';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
@@ -43,22 +45,22 @@ const normalizeHierarchyNode = (node) => ({
   children: (node.children ?? []).map(normalizeHierarchyNode),
 });
 
-const normalizeServicePO = (po) => ({
+const normalizeServicePO = (po, projectName) => ({
   key: `po-${po.service_po_id}`,
   name: po.service_po_name,
+  projectName,
   hours: po.po_total_hours,
   status: po.approval_status,
   children: (po.children ?? []).map(normalizeHierarchyNode),
 });
 
+// Flatten: promote every Service PO to the top level, carrying its parent project name as a
+// subtitle. This removes the Project grouping row (which never has hours or a status anyway)
+// and puts the actionable rows — PDCC, ttyt, etc. — directly at depth 0.
 const normalizeProjects = (projects = []) =>
-  projects.map((project) => ({
-    key: `project-${project.project_id}`,
-    name: project.project_name,
-    hours: undefined,
-    status: undefined,
-    children: (project.service_pos ?? []).map(normalizeServicePO),
-  }));
+  projects.flatMap((project) =>
+    (project.service_pos ?? []).map((po) => normalizeServicePO(po, project.project_name))
+  );
 
 const TreeRow = ({ node, depth, expandedKeys, onToggle }) => {
   const hasChildren = node.children.length > 0;
@@ -90,7 +92,12 @@ const TreeRow = ({ node, depth, expandedKeys, onToggle }) => {
             <span className="w-3.5 shrink-0" />
           )}
           {depth > 0 && <span className="text-muted-foreground">└</span>}
-          <span className={cn('truncate', depth > 0 && 'text-sm')}>{node.name}</span>
+          <span className="flex flex-col min-w-0">
+            <span className={cn('truncate', depth > 0 && 'text-sm')}>{node.name}</span>
+            {depth === 0 && node.projectName && (
+              <span className="text-xs font-normal text-muted-foreground truncate">{node.projectName}</span>
+            )}
+          </span>
         </span>
         <span className={cn('text-right tabular-nums', depth === 0 ? 'font-semibold' : 'text-sm')}>
           {node.hours !== undefined ? formatHours(node.hours) : '—'}
@@ -126,6 +133,9 @@ const bucketKey = (bucket) => `bucket-${bucket.employee_id}-${bucket.date ?? `${
 const periodLabel = (bucket) =>
   bucket.log_type === 'monthly' ? formatMonthYear(bucket.month, bucket.year) : formatDate(bucket.date);
 
+// Deliberately carries no "Remind Manager" control of its own: the reminder endpoint takes no
+// date or bucket, so every per-bucket button would have fired the exact same tenant-wide "all my
+// pending logs" request. One button in the page header says that honestly — see handleRemind.
 const BucketCard = ({ bucket, showEmployeeName, expandedKeys, onToggle }) => {
   const projects = useMemo(() => normalizeProjects(bucket.projects), [bucket.projects]);
 
@@ -147,7 +157,7 @@ const BucketCard = ({ bucket, showEmployeeName, expandedKeys, onToggle }) => {
       ) : (
         <>
           <div className={cn('grid gap-2 bg-muted/20 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground', GRID_COLS)}>
-            <span>Project / Service PO / Hierarchy</span>
+            <span>Service PO / Hierarchy</span>
             <span className="text-right">Hours</span>
             <span className="text-right">Status</span>
           </div>
@@ -161,14 +171,20 @@ const BucketCard = ({ bucket, showEmployeeName, expandedKeys, onToggle }) => {
 };
 
 const TimesheetApprovalStatusReport = () => {
+  const { success, error: showError } = useNotification();
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [reportType, setReportType] = useState('daily');
+  // Default to Monthly mode showing the current month — an employee arriving here to check
+  // approval status or send a reminder sees the whole month's buckets immediately.
+  const [reportType, setReportType] = useState('monthly');
   const [date, setDate] = useState(dayjs().format('YYYY-MM-DD'));
   const [monthYear, setMonthYear] = useState({ month: dayjs().month() + 1, year: dayjs().year() });
   const [range, setRange] = useState(null);
   const [aggregateMonthly, setAggregateMonthly] = useState(false);
   const [employeeId, setEmployeeId] = useState('all');
   const [expandedKeys, setExpandedKeys] = useState(() => new Set());
+  // Guards the single reminder button: disabled from the click until the response lands, so a
+  // double-click can't fire two POSTs (the backend rate-limits as a backstop).
+  const [isReminding, setIsReminding] = useState(false);
 
   const { data: myTeam = [] } = useMyTeamEmployees();
   const employeeOptions = useMemo(
@@ -221,19 +237,72 @@ const TimesheetApprovalStatusReport = () => {
     setAggregateMonthly(false);
   };
 
+  // The "Remind Manager" action always concerns the VIEWER's own pending logs — the endpoint
+  // resolves the employee from the token, not from a param — so it's hidden while a Manager has
+  // drilled into one team member, where a button labelled "Remind Manager" would read as "nudge
+  // this person's approver" and in fact do something else entirely.
+  //
+  // Not a permission gate: `employeeId === 'all'` is true for (a) every non-manager Employee,
+  // who only ever sees their own data, and (b) a Manager on the default "My Whole Team" filter,
+  // which surfaces their own buckets too. So anyone who can see their own timesheet can use it.
+  const showRemindButton = employeeId === 'all';
+
+  // Purely a notification: no query invalidation and no refetch, so nothing on screen shifts and
+  // the reminder can't be mistaken for a status change. The request carries no body — the backend
+  // resolves both the employee and their primary manager from the bearer token, and the period /
+  // pending count in the response are its own computation over ALL of the caller's pending logs,
+  // not whatever period this report is currently filtered to.
+  const handleRemind = async () => {
+    if (isReminding) return;
+    setIsReminding(true);
+    try {
+      const res = await employeeWorkLogApi.remindApproval();
+      success(res?.data?.message ?? res?.message ?? 'Reminder sent to the primary manager.');
+    } catch (err) {
+      // Show the exact API message verbatim — these strings are written to be user-facing.
+      const msg =
+        err?.response?.data?.message ??
+        extractApiError(err) ??
+        'Unable to send reminder. Please try again.';
+      showError(msg);
+    } finally {
+      setIsReminding(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <PageHeader
         title="Timesheet Approval Status Report"
-        backTo={ROUTES.REPORTS}
-        backLabel="Back to Report"
         description="Hours logged and their approval status, broken down by Project → Service PO → Parent → Child. Read-only — use My Team to approve."
         actions={
-          <FilterToggleButton
-            isOpen={filtersOpen}
-            onToggle={() => setFiltersOpen((prev) => !prev)}
-            activeCount={activeFilterCount}
-          />
+          <div className="flex items-center gap-2">
+            {showRemindButton && (
+              <Button
+                size="sm"
+                className="relative h-9 gap-1.5 bg-amber-500 text-white shadow-md shadow-amber-500/30 hover:bg-amber-600"
+                onClick={handleRemind}
+                disabled={isReminding}
+                title="Email your primary manager about your work logs awaiting approval"
+              >
+                {isReminding ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <span className="relative">
+                    <BellRing className="h-4 w-4" />
+                    <span className="absolute -right-0.5 -top-0.5 h-2 w-2 animate-ping rounded-full bg-white" />
+                    <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-white" />
+                  </span>
+                )}
+                {isReminding ? 'Sending…' : 'Remind Manager'}
+              </Button>
+            )}
+            <FilterToggleButton
+              isOpen={filtersOpen}
+              onToggle={() => setFiltersOpen((prev) => !prev)}
+              activeCount={activeFilterCount}
+            />
+          </div>
         }
       />
 
@@ -261,12 +330,11 @@ const TimesheetApprovalStatusReport = () => {
         {reportType === 'daily' && (
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs">Date</Label>
-            <Input
-              type="date"
+            <DatePicker
               value={date}
               max={dayjs().format('YYYY-MM-DD')}
-              onChange={(e) => setDate(e.target.value)}
-              className="h-9 w-full text-sm bg-white"
+              onChange={setDate}
+              className="w-full bg-white text-sm"
             />
           </div>
         )}

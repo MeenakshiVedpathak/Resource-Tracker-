@@ -1,12 +1,15 @@
+import { useState } from 'react';
 import { useDispatch } from 'react-redux';
 import { toggleSidebar } from '@/store/slices/uiSlice';
 import { useTheme } from '@/contexts/ThemeContext';
 import UserMenu from './UserMenu';
-import { Menu, Sun, Moon } from 'lucide-react';
+import DemoVideoModal from '@/components/common/DemoVideoModal';
+import { Menu, Sun, Moon, PlayCircle } from 'lucide-react';
 
 const Topbar = ({ title }) => {
   const dispatch = useDispatch();
   const { isDark, toggleTheme } = useTheme();
+  const [demoOpen, setDemoOpen] = useState(false);
 
   return (
     <header className="shrink-0 sticky top-0 z-30 border-b bg-background/80 backdrop-blur-md">
@@ -34,6 +37,18 @@ const Topbar = ({ title }) => {
         {/* Right controls */}
         <div className="ml-auto flex items-center gap-2 shrink-0">
 
+          {/* Watch Demo button */}
+          <button
+            onClick={() => setDemoOpen(true)}
+            className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors border border-border/60"
+            aria-label="Watch demo"
+          >
+            <PlayCircle className="h-3.5 w-3.5 shrink-0" />
+            <span className="hidden sm:inline">Watch Demo</span>
+          </button>
+
+          <div className="h-5 w-px bg-border shrink-0" />
+
           {/* Theme toggle — pill style (hidden for now) */}
           {/* <button
             onClick={toggleTheme}
@@ -51,6 +66,8 @@ const Topbar = ({ title }) => {
           <UserMenu />
         </div>
       </div>
+
+      <DemoVideoModal open={demoOpen} onOpenChange={setDemoOpen} />
     </header>
   );
 };

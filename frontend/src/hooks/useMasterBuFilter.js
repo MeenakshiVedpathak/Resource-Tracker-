@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useSelectableBusinessUnits } from '@/hooks/useSelectableBusinessUnits';
+import { useSelectableEntities } from '@/hooks/useSelectableEntities';
 import { ALL_BUS } from '@/components/common/BusinessUnitFilter';
+import { ALL_ENTITIES } from '@/components/common/EntityFilter';
 
 // The Master screens' own Business Unit filter state, paired with components/common/
 // BusinessUnitFilter (the same control the Reports suite uses).
@@ -18,12 +20,28 @@ import { ALL_BUS } from '@/components/common/BusinessUnitFilter';
 // any other screen.
 export const useMasterBuFilter = ({ enabled = true } = {}) => {
   const { canFilter } = useSelectableBusinessUnits();
+  const { canFilter: canFilterEntity } = useSelectableEntities();
 
   const showBuFilter = enabled && canFilter;
+  const showEntityFilter = enabled && canFilterEntity;
 
+  const [entityId, setEntityIdState] = useState(ALL_ENTITIES);
   const [buId, setBuId] = useState(ALL_BUS);
 
+  // Picking a different Entity resets the BU choice — whatever was selected may not even belong
+  // to the new Entity, and BusinessUnitFilter's own options are about to change out from under it.
+  const setEntityId = (id) => {
+    setEntityIdState(id);
+    setBuId(ALL_BUS);
+  };
+
   return {
+    entityId,
+    setEntityId,
+    showEntityFilter,
+    // For the screen's active-filter badge: only counts once the user has narrowed to one Entity.
+    isEntityFiltered: showEntityFilter && entityId !== ALL_ENTITIES,
+    resetEntityId: () => setEntityIdState(ALL_ENTITIES),
     buId,
     setBuId,
     showBuFilter,
@@ -35,6 +53,8 @@ export const useMasterBuFilter = ({ enabled = true } = {}) => {
     // pulls it out and turns it into the request's BU scope (X-Company-Id) rather than a
     // query-string field — see reports.api.js's getReport, where this convention started.
     // Omitted entirely when there's no filter, which leaves the global header behaviour untouched.
+    // Entity is never sent this way — it only ever narrows which BUs BusinessUnitFilter offers,
+    // and the eventual `buId` (or its resolved X-Company-Id) is what the request actually scopes by.
     buParams: showBuFilter ? { buId } : {},
   };
 };

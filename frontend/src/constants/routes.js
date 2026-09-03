@@ -21,6 +21,9 @@ export const ROUTES = {
   EMPLOYEE_TIME_ENTRY: '/employee/time-entry',
   EMPLOYEE_MONTHLY_SUMMARY: '/employee/monthly-summary',
   EMPLOYEE_REPORTS: '/employee/reports',
+  // Hub page (category-browser, same layout as admin ReportsCenter) — the individual report
+  // routes above remain their destinations; this is just the landing/navigation layer.
+  EMPLOYEE_REPORTS_CENTER: '/employee/reports-center',
   EMPLOYEE_PROJECT_HOURS_REPORT: '/employee/project-hours-report',
   EMPLOYEE_TIMESHEET_APPROVAL_STATUS_REPORT: '/employee/timesheet-approval-status-report',
   EMPLOYEE_WORK_LOG_TIME_REPORT: '/employee/work-log-time-report',
@@ -150,6 +153,7 @@ export const ROUTES = {
   REPORT_RESOURCE_UTILIZATION_TREND: '/reports/resource-utilization-trend',
   REPORT_SERVICE_PO_HOURS_BUDGET: '/reports/service-po-hours-budget',
   REPORT_EMPLOYEE_WORK_LOG_HOURS_SUMMARY: '/reports/employee-work-log-hours-summary',
+  REPORT_EMPLOYEE_WORK_LOG_COMPLIANCE: '/reports/employee-work-log-compliance',
 
   // Team Mapping — Service PO Admin self-service (§7)
   TEAM_MAPPINGS: '/team-mappings',

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useSyncEmployeeWorkLogs, useConfirmImport } from '@/hooks/useTimesheets';
 import { useNotification } from '@/hooks/useNotification';
@@ -10,33 +10,60 @@ import {
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { SearchableSelect } from '@/components/ui/searchable-select';
+import { MonthYearPicker } from '@/components/ui/month-year-picker';
 
-const currentDate = new Date();
+const now = new Date();
+const currentMonthYear = { month: now.getMonth() + 1, year: now.getFullYear() };
 
-// Same two-stage flow as the Excel upload (pick a period -> preview -> confirm), but the
-// preview comes from the employee Work Log drafts for that month instead of a file. Reuses
-// ImportPreviewPanel and the existing confirm endpoint — both sources feed the same import
-// pipeline on the backend.
-const SyncWorkLogsDialog = ({ open, onOpenChange, buId = null, buName = null }) => {
-  const [month, setMonth] = useState(String(currentDate.getMonth() + 1));
-  const [year, setYear] = useState(String(currentDate.getFullYear()));
+// One dialog, one step of choices (Entity -> Business Unit -> Month/Year), then Sync -> Preview ->
+// Confirm — previously Entity/BU lived in a separate dialog TimesheetList opened first, which read
+// as two popups for one action. `activeBusinessUnits` is the login's own active BU mappings (each
+// possibly carrying entity_id/entity_name); Entity only renders when they actually span more than
+// one, same "nothing to narrow" rule as every other Entity/BU filter pair in the app.
+const SyncWorkLogsDialog = ({ open, onOpenChange, activeBusinessUnits = [] }) => {
+  const [entityId, setEntityId] = useState('all');
+  const [buId, setBuId] = useState('');
+  const [monthYear, setMonthYear] = useState(currentMonthYear);
   const [preview, setPreview] = useState(null);
 
   const { success, error: showError } = useNotification();
   const syncMutation = useSyncEmployeeWorkLogs();
   const confirmMutation = useConfirmImport();
 
-  const resetAndClose = (nextOpen) => {
-    if (!nextOpen) {
-      setPreview(null);
-      setMonth(String(currentDate.getMonth() + 1));
-      setYear(String(currentDate.getFullYear()));
-    }
-    onOpenChange(nextOpen);
-  };
+  const buEntityOptions = useMemo(() => {
+    const byId = new Map();
+    activeBusinessUnits.forEach((bu) => {
+      const id = bu.entity_id ?? bu.entityId;
+      const name = bu.entity_name ?? bu.entityName;
+      if (id != null && name && !byId.has(id)) byId.set(id, { id, name });
+    });
+    return Array.from(byId.values());
+  }, [activeBusinessUnits]);
+
+  const buOptionsForEntity = (id) =>
+    id && id !== 'all'
+      ? activeBusinessUnits.filter((bu) => String(bu.entity_id ?? bu.entityId) === String(id))
+      : activeBusinessUnits;
+
+  // Re-seed on every open (not just mount) — a single-BU login gets it pre-selected, a multi-BU
+  // one starts blank so they must choose, and a stale choice from the last time this dialog was
+  // open never survives into a new one.
+  useEffect(() => {
+    if (!open) return;
+    setEntityId('all');
+    setBuId(activeBusinessUnits.length === 1 ? String(activeBusinessUnits[0].id) : '');
+    setMonthYear(currentMonthYear);
+    setPreview(null);
+  }, [open, activeBusinessUnits]);
+
+  const buName = activeBusinessUnits.find((bu) => String(bu.id) === buId)?.name ?? null;
+  const needsBuChoice = activeBusinessUnits.length > 1;
+  const canSync = !!buId && !!monthYear;
+
+  const resetAndClose = (nextOpen) => onOpenChange(nextOpen);
 
   const handleSync = () => {
-    syncMutation.mutate({ month, year, buId }, {
+    syncMutation.mutate({ month: monthYear.month, year: monthYear.year, buId: Number(buId) }, {
       onSuccess: (result) => {
         setPreview({
           importId: result?.importId,
@@ -53,7 +80,7 @@ const SyncWorkLogsDialog = ({ open, onOpenChange, buId = null, buName = null }) 
   };
 
   const handleConfirm = () => {
-    confirmMutation.mutate({ importId: preview.importId, buId }, {
+    confirmMutation.mutate({ importId: preview.importId, buId: Number(buId) }, {
       onSuccess: (res) => {
         const inserted = res?.data?.insertedRows ?? res?.insertedRows ?? preview.validCount;
         success(`${inserted} row(s) synced to the Timesheet.`);
@@ -65,7 +92,7 @@ const SyncWorkLogsDialog = ({ open, onOpenChange, buId = null, buName = null }) 
 
   return (
     <Dialog open={open} onOpenChange={resetAndClose}>
-      <DialogContent className={preview ? 'sm:max-w-3xl' : 'sm:max-w-[400px]'}>
+      <DialogContent className={preview ? 'sm:max-w-3xl' : 'sm:max-w-[420px]'}>
         <DialogHeader>
           <DialogTitle>Sync Employee Work Logs</DialogTitle>
           <DialogDescription>
@@ -78,40 +105,42 @@ const SyncWorkLogsDialog = ({ open, onOpenChange, buId = null, buName = null }) 
         {!preview ? (
           <>
             <div className="grid gap-4 py-4">
+              {needsBuChoice && buEntityOptions.length > 1 && (
+                <div className="grid gap-2">
+                  <Label>Entity</Label>
+                  <SearchableSelect
+                    options={[{ label: 'All Entities', value: 'all' }, ...buEntityOptions.map((e) => ({ label: e.name, value: String(e.id) }))]}
+                    value={entityId}
+                    onValueChange={(v) => { setEntityId(v ?? 'all'); setBuId(''); }}
+                    placeholder="All Entities"
+                    searchPlaceholder="Search entity..."
+                    showSearch={buEntityOptions.length > 6}
+                  />
+                </div>
+              )}
+              {needsBuChoice && (
+                <div className="grid gap-2">
+                  <Label>Business Unit</Label>
+                  <SearchableSelect
+                    options={buOptionsForEntity(entityId).map((bu) => ({ label: bu.name, value: String(bu.id) }))}
+                    value={buId}
+                    onValueChange={setBuId}
+                    placeholder="Select a Business Unit"
+                    searchPlaceholder="Search business unit..."
+                    showSearch={activeBusinessUnits.length > 6}
+                  />
+                </div>
+              )}
               <div className="grid gap-2">
-                <Label>Month</Label>
-                <SearchableSelect
-                  showSearch={false}
-                  options={Array.from({ length: 12 }, (_, i) => {
-                    const m = i + 1;
-                    return { label: new Date(0, m - 1).toLocaleString('default', { month: 'long' }), value: String(m) };
-                  })}
-                  value={month}
-                  onValueChange={setMonth}
-                  placeholder="Select month"
-                  searchPlaceholder="Search month..."
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label>Year</Label>
-                <SearchableSelect
-                  showSearch={false}
-                  options={Array.from({ length: 5 }, (_, i) => {
-                    const y = currentDate.getFullYear() - 2 + i;
-                    return { label: String(y), value: String(y) };
-                  })}
-                  value={year}
-                  onValueChange={setYear}
-                  placeholder="Select year"
-                  searchPlaceholder="Search year..."
-                />
+                <Label>Month &amp; Year</Label>
+                <MonthYearPicker value={monthYear} onChange={setMonthYear} clearable={false} className="w-full" />
               </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => resetAndClose(false)} disabled={syncMutation.isPending}>
                 Cancel
               </Button>
-              <Button onClick={handleSync} disabled={syncMutation.isPending}>
+              <Button onClick={handleSync} disabled={!canSync || syncMutation.isPending}>
                 {syncMutation.isPending ? (
                   <span className="flex items-center gap-2">
                     <Loader2 className="h-4 w-4 animate-spin" /> Syncing…

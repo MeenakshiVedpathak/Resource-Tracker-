@@ -26,27 +26,59 @@ import { canScopeAcrossBus } from '@/services/apiClient';
 // two BUs to choose between. An Admin on a single-BU tenant, or a BU Admin mapped to exactly one
 // BU, has nothing to narrow — the control would be a no-op, and for the single-BU login their one
 // BU already IS "all of theirs" (see explicitBuScope, which resolves 'all' to that BU's header).
-export const useSelectableBusinessUnits = () => {
+//
+// `entityId` (optional) narrows the returned `units` to one Entity's BUs — the Entity filter that
+// sits above this one in every Filters panel (see components/common/EntityFilter). `canFilter` is
+// deliberately computed off the UNNARROWED set: picking an Entity whose BUs happen to number
+// exactly one must not make the BU filter disappear out from under the user, only shrink its
+// options down to that one BU.
+export const useSelectableBusinessUnits = (entityId) => {
   const { businessUnits } = useAuth();
   const isCrossBu = canScopeAcrossBus();
 
-  // Only fetched for the logins that need it. Long staleTime because this mounts on every
-  // report and master a cross-BU login opens, and the BU master changes rarely.
+  // Fetched for every login now (not just cross-BU ones): it's the BU list itself for a cross-BU
+  // login, and — just as importantly — the ONLY source that reliably carries entity_id per BU for
+  // a BU-scoped one. The login's own `businessUnits[]` mapping (GET /employees/:id/business-units)
+  // does not include entity info at all, confirmed live: a multi-BU login's Entity dropdown came
+  // back empty everywhere that tried to read bu.entity_id directly off it. GET /companies is
+  // already scoped server-side to the caller (see companies.api.js) and confirmed readable
+  // read-only by the BU-scoped senior tier too (see CompanyList.jsx), so this degrades safely for
+  // any login it isn't authorized for: the query just errors silently and entityId stays null,
+  // same as today.
+  // Long staleTime because this mounts on every report and master a cross-BU login opens, and the
+  // BU master changes rarely.
   const { data: companiesData } = useCompanies(
     { status: 'active', limit: 200 },
-    { enabled: isCrossBu, staleTime: 1000 * 60 * 10 }
+    { staleTime: 1000 * 60 * 10 }
   );
 
-  // Normalized to { id, name } — the BU master calls it `company_name`, the login's own mapping
-  // calls it `name`.
-  const units = useMemo(() => {
-    if (isCrossBu) {
-      return (companiesData?.data ?? []).map((c) => ({ id: c.id, name: c.company_name }));
-    }
-    return (businessUnits ?? []).map((bu) => ({ id: bu.id, name: bu.name }));
-  }, [isCrossBu, companiesData, businessUnits]);
+  const entityByBuId = useMemo(() => {
+    const map = new Map();
+    (companiesData?.data ?? []).forEach((c) => {
+      map.set(String(c.id), c.entity_id ?? c.entity?.id ?? null);
+    });
+    return map;
+  }, [companiesData]);
 
-  return { units, isCrossBu, canFilter: units.length > 1 };
+  // Normalized to { id, name, entityId } — the BU master calls it `company_name`, the login's own
+  // mapping calls it `name`.
+  const allUnits = useMemo(() => {
+    if (isCrossBu) {
+      return (companiesData?.data ?? []).map((c) => ({ id: c.id, name: c.company_name, entityId: c.entity_id ?? c.entity?.id ?? null }));
+    }
+    return (businessUnits ?? []).map((bu) => ({
+      id: bu.id,
+      name: bu.name,
+      entityId: bu.entity_id ?? bu.entityId ?? entityByBuId.get(String(bu.id)) ?? null,
+    }));
+  }, [isCrossBu, companiesData, businessUnits, entityByBuId]);
+
+  const units = useMemo(() => {
+    if (entityId == null || entityId === 'all') return allUnits;
+    return allUnits.filter((u) => String(u.entityId) === String(entityId));
+  }, [allUnits, entityId]);
+
+  return { units, isCrossBu, canFilter: allUnits.length > 1 };
 };
 
 export default useSelectableBusinessUnits;

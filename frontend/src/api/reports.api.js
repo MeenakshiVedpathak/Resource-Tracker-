@@ -88,4 +88,36 @@ export const reportsApi = {
         ...explicitBuScope(company_id),
       })
       .then((r) => r.data),
+
+  getEmployeeWorkLogCompliance: (params) =>
+    getReport('/reports/employee-work-log-compliance', params),
+
+  // Backend hard-caps limit at 100 for this endpoint. Fetch all pages at 100/page and
+  // merge records — same pattern as fetchAllResourceAllocationRows.
+  fetchAllEmployeeWorkLogComplianceRows: async (filterParams) => {
+    const PAGE_LIMIT = 100;
+    const MAX_PAGES = 200; // safety cap — 20,000 records, well beyond any realistic dataset
+    const { page: _p, limit: _l, ...baseParams } = filterParams ?? {};
+    const first = await reportsApi.getEmployeeWorkLogCompliance({ ...baseParams, page: 1, limit: PAGE_LIMIT });
+    const total = first?.meta?.total ?? 0;
+    const totalPages = Math.min(MAX_PAGES, Math.max(1, Math.ceil(total / PAGE_LIMIT)));
+    const records = Array.isArray(first?.data?.records) ? [...first.data.records] : [];
+
+    for (let p = 2; p <= totalPages; p++) {
+      const res = await reportsApi.getEmployeeWorkLogCompliance({ ...baseParams, page: p, limit: PAGE_LIMIT });
+      if (Array.isArray(res?.data?.records)) records.push(...res.data.records);
+    }
+
+    // Return the same shape the component already destructures from data?.data?.records
+    return { ...first, data: { ...first?.data, records } };
+  },
+
+  sendWorkLogComplianceReminder: (body) =>
+    apiClient.post('/reports/employee-work-log-compliance/remind', body).then((r) => r.data),
+
+  // Bulk remind — two modes:
+  // • remindAll: true + optional company_id → backend resolves all below-threshold employees itself
+  // • employeeIds: [...] + period              → remind a specific selection
+  sendWorkLogComplianceBulkReminder: (body) =>
+    apiClient.post('/reports/employee-work-log-compliance/remind-bulk', body).then((r) => r.data),
 };

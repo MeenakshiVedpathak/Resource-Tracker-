@@ -112,6 +112,15 @@ const ProjectGroup = ({
   };
   const groupTotal = nodeRows.reduce((sum, r) => sum + cellValueOf(r), 0);
 
+  // Own hours plus every descendant's. The folder header above already shows this for the whole
+  // Service PO; a COLLAPSED node inside it needs the same, or it reads 0 while the rows holding
+  // its hours sit hidden underneath (a Parent/PO can carry its own hours *and* have a breakdown
+  // at the same time, so its own figure is genuinely 0 in that case).
+  const subtreeValueOf = (r) =>
+    nodeRows
+      .filter((n) => n.rowKey === r.rowKey || (n.ancestorKeys ?? []).includes(r.rowKey))
+      .reduce((sum, n) => sum + cellValueOf(n), 0);
+
   return (
     <Card className="overflow-hidden">
       <button
@@ -130,11 +139,15 @@ const ProjectGroup = ({
       {isOpen && (
         <div className="border-t">
           {visibleRows.map((row, i) => {
-            const value = cellValueOf(row);
             const isDirty = edits?.[row.rowKey]?.[day] !== undefined;
             const hasChildren = (childrenByParent.get(row.rowKey)?.length ?? 0) > 0;
             const isRowCollapsed = collapsedKeys.has(row.rowKey);
-            const canEditRow = row.editable && isPastOrToday;
+            // A collapsed parent stands in for its subtree, shown read-only: the aggregate is not
+            // one editable quantity, and typing into it would write the subtree's sum onto the
+            // parent's own hours on top of the children already carrying them. Expand to edit.
+            const isRolledUp = hasChildren && isRowCollapsed;
+            const value = isRolledUp ? subtreeValueOf(row) : cellValueOf(row);
+            const canEditRow = row.editable && isPastOrToday && !isRolledUp;
 
             return (
               <div key={row.rowKey} className={cn(i > 0 && 'border-t border-dashed')}>
@@ -158,7 +171,12 @@ const ProjectGroup = ({
                     {canEditRow ? (
                       <HourStepper value={value} onChange={(v) => onCellChange(row.rowKey, day, String(v))} hoursCap={hoursCap} />
                     ) : (
-                      <span className="text-xs font-medium tabular-nums text-muted-foreground">{formatHoursMinutes(value)}</span>
+                      <span
+                        className={cn('text-xs font-medium tabular-nums text-muted-foreground', isRolledUp && 'italic')}
+                        title={isRolledUp ? 'Total of this task and everything under it — expand to edit' : undefined}
+                      >
+                        {formatHoursMinutes(value)}
+                      </span>
                     )}
                   </div>
                 </div>

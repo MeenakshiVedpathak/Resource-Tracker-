@@ -17,6 +17,7 @@ import PageHeader from '@/components/common/PageHeader';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
 import BusinessUnitFilter, { ALL_BUS } from '@/components/common/BusinessUnitFilter';
+import EntityFilter, { ALL_ENTITIES } from '@/components/common/EntityFilter';
 import EmptyState from '@/components/common/EmptyState';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -81,6 +82,7 @@ const BudgetVsBilled = () => {
   const [serviceTypeId, setServiceTypeId] = useState('all');
   const [poId, setPoId] = useState('all');
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [entityId, setEntityId] = useState(ALL_ENTITIES);
   const [buId, setBuId] = useState(ALL_BUS);
 
   const [page, setPage] = useState(1);
@@ -154,6 +156,7 @@ const BudgetVsBilled = () => {
   const sheetTitle = sheetKind === 'over' ? 'Over Budget Service POs' : 'Under Budget Service POs';
 
   const activeFilterCount = [
+    entityId !== ALL_ENTITIES,
     buId !== ALL_BUS,
     clientId !== 'all',
     serviceTypeId !== 'all',
@@ -161,6 +164,7 @@ const BudgetVsBilled = () => {
   ].filter(Boolean).length;
 
   const clearFilters = () => {
+    setEntityId(ALL_ENTITIES);
     setBuId(ALL_BUS);
     setClientId('all');
     setServiceTypeId('all');
@@ -322,7 +326,9 @@ const BudgetVsBilled = () => {
       />
 
       <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[460px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
-        <BusinessUnitFilter value={buId} onChange={setBuId} />
+        <EntityFilter value={entityId} onChange={(v) => { setEntityId(v); setBuId(ALL_BUS); }} />
+
+        <BusinessUnitFilter value={buId} entityId={entityId} onChange={setBuId} />
 
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Period <span className="text-destructive">*</span></Label>

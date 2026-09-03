@@ -17,11 +17,12 @@ export const useTimesheet = (id) =>
     enabled: !!id,
   });
 
-export const useTimesheetHistory = (params) =>
+export const useTimesheetHistory = (params, options = {}) =>
   useQuery({
     queryKey: QUERY_KEYS.TIMESHEET_IMPORT_HISTORY(params),
     queryFn: () => timesheetsApi.getHistory(params),
     placeholderData: (prev) => prev,
+    ...options,
   });
 
 export const useCreateTimesheet = () => {

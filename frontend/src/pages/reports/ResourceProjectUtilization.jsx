@@ -16,6 +16,7 @@ import EmptyState from '@/components/common/EmptyState';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
 import BusinessUnitFilter, { ALL_BUS } from '@/components/common/BusinessUnitFilter';
+import EntityFilter, { ALL_ENTITIES } from '@/components/common/EntityFilter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -154,6 +155,7 @@ const ResourceProjectUtilization = () => {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [entityId, setEntityId] = useState(ALL_ENTITIES);
   const [buId, setBuId] = useState(ALL_BUS);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState(null);
   const [exporting, setExporting] = useState(false);
@@ -300,6 +302,7 @@ const ResourceProjectUtilization = () => {
   const selectedRow = rows.find((r) => r.employeeId === selectedEmployeeId) ?? null;
 
   const activeFilterCount = [
+    entityId !== ALL_ENTITIES ? 1 : 0,
     buId !== ALL_BUS ? 1 : 0,
     employeeIds.length > 0 ? 1 : 0,
     clientIds.length > 0 ? 1 : 0,
@@ -309,6 +312,7 @@ const ResourceProjectUtilization = () => {
   ].reduce((a, b) => a + b, 0);
 
   const clearFilters = () => {
+    setEntityId(ALL_ENTITIES);
     setBuId(ALL_BUS);
     setEmployeeIds([]);
     setClientIds([]);
@@ -373,7 +377,9 @@ const ResourceProjectUtilization = () => {
 
       {/* Collapsible filter panel */}
       <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[560px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
-          <BusinessUnitFilter value={buId} onChange={setBuId} />
+          <EntityFilter value={entityId} onChange={(v) => { setEntityId(v); setBuId(ALL_BUS); }} />
+
+          <BusinessUnitFilter value={buId} entityId={entityId} onChange={setBuId} />
 
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs font-medium">Month &amp; Year <span className="text-destructive">*</span></Label>

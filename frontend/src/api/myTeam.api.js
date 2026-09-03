@@ -97,11 +97,6 @@ const mockRevokeServicePo = async (employeeId, servicePOId) => {
   return { success: true, message: 'Service PO grant revoked.' };
 };
 
-// Largest page size the approval-summary endpoint is asked for in one go, plus a hard page cap so
-// a backend that ignores `page` can never spin this into an unbounded loop.
-const APPROVAL_SUMMARY_MAX_LIMIT = 100;
-const APPROVAL_SUMMARY_MAX_PAGES = 50;
-
 const fetchApprovalSummaryPage = (params) =>
   apiClient.get('/my-team/timesheets/approval-summary', { params }).then((r) => r.data);
 
@@ -125,27 +120,6 @@ export const myTeamApi = {
   // mirrors the Employee's is_timesheet_approval_required (false there means status is always
   // 'approved'). Never reads `drafts` — an Employee's own unsynced entries are not approval-eligible.
   getApprovalSummary: (params) => fetchApprovalSummaryPage(params),
-  // Every bucket for the given Employee + filters, ignoring the table's display page size — the
-  // backing set for "select all", which must cover the whole filtered range and not just the
-  // rendered page. One request at APPROVAL_SUMMARY_MAX_LIMIT already covers any normal range
-  // (daily buckets cap at ~31 per month, monthly at 12 per year), but a multi-month backlog can
-  // exceed that, so keep paging until the reported total is in hand rather than silently
-  // truncating. Returns a flat, pagination-ordered bucket array (no meta) — the caller derives
-  // which display page a bucket falls on from its index.
-  getAllApprovalSummary: async (params) => {
-    const buckets = [];
-    for (let page = 1; page <= APPROVAL_SUMMARY_MAX_PAGES; page += 1) {
-      // Sequential by necessity — the page count isn't known until the first response lands.
-      // eslint-disable-next-line no-await-in-loop
-      const res = await fetchApprovalSummaryPage({ ...params, page, limit: APPROVAL_SUMMARY_MAX_LIMIT });
-      const chunk = res?.data ?? [];
-      buckets.push(...chunk);
-      const total = Number(res?.meta?.total);
-      // Also stops on a short page, which covers a backend that reports no/!finite total.
-      if (chunk.length < APPROVAL_SUMMARY_MAX_LIMIT || !Number.isFinite(total) || buckets.length >= total) break;
-    }
-    return buckets;
-  },
   // Single endpoint for single-row, bulk-daily, and monthly approval alike — pass exactly one of
   // `dates` (array) or `months` (array of {month,year}); a single-element array covers the
   // "approve this one date/month" case, so no separate single-approve call is needed.

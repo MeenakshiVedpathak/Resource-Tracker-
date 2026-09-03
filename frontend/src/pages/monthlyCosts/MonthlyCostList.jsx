@@ -17,6 +17,7 @@ import ConfirmDialog from '@/components/common/ConfirmDialog';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
 import BusinessUnitFilter from '@/components/common/BusinessUnitFilter';
+import EntityFilter from '@/components/common/EntityFilter';
 import { useMasterBuFilter } from '@/hooks/useMasterBuFilter';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -71,7 +72,10 @@ const MonthlyCostList = () => {
 
   const canManage = useCanWrite();
 
-  const { buId, setBuId, showBuFilter, isBuFiltered, resetBuId, buParams } = useMasterBuFilter();
+  const {
+    entityId, setEntityId, showEntityFilter, isEntityFiltered, resetEntityId,
+    buId, setBuId, showBuFilter, isBuFiltered, resetBuId, buParams,
+  } = useMasterBuFilter();
 
   const params = {
     page,
@@ -95,10 +99,11 @@ const MonthlyCostList = () => {
 
   const clearSelection = () => setSelectedKeys([]);
 
-  const activeFilterCount = (monthYearFilter ? 1 : 0) + (isBuFiltered ? 1 : 0);
+  const activeFilterCount = (monthYearFilter ? 1 : 0) + (isEntityFiltered ? 1 : 0) + (isBuFiltered ? 1 : 0);
 
   const clearFilters = () => {
     setMonthYearFilter(null);
+    resetEntityId();
     resetBuId();
     setPage(1);
     clearSelection();
@@ -106,6 +111,12 @@ const MonthlyCostList = () => {
 
   // Narrowing the BU changes which periods (and which rows inside them) are on screen, so a
   // selection made against the previous scope must not survive into a bulk delete.
+  const handleEntityChange = (v) => {
+    setEntityId(v);
+    setPage(1);
+    clearSelection();
+  };
+
   const handleBuChange = (v) => {
     setBuId(v);
     setPage(1);
@@ -286,8 +297,11 @@ const MonthlyCostList = () => {
         onClear={clearFilters}
         showClear={activeFilterCount > 0}
       >
+        {showEntityFilter && (
+          <EntityFilter value={entityId} onChange={handleEntityChange} />
+        )}
         {showBuFilter && (
-          <BusinessUnitFilter value={buId} onChange={handleBuChange} />
+          <BusinessUnitFilter value={buId} entityId={entityId} onChange={handleBuChange} />
         )}
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Month &amp; Year</Label>

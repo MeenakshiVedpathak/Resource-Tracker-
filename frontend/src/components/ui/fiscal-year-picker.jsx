@@ -45,7 +45,7 @@ export function FiscalYearPicker({ value, onChange, className }) {
             className
           )}
         >
-          <CalendarDays className="h-3.5 w-3.5 shrink-0" />
+          <CalendarDays className="h-4 w-4 shrink-0" />
           {value != null ? fyLabel(value) : 'Select FY'}
         </Button>
       </PopoverTrigger>

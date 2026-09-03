@@ -6,7 +6,7 @@ import { z } from 'zod';
 import dayjs from 'dayjs';
 import { useQueryClient } from '@tanstack/react-query';
 import {
-  Save, CalendarDays, AlertCircle, BarChart3, Loader2,
+  Save, CalendarDays, AlertCircle, BarChart3, Loader2, Trash2,
 } from 'lucide-react';
 import {
   Form, FormField, FormItem, FormLabel, FormControl, FormMessage,
@@ -19,11 +19,12 @@ import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/componen
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import ConfirmDialog from '@/components/common/ConfirmDialog';
 import ProjectSelect from '@/components/employee/ProjectSelect';
 import TimeSegmentsInput, { BLANK_SEGMENT, AddTimeBlockButton } from '@/components/employee/TimeSegmentsInput';
 import { employeeWorkLogApi } from '@/api/employeeWorkLog.api';
 import { useEmployeeMappedProjects } from '@/hooks/useEmployeeProjects';
-import { useEmployeeEntries, useSaveWorkLogDay } from '@/hooks/useEmployeeWorkLog';
+import { useEmployeeEntries, useSaveWorkLogDay, useDeleteWorkLogEntry } from '@/hooks/useEmployeeWorkLog';
 import { useNotification } from '@/hooks/useNotification';
 import { ROUTES } from '@/constants/routes';
 import { extractApiError, extractFieldErrors } from '@/services/apiClient';
@@ -41,10 +42,10 @@ const taskSchema = z.object({
   timesheet_date: z.string().min(1, 'Date is required'),
 });
 
-// Earliest time of day a block may start or end on this screen — the workday opens at 9 AM, so
+// Earliest time of day a block may start or end on this screen — the workday opens at 6 AM, so
 // the pickers grey out everything before it instead of letting a time be chosen and then rejected.
 // Only bounds what can be PICKED here; already-saved entries outside the window still display.
-const WORKDAY_START_TIME = '09:00';
+const WORKDAY_START_TIME = '06:00';
 
 const blankDefaults = (date) => ({
   service_po_id: '',
@@ -105,7 +106,10 @@ const EmployeeTimeEntry = () => {
   const qc = useQueryClient();
   const { data: projects = [] } = useEmployeeMappedProjects();
   const saveDayMutation = useSaveWorkLogDay();
+  const deleteEntryMutation = useDeleteWorkLogEntry();
   const [segments, setSegments] = useState([BLANK_SEGMENT]);
+  // The Entries panel group awaiting delete confirmation, or null.
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const [formError, setFormError] = useState(null);
 
@@ -216,10 +220,16 @@ const EmployeeTimeEntry = () => {
       const displayName = project?.name ?? 'Project';
 
       if (!groups.has(key)) {
-        groups.set(key, { key, label, displayName, servicePoId, moduleNodeId, taskNodeId, hours: 0, blocks: [] });
+        // `rowIds` is what the panel's delete acts on: DELETE /employee-timesheets/entries/:id
+        // takes a ROW id, and one heading can be backed by more than one row (the backend is free
+        // to split a (project, node) pair across rows), so they're collected rather than assumed
+        // to be a single id. Block ids can't be used — they identify segments, which have no
+        // endpoint of their own (removing one block is an edit + save, not a delete).
+        groups.set(key, { key, label, displayName, servicePoId, moduleNodeId, taskNodeId, hours: 0, blocks: [], rowIds: [] });
       }
       const group = groups.get(key);
       group.hours += Number(row.hours ?? 0);
+      if (row.id != null) group.rowIds.push(row.id);
 
       const segments = row.timeEntries ?? row.time_entries ?? [];
       if (segments.length) {
@@ -381,6 +391,33 @@ const EmployeeTimeEntry = () => {
     form.setValue('module_node_id', group.moduleNodeId);
     form.setValue('task_node_id', group.taskNodeId);
     setFormError(null);
+  };
+
+  // Deleting saved time is its own action, not a side effect of emptying the editor: clearing a
+  // block only wipes the form, and the form then can't be saved empty (validateSegments requires
+  // at least one), so without this there was no way off the screen for an entry that shouldn't
+  // exist. Uses DELETE /employee-timesheets/entries/:id rather than a whole-day replace with the
+  // row omitted — same end state, but it can't take neighbouring rows down with it if the
+  // pre-read is stale.
+  const handleConfirmDelete = async () => {
+    const group = deleteTarget;
+    if (!group) return;
+    try {
+      await Promise.all(group.rowIds.map((id) => deleteEntryMutation.mutateAsync(id)));
+      // If the editor is still holding what was just deleted, the next save would re-create it
+      // (this form writes as a whole-day replace for the pair). Drop the blocks and release the
+      // prefill guard so the now-empty selection re-reads instead of standing on stale rows.
+      if (group.key === `${selectedServicePOId}|${selectedHierarchyNodeId}`) {
+        setSegments([BLANK_SEGMENT]);
+        setFormError(null);
+        prefilledKeyRef.current = null;
+      }
+      success('Time entry deleted.');
+    } catch (err) {
+      showError(extractApiError(err));
+    } finally {
+      setDeleteTarget(null);
+    }
   };
 
   return (
@@ -616,26 +653,40 @@ const EmployeeTimeEntry = () => {
                 <>
                   {savedGroups.map((group) => (
                     <div key={group.key} className="space-y-2">
-                      <button
-                        type="button"
-                        onClick={() => handleEditGroup(group)}
-                        title="Edit this entry"
-                        className="group/entry -mx-1 flex w-full items-baseline justify-between gap-2 rounded-md px-1 py-1 text-left transition-colors hover:bg-muted/60"
-                      >
-                        <span className="min-w-0 truncate text-sm font-semibold transition-colors group-hover/entry:text-primary">
-                          {group.label.length
-                            ? group.label.map((part, i) => (
-                                <span key={part + i}>
-                                  {i > 0 && <span className="mx-1 font-normal text-muted-foreground">&gt;</span>}
-                                  {part}
-                                </span>
-                              ))
-                            : group.displayName}
-                        </span>
-                        <span className="shrink-0 text-sm font-semibold tabular-nums">
-                          {formatHoursMinutes(group.hours)}
-                        </span>
-                      </button>
+                      {/* Edit and delete sit side by side as siblings — the heading is itself a
+                          button, and a button can't be nested inside another. */}
+                      <div className="-mx-1 flex items-start gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleEditGroup(group)}
+                          title="Edit this entry"
+                          className="group/entry flex min-w-0 flex-1 items-baseline justify-between gap-2 rounded-md px-1 py-1 text-left transition-colors hover:bg-muted/60"
+                        >
+                          <span className="min-w-0 truncate text-sm font-semibold transition-colors group-hover/entry:text-primary">
+                            {group.label.length
+                              ? group.label.map((part, i) => (
+                                  <span key={part + i}>
+                                    {i > 0 && <span className="mx-1 font-normal text-muted-foreground">&gt;</span>}
+                                    {part}
+                                  </span>
+                                ))
+                              : group.displayName}
+                          </span>
+                          <span className="shrink-0 text-sm font-semibold tabular-nums">
+                            {formatHoursMinutes(group.hours)}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeleteTarget(group)}
+                          disabled={deleteEntryMutation.isPending || isSaving}
+                          title="Delete this entry"
+                          aria-label={`Delete the entry for ${group.label.length ? group.label.join(' > ') : group.displayName}`}
+                          className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-destructive transition-colors hover:bg-destructive/10 disabled:pointer-events-none disabled:opacity-40"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
 
                       {group.blocks.map((block) => (
                         <div key={block.id} className="space-y-0.5 text-xs">
@@ -676,6 +727,19 @@ const EmployeeTimeEntry = () => {
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title="Delete this time entry?"
+        description={deleteTarget
+          ? `${formatHoursMinutes(deleteTarget.hours)} logged against ${deleteTarget.label.length ? deleteTarget.label.join(' > ') : deleteTarget.displayName} on ${dayjs(selectedDate).format('DD MMM YYYY')} will be removed. This can't be undone.`
+          : ''}
+        confirmLabel="Delete"
+        variant="destructive"
+        onConfirm={handleConfirmDelete}
+        isLoading={deleteEntryMutation.isPending}
+      />
     </div>
   );
 };

@@ -22,10 +22,17 @@ export const ALL_BUS = 'all';
 const BusinessUnitFilter = ({
   value,
   onChange,
+  // Optional — the value of an EntityFilter rendered above this one in the same Filters panel.
+  // Narrows the options to that Entity's BUs; leave unset on a page with no EntityFilter.
+  entityId,
   label = 'Business Unit',
   className = 'h-9 w-full text-sm bg-white',
+  // Pages that restyle their filter labels (e.g. the uppercase micro-labels on Client Wise
+  // Analytics) pass the same class here, so this cell's label doesn't read as the odd one out in
+  // a row it shares. Omitted everywhere else, which keeps the plain text-xs label.
+  labelClassName = 'text-xs',
 }) => {
-  const { units, canFilter } = useSelectableBusinessUnits();
+  const { units, canFilter } = useSelectableBusinessUnits(entityId);
 
   if (!canFilter) return null;
 
@@ -36,7 +43,7 @@ const BusinessUnitFilter = ({
 
   return (
     <div className="flex flex-col gap-1.5">
-      <Label className="text-xs">{label}</Label>
+      <Label className={labelClassName}>{label}</Label>
       <SearchableSelect
         options={options}
         value={value}

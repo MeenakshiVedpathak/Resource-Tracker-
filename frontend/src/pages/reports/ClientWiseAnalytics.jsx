@@ -14,14 +14,20 @@ import PageHeader from '@/components/common/PageHeader';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
 import BusinessUnitFilter, { ALL_BUS } from '@/components/common/BusinessUnitFilter';
+import EntityFilter, { ALL_ENTITIES } from '@/components/common/EntityFilter';
 import EmptyState from '@/components/common/EmptyState';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/utils/cn';
+
+// Filter labels read as uppercase micro-labels, echoing the data table's own column headers so
+// the panel and the table below it look like one surface.
+const FILTER_LABEL = 'text-[11px] font-semibold uppercase tracking-wider text-muted-foreground';
 
 const columnHelper = createColumnHelper();
 
@@ -80,6 +86,7 @@ const ClientWiseAnalytics = () => {
 
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [buId, setBuId] = useState(ALL_BUS);
+  const [entityId, setEntityId] = useState(ALL_ENTITIES);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [sortBy, setSortBy] = useState(null);
@@ -131,6 +138,7 @@ const ClientWiseAnalytics = () => {
   const meta = data?.meta ?? {};
 
   const activeFilterCount = [
+    entityId !== ALL_ENTITIES,
     buId !== ALL_BUS,
     employeeId !== 'all',
     clientId !== 'all',
@@ -139,6 +147,7 @@ const ClientWiseAnalytics = () => {
   ].filter(Boolean).length;
 
   const clearFilters = () => {
+    setEntityId(ALL_ENTITIES);
     setBuId(ALL_BUS);
     setEmployeeId('all');
     setClientId('all');
@@ -248,53 +257,64 @@ const ClientWiseAnalytics = () => {
         }
       />
 
-      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[460px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
-        <BusinessUnitFilter value={buId} onChange={setBuId} />
+      <FilterPanel
+        isOpen={filtersOpen}
+        maxHeightClass="max-h-[460px]"
+        gridClassName="items-end gap-x-4 gap-y-5 rounded-xl border-slate-200/80 bg-slate-50/70 p-5 shadow-sm"
+        onClear={clearFilters}
+        showClear={activeFilterCount > 0}
+      >
+        <EntityFilter
+          value={entityId}
+          onChange={(v) => { setEntityId(v); setBuId(ALL_BUS); }}
+          labelClassName={FILTER_LABEL}
+        />
 
-        {/* Spans 2 of the 4 columns so it shares row 1 with Business Unit and Employee rather
-            than taking a whole row to itself. The mode toggle sits in the control row beside
-            the picker, matching the plain label + h-9 control of every neighbouring cell. */}
-        <div className="col-span-2 flex flex-col gap-1.5">
-          <Label className="text-xs">Period <span className="text-destructive">*</span></Label>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex h-9 shrink-0 items-center gap-0.5 rounded-lg border bg-muted p-1">
-              {[
-                { value: 'month', label: 'Month' },
-                { value: 'range', label: 'Date Range' },
-              ].map(({ value, label }) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => handlePeriodModeChange(value)}
-                  className={`flex h-full items-center rounded-md px-3 text-xs font-semibold transition-all duration-150 whitespace-nowrap ${
-                    periodMode === value ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            {periodMode === 'month' ? (
-              <MonthYearPicker
-                value={monthYear}
-                onChange={(val) => { setMonthYear(val); setPage(1); }}
-                placeholder="Select month"
-                clearable={false}
-                className="w-full flex-1 sm:w-auto sm:min-w-[10rem]"
-              />
-            ) : (
-              <DateRangePicker
-                value={dateRange}
-                onChange={(val) => { setDateRange(val); setPage(1); }}
-                placeholder="Select date range"
-                className="w-full flex-1 sm:w-auto sm:min-w-[14rem]"
-              />
-            )}
-          </div>
+        <BusinessUnitFilter value={buId} entityId={entityId} onChange={setBuId} labelClassName={FILTER_LABEL} />
+
+        {/* Period mode and its picker take one grid cell each, rather than sharing a single
+            col-span-2 cell: a picker stretched across two columns dwarfed every neighbouring
+            control, and split this way all seven filters sit on the same column rhythm. */}
+        <div className="flex flex-col gap-1.5">
+          <Label className={FILTER_LABEL}>Period</Label>
+          <Tabs value={periodMode} onValueChange={handlePeriodModeChange}>
+            <TabsList className="grid w-full grid-cols-2 border border-input bg-slate-100">
+              <TabsTrigger value="month" className="text-xs font-semibold data-[state=active]:bg-white">
+                Month
+              </TabsTrigger>
+              <TabsTrigger value="range" className="text-xs font-semibold data-[state=active]:bg-white">
+                Date Range
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+
+        {/* The required marker belongs on the value, not the mode toggle above — the toggle
+            always holds one of its two values, so it is the picker that can be left unset. */}
+        <div className="flex flex-col gap-1.5">
+          <Label className={FILTER_LABEL}>
+            {periodMode === 'month' ? 'Month & Year' : 'Date Range'} <span className="text-destructive">*</span>
+          </Label>
+          {periodMode === 'month' ? (
+            <MonthYearPicker
+              value={monthYear}
+              onChange={(val) => { setMonthYear(val); setPage(1); }}
+              placeholder="Select month"
+              clearable={false}
+              className="w-full"
+            />
+          ) : (
+            <DateRangePicker
+              value={dateRange}
+              onChange={(val) => { setDateRange(val); setPage(1); }}
+              placeholder="Select date range"
+              className="w-full"
+            />
+          )}
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">Employee</Label>
+          <Label className={FILTER_LABEL}>Employee</Label>
           <SearchableSelect
             options={[
               { label: 'All Employees', value: 'all' },
@@ -309,7 +329,7 @@ const ClientWiseAnalytics = () => {
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">Client</Label>
+          <Label className={FILTER_LABEL}>Client</Label>
           <SearchableSelect
             options={[
               { label: 'All Clients', value: 'all' },
@@ -324,7 +344,7 @@ const ClientWiseAnalytics = () => {
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">Service Type</Label>
+          <Label className={FILTER_LABEL}>Service Type</Label>
           <SearchableSelect
             options={[
               { label: 'All Service Types', value: 'all' },
@@ -339,7 +359,7 @@ const ClientWiseAnalytics = () => {
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">Project (Service PO)</Label>
+          <Label className={FILTER_LABEL}>Project (Service PO)</Label>
           <SearchableSelect
             options={[
               { label: 'All Projects', value: 'all' },
