@@ -5,7 +5,7 @@ import { useIsMutating } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus, Pencil, UserCog, Search, Download, Upload, CheckCircle2, AlertCircle, FileDown, FileText, Printer, FileSpreadsheet, ChevronDown } from 'lucide-react';
+import { Plus, Pencil, UserCog, Search, Download, Upload, CheckCircle2, AlertCircle, FileDown, FileText, Printer, FileSpreadsheet, ChevronDown, MoreVertical, ChevronLeft, ChevronRight } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -14,6 +14,7 @@ import { useEmployeeServicePOMappingOptions, useSaveEmployeeServicePOMapping } f
 import { useActiveServicePOs } from '@/hooks/useServicePOs';
 import { useRoles } from '@/hooks/useRoles';
 import { useCompanies } from '@/hooks/useCompanies';
+import { useMasterBuFilter } from '@/hooks/useMasterBuFilter';
 import { employeesApi } from '@/api/employees.api';
 import { useCanWrite, useCanManageEmployeeRecords } from '@/hooks/usePermissions';
 import { useAuth } from '@/hooks/useAuth';
@@ -22,13 +23,17 @@ import { useNotification } from '@/hooks/useNotification';
 import { useDebounce } from '@/hooks/useDebounce';
 import { extractApiError } from '@/services/apiClient';
 import { buildPath, ROUTES } from '@/constants/routes';
-import { formatDate } from '@/utils/formatters';
+import { formatDate, getInitials } from '@/utils/formatters';
 import { cn } from '@/utils/cn';
 import DataTable from '@/components/common/DataTable';
+import BusinessUnitFilter from '@/components/common/BusinessUnitFilter';
 import PageHeader from '@/components/common/PageHeader';
 import StatusBadge from '@/components/common/StatusBadge';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
+import SearchInput from '@/components/common/SearchInput';
+import SegmentedToggle from '@/components/common/SegmentedToggle';
+import EmptyState from '@/components/common/EmptyState';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
@@ -56,6 +61,8 @@ import {
 } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const columnHelper = createColumnHelper();
 
@@ -195,7 +202,7 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
 
   return (
     <Dialog open={!!employee} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl flex max-h-[90vh] flex-col">
+      <DialogContent className="max-w-2xl md:max-w-3xl flex max-h-[90vh] flex-col">
         <DialogHeader className="shrink-0">
           <DialogTitle>Map Roles &amp; Business Units</DialogTitle>
           <DialogDescription>Assign roles and business units for {employee?.full_name}.</DialogDescription>
@@ -203,8 +210,12 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
         {/* min-h-0 is what lets this flex child actually shrink and scroll instead of
             stretching the dialog past the viewport. */}
         <div className="flex-1 min-h-0 space-y-4 overflow-y-auto px-1 -mx-1">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-1.5">
+        {/* Stays single-column through tablet-portrait widths (sm/640px was too early — it forced
+            two cramped columns before there was room, wrapping role/BU names onto a second line
+            and desyncing the two tables' row heights) and only splits into two once md/768px
+            actually has the width to spare. */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-1.5 min-w-0">
             <Label className="text-xs">Roles</Label>
             <Table containerClassName="border rounded-md max-h-[240px]">
                 <TableHeader>
@@ -223,13 +234,15 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
                           onCheckedChange={() => toggleRole(r.id)}
                         />
                       </TableCell>
-                      <TableCell className="text-sm">{r.role_name}</TableCell>
+                      <TableCell>
+                        <TruncatedCell value={r.role_name} maxWidth="220px" />
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
             </Table>
           </div>
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 min-w-0">
             <Label className="text-xs">Business Units</Label>
             <Table containerClassName="border rounded-md max-h-[240px]">
                 <TableHeader>
@@ -244,7 +257,9 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
                       <TableCell>
                         <Checkbox checked={selectedBuIds.includes(bu.id)} onCheckedChange={() => toggleBu(bu.id)} />
                       </TableCell>
-                      <TableCell className="text-sm">{bu.company_name}</TableCell>
+                      <TableCell>
+                        <TruncatedCell value={bu.company_name} maxWidth="220px" />
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -313,11 +328,15 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
                         <TableCell>
                           <Checkbox checked={selectedPoIds.includes(po.id)} onCheckedChange={() => togglePo(po.id)} />
                         </TableCell>
-                        <TableCell className="text-sm">
-                          {po.service_po_name}
-                          {po.service_po_code ? ` (${po.service_po_code})` : ''}
+                        <TableCell>
+                          <TruncatedCell
+                            value={po.service_po_code ? `${po.service_po_name} (${po.service_po_code})` : po.service_po_name}
+                            maxWidth="260px"
+                          />
                         </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{po.client?.client_name ?? '—'}</TableCell>
+                        <TableCell>
+                          <TruncatedCell value={po.client?.client_name} maxWidth="180px" className="text-muted-foreground" />
+                        </TableCell>
                       </TableRow>
                     ))
                   )}
@@ -369,7 +388,7 @@ const EmployeeList = () => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [roleFilter, setRoleFilter] = useState('all');
-  const [buFilter, setBuFilter] = useState('all');
+  const { buId: buFilter, setBuId: setBuFilter, showBuFilter, isBuFiltered, resetBuId } = useMasterBuFilter();
   const [mappingTarget, setMappingTarget] = useState(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
@@ -382,7 +401,7 @@ const EmployeeList = () => {
     limit,
     status: statusFilter,
     ...(roleFilter !== 'all' && { role_id: roleFilter }),
-    ...(buFilter !== 'all' && { business_unit_id: buFilter }),
+    ...(isBuFiltered && { business_unit_id: buFilter }),
     ...(debouncedSearch && debouncedSearch.length >= 3 && { search: debouncedSearch }),
     ...(sorting[0] && { sortBy: sorting[0].id, sortOrder: sorting[0].desc ? 'desc' : 'asc' }),
   };
@@ -420,23 +439,15 @@ const EmployeeList = () => {
   // EMPLOYEE_NEW / EMPLOYEE_EDIT.
   const canManageEmployees = useCanManageEmployeeRecords();
 
-  // Same list already loaded for the mapping dialog's Business Units table — no extra request.
-  // Only offered as a filter when there's an actual choice to make: the backend scopes this list
-  // to the caller, so a single-BU login would otherwise get a dropdown with one option, and a
-  // BU-scoped session is already limited to that BU anyway. A multi-BU login (Admin, or a BU Head
-  // mapped to several) is exactly who needs it.
-  const buFilterOptions = companiesData?.data ?? [];
-  const showBuFilter = buFilterOptions.length > 1;
-
   const activeFilterCount =
     (statusFilter !== 'all' ? 1 : 0)
     + (roleFilter !== 'all' ? 1 : 0)
-    + (buFilter !== 'all' ? 1 : 0);
+    + (isBuFiltered ? 1 : 0);
 
   const clearFilters = () => {
     setStatusFilter('all');
     setRoleFilter('all');
-    setBuFilter('all');
+    resetBuId();
     setPage(1);
   };
 
@@ -494,6 +505,21 @@ const EmployeeList = () => {
       header: 'Designation',
       size: 180,
       cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="160px" />,
+    }),
+    columnHelper.accessor('payroll_entity', {
+      header: 'Payroll Entity',
+      size: 160,
+      cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="140px" />,
+    }),
+    columnHelper.accessor('location', {
+      header: 'Location',
+      size: 160,
+      cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="140px" />,
+    }),
+    columnHelper.accessor('sub_location', {
+      header: 'Sub Location',
+      size: 160,
+      cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="140px" />,
     }),
     // Business Units column hidden — kept here so it can be restored when needed.
     // columnHelper.accessor('businessUnits', {
@@ -577,8 +603,12 @@ const EmployeeList = () => {
       'Company Experience': 2.1,
       'Email ID': 'omkar@example.com',
       'Resource Description': 'Java, React',
+      'Payroll Entity': 'GTT India Pvt Ltd',
+      'Location': 'Pune',
+      'Sub Location': 'Hinjewadi',
       'Date of Joining': '2023-01-15',
-      'Date of Leaving': ''
+      'Date of Leaving': '',
+      'Business Units': 'Finance BU, Delivery BU'
     }]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Employees");
@@ -639,7 +669,7 @@ const EmployeeList = () => {
   const getExportParams = () => ({
     status: statusFilter,
     ...(roleFilter !== 'all' && { role_id: roleFilter }),
-    ...(buFilter !== 'all' && { business_unit_id: buFilter }),
+    ...(isBuFiltered && { business_unit_id: buFilter }),
     ...(debouncedSearch && debouncedSearch.length >= 3 && { search: debouncedSearch }),
   });
 
@@ -675,6 +705,9 @@ const EmployeeList = () => {
         'Name': emp.full_name,
         'Email ID': emp.email,
         'Designation': emp.designation,
+        'Payroll Entity': emp.payroll_entity,
+        'Location': emp.location,
+        'Sub Location': emp.sub_location,
         'Business Units': (emp.businessUnits ?? []).map(bu => bu.name ?? bu.company_name).join(', '),
         'Total Experience (yrs)': emp.total_experience,
         'Company Experience (yrs)': emp.company_experience,
@@ -872,106 +905,169 @@ const EmployeeList = () => {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="flex h-full min-h-0 flex-col space-y-4">
       <PageHeader
         title="Employees"
         actions={
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
+          <>
+            {/* Desktop toolbar — unchanged from the original layout. */}
+            <div className="hidden flex-wrap items-center gap-2 md:flex">
+              <SearchInput
                 placeholder="Search by name, code..."
-                className="pl-9 w-[250px] h-9 text-sm bg-white"
                 value={search}
                 onChange={handleSearch}
+                className="w-[250px]"
+                inputClassName="bg-white"
               />
-            </div>
-            <FilterToggleButton
-              isOpen={filtersOpen}
-              onToggle={() => setFiltersOpen((prev) => !prev)}
-              activeCount={activeFilterCount}
-            />
-            {isHR && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-9 gap-1.5 bg-white">
-                    <FileDown className="h-4 w-4" /> Export <ChevronDown className="ml-1 h-3 w-3" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={handleExportExcel} className="cursor-pointer">
-                    <FileSpreadsheet className="mr-2 h-4 w-4 text-green-600" />
-                    Excel
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleExportPDF} className="cursor-pointer">
-                    <FileText className="mr-2 h-4 w-4 text-red-500" />
-                    PDF
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handlePrint} className="cursor-pointer">
-                    <Printer className="mr-2 h-4 w-4 text-slate-600" />
-                    Print / View
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-            {canManageEmployees && (
-              <Button variant="outline" size="sm" className="h-9 gap-1.5 bg-white" onClick={handleDownloadSample}>
-                <Download className="h-4 w-4" /> Sample
-              </Button>
-            )}
-            {canManageEmployees && (
-              <>
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  className="hidden"
-                  accept=".xlsx,.csv"
-                  onChange={handleFileUpload}
-                />
+              <FilterToggleButton
+                isOpen={filtersOpen}
+                onToggle={() => setFiltersOpen((prev) => !prev)}
+                activeCount={activeFilterCount}
+              />
+              {isHR && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="toolbar" className="bg-white">
+                      <FileDown className="h-4 w-4" /> Export <ChevronDown className="ml-1 h-3 w-3" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={handleExportExcel} className="cursor-pointer">
+                      <FileSpreadsheet className="mr-2 h-4 w-4 text-green-600" />
+                      Excel
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleExportPDF} className="cursor-pointer">
+                      <FileText className="mr-2 h-4 w-4 text-red-500" />
+                      PDF
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handlePrint} className="cursor-pointer">
+                      <Printer className="mr-2 h-4 w-4 text-slate-600" />
+                      Print / View
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+              {canManageEmployees && (
+                <Button variant="outline" size="toolbar" className="bg-white" onClick={handleDownloadSample}>
+                  <Download className="h-4 w-4" /> Sample
+                </Button>
+              )}
+              {canManageEmployees && (
                 <Button
                   variant="outline"
-                  size="sm"
-                  className="h-9 gap-1.5 bg-white"
+                  size="toolbar"
+                  className="bg-white"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={importMutation.isPending}
                 >
                   <Upload className="h-4 w-4" />
                   {importMutation.isPending ? 'Importing…' : 'Import Excel'}
                 </Button>
-              </>
-            )}
+              )}
+              {canManageEmployees && !isPreviewOpen && !importResult && (
+                <Button size="toolbar" onClick={() => navigate(ROUTES.EMPLOYEE_NEW)}>
+                  <Plus className="h-4 w-4" /> Add Employee
+                </Button>
+              )}
+            </div>
+            {/* Mobile header — only a compact primary action stays up top; search/filters/more
+                move into their own row below the header (see the md:hidden block after
+                PageHeader). */}
             {canManageEmployees && !isPreviewOpen && !importResult && (
-              <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => navigate(ROUTES.EMPLOYEE_NEW)}>
-                <Plus className="mr-1.5 h-4 w-4" /> Add Employee
+              <Button size="toolbar" className="md:hidden" onClick={() => navigate(ROUTES.EMPLOYEE_NEW)}>
+                <Plus className="h-4 w-4" /> Add
               </Button>
             )}
-          </div>
+            {/* The Import Excel file input must stay mounted (not conditionally rendered only in
+                the desktop block above) so both the desktop button and the mobile "More" menu
+                item can trigger the same ref-driven picker. */}
+            {canManageEmployees && (
+              <input
+                type="file"
+                ref={fileInputRef}
+                className="hidden"
+                accept=".xlsx,.csv"
+                onChange={handleFileUpload}
+              />
+            )}
+          </>
         }
       />
+
+      {/* Mobile toolbar — employee count, full-width search, and a compact Filters + More row.
+          Reuses the exact same state/handlers as the desktop toolbar above; only the layout differs. */}
+      <div className="flex flex-col gap-2 md:hidden">
+        <p className="text-sm text-muted-foreground">
+          {meta.total ?? employees.length} employee{(meta.total ?? employees.length) === 1 ? '' : 's'}
+        </p>
+        <SearchInput
+          placeholder="Search employees..."
+          value={search}
+          onChange={handleSearch}
+          className="w-full"
+          inputClassName="h-10 bg-white"
+        />
+        <div className="flex items-center justify-between gap-2">
+          <FilterToggleButton
+            isOpen={filtersOpen}
+            onToggle={() => setFiltersOpen((prev) => !prev)}
+            activeCount={activeFilterCount}
+            className="h-10"
+          />
+          {(isHR || canManageEmployees) && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="toolbar" className="h-10 bg-white">
+                  <MoreVertical className="h-4 w-4" /> More
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {isHR && (
+                  <>
+                    <DropdownMenuItem onClick={handleExportExcel} className="cursor-pointer">
+                      <FileSpreadsheet className="h-4 w-4 text-green-600" /> Export Excel
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleExportPDF} className="cursor-pointer">
+                      <FileText className="h-4 w-4 text-red-500" /> Export PDF
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handlePrint} className="cursor-pointer">
+                      <Printer className="h-4 w-4 text-slate-600" /> Print / View
+                    </DropdownMenuItem>
+                  </>
+                )}
+                {canManageEmployees && (
+                  <>
+                    <DropdownMenuItem onClick={handleDownloadSample} className="cursor-pointer">
+                      <Download className="h-4 w-4" /> Sample
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => fileInputRef.current?.click()}
+                      className="cursor-pointer"
+                      disabled={importMutation.isPending}
+                    >
+                      <Upload className="h-4 w-4" /> {importMutation.isPending ? 'Importing…' : 'Import Excel'}
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
+      </div>
 
       <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[200px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Status</Label>
-          <div className="flex items-center rounded-md border overflow-hidden h-9 text-sm bg-white">
-            {[
+          <SegmentedToggle
+            options={[
               { label: 'All', value: 'all' },
               { label: 'Active', value: 'active' },
               { label: 'Inactive', value: 'inactive' },
-            ].map(({ label, value }) => (
-              <button
-                key={value}
-                onClick={() => { setStatusFilter(value); setPage(1); }}
-                className={cn(
-                  'flex-1 px-3 h-full font-medium text-center transition-colors border-r last:border-r-0',
-                  statusFilter === value
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-background text-muted-foreground hover:bg-muted'
-                )}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+            ]}
+            value={statusFilter}
+            onChange={(value) => { setStatusFilter(value); setPage(1); }}
+            className="bg-white"
+          />
         </div>
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Role</Label>
@@ -991,23 +1087,10 @@ const EmployeeList = () => {
           />
         </div>
         {showBuFilter && (
-          <div className="flex flex-col gap-1.5">
-            <Label className="text-xs">Business Unit</Label>
-            <SearchableSelect
-              options={[
-                { label: 'All business units', value: 'all' },
-                ...buFilterOptions.map((c) => ({
-                  label: c.company_name,
-                  value: String(c.id),
-                })),
-              ]}
-              value={buFilter}
-              onValueChange={(v) => { setBuFilter(v); setPage(1); }}
-              placeholder="All business units"
-              searchPlaceholder="Search business unit..."
-              className="h-9 w-full text-sm bg-white"
-            />
-          </div>
+          <BusinessUnitFilter
+            value={buFilter}
+            onChange={(v) => { setBuFilter(v); setPage(1); }}
+          />
         )}
       </FilterPanel>
 
@@ -1077,22 +1160,131 @@ const EmployeeList = () => {
           </CardContent>
         </Card>
       ) : (
-        <DataTable
-          columns={columns}
-          data={employees}
-          isLoading={isPending}
-          toolbar={null}
-          pagination={meta.total != null ? {
-            page: meta.current_page ?? page,
-            limit: meta.per_page ?? limit,
-            total: meta.total,
-          } : undefined}
-          sorting={sorting}
-          onSortingChange={(s) => { setSorting(s); setPage(1); }}
-          onPageChange={setPage}
-          onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
-          onRowClick={canManageEmployees ? (row) => navigate(buildPath(ROUTES.EMPLOYEE_EDIT, { id: row.id })) : undefined}
-        />
+        <>
+          {/* Desktop table — unchanged, including frozen/sticky columns. */}
+          <DataTable
+            className="hidden md:flex"
+            columns={columns}
+            data={employees}
+            isLoading={isPending}
+            toolbar={null}
+            pagination={meta.total != null ? {
+              page: meta.current_page ?? page,
+              limit: meta.per_page ?? limit,
+              total: meta.total,
+            } : undefined}
+            sorting={sorting}
+            onSortingChange={(s) => { setSorting(s); setPage(1); }}
+            onPageChange={setPage}
+            onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
+            onRowClick={canManageEmployees ? (row) => navigate(buildPath(ROUTES.EMPLOYEE_EDIT, { id: row.id })) : undefined}
+          />
+
+          {/* Mobile — compact card list instead of the frozen-column table, same data/handlers. */}
+          <div className="flex min-h-0 flex-1 flex-col gap-3 md:hidden">
+            <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
+              {isPending ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-3 rounded-xl border bg-white p-3 shadow-sm">
+                    <Skeleton className="h-10 w-10 shrink-0 rounded-full" />
+                    <div className="flex-1 space-y-2">
+                      <Skeleton className="h-4 w-2/3" />
+                      <Skeleton className="h-3 w-1/3" />
+                    </div>
+                  </div>
+                ))
+              ) : employees.length === 0 ? (
+                <EmptyState title="No records found" description="Try adjusting your search or filters." />
+              ) : (
+                employees.map((emp) => (
+                  <div
+                    key={emp.id}
+                    className={cn(
+                      'flex items-center gap-3 rounded-xl border bg-white p-3 shadow-sm transition-colors',
+                      canManageEmployees && 'active:bg-slate-50'
+                    )}
+                    onClick={canManageEmployees ? () => navigate(buildPath(ROUTES.EMPLOYEE_EDIT, { id: emp.id })) : undefined}
+                  >
+                    <Avatar className="h-10 w-10 shrink-0">
+                      <AvatarFallback>{getInitials(emp.full_name)}</AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-slate-900">{emp.full_name}</p>
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                        {emp.employee_code}
+                        {' · '}
+                        <span className={emp.status === 'active' ? 'text-green-600' : 'text-slate-400'}>
+                          {emp.status === 'active' ? 'Active' : 'Inactive'}
+                        </span>
+                      </p>
+                    </div>
+                    {isHR && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-10 w-10 shrink-0"
+                            aria-label="Employee actions"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <MoreVertical className="h-5 w-5" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                          {canManageEmployees && (
+                            <DropdownMenuItem onClick={() => navigate(buildPath(ROUTES.EMPLOYEE_EDIT, { id: emp.id }))}>
+                              <Pencil className="h-4 w-4" /> Edit Employee
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuItem onClick={() => setMappingTarget(emp)}>
+                            <UserCog className="h-4 w-4" /> Manage Roles / Permissions
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+
+            {meta.total != null && (() => {
+              const mobileLimit = meta.per_page ?? limit;
+              const mobilePage = meta.current_page ?? page;
+              const totalPages = Math.max(1, Math.ceil(meta.total / mobileLimit));
+              return (
+                <div className="flex shrink-0 items-center justify-between border-t pt-3 text-sm">
+                  <p className="text-xs text-muted-foreground">
+                    Showing {meta.total === 0 ? 0 : ((mobilePage - 1) * mobileLimit) + 1}–{Math.min(mobilePage * mobileLimit, meta.total)} of {meta.total}
+                  </p>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-10 w-10"
+                      onClick={() => setPage(mobilePage - 1)}
+                      disabled={mobilePage <= 1 || isPending}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <span className="px-2 text-xs text-muted-foreground">
+                      {mobilePage} / {totalPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-10 w-10"
+                      onClick={() => setPage(mobilePage + 1)}
+                      disabled={mobilePage >= totalPages || isPending}
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        </>
       )}
 
       <RoleBuMappingDialog

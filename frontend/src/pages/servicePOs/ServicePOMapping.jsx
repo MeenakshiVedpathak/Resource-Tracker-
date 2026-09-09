@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, ChevronRight, Search, Inbox, Loader2 } from 'lucide-react';
+import { ArrowLeft, ChevronRight, Search, Inbox, Loader2, MoreVertical, Link2Off, Info } from 'lucide-react';
 import { useServicePO } from '@/hooks/useServicePOs';
 import { useDebounce } from '@/hooks/useDebounce';
 import {
@@ -9,13 +9,16 @@ import {
   useEmployeeServicePOMappingFilterOptions,
   useCreateEmployeeServicePOMapping,
   useSetEmployeeServicePOMappingStatus,
+  useDeleteEmployeeServicePOMapping,
 } from '@/hooks/useEmployeeServicePOMapping';
 import { useCanWrite } from '@/hooks/usePermissions';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
-import { ROUTES } from '@/constants/routes';
+import { ROUTES, buildPath } from '@/constants/routes';
+import { getInitials } from '@/utils/formatters';
 import { cn } from '@/utils/cn';
 import PageHeader from '@/components/common/PageHeader';
+import MobilePagination from '@/components/common/MobilePagination';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -23,7 +26,10 @@ import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SearchableSelect } from '@/components/ui/searchable-select';
+import { MultiSelect } from '@/components/ui/multi-select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from '@/components/ui/sheet';
 
 // Row shape used by both panels below: { key, name, sub, raw }. Normalizing mapping
 // records into this common shape up front means the picker UI itself never has to know
@@ -189,10 +195,31 @@ const SelectPanel = ({
   );
 };
 
+// Already-mapped employees arrive from the server as one full list (that endpoint has no
+// page/limit support), so this panel windows it client-side instead: only the first page of
+// rows renders, and scrolling to the bottom reveals the next page, the same "load more as you
+// scroll" feel as the left panel without adding extra round trips.
+const MAPPED_PANEL_PAGE_SIZE = 10;
+
 // Right-hand panel: employees already mapped, each with an "Is Mapped?" toggle
 // (deactivate) and a remove (delete) action.
 const MappedPanel = ({ rows, search, onSearchChange, renderToggle, selectAll }) => {
   const filtered = filterRows(rows, search);
+  const [visibleCount, setVisibleCount] = useState(MAPPED_PANEL_PAGE_SIZE);
+
+  // Re-narrowing the search (or the mapping list itself changing) should start back at one page,
+  // not keep whatever count scrolling had reached for the previous list.
+  useEffect(() => {
+    setVisibleCount(MAPPED_PANEL_PAGE_SIZE);
+  }, [search, rows]);
+
+  const visibleRows = filtered.slice(0, visibleCount);
+  const hasMore = visibleCount < filtered.length;
+  const sentinelRef = useLoadMoreOnVisible({
+    hasMore,
+    isLoading: false,
+    onLoadMore: () => setVisibleCount((c) => c + MAPPED_PANEL_PAGE_SIZE),
+  });
 
   return (
     <div className="flex flex-col overflow-hidden rounded-lg border bg-background">
@@ -216,7 +243,7 @@ const MappedPanel = ({ rows, search, onSearchChange, renderToggle, selectAll }) 
               </tr>
             </thead>
             <tbody>
-              {filtered.map((row) => (
+              {visibleRows.map((row) => (
                 <tr key={row.key} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
                   <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
                     {renderToggle(row)}
@@ -227,6 +254,16 @@ const MappedPanel = ({ rows, search, onSearchChange, renderToggle, selectAll }) 
                   </td>
                 </tr>
               ))}
+              {hasMore && (
+                <tr ref={sentinelRef}>
+                  <td colSpan={2} className="px-3 py-3 text-center text-xs text-muted-foreground">
+                    <span className="inline-flex items-center gap-1.5">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      Loading more…
+                    </span>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         )}
@@ -236,12 +273,13 @@ const MappedPanel = ({ rows, search, onSearchChange, renderToggle, selectAll }) 
 };
 
 // Left panel's own Entity → BU cascade: picking an Entity narrows the BU dropdown's options
-// (client-side, from that Entity's own BUs); picking a BU is what actually re-queries the left
-// panel's employee list, scoped server-side (see useServicePOEmployeeOptions). Neither dropdown
-// touches the right panel or the caller's ambient selected BU.
+// (client-side, from that Entity's own BUs); picking one or more BUs is what actually re-queries
+// the left panel's employee list, scoped server-side (see useServicePOEmployeeOptions — the
+// backend only filters by one BU per call, so multiple selected BUs are fetched in turn and
+// merged there). Neither dropdown touches the right panel or the caller's ambient selected BU.
 const EntityBuFilterBar = ({
   entities, entityId, onEntityChange,
-  businessUnits, isLoading, buId, onBuChange,
+  businessUnits, isLoading, buIds, onBuIdsChange,
 }) => (
   <div className="mb-3 flex flex-wrap items-end gap-3">
     <div className="flex w-56 flex-col gap-1.5">
@@ -250,7 +288,7 @@ const EntityBuFilterBar = ({
         options={entities.map((e) => ({ label: e.entity_name ?? e.name, value: String(e.id) }))}
         value={entityId}
         onValueChange={onEntityChange}
-        placeholder={isLoading ? 'Loading…' : 'All Entities'}
+        placeholder={isLoading ? 'Loading…' : 'Select Entity'}
         searchPlaceholder="Search entity..."
         className="bg-white"
         clearable
@@ -259,18 +297,16 @@ const EntityBuFilterBar = ({
     </div>
     <div className="flex w-56 flex-col gap-1.5">
       <Label className="text-xs">Business Unit</Label>
-      <SearchableSelect
+      <MultiSelect
         options={businessUnits.map((bu) => ({ label: bu.company_name, value: String(bu.id) }))}
-        value={buId}
-        onValueChange={onBuChange}
+        value={buIds}
+        onValueChange={onBuIdsChange}
         disabled={entityId === 'all'}
         placeholder={
-          entityId === 'all' ? 'Select an Entity first' : isLoading ? 'Loading…' : 'All Business Units'
+          entityId === 'all' ? 'Select an Entity first' : isLoading ? 'Loading…' : 'Select Business Unit'
         }
         searchPlaceholder="Search business unit..."
         className="bg-white"
-        clearable
-        clearValue="all"
       />
     </div>
   </div>
@@ -323,7 +359,17 @@ const ServicePOMapping = () => {
   const [searchLeft, setSearchLeft] = useState('');
   const [searchRight, setSearchRight] = useState('');
   const [entityFilter, setEntityFilter] = useState('all');
-  const [buFilter, setBuFilter] = useState('all');
+  const [buFilters, setBuFilters] = useState([]); // multi-select: array of BU id strings
+
+  // Mobile — single combined list (see below) instead of the desktop two-panel transfer list.
+  // Reuses `searchLeft` as its own search box (the same server-side search that already narrows
+  // the "available" query) rather than introducing a second, parallel search state.
+  const MOBILE_PAGE_SIZE = 10;
+  const [mobilePage, setMobilePage] = useState(1);
+  const [mobileMappingId, setMobileMappingId] = useState(null); // employee id currently being mapped (per-row spinner)
+  const [mobileBulkMapping, setMobileBulkMapping] = useState(false);
+  const [mobileActionRow, setMobileActionRow] = useState(null); // mapped row whose "⋮" opened the action sheet
+  const [mobileRemovingId, setMobileRemovingId] = useState(null); // mapping id currently being removed
 
   const { data: servicePO, isPending: isLoadingPO } = useServicePO(id);
   // Entity → BU filter dropdowns above the left panel (see EntityBuFilterBar). One call returns
@@ -331,33 +377,34 @@ const ServicePOMapping = () => {
   // GET /entities or GET /companies, which either 403 a BU Admin/Service PO Admin/Delivery Head or
   // (for a BU Admin) silently return a narrower set than this screen is actually scoped to (see
   // useEmployeeServicePOMappingFilterOptions' doc comment). Both dropdowns filter this single
-  // result client-side; only the BU choice is ever sent to the server, as `business_unit_id`.
+  // result client-side; only the BU choice (one or more) is ever sent to the server, as
+  // `business_unit_id` — one call per selected BU, see useServicePOEmployeeOptions.
   const { data: filterOptions, isLoading: isLoadingFilterOptions } = useEmployeeServicePOMappingFilterOptions(canManageResources);
   const entities = filterOptions?.entities ?? [];
   const selectedEntityId = entityFilter !== 'all' ? Number(entityFilter) : null;
   const businessUnitOptions = selectedEntityId
     ? (filterOptions?.business_units ?? []).filter((bu) => bu.entity_id === selectedEntityId)
     : [];
-  const selectedBusinessUnitId = buFilter !== 'all' ? buFilter : undefined;
+  const selectedBusinessUnitIds = buFilters.map(Number);
 
   const handleEntityFilterChange = (v) => {
     setEntityFilter(v);
-    setBuFilter('all');
+    setBuFilters([]);
   };
   // The PO's own eligibility endpoint, NOT a generic employee list: those scope to the caller's own
   // team or their currently-selected BU, which is why this panel used to show 4 of 18. This one is
   // scoped server-side to the caller's entire authorized Admin/company scope — every BU they manage
-  // — so nothing here may re-narrow it by the caller's *ambient* selected BU. `selectedBusinessUnitId`
+  // — so nothing here may re-narrow it by the caller's *ambient* selected BU. `selectedBusinessUnitIds`
   // is different: the panel's own explicit Entity → BU filter dropdowns, opted into here the same way
   // `search` is. Arrives a page at a time as the panel scrolls; search is debounced because it is a
   // request, not a client-side filter.
   //
-  // Deliberately NOT fetched until a Business Unit is actually picked (`needsFilterSelection` below)
-  // — the unfiltered result is every employee in the caller's whole scope, which is both expensive
-  // and rarely what an admin opening this screen wants to browse. The left panel shows a prompt
-  // instead (see SelectPanel) until then.
+  // Deliberately NOT fetched until at least one Business Unit is actually picked
+  // (`needsFilterSelection` below) — the unfiltered result is every employee in the caller's whole
+  // scope, which is both expensive and rarely what an admin opening this screen wants to browse.
+  // The left panel shows a prompt instead (see SelectPanel) until then.
   const debouncedSearchLeft = useDebounce(searchLeft, 400);
-  const needsFilterSelection = !selectedBusinessUnitId;
+  const needsFilterSelection = selectedBusinessUnitIds.length === 0;
   const shouldLoadEligibleEmployees = canManageResources && !needsFilterSelection;
   const filterPromptMessage = entityFilter === 'all'
     ? 'Select an Entity and Business Unit to view employees.'
@@ -369,12 +416,13 @@ const ServicePOMapping = () => {
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
-  } = useServicePOEmployeeOptions(shouldLoadEligibleEmployees ? id : null, debouncedSearchLeft, selectedBusinessUnitId);
+  } = useServicePOEmployeeOptions(shouldLoadEligibleEmployees ? id : null, debouncedSearchLeft, selectedBusinessUnitIds);
   const eligibleEmployees = employeeOptions?.employees ?? [];
   const { data: mappings = [], isPending: isLoadingMappings } = useServicePOEmployeeMappings(id);
 
   const createMappingMutation = useCreateEmployeeServicePOMapping();
   const mappingStatusMutation = useSetEmployeeServicePOMappingStatus();
+  const deleteMappingMutation = useDeleteEmployeeServicePOMapping();
 
   // `eligible_employees` includes employees already mapped, so this two-panel transfer list moves
   // those to the right and takes them off the left. Keyed off the PO's mapping records ALONE — the
@@ -441,6 +489,76 @@ const ServicePOMapping = () => {
     }
   };
 
+  // Mobile — one combined, searchable list instead of the desktop transfer-list panels. Built
+  // from the exact same `leftRows`/`rightRows` (no separate fetch/business logic), each tagged
+  // with its mapped state so a single row renderer can show "Mapped" + a "⋮" action sheet or a
+  // "+ Map" button. `leftRows` already excludes anyone in `rightRows` (see `availableForMapping`
+  // above), so the two never overlap.
+  const mobileRows = [
+    ...filterRows(rightRows, searchRight || searchLeft).map((r) => ({ ...r, mapped: true })),
+    ...leftRows.map((r) => ({ ...r, mapped: false })),
+  ];
+  const mobileTotalPages = Math.max(1, Math.ceil(mobileRows.length / MOBILE_PAGE_SIZE));
+  const pagedMobileRows = mobileRows.slice((mobilePage - 1) * MOBILE_PAGE_SIZE, mobilePage * MOBILE_PAGE_SIZE);
+
+  useEffect(() => {
+    if (mobilePage > mobileTotalPages) setMobilePage(mobileTotalPages);
+  }, [mobileTotalPages, mobilePage]);
+
+  const handleMobileNext = () => {
+    // The "available" side is a paged server query — if the next mobile page needs rows past
+    // what's loaded so far and the server has more, pull them in too.
+    if (mobilePage * MOBILE_PAGE_SIZE >= mobileRows.length && hasNextPage && !isFetchingNextPage) {
+      fetchNextPage();
+    }
+    setMobilePage((p) => p + 1);
+  };
+
+  const handleMobileMap = async (employeeId) => {
+    setMobileMappingId(employeeId);
+    try {
+      await createMappingMutation.mutateAsync({ employeeId, servicePOId: id });
+    } catch (err) {
+      showError(extractApiError(err));
+    } finally {
+      setMobileMappingId(null);
+    }
+  };
+
+  const handleMobileSelectAll = async (checked) => {
+    if (!checked || leftRows.length === 0) return;
+    setMobileBulkMapping(true);
+    try {
+      await Promise.all(
+        leftRows.map((r) => createMappingMutation.mutateAsync({ employeeId: r.key, servicePOId: id }))
+      );
+      success('Employees mapped for timesheet entry.');
+    } catch (err) {
+      showError(extractApiError(err));
+    } finally {
+      setMobileBulkMapping(false);
+    }
+  };
+
+  const handleMobileRemoveMapping = async (row) => {
+    setMobileRemovingId(row.key);
+    try {
+      await deleteMappingMutation.mutateAsync(row.key);
+      success('Mapping removed.');
+      setMobileActionRow(null);
+    } catch (err) {
+      showError(extractApiError(err));
+    } finally {
+      setMobileRemovingId(null);
+    }
+  };
+
+  const handleMobileViewDetails = (row) => {
+    setMobileActionRow(null);
+    const employeeId = row.raw?.employee_id;
+    if (employeeId != null) navigate(buildPath(ROUTES.EMPLOYEE_EDIT, { id: employeeId }));
+  };
+
   if (!isLoadingPO && !servicePO) {
     return (
       <div className="py-12 text-center">
@@ -453,7 +571,7 @@ const ServicePOMapping = () => {
   }
 
   return (
-    <div>
+    <div className="flex h-full min-h-0 flex-col">
       <PageHeader
         title="Map Employees"
         description={
@@ -482,21 +600,70 @@ const ServicePOMapping = () => {
       </p> */}
 
       {canManageResources && !isLoadingPO && (
-        <EntityBuFilterBar
-          entities={entities}
-          entityId={entityFilter}
-          onEntityChange={handleEntityFilterChange}
-          businessUnits={businessUnitOptions}
-          isLoading={isLoadingFilterOptions}
-          buId={buFilter}
-          onBuChange={setBuFilter}
-        />
+        <>
+          {/* Desktop. */}
+          <div className="hidden md:block">
+            <EntityBuFilterBar
+              entities={entities}
+              entityId={entityFilter}
+              onEntityChange={handleEntityFilterChange}
+              businessUnits={businessUnitOptions}
+              isLoading={isLoadingFilterOptions}
+              buIds={buFilters}
+              onBuIdsChange={setBuFilters}
+            />
+          </div>
+          {/* Mobile — same Entity → BU cascade, stacked full-width instead of an inline row. */}
+          <div className="mb-3 grid grid-cols-1 gap-3 md:hidden">
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs">Entity</Label>
+              <SearchableSelect
+                options={entities.map((e) => ({ label: e.entity_name ?? e.name, value: String(e.id) }))}
+                value={entityFilter}
+                onValueChange={handleEntityFilterChange}
+                placeholder={isLoadingFilterOptions ? 'Loading…' : 'Select Entity'}
+                searchPlaceholder="Search entity..."
+                className="h-11 bg-white"
+                clearable
+                clearValue="all"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs">Business Unit</Label>
+              <MultiSelect
+                options={businessUnitOptions.map((bu) => ({ label: bu.company_name, value: String(bu.id) }))}
+                value={buFilters}
+                onValueChange={setBuFilters}
+                disabled={entityFilter === 'all'}
+                placeholder={
+                  entityFilter === 'all' ? 'Select an Entity first' : isLoadingFilterOptions ? 'Loading…' : 'Select Business Unit'
+                }
+                searchPlaceholder="Search business unit..."
+                className="h-11 bg-white"
+              />
+            </div>
+          </div>
+        </>
       )}
 
       {isLoadingPO || isLoadingMappings || (shouldLoadEligibleEmployees && isLoadingEmployees) ? (
-        <MappingSkeleton />
+        <>
+          <div className="hidden md:block"><MappingSkeleton /></div>
+          <div className="flex flex-col gap-2 md:hidden">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3 rounded-xl border bg-white p-3 shadow-sm">
+                <Skeleton className="h-10 w-10 shrink-0 rounded-full" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-4 w-2/3" />
+                  <Skeleton className="h-3 w-1/3" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
       ) : (
-        <div className={cn('grid gap-2 items-start', canManageResources ? 'grid-cols-[1fr_auto_1fr]' : 'grid-cols-1')}>
+        <>
+        <div className={cn('hidden md:grid gap-2 items-start', canManageResources ? 'grid-cols-[1fr_auto_1fr]' : 'grid-cols-1')}>
           {canManageResources && (
             <>
               <SelectPanel
@@ -548,6 +715,144 @@ const ServicePOMapping = () => {
             }}
           />
         </div>
+
+        {/* Mobile — one combined, searchable list (see mobileRows above) instead of the desktop
+            transfer-list panels: each row shows its own state ("Mapped" + a "⋮" action sheet, or
+            a "+ Map" button) rather than a separate select-then-move step. */}
+        <div className="flex min-h-0 flex-1 flex-col gap-3 md:hidden">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm text-muted-foreground">
+              {mobileRows.length}{hasNextPage ? '+' : ''} employee{mobileRows.length === 1 && !hasNextPage ? '' : 's'}
+            </p>
+            {canManageResources && (
+              <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                Select All
+                <Switch
+                  checked={mobileBulkMapping}
+                  disabled={mobileBulkMapping || leftRows.length === 0}
+                  onCheckedChange={handleMobileSelectAll}
+                />
+              </label>
+            )}
+          </div>
+
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={searchLeft}
+              onChange={(e) => setSearchLeft(e.target.value)}
+              placeholder="Search employees..."
+              className="h-11 pl-9 bg-white"
+            />
+          </div>
+
+          <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
+            {needsFilterSelection && canManageResources ? (
+              <EmptyState message={filterPromptMessage} />
+            ) : pagedMobileRows.length === 0 ? (
+              <EmptyState />
+            ) : (
+              pagedMobileRows.map((row) => (
+                <div key={`${row.mapped ? 'm' : 'a'}-${row.key}`} className="flex items-center gap-3 rounded-xl border bg-white p-3 shadow-sm">
+                  <Avatar className="h-10 w-10 shrink-0">
+                    <AvatarFallback>{getInitials(row.name)}</AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-slate-900">{row.name}</p>
+                    {row.sub && <p className="mt-0.5 truncate text-xs text-muted-foreground">{row.sub}</p>}
+                  </div>
+                  {row.mapped ? (
+                    <div className="flex shrink-0 items-center gap-1">
+                      <Badge variant="success" className="font-normal">Mapped</Badge>
+                      {canManageResources && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-10 w-10 shrink-0"
+                          aria-label="Actions"
+                          onClick={() => setMobileActionRow(row)}
+                        >
+                          <MoreVertical className="h-5 w-5" />
+                        </Button>
+                      )}
+                    </div>
+                  ) : canManageResources ? (
+                    <Button
+                      size="sm"
+                      className="shrink-0"
+                      disabled={mobileMappingId === row.key || createMappingMutation.isPending}
+                      onClick={() => handleMobileMap(row.key)}
+                    >
+                      {mobileMappingId === row.key ? <Loader2 className="h-4 w-4 animate-spin" /> : '+ Map'}
+                    </Button>
+                  ) : null}
+                </div>
+              ))
+            )}
+          </div>
+
+          <MobilePagination
+            className="shrink-0 border-t pt-3"
+            page={mobilePage}
+            totalPages={mobileTotalPages}
+            total={mobileRows.length}
+            limit={MOBILE_PAGE_SIZE}
+            itemLabel="employee"
+            onPrev={() => setMobilePage((p) => Math.max(1, p - 1))}
+            onNext={handleMobileNext}
+          />
+        </div>
+
+        {/* Mobile row actions — mirrors the desktop mapped-row Switch (deactivate) as a Remove,
+            since this list has no separate active/inactive state of its own on mobile. */}
+        <Sheet open={!!mobileActionRow} onOpenChange={(open) => !open && setMobileActionRow(null)}>
+          <SheetContent side="bottom" className="rounded-t-2xl md:hidden">
+            <SheetHeader className="text-left">
+              <SheetTitle className="flex items-center gap-3 text-base">
+                <Avatar className="h-9 w-9">
+                  <AvatarFallback>{getInitials(mobileActionRow?.name)}</AvatarFallback>
+                </Avatar>
+                <div className="min-w-0">
+                  <p className="truncate">{mobileActionRow?.name}</p>
+                  {mobileActionRow?.sub && (
+                    <p className="truncate text-xs font-normal text-muted-foreground">{mobileActionRow.sub}</p>
+                  )}
+                </div>
+              </SheetTitle>
+            </SheetHeader>
+            <div className="flex flex-col py-2">
+              {canManageResources && (
+                <button
+                  type="button"
+                  className="flex items-center gap-3 rounded-lg px-2 py-3 text-left text-sm font-medium text-destructive hover:bg-destructive/5 disabled:pointer-events-none disabled:opacity-60"
+                  disabled={mobileRemovingId === mobileActionRow?.key}
+                  onClick={() => handleMobileRemoveMapping(mobileActionRow)}
+                >
+                  {mobileRemovingId === mobileActionRow?.key ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Link2Off className="h-4 w-4" />
+                  )}
+                  Remove Mapping
+                </button>
+              )}
+              <button
+                type="button"
+                className="flex items-center gap-3 rounded-lg px-2 py-3 text-left text-sm font-medium hover:bg-muted/50"
+                onClick={() => handleMobileViewDetails(mobileActionRow)}
+              >
+                <Info className="h-4 w-4" />
+                View Employee Details
+              </button>
+            </div>
+            <SheetFooter>
+              <Button type="button" variant="outline" className="h-11 w-full" onClick={() => setMobileActionRow(null)}>
+                Cancel
+              </Button>
+            </SheetFooter>
+          </SheetContent>
+        </Sheet>
+        </>
       )}
     </div>
   );

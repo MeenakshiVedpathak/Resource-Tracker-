@@ -52,6 +52,10 @@ export const QUERY_KEYS = {
   MY_TEAM_EMPLOYEES: ['my-team', 'employees'],
   MY_TEAM_SERVICE_POS: ['my-team', 'service-pos'],
   MY_TEAM_APPROVAL_SUMMARY: (params) => ['my-team', 'approval-summary', params],
+  // "Log Work for My Team" (net-new) — one Employee's one month, so month/year are part of the
+  // key the same way every other server-side-filtered query embeds its params.
+  MY_TEAM_EMPLOYEE_MONTHLY_WORKLOG: (employeeId, month, year) =>
+    ['my-team', 'employees', employeeId, 'monthly-worklog', month, year],
 
   // Admins (Platform Admin -> Admin)
   ADMINS: (params) => ['admins', params],
@@ -112,8 +116,10 @@ export const QUERY_KEYS = {
   // summary strip share these cache entries, so without it a BU switch would serve the previous
   // BU's records to both.
   SERVICE_PO_MONTHLY_BUDGET_LIST: (month, year, buId) => ['service-po-monthly-budget', 'list', month, year, buId],
-  SERVICE_PO_MONTHLY_BUDGET_RECORD: (servicePoId, month, year) =>
-    ['service-po-monthly-budget', 'record', servicePoId, month, year],
+  // `buId` — see SERVICE_PO_MONTHLY_BUDGET_LIST above: must stay in the key so a BU switch never
+  // serves a different BU's cached record for the same PO/month/year.
+  SERVICE_PO_MONTHLY_BUDGET_RECORD: (servicePoId, month, year, buId) =>
+    ['service-po-monthly-budget', 'record', servicePoId, month, year, buId],
 
   // Cost Budget
   COST_BUDGETS: (params) => ['cost-budgets', params],
@@ -141,6 +147,8 @@ export const QUERY_KEYS = {
   REPORT_INVOICE_PO_SUMMARY: (params) => ['reports', 'invoice-po-summary', params],
   REPORT_INVOICE_PO_SUMMARY_TOTALS: (params) => ['reports', 'invoice-po-summary-totals', params],
   REPORT_MONTHLY_RESOURCE_UTILIZATION: (params) => ['reports', 'monthly-resource-utilization', params],
+  REPORT_EMPLOYEE_UTILIZATION_SUMMARY: (params) => ['reports', 'employee-utilization-summary', params],
+  REPORT_EMPLOYEE_UTILIZATION_SUMMARY_TOTALS: (params) => ['reports', 'employee-utilization-summary-totals', params],
   REPORT_RESOURCE_PROJECT_UTILIZATION: (params) => ['reports', 'resource-project-utilization', params],
   REPORT_CLIENT_SERVICE_PO_HOURS: (params) => ['reports', 'client-service-po-hours', params],
   REPORT_SERVICE_PO_PROFITABILITY: (params) => ['reports', 'service-po-profitability', params],
@@ -178,12 +186,13 @@ export const QUERY_KEYS = {
   EMPLOYEE_SERVICEPO_MAPPING_BY_EMPLOYEE: (employeeId) => ['employee-servicepo-mapping', 'employee', employeeId],
   EMPLOYEE_SERVICEPO_MAPPING_BY_SERVICE_PO: (servicePOId) => ['employee-servicepo-mapping', 'service-po', servicePOId],
   EMPLOYEE_SERVICEPO_MAPPING_OPTIONS: (employeeId) => ['employee-servicepo-mapping', 'options', employeeId],
-  // Service PO → Map Employees' left panel. `search` and `businessUnitId` are part of the key
-  // because both are applied server-side — a new value is a different paged result set, not a
-  // client-side filter of this one. Prefix-matched by ['employee-servicepo-mapping'], so the
-  // existing map/unmap invalidations reach it and the panel's mapped_employee_ids refresh after a save.
-  EMPLOYEE_SERVICEPO_MAPPING_SERVICE_PO_OPTIONS: (servicePOId, search, businessUnitId) =>
-    ['employee-servicepo-mapping', 'service-po', servicePOId, 'options', search ?? '', businessUnitId ?? ''],
+  // Service PO → Map Employees' left panel. `search` and `businessUnitIdsKey` (the selected BU ids,
+  // sorted and comma-joined — BU is multi-select) are part of the key because both are applied
+  // server-side — a new value is a different paged result set, not a client-side filter of this one.
+  // Prefix-matched by ['employee-servicepo-mapping'], so the existing map/unmap invalidations reach
+  // it and the panel's mapped_employee_ids refresh after a save.
+  EMPLOYEE_SERVICEPO_MAPPING_SERVICE_PO_OPTIONS: (servicePOId, search, businessUnitIdsKey) =>
+    ['employee-servicepo-mapping', 'service-po', servicePOId, 'options', search ?? '', businessUnitIdsKey ?? ''],
   // Map Employees' Entity → BU filter bar — same for every Service PO the caller can open this
   // screen for, so no servicePOId in the key.
   EMPLOYEE_SERVICEPO_MAPPING_FILTER_OPTIONS: ['employee-servicepo-mapping', 'filter-options'],

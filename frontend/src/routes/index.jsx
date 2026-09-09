@@ -113,6 +113,7 @@ const ServicePOResource = lazy(() => import('@/pages/reports/ServicePOResource')
 const ServicePOSummary = lazy(() => import('@/pages/reports/ServicePOSummary'));
 const InvoicePOSummary = lazy(() => import('@/pages/reports/InvoicePOSummary'));
 const MonthlyResourceUtilization = lazy(() => import('@/pages/reports/MonthlyResourceUtilization'));
+const EmployeeUtilizationSummary = lazy(() => import('@/pages/reports/EmployeeUtilizationSummary'));
 const ResourceProjectUtilization = lazy(() => import('@/pages/reports/ResourceProjectUtilization'));
 const ClientServicePOHoursReport = lazy(() => import('@/pages/reports/ClientServicePOHoursReport'));
 const ServicePOProfitability = lazy(() => import('@/pages/reports/ServicePOProfitability'));
@@ -150,6 +151,10 @@ const TeamMappingList = lazy(() => import('@/pages/teamMappings/TeamMappingList'
 
 // ── My Team (Manager self-service — same allowedRoles gating as Team Mapping above) ──
 const MyTeamList = lazy(() => import('@/pages/myTeam/MyTeamList'));
+
+// ── Log Work for My Team (Manager self-service, net-new — gated by formName like every other
+// RBAC-driven screen; see rbacForms.js) ──
+const ManagerFillWorkLog = lazy(() => import('@/pages/myTeam/ManagerFillWorkLog'));
 
 // ── Service PO Monthly Budget (Manager self-service, net-new — same allowedRoles gating) ──
 const ServicePoMonthlyBudgetPage = lazy(() => import('@/pages/servicePoMonthlyBudget/ServicePoMonthlyBudgetPage'));
@@ -410,6 +415,7 @@ const AppRoutes = () => {
           <Route path={ROUTES.REPORT_SERVICE_PO_SUMMARY} element={<ProtectedRoute formName={FORM_NAMES.REPORT_SERVICE_PO_SUMMARY}><ServicePOSummary /></ProtectedRoute>} />
           <Route path={ROUTES.REPORT_INVOICE_PO_SUMMARY} element={<ProtectedRoute formName={FORM_NAMES.REPORT_INVOICE_PO_SUMMARY}><InvoicePOSummary /></ProtectedRoute>} />
           <Route path={ROUTES.REPORT_MONTHLY_RESOURCE_UTILIZATION} element={<ProtectedRoute formName={FORM_NAMES.REPORT_MONTHLY_UTILIZATION}><MonthlyResourceUtilization /></ProtectedRoute>} />
+          <Route path={ROUTES.REPORT_EMPLOYEE_UTILIZATION_SUMMARY} element={<ProtectedRoute formName={FORM_NAMES.REPORT_EMPLOYEE_UTILIZATION_SUMMARY}><EmployeeUtilizationSummary /></ProtectedRoute>} />
           <Route path={ROUTES.REPORT_RESOURCE_PROJECT_UTILIZATION} element={<ProtectedRoute formName={FORM_NAMES.REPORT_RESOURCE_PROJECT_UTILIZATION}><ResourceProjectUtilization /></ProtectedRoute>} />
           <Route path={ROUTES.REPORT_CLIENT_SERVICE_PO_HOURS} element={<ProtectedRoute formName={FORM_NAMES.REPORT_CLIENT_SERVICE_PO_HOURS}><ClientServicePOHoursReport /></ProtectedRoute>} />
           <Route path={ROUTES.REPORT_SERVICE_PO_PROFITABILITY} element={<ProtectedRoute formName={FORM_NAMES.REPORT_SERVICE_PO_PROFITABILITY}><ServicePOProfitability /></ProtectedRoute>} />
@@ -457,6 +463,10 @@ const AppRoutes = () => {
             allowedRoles whitelist, so any role the admin maps this form to gets access
             automatically. */}
         <Route path={ROUTES.MY_TEAM} element={<ProtectedRoute formName={FORM_NAMES.MY_TEAM}><MyTeamList /></ProtectedRoute>} />
+
+        {/* Log Work for My Team — Manager fills a mapped Employee's monthly work log on their
+            behalf (auto-approved), gated by its own formName distinct from My Team/Approval. */}
+        <Route path={ROUTES.MANAGER_FILL_WORKLOG} element={<ProtectedRoute formName={FORM_NAMES.MANAGER_FILL_WORKLOG}><ManagerFillWorkLog /></ProtectedRoute>} />
 
         {/* Service PO Monthly Budget — Business module Form Master row (confirmed via
             GET /roles/forms), now gated dynamically by formName like every other RBAC-driven

@@ -19,8 +19,10 @@ import { ROLE_NAMES, SENIOR_ROLE_NAMES } from '@/constants/roleHierarchy';
 // Real GET /employees supports `business_unit_id` but not `role_id` filtering — this bounds
 // how many employees the Role filter/column can consider: enough for a typical
 // company, but a match past this bound silently won't be found. Same bound this app already
-// accepted for the equivalent pre-migration workaround.
-const REAL_ROLE_FILTER_SCAN_LIMIT = 100;
+// accepted for the equivalent pre-migration workaround. Matches the backend's own page-size cap
+// (see EmployeeList.jsx's EXPORT_PAGE_LIMIT) so this scan uses the full page it's allowed, not an
+// arbitrarily smaller slice of it.
+const REAL_ROLE_FILTER_SCAN_LIMIT = 200;
 
 const resolveRoles = (roleIds, actorRoleObjects) => {
   const roles = (roleIds ?? []).map((rid) => findRoleById(Number(rid))).filter(Boolean);
@@ -52,8 +54,9 @@ const mockGetAll = async (params) => {
         const targetId = Number(params.role_id);
         if (!(e.role_ids ?? []).includes(targetId)) return false;
       }
-      if (params?.company_id) {
-        const targetBuId = Number(params.company_id);
+      const buParam = params?.business_unit_id ?? params?.company_id;
+      if (buParam && buParam !== 'all') {
+        const targetBuId = Number(buParam);
         if (!(e.business_unit_ids ?? []).includes(targetBuId)) return false;
       }
       return true;
@@ -96,6 +99,9 @@ const mockCreate = async (payload) => {
     total_experience: payload.total_experience ?? null,
     company_experience: payload.company_experience ?? null,
     resource_description: payload.resource_description ?? '',
+    payroll_entity: payload.payroll_entity ?? null,
+    location: payload.location ?? null,
+    sub_location: payload.sub_location ?? null,
     date_of_joining: payload.date_of_joining,
     date_of_leaving: payload.date_of_leaving ?? null,
     status: payload.status ?? 'active',
@@ -169,17 +175,20 @@ const mockDelete = async (id) => {
 // BU is selected too it goes on the batch request itself, so the scan starts from an already
 // BU-filtered set and the two filters intersect (rather than the bound being spent on employees
 // the chosen BU excludes anyway).
+//
+// The BU scope rides on X-Company-Id (explicitBuScope), the same mechanism every other master/
+// report uses — NOT also as a `business_unit_id` query param, which this used to send in addition
+// to the header. Sending both was never confirmed against the real controller and risked the
+// backend's param validation rejecting the request outright whenever a role AND a BU were both
+// selected, which read as "neither filter works" even though the BU-only path (below, no
+// role_id) was fine.
 const realGetAllFiltered = async ({ roleId, businessUnitId }, employeeParams) => {
   const { status, search } = employeeParams;
+  const scope = businessUnitId && businessUnitId !== 'all' ? explicitBuScope(businessUnitId) : explicitBuScope(null);
   const batchRes = await apiClient
     .get('/employees', {
-      params: {
-        page: 1,
-        limit: REAL_ROLE_FILTER_SCAN_LIMIT,
-        status,
-        search,
-        ...(businessUnitId != null && { business_unit_id: businessUnitId }),
-      },
+      params: { page: 1, limit: REAL_ROLE_FILTER_SCAN_LIMIT, status, search },
+      ...scope,
     })
     .then((r) => r.data);
   const targetRoleId = roleId != null ? Number(roleId) : null;
@@ -214,12 +223,14 @@ export const employeesApi = {
     // scoped to whatever BU the navbar's global switcher happens to have active.
     // explicitBuScope(undefined) would leave the interceptor's global header in place — that's
     // the wrong behaviour when the caller explicitly asked for the unscoped list.
+    // BU scope rides on the X-Company-Id header only (explicitBuScope) — not also as a
+    // `business_unit_id` query param, which this used to send alongside the header. That
+    // duplication was never confirmed against the real controller and is the one way this
+    // endpoint's BU scoping differed from every other master (Projects, Reports, …), which all
+    // scope by header alone.
     const scope = buId && buId !== 'all' ? explicitBuScope(buId) : explicitBuScope(null);
     return apiClient
-      .get('/employees', {
-        params: { ...employeeParams, ...(buId != null && buId !== 'all' && { business_unit_id: buId }) },
-        ...scope,
-      })
+      .get('/employees', { params: employeeParams, ...scope })
       .then((r) => r.data);
   },
 

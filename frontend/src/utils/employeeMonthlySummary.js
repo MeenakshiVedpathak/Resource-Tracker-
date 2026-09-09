@@ -20,14 +20,20 @@ const dayNumberOf = (dateStr) => Number(dateStr.slice(-2));
 // can identify an existing row, so this stays a no-op passthrough until/unless a given backend
 // response actually includes it.
 const ensureNode = (map, key, name) => {
-  if (!map.has(key)) map.set(key, { name, id: undefined, hoursByDay: {}, childMap: new Map() });
+  if (!map.has(key)) map.set(key, { name, id: undefined, hoursByDay: {}, descriptionByDay: {}, childMap: new Map() });
   return map.get(key);
 };
 
+// `description` is read defensively (`child.description` / `po.description`) the same way `id`
+// is above — the backend doesn't echo it back on these GET endpoints yet (see the ⚠️ note on
+// buildDayEntries below), so this is a no-op until it does; once it does, the value flows through
+// per-day exactly like hoursByDay does, rather than one flat field the last date processed would
+// otherwise clobber for every earlier day in a whole-month rows build.
 const walkChildren = (children = [], parentChildMap, day) => {
   children.forEach((child) => {
     const node = ensureNode(parentChildMap, child.hierarchy_id, child.name);
     node.hoursByDay[day] = Number(child.hours || 0);
+    node.descriptionByDay[day] = child.description ?? '';
     node.id = child.id ?? child.entry_id ?? node.id;
     walkChildren(child.children, node.childMap, day);
   });
@@ -38,10 +44,14 @@ const flattenChildren = (childMap, depth, days, servicePOId, ancestorKeys) => {
   childMap.forEach((node, hierarchyId) => {
     const hasChildren = node.childMap.size > 0;
     const hoursByDay = {};
-    days.forEach((day) => { hoursByDay[day] = node.hoursByDay[day] || 0; });
+    const descriptionByDay = {};
+    days.forEach((day) => {
+      hoursByDay[day] = node.hoursByDay[day] || 0;
+      descriptionByDay[day] = node.descriptionByDay[day] || '';
+    });
     const rowKey = `h:${hierarchyId}`;
     rows.push({
-      servicePOId, hierarchyId, label: node.name, depth, hasChildren, editable: true, hoursByDay, rowKey, ancestorKeys, id: node.id,
+      servicePOId, hierarchyId, label: node.name, depth, hasChildren, editable: true, hoursByDay, descriptionByDay, rowKey, ancestorKeys, id: node.id,
     });
     rows.push(...flattenChildren(node.childMap, depth + 1, days, servicePOId, [...ancestorKeys, rowKey]));
   });
@@ -58,6 +68,7 @@ export const buildMonthlySummaryRows = (dayEntries = []) => {
     service_pos.forEach((po) => {
       const poNode = ensureNode(poMap, po.service_po_id, po.service_po_name);
       poNode.hoursByDay[day] = Number(po.hours || 0);
+      poNode.descriptionByDay[day] = po.description ?? '';
       poNode.id = po.id ?? po.entry_id ?? poNode.id;
       walkChildren(po.children, poNode.childMap, day);
     });
@@ -68,10 +79,14 @@ export const buildMonthlySummaryRows = (dayEntries = []) => {
   poMap.forEach((node, servicePOId) => {
     const hasChildren = node.childMap.size > 0;
     const hoursByDay = {};
-    dayList.forEach((day) => { hoursByDay[day] = node.hoursByDay[day] || 0; });
+    const descriptionByDay = {};
+    dayList.forEach((day) => {
+      hoursByDay[day] = node.hoursByDay[day] || 0;
+      descriptionByDay[day] = node.descriptionByDay[day] || '';
+    });
     const rowKey = `po:${servicePOId}`;
     rows.push({
-      servicePOId, label: node.name, depth: 0, hasChildren, editable: true, hoursByDay, rowKey, ancestorKeys: [], id: node.id,
+      servicePOId, label: node.name, depth: 0, hasChildren, editable: true, hoursByDay, descriptionByDay, rowKey, ancestorKeys: [], id: node.id,
     });
     rows.push(...flattenChildren(node.childMap, 1, dayList, servicePOId, [rowKey]));
   });
@@ -86,19 +101,33 @@ export const buildMonthlySummaryRows = (dayEntries = []) => {
 //
 // Plain-hours only — the Work Log form never sends time_entries (that's the separate Time Entry
 // form's job, see utils/employeeTimeEntry.js and pages/employee/EmployeeTimeEntry.jsx).
-export const buildDayEntries = (rows, day, edits) =>
+// `descriptions` is the same `{ [rowKey]: { [day]: text } }` shape as `edits`, holding whatever
+// the user typed into WorkLogEntryTable's Description column; falls back to the row's own label
+// (then a generic placeholder) when left blank, since the entries API requires a description.
+//
+// ⚠️ KNOWN BACKEND GAP — a saved description doesn't read back. This does send `description` per
+// entry on save, but GET /employee-timesheets/daily, /monthly-summary and /monthly never include
+// a `description` field on a service_po/child node in their response (see employeeWorkLog.api.js's
+// documented shapes), so buildMonthlySummaryRows above has nothing to populate descriptionByDay
+// with on the next load — the box reads back empty even though the value was persisted, which is
+// indistinguishable from "didn't save" to the user. Needs the three GET endpoints to start
+// returning that day's `description` per node; buildMonthlySummaryRows already reads it
+// defensively (`po.description` / `child.description`) and will pick it up the moment it's there.
+export const buildDayEntries = (rows, day, edits, descriptions) =>
   rows
     .map((row) => {
       const edited = edits?.[row.rowKey]?.[day];
       const hours = edited !== undefined ? Number(edited || 0) : Number(row.hoursByDay?.[day] ?? 0);
-      return { row, hours };
+      const editedDescription = descriptions?.[row.rowKey]?.[day];
+      const description = editedDescription?.trim() || row.descriptionByDay?.[day]?.trim() || row.label || 'Logged via Monthly Summary';
+      return { row, hours, description };
     })
     .filter(({ hours }) => hours > 0)
-    .map(({ row, hours }) => ({
+    .map(({ row, hours, description }) => ({
       service_po_id: row.servicePOId,
       hierarchy_node_id: row.hierarchyId ?? null,
       hours,
-      description: row.label ?? 'Logged via Monthly Summary',
+      description,
     }));
 
 // Mirrors the 400s the server enforces on a whole-day save, so the user sees the same wording

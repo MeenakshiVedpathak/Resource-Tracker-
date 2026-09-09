@@ -1,5 +1,5 @@
 import * as React from "react"
-import { ChevronsUpDown, X } from "lucide-react"
+import { ChevronDown, X } from "lucide-react"
 import { cn } from "@/utils/cn"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -80,7 +80,7 @@ export function MultiSelect({
                 ? selectedLabels[0]
                 : `${selectedLabels.length} selected`}
             </span>
-            <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
+            <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">

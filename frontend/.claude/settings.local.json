@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx vite *)",
+      "Bash(ls e:/RUTQA/Resource-Tracker-/)",
+      "Read(//e/RUTQA/Resource-Tracker-/**)",
+      "Bash(npx eslint *)",
+      "Bash(npx esbuild *)",
+      "Bash(npm run *)",
+      "Bash(node -e \"const s=require\\('./package.json'\\).scripts||{}; console.log\\(JSON.stringify\\(s,null,2\\)\\)\")",
+      "Bash(timeout 30 bash -c 'until curl -sf http://localhost:5180 >/dev/null; do sleep 1; done')",
+      "Read(//tmp/**)",
+      "Bash(npx --yes playwright screenshot --help)",
+      "Bash(npx --yes -p playwright node authshot.js)",
+      "Bash(NODE_PATH=\"C:\\\\Users\\\\Admin\\\\AppData\\\\Local\\\\npm-cache\\\\_npx\\\\e41f203b7505f1fb\\\\node_modules\" node authshot.js)",
+      "Bash(curl -sS -m 8 -o /dev/null -w \"HTTP %{http_code}\\\\n\" https://24d9qpd0-5555.inc1.devtunnels.ms/api/v1)",
+      "Bash(NODE_PATH=\"C:\\\\Users\\\\Admin\\\\AppData\\\\Local\\\\npm-cache\\\\_npx\\\\e41f203b7505f1fb\\\\node_modules\" node diag.js)",
+      "Bash(NODE_PATH=\"C:\\\\Users\\\\Admin\\\\AppData\\\\Local\\\\npm-cache\\\\_npx\\\\e41f203b7505f1fb\\\\node_modules\" node dialogshot.js)",
+      "Bash(lsof -ti:5173 -sTCP:LISTEN)",
+      "Bash(xargs -r kill)",
+      "Bash(lsof -ti:5180 -sTCP:LISTEN)",
+      "Bash(NODE_PATH=\"C:\\\\Users\\\\Admin\\\\AppData\\\\Local\\\\npm-cache\\\\_npx\\\\e41f203b7505f1fb\\\\node_modules\" node dashcheck.js)",
+      "Bash(NODE_PATH=\"C:\\\\Users\\\\Admin\\\\AppData\\\\Local\\\\npm-cache\\\\_npx\\\\e41f203b7505f1fb\\\\node_modules\" node tablecheck.js)",
+      "Bash(NODE_PATH=\"C:\\\\Users\\\\Admin\\\\AppData\\\\Local\\\\npm-cache\\\\_npx\\\\e41f203b7505f1fb\\\\node_modules\" node fadecheck.js)",
+      "Bash(NODE_PATH=\"C:\\\\Users\\\\Admin\\\\AppData\\\\Local\\\\npm-cache\\\\_npx\\\\e41f203b7505f1fb\\\\node_modules\" node pagecheck.js)",
+      "Bash(NODE_PATH=\"C:\\\\Users\\\\Admin\\\\AppData\\\\Local\\\\npm-cache\\\\_npx\\\\e41f203b7505f1fb\\\\node_modules\" node pagbtn.js)",
+      "Bash(NODE_PATH=\"C:\\\\Users\\\\Admin\\\\AppData\\\\Local\\\\npm-cache\\\\_npx\\\\e41f203b7505f1fb\\\\node_modules\" node timesheetcheck.js)",
+      "Bash(NODE_PATH=\"C:\\\\Users\\\\Admin\\\\AppData\\\\Local\\\\npm-cache\\\\_npx\\\\e41f203b7505f1fb\\\\node_modules\" node toolbarcheck.js)"
+    ]
+  }
+}

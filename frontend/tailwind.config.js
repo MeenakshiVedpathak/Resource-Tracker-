@@ -15,7 +15,7 @@ export default {
     },
     extend: {
        fontFamily: {
-        sans: ['Inter', '"Source Sans Pro"', 'Helvetica', 'Arial', 'sans-serif'],
+        sans: ['Inter', 'ui-sans-serif', 'system-ui', 'Helvetica', 'Arial', 'sans-serif'],
         mono: ['JetBrains Mono', 'Fira Code', 'Cascadia Code', 'monospace'],
       },
       colors: {
@@ -128,3 +128,5 @@ export default {
     require('tailwindcss-animate'),
   ],
 };
+ 
+ 

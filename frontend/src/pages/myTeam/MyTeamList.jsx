@@ -1,9 +1,13 @@
 import { useMemo, useState } from 'react';
-import { Plus, Users } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Plus, Users, CalendarPlus } from 'lucide-react';
 import { useMyTeamEmployees, useMapMyTeamEmployee } from '@/hooks/useMyTeam';
 import { useActiveEmployees } from '@/hooks/useEmployees';
 import { useNotification } from '@/hooks/useNotification';
+import { useHasForm } from '@/hooks/usePermissions';
 import { extractApiError } from '@/services/apiClient';
+import { ROUTES } from '@/constants/routes';
+import { FORM_NAMES } from '@/constants/rbacForms';
 import PageHeader from '@/components/common/PageHeader';
 import StatusBadge from '@/components/common/StatusBadge';
 import { Button } from '@/components/ui/button';
@@ -19,7 +23,11 @@ import {
 } from '@/components/ui/dialog';
 
 const MyTeamList = () => {
+  const navigate = useNavigate();
   const { success, error: showError } = useNotification();
+  // Separately grantable capability — a Manager can have "My Team" (this list) without also
+  // having "Log Work for My Team" (filling hours on an Employee's behalf).
+  const canFillWorkLog = useHasForm(FORM_NAMES.MANAGER_FILL_WORKLOG);
 
   const [addOpen, setAddOpen] = useState(false);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
@@ -51,14 +59,27 @@ const MyTeamList = () => {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="flex h-full min-h-0 flex-col space-y-4">
       <PageHeader
         title="My Team"
         description="Employees reporting to you"
         actions={
-          <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => setAddOpen(true)}>
-            <Plus className="mr-1.5 h-4 w-4" /> Map Employee
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Visually distinct (emerald, not blue) from Map Employee — this creates
+                already-approved work log records for an Employee, not a team-membership change. */}
+            {canFillWorkLog && (
+              <Button
+                size="sm"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                onClick={() => navigate(ROUTES.MANAGER_FILL_WORKLOG)}
+              >
+                <CalendarPlus className="mr-1.5 h-4 w-4" /> Log Work for Team
+              </Button>
+            )}
+            <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => setAddOpen(true)}>
+              <Plus className="mr-1.5 h-4 w-4" /> Map Employee
+            </Button>
+          </div>
         }
       />
 

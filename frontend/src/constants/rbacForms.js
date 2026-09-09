@@ -19,7 +19,7 @@ import {
   ListTree, ListChecks, Banknote, CalendarClock, Timer, Hourglass,
   TrendingUp, LineChart, Target, Percent, Award, BatteryCharging, AlertTriangle, Crown,
   ReceiptText, GitCompare, Scale, BarChart3, Building, Activity, Armchair, Users2,
-  ClipboardCheck, XCircle, UserCog,
+  ClipboardCheck, XCircle, UserCog, CalendarPlus,
 } from 'lucide-react';
 import { ROUTES } from '@/constants/routes';
 
@@ -57,6 +57,11 @@ export const FORM_NAMES = {
   REPORT_SERVICE_PO_SUMMARY: 'Service PO Summary',
   REPORT_INVOICE_PO_SUMMARY: 'Invoice PO Summary',
   REPORT_MONTHLY_UTILIZATION: 'Monthly Utilization',
+  // Guessed name — same caveat as this file's header comment; confirm against the actual Form
+  // Master row once one is seeded for this new report (backend GET /reports/employee-utilization-
+  // summary already exists and is tested — only the Form Master row + Role Form Mapping grant are
+  // missing, which is an admin action via the Forms/Role Form Mapping screens, not a code change).
+  REPORT_EMPLOYEE_UTILIZATION_SUMMARY: 'Employee Utilization Summary',
   REPORT_RESOURCE_ALLOCATION: 'Resource Allocation',
   REPORT_RESOURCE_PROJECT_UTILIZATION: 'Resource Project Utilization',
   // Matches the backend's actual Form Master row name (confirmed via GET /roles/forms), not
@@ -104,6 +109,11 @@ export const FORM_NAMES = {
   // (2026-08-23) to its own dedicated screen — see pages/managerTimesheet/ManagerTimesheetApproval.jsx.
   MANAGER_TIMESHEET: 'Timesheet',
   MANAGER_TIMESHEET_APPROVAL: 'Timesheet Approval',
+  // "Log Work for My Team" (net-new, 2026-09-08 spec) — a Manager fills a mapped Employee's
+  // monthly work log hours on their behalf (auto-approved), distinct from Timesheet Approval
+  // above, which only approves/rejects entries the Employee submitted themself. Guessed name —
+  // same caveat as the rest of this file: confirm against the actual Form Master row once seeded.
+  MANAGER_FILL_WORKLOG: 'Log Work for My Team',
   // Business module, Service PO Admin login (confirmed via GET /roles/forms) — the Form Master
   // row now exists on the backend, so this is picked up automatically by Sidebar's RBAC-driven
   // buildNavGroups() instead of the Manager-only hardcoded injection below.
@@ -175,13 +185,14 @@ export const FORM_ROUTE_CONFIG = {
   [FORM_NAMES.SERVICE_CATEGORIES]: { to: ROUTES.SERVICE_CATEGORIES, icon: Tag, addTo: ROUTES.SERVICE_CATEGORY_NEW, addLabel: 'Add Category' },
   [FORM_NAMES.TIMESHEETS]: { to: ROUTES.TIMESHEETS, icon: Clock },
   [FORM_NAMES.MONTHLY_COSTS]: { to: ROUTES.MONTHLY_COSTS, icon: DollarSign },
-  [FORM_NAMES.REPORT_PO_VS_RESOURCE]: { to: ROUTES.REPORT_SERVICE_PO_RESOURCE, icon: Network },
-  [FORM_NAMES.REPORT_SERVICE_PO_SUMMARY]: { to: ROUTES.REPORT_SERVICE_PO_SUMMARY, icon: FileBarChart2 },
-  [FORM_NAMES.REPORT_INVOICE_PO_SUMMARY]: { to: ROUTES.REPORT_INVOICE_PO_SUMMARY, icon: IndianRupee },
-  [FORM_NAMES.REPORT_MONTHLY_UTILIZATION]: { to: ROUTES.REPORT_MONTHLY_RESOURCE_UTILIZATION, icon: CalendarRange },
-  [FORM_NAMES.REPORT_RESOURCE_ALLOCATION]: { to: ROUTES.REPORT_RESOURCE_ALLOCATION, icon: PieChart },
-  [FORM_NAMES.REPORT_RESOURCE_PROJECT_UTILIZATION]: { to: ROUTES.REPORT_RESOURCE_PROJECT_UTILIZATION, icon: UserCheck },
-  [FORM_NAMES.REPORT_CLIENT_SERVICE_PO_HOURS]: { to: ROUTES.REPORT_CLIENT_SERVICE_PO_HOURS, icon: Receipt },
+  [FORM_NAMES.REPORT_PO_VS_RESOURCE]: { to: ROUTES.REPORT_SERVICE_PO_RESOURCE, icon: Network, description: 'Resources allocated per Service PO for a selected month' },
+  [FORM_NAMES.REPORT_SERVICE_PO_SUMMARY]: { to: ROUTES.REPORT_SERVICE_PO_SUMMARY, icon: FileBarChart2, description: 'Service PO Summary with Hours & Billing' },
+  [FORM_NAMES.REPORT_INVOICE_PO_SUMMARY]: { to: ROUTES.REPORT_INVOICE_PO_SUMMARY, icon: IndianRupee, description: 'Invoiced, billed and unbilled amounts by Service PO' },
+  [FORM_NAMES.REPORT_MONTHLY_UTILIZATION]: { to: ROUTES.REPORT_MONTHLY_RESOURCE_UTILIZATION, icon: CalendarRange, description: 'Detailed resource utilization based on service categories' },
+  [FORM_NAMES.REPORT_EMPLOYEE_UTILIZATION_SUMMARY]: { to: ROUTES.REPORT_EMPLOYEE_UTILIZATION_SUMMARY, icon: Users2, description: "Each employee's total logged hours for the month, billable/non-billable breakdown" },
+  [FORM_NAMES.REPORT_RESOURCE_ALLOCATION]: { to: ROUTES.REPORT_RESOURCE_ALLOCATION, icon: PieChart, description: 'View employee-to-PO assignments and hours logged.' },
+  [FORM_NAMES.REPORT_RESOURCE_PROJECT_UTILIZATION]: { to: ROUTES.REPORT_RESOURCE_PROJECT_UTILIZATION, icon: UserCheck, description: 'Per-employee hours breakdown across projects, for a given month.' },
+  [FORM_NAMES.REPORT_CLIENT_SERVICE_PO_HOURS]: { to: ROUTES.REPORT_CLIENT_SERVICE_PO_HOURS, icon: Receipt, description: 'Hours delivered per Service PO, grouped by Client' },
   [FORM_NAMES.EMPLOYEE_DASHBOARD]: { to: ROUTES.EMPLOYEE_DASHBOARD, icon: LayoutDashboard, exact: true },
   [FORM_NAMES.EMPLOYEE_WORK_LOG]: { to: ROUTES.EMPLOYEE_TIMESHEET, icon: Clock },
   [FORM_NAMES.EMPLOYEE_TIME_ENTRY]: { to: ROUTES.EMPLOYEE_TIME_ENTRY, icon: Hourglass, exact: true },
@@ -196,30 +207,31 @@ export const FORM_ROUTE_CONFIG = {
   [FORM_NAMES.EMPLOYEE_REJECTED_ENTRIES]: { to: ROUTES.EMPLOYEE_REJECTED_ENTRIES, icon: XCircle, exact: true },
   [FORM_NAMES.MANAGER_TIMESHEET]: { to: ROUTES.EMPLOYEE_TIMESHEET, icon: Clock },
   [FORM_NAMES.MANAGER_TIMESHEET_APPROVAL]: { to: ROUTES.MANAGER_TIMESHEET_APPROVAL, icon: ClipboardCheck, exact: true },
+  [FORM_NAMES.MANAGER_FILL_WORKLOG]: { to: ROUTES.MANAGER_FILL_WORKLOG, icon: CalendarPlus, exact: true },
   [FORM_NAMES.SERVICE_PO_MONTHLY_BUDGET]: { to: ROUTES.SERVICE_PO_MONTHLY_BUDGET, icon: Wallet, exact: true },
   [FORM_NAMES.MY_TEAM]: { to: ROUTES.MY_TEAM, icon: Network, exact: true },
   [FORM_NAMES.TEAM_MAPPING]: { to: ROUTES.TEAM_MAPPINGS, icon: UserCog, exact: true },
   [FORM_NAMES.COST_BUDGET]: { to: ROUTES.COST_BUDGETS, icon: Banknote, exact: true },
   [FORM_NAMES.RESOURCE_BUDGET]: { to: ROUTES.RESOURCE_BUDGETS, icon: CalendarClock, exact: true },
-  [FORM_NAMES.REPORT_SERVICE_PO_PROFITABILITY]: { to: ROUTES.REPORT_SERVICE_PO_PROFITABILITY, icon: TrendingUp },
-  [FORM_NAMES.REPORT_BUDGETED_MARGIN_FORECAST]: { to: ROUTES.REPORT_BUDGETED_MARGIN_FORECAST, icon: LineChart },
-  [FORM_NAMES.REPORT_RESOURCE_STAFFING_PLAN_ACCURACY]: { to: ROUTES.REPORT_RESOURCE_STAFFING_PLAN_ACCURACY, icon: Target },
-  [FORM_NAMES.REPORT_CLIENT_PROFITABILITY_CONCENTRATION]: { to: ROUTES.REPORT_CLIENT_PROFITABILITY_CONCENTRATION, icon: Percent },
-  [FORM_NAMES.REPORT_BU_PERFORMANCE_SCORECARD]: { to: ROUTES.REPORT_BU_PERFORMANCE_SCORECARD, icon: Award },
-  [FORM_NAMES.REPORT_EMPLOYEE_CAPACITY_FORECAST]: { to: ROUTES.REPORT_EMPLOYEE_CAPACITY_FORECAST, icon: BatteryCharging },
-  [FORM_NAMES.REPORT_SERVICE_PO_TIMELINE_RISK]: { to: ROUTES.REPORT_SERVICE_PO_TIMELINE_RISK, icon: AlertTriangle },
-  [FORM_NAMES.REPORT_DELIVERY_HEAD_PERFORMANCE]: { to: ROUTES.REPORT_DELIVERY_HEAD_PERFORMANCE, icon: Crown },
-  [FORM_NAMES.REPORT_INVOICE_REALIZATION_TREND]: { to: ROUTES.REPORT_INVOICE_REALIZATION_TREND, icon: ReceiptText },
-  [FORM_NAMES.REPORT_SERVICE_LINE_BUSINESS_MIX]: { to: ROUTES.REPORT_SERVICE_LINE_BUSINESS_MIX, icon: GitCompare },
-  [FORM_NAMES.REPORT_BUDGET_VS_BILLED]: { to: ROUTES.REPORT_BUDGET_VS_BILLED, icon: Scale },
-  [FORM_NAMES.REPORT_CLIENT_COST_ANALYTICS]: { to: ROUTES.REPORT_CLIENT_COST_ANALYTICS, icon: BarChart3 },
-  [FORM_NAMES.REPORT_CLIENT_WISE_ANALYTICS]: { to: ROUTES.REPORT_CLIENT_WISE_ANALYTICS, icon: Building },
-  [FORM_NAMES.REPORT_MONTHLY_HOURS_TREND]: { to: ROUTES.REPORT_MONTHLY_HOURS_TREND, icon: Activity },
-  [FORM_NAMES.REPORT_EMPLOYEE_BENCH_PERCENTAGE]: { to: ROUTES.REPORT_EMPLOYEE_BENCH_PERCENTAGE, icon: Armchair },
-  [FORM_NAMES.REPORT_EMPLOYEE_WORK_LOG_HOURS_SUMMARY]: { to: ROUTES.REPORT_EMPLOYEE_WORK_LOG_HOURS_SUMMARY, icon: FileBarChart2 },
-  [FORM_NAMES.REPORT_EMPLOYEE_WORK_LOG_COMPLIANCE]: { to: ROUTES.REPORT_EMPLOYEE_WORK_LOG_COMPLIANCE, icon: ClipboardList },
-  [FORM_NAMES.REPORT_RESOURCE_UTILIZATION_TREND]: { to: ROUTES.REPORT_RESOURCE_UTILIZATION_TREND, icon: LineChart },
-  [FORM_NAMES.REPORT_SERVICE_PO_HOURS_BUDGET]: { to: ROUTES.REPORT_SERVICE_PO_HOURS_BUDGET, icon: Wallet },
+  [FORM_NAMES.REPORT_SERVICE_PO_PROFITABILITY]: { to: ROUTES.REPORT_SERVICE_PO_PROFITABILITY, icon: TrendingUp, description: 'Margin analysis per Service PO — invoiced amount vs delivery cost.' },
+  [FORM_NAMES.REPORT_BUDGETED_MARGIN_FORECAST]: { to: ROUTES.REPORT_BUDGETED_MARGIN_FORECAST, icon: LineChart, description: 'Forecasted margin from budgeted revenue vs budgeted cost, by Service PO.' },
+  [FORM_NAMES.REPORT_RESOURCE_STAFFING_PLAN_ACCURACY]: { to: ROUTES.REPORT_RESOURCE_STAFFING_PLAN_ACCURACY, icon: Target, description: 'Planned vs actual hours per employee/Service PO, flagged when variance exceeds a threshold.' },
+  [FORM_NAMES.REPORT_CLIENT_PROFITABILITY_CONCENTRATION]: { to: ROUTES.REPORT_CLIENT_PROFITABILITY_CONCENTRATION, icon: Percent, description: 'Revenue concentration and margin per client for the selected month.' },
+  [FORM_NAMES.REPORT_BU_PERFORMANCE_SCORECARD]: { to: ROUTES.REPORT_BU_PERFORMANCE_SCORECARD, icon: Award, description: 'Per-company scorecard of active employees, POs, and margin.' },
+  [FORM_NAMES.REPORT_EMPLOYEE_CAPACITY_FORECAST]: { to: ROUTES.REPORT_EMPLOYEE_CAPACITY_FORECAST, icon: BatteryCharging, description: 'Capacity utilization and bench/overallocation risk per employee for the selected month.' },
+  [FORM_NAMES.REPORT_SERVICE_PO_TIMELINE_RISK]: { to: ROUTES.REPORT_SERVICE_PO_TIMELINE_RISK, icon: AlertTriangle, description: 'Burn-rate risk per Service PO based on elapsed time vs hours consumed.' },
+  [FORM_NAMES.REPORT_DELIVERY_HEAD_PERFORMANCE]: { to: ROUTES.REPORT_DELIVERY_HEAD_PERFORMANCE, icon: Crown, description: 'Portfolio performance per Delivery Head — PO count, hours, and margin delivered.' },
+  [FORM_NAMES.REPORT_INVOICE_REALIZATION_TREND]: { to: ROUTES.REPORT_INVOICE_REALIZATION_TREND, icon: ReceiptText, description: 'Invoiced vs billed amounts per Service PO across a month range, with a monthly trend drill-down.' },
+  [FORM_NAMES.REPORT_SERVICE_LINE_BUSINESS_MIX]: { to: ROUTES.REPORT_SERVICE_LINE_BUSINESS_MIX, icon: GitCompare, description: 'Hours, cost, and margin by Service Category/Type, with optional month-over-month comparison.' },
+  [FORM_NAMES.REPORT_BUDGET_VS_BILLED]: { to: ROUTES.REPORT_BUDGET_VS_BILLED, icon: Scale, description: 'Budget cost vs billed amount per Service PO, with a monthly trend and over/under-budget breakdown.' },
+  [FORM_NAMES.REPORT_CLIENT_COST_ANALYTICS]: { to: ROUTES.REPORT_CLIENT_COST_ANALYTICS, icon: BarChart3, description: 'Cost and hours breakdown per client — an all-time view with no date range filter.' },
+  [FORM_NAMES.REPORT_CLIENT_WISE_ANALYTICS]: { to: ROUTES.REPORT_CLIENT_WISE_ANALYTICS, icon: Building, description: 'Cost, hours and project distribution per client for the selected period.' },
+  [FORM_NAMES.REPORT_MONTHLY_HOURS_TREND]: { to: ROUTES.REPORT_MONTHLY_HOURS_TREND, icon: Activity, description: 'Hours by category, cost by category, utilization, and leave/no-work hours across a resolved month range.' },
+  [FORM_NAMES.REPORT_EMPLOYEE_BENCH_PERCENTAGE]: { to: ROUTES.REPORT_EMPLOYEE_BENCH_PERCENTAGE, icon: Armchair, description: "Share of each employee's hours that went unbilled (bench) for the selected period." },
+  [FORM_NAMES.REPORT_EMPLOYEE_WORK_LOG_HOURS_SUMMARY]: { to: ROUTES.REPORT_EMPLOYEE_WORK_LOG_HOURS_SUMMARY, icon: FileBarChart2, description: 'Aggregated work log hours per employee for the selected date or month.' },
+  [FORM_NAMES.REPORT_EMPLOYEE_WORK_LOG_COMPLIANCE]: { to: ROUTES.REPORT_EMPLOYEE_WORK_LOG_COMPLIANCE, icon: ClipboardList, description: 'Employees whose total logged hours fall below the required threshold for the selected period.' },
+  [FORM_NAMES.REPORT_RESOURCE_UTILIZATION_TREND]: { to: ROUTES.REPORT_RESOURCE_UTILIZATION_TREND, icon: LineChart, description: 'Monthly utilization per resource — billable hours as a share of total hours.' },
+  [FORM_NAMES.REPORT_SERVICE_PO_HOURS_BUDGET]: { to: ROUTES.REPORT_SERVICE_PO_HOURS_BUDGET, icon: Wallet, description: "Hours delivered against each Service PO's month-specific cost budget." },
 };
 
 const NORMALIZED_CONFIG = Object.fromEntries(

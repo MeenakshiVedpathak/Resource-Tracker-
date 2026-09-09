@@ -133,6 +133,7 @@ export const ROUTES = {
   REPORT_SERVICE_PO_SUMMARY: '/reports/service-po-summary',
   REPORT_INVOICE_PO_SUMMARY: '/reports/invoice-po-summary',
   REPORT_MONTHLY_RESOURCE_UTILIZATION: '/reports/monthly-resource-utilization',
+  REPORT_EMPLOYEE_UTILIZATION_SUMMARY: '/reports/employee-utilization-summary',
   REPORT_RESOURCE_PROJECT_UTILIZATION: '/reports/resource-project-utilization',
   REPORT_CLIENT_SERVICE_PO_HOURS: '/reports/client-service-po-hours',
   REPORT_SERVICE_PO_PROFITABILITY: '/reports/service-po-profitability',
@@ -168,6 +169,11 @@ export const ROUTES = {
   // own screen (2026-08-23) so approving a team's timesheets no longer lives behind the
   // employee selector on the work-log page.
   MANAGER_TIMESHEET_APPROVAL: '/manager/timesheet-approval',
+
+  // Log Work for My Team — Manager self-service, net-new (2026-09-08): a Manager fills a mapped
+  // Employee's monthly work log on their behalf (auto-approved), distinct from the review queue
+  // above.
+  MANAGER_FILL_WORKLOG: '/manager/fill-worklog',
 
   // Cost Budget / Resource Budget — net-new, per Service PO + month
   COST_BUDGETS: '/cost-budgets',

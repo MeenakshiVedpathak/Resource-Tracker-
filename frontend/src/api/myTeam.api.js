@@ -106,7 +106,15 @@ export const myTeamApi = {
   getEmployees: (params) => {
     if (RBAC_MOCK_ENABLED) return mockGetEmployees(params);
     const { buId, ...restParams } = params || {};
-    const scope = buId && buId !== 'all' ? explicitBuScope(buId) : {};
+    // My Team's mapped-Employee list must NEVER be silently narrowed by the navbar's globally-
+    // active Business Unit — a mapped Employee can legitimately sit in a Business Unit the
+    // Manager themself doesn't belong to (manager_employee_mappings is the access grant, not
+    // shared BU membership; see the backend's resolveMyTeamBusinessUnitScope.js /
+    // managerSelfServiceService.getMyEmployees). Unlike explicitBuScope('all')'s Reports-oriented
+    // fallback (a single-BU login's one BU counts as "all of theirs" there), that assumption does
+    // NOT hold here, so the interceptor's global X-Company-Id header is unconditionally dropped
+    // unless THIS screen's own BusinessUnitFilter explicitly picked one.
+    const scope = buId && buId !== 'all' ? explicitBuScope(buId) : { skipCompanyHeader: true };
     return apiClient.get('/my-team/employees', {
       params: { ...restParams, ...(buId && buId !== 'all' ? { business_unit_id: buId } : {}) },
       ...scope,
@@ -162,5 +170,49 @@ export const myTeamApi = {
   revokeServicePo: (employeeId, servicePOId) => {
     if (RBAC_MOCK_ENABLED) return mockRevokeServicePo(employeeId, servicePOId);
     return apiClient.delete(`/my-team/employees/${employeeId}/service-pos/${servicePOId}`).then((r) => r.data);
+  },
+
+  // "Log Work for My Team" (net-new) — a Manager filling in an Employee's monthly work log hours
+  // on their behalf, separate from the approval flow above (that only approves/rejects entries
+  // the Employee submitted themself). `service_pos` in the response is the Employee's mapped
+  // Service PO list for the month, each carrying any hours/description already filled in — see
+  // pages/myTeam/ManagerFillWorkLog.jsx for how Parent/Child hierarchy nodes under a PO (present
+  // for display only) are excluded from what the Manager can actually pick.
+  getEmployeeMonthlyWorkLog: (employeeId, { month, year }) =>
+    apiClient
+      .get(`/my-team/employees/${employeeId}/monthly-worklog`, { params: { month, year } })
+      .then((r) => r.data?.data ?? r.data),
+  // Replace-save: resubmitting with a different `entries` array edits the prior submission
+  // (delete-then-reinsert server-side) — there is no separate update endpoint/mode.
+  saveEmployeeMonthlyWorkLog: (employeeId, { month, year, entries }) =>
+    apiClient
+      .post(`/my-team/employees/${employeeId}/monthly-worklog`, { month, year, entries })
+      .then((r) => r.data),
+  // Deletes EVERY entry for this Employee+month, not only ones created via the save above — the
+  // caller must confirm before calling this (see ManagerFillWorkLog's ConfirmDialog).
+  deleteEmployeeMonthlyWorkLog: (employeeId, { month, year }) =>
+    apiClient
+      .delete(`/my-team/employees/${employeeId}/monthly-worklog`, { params: { month, year } })
+      .then((r) => r.data),
+
+  // Bulk Upload mode of "Log Work for My Team" — one Excel/CSV file covering many Employees at
+  // once, instead of the single-Employee drawer above. Whole-file, all-or-nothing validation
+  // (a single bad row 422s the entire file, nothing partially saved) — see
+  // components/myTeam/ManagerFillWorkLogBulkUpload.jsx for how the 422 body's
+  // `phase: 'format'|'ownership'|'service_po'` is rendered. No BU scoping: this is resolved
+  // entirely from the caller's own Primary-managed Employees, not a BU-filtered list.
+  importMonthlyWorkLog: ({ file, month, year, onUploadProgress }) => {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('month', month);
+    form.append('year', year);
+    return apiClient
+      .post('/my-team/monthly-worklog/bulk-upload', form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        ...(onUploadProgress && {
+          onUploadProgress: (e) => onUploadProgress(e.total ? Math.round((e.loaded / e.total) * 100) : 0),
+        }),
+      })
+      .then((r) => r.data);
   },
 };

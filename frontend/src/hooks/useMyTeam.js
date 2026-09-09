@@ -153,3 +153,82 @@ export const useApproveMyTeamTimesheetEntry = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['my-team', 'approval-summary'] }),
   });
 };
+
+// "Log Work for My Team" — a Manager filling in a mapped Employee's monthly work log on their
+// behalf (see pages/myTeam/ManagerFillWorkLog.jsx). `enabled` follows the caller (only fetch once
+// both an Employee and a Month/Year are picked).
+export const useEmployeeMonthlyWorkLog = (employeeId, { month, year } = {}, { enabled = true } = {}) =>
+  useQuery({
+    queryKey: QUERY_KEYS.MY_TEAM_EMPLOYEE_MONTHLY_WORKLOG(employeeId, month, year),
+    queryFn: () => myTeamApi.getEmployeeMonthlyWorkLog(employeeId, { month, year }),
+    enabled: enabled && !!employeeId && !!month && !!year,
+  });
+
+export const useSaveEmployeeMonthlyWorkLog = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ employeeId, month, year, entries }) =>
+      myTeamApi.saveEmployeeMonthlyWorkLog(employeeId, { month, year, entries }),
+    onSuccess: (_data, { employeeId, month, year }) =>
+      qc.invalidateQueries({ queryKey: QUERY_KEYS.MY_TEAM_EMPLOYEE_MONTHLY_WORKLOG(employeeId, month, year) }),
+  });
+};
+
+export const useDeleteEmployeeMonthlyWorkLog = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ employeeId, month, year }) => myTeamApi.deleteEmployeeMonthlyWorkLog(employeeId, { month, year }),
+    onSuccess: (_data, { employeeId, month, year }) =>
+      qc.invalidateQueries({ queryKey: QUERY_KEYS.MY_TEAM_EMPLOYEE_MONTHLY_WORKLOG(employeeId, month, year) }),
+  });
+};
+
+// Bulk Upload mode — one file can touch any number of the caller's Employees, so on success this
+// invalidates every cached MY_TEAM_EMPLOYEE_MONTHLY_WORKLOG entry by prefix (that key shape is
+// `['my-team', 'employees', employeeId, 'monthly-worklog', month, year]`, so a 2-element prefix
+// matches all of them) rather than trying to enumerate which employee/month combinations were
+// touched from the response alone.
+export const useImportMyTeamMonthlyWorkLog = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ file, month, year, onUploadProgress }) =>
+      myTeamApi.importMonthlyWorkLog({ file, month, year, onUploadProgress }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['my-team', 'employees'] }),
+  });
+};
+
+// Mirrors ManagerFillWorkLogDrawer's own filter — a hierarchy node nested under a Service PO is
+// shown there for context only, never editable by the Manager, so it's excluded here too: this
+// total must read as "what the drawer would show as already filled in" for that Employee, not a
+// bigger number the drawer itself never displays.
+const isTopLevelServicePO = (po) =>
+  (po.depth ?? 0) === 0 && !(po.ancestorKeys?.length) && po.hierarchy_node_id == null && po.parent_id == null;
+
+const sumWorkLogHours = (workLog) =>
+  (workLog?.service_pos ?? [])
+    .filter(isTopLevelServicePO)
+    .reduce((sum, po) => sum + Number(po.hours ?? po.existing_hours ?? po.total_hours ?? 0), 0);
+
+// Employee list's "Total Hours" column — one GET .../monthly-worklog per Employee for the
+// selected Month/Year, fanned out the same way useMyTeamAllEmployeesApprovalSummary does. Shares
+// its cache entry (same MY_TEAM_EMPLOYEE_MONTHLY_WORKLOG key) with useEmployeeMonthlyWorkLog, so
+// opening the drawer for a row already warmed by this list re-uses it instead of re-fetching, and
+// vice versa.
+export const useMyTeamEmployeesMonthlyWorkLogTotals = (employees, { month, year } = {}, { enabled = true } = {}) => {
+  const queries = useQueries({
+    queries: employees.map((emp) => ({
+      queryKey: QUERY_KEYS.MY_TEAM_EMPLOYEE_MONTHLY_WORKLOG(emp.id, month, year),
+      queryFn: () => myTeamApi.getEmployeeMonthlyWorkLog(emp.id, { month, year }),
+      enabled: enabled && !!emp.id && !!month && !!year,
+    })),
+  });
+
+  const totalsByEmployeeId = new Map();
+  queries.forEach((q, i) => {
+    const emp = employees[i];
+    if (!emp) return;
+    totalsByEmployeeId.set(emp.id, { totalHours: sumWorkLogHours(q.data), isLoading: q.isLoading });
+  });
+
+  return totalsByEmployeeId;
+};

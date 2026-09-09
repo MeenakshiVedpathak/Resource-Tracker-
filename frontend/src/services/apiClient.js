@@ -340,17 +340,31 @@ export const extractFieldErrors = (error) => {
   );
 };
 
+// True for a request that never got a response at all — the server timed out, DNS/CORS/offline
+// failed outright, or the client aborted past its own timeout — as opposed to one that got a real
+// HTTP response back (2xx/4xx/5xx), which `error.response` would carry. Exported so callers that
+// want to react to connectivity failures specifically (see lib/queryClient.js's background-query
+// toast) don't have to re-derive this from axios' error codes themselves.
+export const isNetworkOrTimeoutError = (error) =>
+  !error?.response
+  && (error?.code === 'ECONNABORTED' || error?.code === 'ERR_NETWORK' || error?.message === 'Network Error' || /timeout/i.test(error?.message ?? ''));
+
 // ── API error normalizer ──
 export const extractApiError = (error) => {
+  // Checked before `error.response.data`: a request that timed out or never left the browser
+  // carries no response body to read a message out of, and used to fall through to axios' own
+  // technical wording ("timeout of 30000ms exceeded") landing verbatim in a toast.
+  if (isNetworkOrTimeoutError(error)) {
+    return error?.code === 'ECONNABORTED' || /timeout/i.test(error?.message ?? '')
+      ? 'The request took too long to respond. Please check your connection and try again.'
+      : 'Unable to connect to server. Please check your connection.';
+  }
   if (error?.response?.data) {
     const { message, errors } = error.response.data;
     if (errors?.length) {
       return errors.map((e) => e.message).join(', ');
     }
     return message || 'An unexpected error occurred.';
-  }
-  if (error?.message === 'Network Error') {
-    return 'Unable to connect to server. Please check your connection.';
   }
   return error?.message || 'An unexpected error occurred.';
 };
