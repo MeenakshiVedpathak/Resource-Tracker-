@@ -136,6 +136,23 @@ const ManagerFillWorkLog = () => {
     [filteredEmployees, page, limit],
   );
 
+  // The Business Unit column had a flat 180px size, which clipped anything past ~1 short BU name
+  // — an Employee mapped to several BUs renders them comma-joined in one cell, and that string
+  // routinely runs longer than a single name ever would. Size the column to the longest joined
+  // string actually on the current page instead of a fixed guess, clamped so one outlier can't
+  // blow out the whole table (DataTable renders `table-fixed`, so every column still needs a real
+  // number) — same approach TimesheetList's own Business Unit column uses.
+  const businessUnitColumnWidth = useMemo(() => {
+    const longest = pagedEmployees.reduce((max, e) => {
+      const joined = (e.business_unit_ids ?? [])
+        .map((id) => buNameById.get(String(id)))
+        .filter(Boolean)
+        .join(', ');
+      return Math.max(max, joined.length);
+    }, 0);
+    return Math.min(320, Math.max(150, (longest * 7.5) + 40));
+  }, [pagedEmployees, buNameById]);
+
   const handleMonthYearChange = (v) => setMonthYear(v ?? defaultMonthYear());
 
   const handleSearchChange = (e) => {
@@ -187,12 +204,16 @@ const ManagerFillWorkLog = () => {
     columnHelper.display({
       id: 'business_unit',
       header: 'Business Unit',
-      size: 180,
+      size: businessUnitColumnWidth,
       cell: ({ row }) => {
         const names = (row.original.business_unit_ids ?? [])
           .map((id) => buNameById.get(String(id)))
           .filter(Boolean);
-        return <span className="whitespace-nowrap text-sm text-muted-foreground">{names.length ? names.join(', ') : '—'}</span>;
+        const joined = names.length ? names.join(', ') : '—';
+        // `truncate` (not `whitespace-nowrap` alone) so a name list that still outgrows the
+        // clamped column width ellipsizes in place instead of visually overflowing into the next
+        // cell — the `title` surfaces the full list on hover either way.
+        return <span className="block truncate text-sm text-muted-foreground" title={joined}>{joined}</span>;
       },
     }),
     columnHelper.accessor('designation', {

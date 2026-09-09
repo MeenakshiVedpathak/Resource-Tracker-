@@ -24,6 +24,36 @@ import { ROLE_NAMES, SENIOR_ROLE_NAMES } from '@/constants/roleHierarchy';
 // arbitrarily smaller slice of it.
 const REAL_ROLE_FILTER_SCAN_LIMIT = 200;
 
+// Fields the Employee List's search box is expected to match. GET /employees' own `search` covers
+// the name and the employee code but NOT the email, so an email search comes back empty from the
+// backend — hence the fallback scan below, which resolves the same predicate client-side.
+const SEARCH_MATCH_FIELDS = ['full_name', 'employee_code', 'email'];
+
+const matchesSearch = (employee, query) =>
+  SEARCH_MATCH_FIELDS.some((f) => String(employee?.[f] ?? '').toLowerCase().includes(query));
+
+// Slice a locally-resolved match set into the page the caller asked for, in the same envelope
+// shape the real endpoint returns, so callers can't tell a scanned page from a server-paged one.
+const pageOfMatches = (matches, { page, limit }, message) => {
+  const pageNum = Number(page) || 1;
+  const perPage = Number(limit) || 10;
+  const start = (pageNum - 1) * perPage;
+  const total = matches.length;
+  return {
+    success: true,
+    message: message ?? 'OK',
+    data: matches.slice(start, start + perPage),
+    meta: {
+      total,
+      page: pageNum,
+      limit: perPage,
+      totalPages: Math.ceil(total / perPage) || 0,
+      hasNext: pageNum * perPage < total,
+      hasPrev: pageNum > 1,
+    },
+  };
+};
+
 const resolveRoles = (roleIds, actorRoleObjects) => {
   const roles = (roleIds ?? []).map((rid) => findRoleById(Number(rid))).filter(Boolean);
   if (!roles.length) throw mockError(422, 'Select at least one role.');
@@ -48,7 +78,7 @@ const mockGetAll = async (params) => {
   await delay();
   const result = paginate(getDb().employees, {
     ...params,
-    searchFields: ['full_name', 'employee_code'],
+    searchFields: ['full_name', 'employee_code', 'email'],
     filter: (e) => {
       if (params?.role_id) {
         const targetId = Number(params.role_id);
@@ -199,16 +229,37 @@ const realGetAllFiltered = async ({ roleId, businessUnitId }, employeeParams) =>
     (e) => targetRoleId == null || (e.roles ?? []).some((r) => Number(r.id) === targetRoleId)
   );
 
-  const page = Number(employeeParams.page) || 1;
-  const limit = Number(employeeParams.limit) || 10;
-  const start = (page - 1) * limit;
-  const total = matches.length;
-  return {
-    success: true,
-    message: batchRes?.message ?? 'OK',
-    data: matches.slice(start, start + limit),
-    meta: { total, page, limit, totalPages: Math.ceil(total / limit) || 0, hasNext: page * limit < total, hasPrev: page > 1 },
-  };
+  return pageOfMatches(matches, employeeParams, batchRes?.message);
+};
+
+// Email search fallback. The backend's `search` matches name/code only, so searching an email (or
+// any fragment of one — a domain, say) returns an empty page even when an employee plainly
+// matches. When that happens, re-fetch one bounded, UNSEARCHED page and resolve the search
+// locally across SEARCH_MATCH_FIELDS, which includes the email.
+//
+// Deliberately a fallback rather than the primary path: it only costs a second request on a
+// search that already found nothing, it leaves the working name/code path entirely server-side,
+// and it becomes dead weight (never triggered) the day GET /employees searches email itself.
+// Same REAL_ROLE_FILTER_SCAN_LIMIT bound — and the same caveat — as the role filter above: past
+// that many employees in scope, a match can fall outside the scanned page.
+const realSearchFallback = async ({ roleId, businessUnitId }, employeeParams) => {
+  const { search, status, sortBy, sortOrder } = employeeParams;
+  const scope = businessUnitId && businessUnitId !== 'all' ? explicitBuScope(businessUnitId) : explicitBuScope(null);
+  const batchRes = await apiClient
+    .get('/employees', {
+      params: { page: 1, limit: REAL_ROLE_FILTER_SCAN_LIMIT, status, sortBy, sortOrder },
+      ...scope,
+    })
+    .then((r) => r.data);
+
+  const query = String(search).toLowerCase();
+  const targetRoleId = roleId != null ? Number(roleId) : null;
+  const matches = (batchRes?.data ?? []).filter(
+    (e) => matchesSearch(e, query)
+      && (targetRoleId == null || (e.roles ?? []).some((r) => Number(r.id) === targetRoleId))
+  );
+
+  return pageOfMatches(matches, employeeParams, batchRes?.message);
 };
 
 export const employeesApi = {
@@ -217,7 +268,13 @@ export const employeesApi = {
     const { role_id, business_unit_id, company_id, ...employeeParams } = params ?? {};
     const buId = business_unit_id ?? company_id;
     if (role_id) {
-      return realGetAllFiltered({ roleId: role_id, businessUnitId: buId }, employeeParams);
+      const filtered = await realGetAllFiltered({ roleId: role_id, businessUnitId: buId }, employeeParams);
+      // Its scan seeds itself from a server-side `search`, so an email search starves it the same
+      // way it starves the unfiltered list — fall back to the local match, role predicate intact.
+      if (employeeParams.search && !(filtered?.data ?? []).length) {
+        return realSearchFallback({ roleId: role_id, businessUnitId: buId }, employeeParams);
+      }
+      return filtered;
     }
     // explicitBuScope(null) suppresses X-Company-Id for cross-BU logins (Admin/Entity Admin/
     // Platform Admin) so that "All Business Units" truly returns all employees, not just those
@@ -230,9 +287,15 @@ export const employeesApi = {
     // endpoint's BU scoping differed from every other master (Projects, Reports, …), which all
     // scope by header alone.
     const scope = buId && buId !== 'all' ? explicitBuScope(buId) : explicitBuScope(null);
-    return apiClient
+    const res = await apiClient
       .get('/employees', { params: employeeParams, ...scope })
       .then((r) => r.data);
+    // Nothing matched server-side — the search may have been an email, which GET /employees
+    // doesn't look at. Resolve it locally before reporting "no records found".
+    if (employeeParams.search && !(res?.data ?? []).length) {
+      return realSearchFallback({ roleId: null, businessUnitId: buId }, employeeParams);
+    }
+    return res;
   },
 
   getActiveList: (buId) => {

@@ -997,7 +997,7 @@ const EmployeeList = () => {
             {/* Desktop toolbar — unchanged from the original layout. */}
             <div className="hidden flex-wrap items-center gap-2 md:flex">
               <SearchInput
-                placeholder="Search by name, code..."
+                placeholder="Search by name, code, email..."
                 value={search}
                 onChange={handleSearch}
                 className="w-[250px]"

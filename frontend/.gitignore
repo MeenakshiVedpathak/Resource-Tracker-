@@ -12,3 +12,5 @@ dist
 *.rar
 .vercel
 old_backups
+public
+deploy-configs
