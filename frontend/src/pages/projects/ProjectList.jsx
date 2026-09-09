@@ -48,14 +48,17 @@ const TruncatedCell = ({ value, maxWidth = '150px', className }) => {
   );
 };
  
-const StatusToggle = ({ project }) => {
+// `canManage` is required, not optional: this toggle PATCHes project status, so a read-only role
+// (e.g. Delivery Operation Team Members, documented as strictly view-only in roleHierarchy.js)
+// must see the state but not be able to flip it.
+const StatusToggle = ({ project, canManage }) => {
   const { mutate, isPending } = useToggleProjectStatus();
   const isActive = project.status === 'active';
   return (
     <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
       <Switch
         checked={isActive}
-        disabled={isPending}
+        disabled={isPending || !canManage}
         onCheckedChange={(checked) =>
           mutate({ id: project.id, status: checked ? 'active' : 'inactive' })
         }
@@ -120,8 +123,12 @@ const ProjectList = () => {
     setPage(1);
   };
  
+  // Edit is the actions column's only content, so for a read-only role the whole column is
+  // dropped rather than rendered as a header over empty cells. That also shifts Project Name into
+  // the freed sticky slot — `meta.left` offsets are hand-maintained against the columns actually
+  // present, so they have to follow whether Actions is there or not.
   const columns = [
-    columnHelper.display({
+    ...(canManage ? [columnHelper.display({
       id: 'actions',
       header: 'Actions',
       size: 96,
@@ -139,11 +146,11 @@ const ProjectList = () => {
           </Button>
         </div>
       ),
-    }),
+    })] : []),
     columnHelper.accessor('project_name', {
       header: 'Project Name',
       size: 250,
-      meta: { sticky: true, left: 96 },
+      meta: { sticky: true, left: canManage ? 96 : 0 },
       cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="230px" className="font-medium" />,
     }),
     columnHelper.accessor('project_code', {
@@ -167,7 +174,7 @@ const ProjectList = () => {
     columnHelper.accessor('status', {
       header: 'Status',
       size: 140,
-      cell: (info) => <StatusToggle project={info.row.original} />,
+      cell: (info) => <StatusToggle project={info.row.original} canManage={canManage} />,
     }),
     columnHelper.accessor('total_service_pos', {
       header: 'Total Service POs',
@@ -579,7 +586,7 @@ const ProjectList = () => {
             onSortingChange={(s) => { setSorting(s); setPage(1); }}
             onPageChange={setPage}
             onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
-            onRowClick={(row) => navigate(buildPath(ROUTES.PROJECT_EDIT, { id: row.id }))}
+            onRowClick={canManage ? (row) => navigate(buildPath(ROUTES.PROJECT_EDIT, { id: row.id })) : undefined}
           />
 
           {/* Mobile — compact card list instead of the frozen-column table, same data/handlers. */}
@@ -603,9 +610,9 @@ const ProjectList = () => {
                     key={project.id}
                     className={cn(
                       'flex items-center gap-3 rounded-xl border bg-white p-3 shadow-sm transition-colors',
-                      'active:bg-slate-50'
+                      canManage && 'active:bg-slate-50'
                     )}
-                    onClick={() => navigate(buildPath(ROUTES.PROJECT_EDIT, { id: project.id }))}
+                    onClick={canManage ? () => navigate(buildPath(ROUTES.PROJECT_EDIT, { id: project.id })) : undefined}
                   >
                     <Avatar className="h-10 w-10 shrink-0">
                       <AvatarFallback>{getInitials(project.project_name)}</AvatarFallback>
@@ -625,26 +632,28 @@ const ProjectList = () => {
                         </p>
                       )}
                     </div>
-                    {/* Edit is not gated by canManage here — mirrors the desktop actions column,
-                        which renders this same ghost icon button unconditionally. */}
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-10 w-10 shrink-0"
-                          aria-label="Actions"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <MoreVertical className="h-5 w-5" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                        <DropdownMenuItem onClick={() => navigate(buildPath(ROUTES.PROJECT_EDIT, { id: project.id }))}>
-                          <Pencil className="h-4 w-4" /> Edit Project
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    {/* Edit-only menu, so it's dropped entirely for a read-only role rather than
+                        opening to a single action that role isn't allowed to take. */}
+                    {canManage && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-10 w-10 shrink-0"
+                            aria-label="Actions"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <MoreVertical className="h-5 w-5" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                          <DropdownMenuItem onClick={() => navigate(buildPath(ROUTES.PROJECT_EDIT, { id: project.id }))}>
+                            <Pencil className="h-4 w-4" /> Edit Project
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
                   </div>
                 ))
               )}

@@ -101,6 +101,7 @@ const EmployeeForm = () => {
       payroll_entity: '',
       location: '',
       sub_location: '',
+      original_entity: '',
       date_of_joining: '',
       date_of_leaving: '',
       status: 'active',
@@ -158,6 +159,7 @@ const EmployeeForm = () => {
         payroll_entity: employee.payroll_entity ?? '',
         location: employee.location ?? '',
         sub_location: employee.sub_location ?? '',
+        original_entity: employee.original_entity ?? '',
         date_of_joining: employee.date_of_joining?.split('T')[0] ?? '',
         date_of_leaving: employee.date_of_leaving?.split('T')[0] ?? '',
         status: employee.status ?? 'active',
@@ -307,13 +309,27 @@ const EmployeeForm = () => {
                   <h3 className="flex items-center gap-1.5 text-xs font-semibold text-foreground uppercase tracking-wide border-b border-gray-200 pb-2">
                     <Building2 className="h-3.5 w-3.5 text-muted-foreground" /> Organisational Details
                   </h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="original_entity"
+                      render={({ field }) => (
+                        <FormItem className="space-y-1">
+                          <FormLabel className="text-[11px] text-muted-foreground font-medium"><span className="text-destructive mr-0.5">*</span> Original Entity</FormLabel>
+                          <FormControl>
+                            <Input placeholder="e.g. GTT Client Entity" maxLength={512} {...field} className="h-8 text-sm border-gray-200" />
+                          </FormControl>
+                          <FormMessage className="text-[10px]" />
+                        </FormItem>
+                      )}
+                    />
+
                     <FormField
                       control={form.control}
                       name="payroll_entity"
                       render={({ field }) => (
                         <FormItem className="space-y-1">
-                          <FormLabel className="text-[11px] text-muted-foreground font-medium">Payroll Entity</FormLabel>
+                          <FormLabel className="text-[11px] text-muted-foreground font-medium"><span className="text-destructive mr-0.5">*</span> Payroll Entity</FormLabel>
                           <FormControl>
                             <Input placeholder="e.g. GTT India Pvt Ltd" maxLength={64} {...field} className="h-8 text-sm border-gray-200" />
                           </FormControl>
@@ -327,7 +343,7 @@ const EmployeeForm = () => {
                       name="location"
                       render={({ field }) => (
                         <FormItem className="space-y-1">
-                          <FormLabel className="text-[11px] text-muted-foreground font-medium">Location</FormLabel>
+                          <FormLabel className="text-[11px] text-muted-foreground font-medium"><span className="text-destructive mr-0.5">*</span> Location</FormLabel>
                           <FormControl>
                             <Input placeholder="e.g. Pune" maxLength={256} {...field} className="h-8 text-sm border-gray-200" />
                           </FormControl>
@@ -341,7 +357,7 @@ const EmployeeForm = () => {
                       name="sub_location"
                       render={({ field }) => (
                         <FormItem className="space-y-1">
-                          <FormLabel className="text-[11px] text-muted-foreground font-medium">Sub Location</FormLabel>
+                          <FormLabel className="text-[11px] text-muted-foreground font-medium"><span className="text-destructive mr-0.5">*</span> Sub Location</FormLabel>
                           <FormControl>
                             <Input placeholder="e.g. Hinjewadi" maxLength={256} {...field} className="h-8 text-sm border-gray-200" />
                           </FormControl>

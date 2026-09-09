@@ -52,7 +52,7 @@ const mockAddManager = async (managerUserId) => {
   const actor = requireActor();
   const existing = getDb().teamMappings.find((t) => t.manager_user_id === managerUserId && t.status === 'active');
   if (existing && existing.service_po_admin_user_id !== actor.id) {
-    throw mockError(409, "This Manager already belongs to a different Service PO Admin's team.");
+    throw mockError(409, "This Manager already belongs to a different Project Manager's team.");
   }
   if (existing) throw mockError(409, 'This Manager is already on your team.');
   const mapping = {

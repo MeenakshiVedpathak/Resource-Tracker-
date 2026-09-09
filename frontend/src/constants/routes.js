@@ -3,8 +3,9 @@ export const ROUTES = {
   // state (email/otp/timers) needs "refresh/back-button/direct-URL -> Email screen" semantics,
   // which only make sense with separate URLs to refresh/navigate/back into.
   LOGIN: '/login',
-  // Popup redirect target for Microsoft SSO (loginPopup) — must match VITE_MICROSOFT_REDIRECT_URI
-  // and the Entra App Registration's SPA redirect URI. Rendered inside the MSAL popup window
+  // Popup redirect target for Microsoft SSO (loginPopup) — msalConfig derives its redirectUri
+  // from window.location.origin + this path, so it must stay in sync with the Entra App
+  // Registration's SPA redirect URIs. Rendered inside the MSAL popup window
   // only; not part of AuthLayout since it must never redirect based on the opener's auth state.
   MICROSOFT_CALLBACK: '/auth/microsoft/callback',
   FORGOT_PASSWORD: '/forgot-password',

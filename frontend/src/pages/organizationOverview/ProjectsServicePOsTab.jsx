@@ -1,17 +1,30 @@
-import { Fragment, useMemo, useState } from 'react';
-import { ChevronRight, ChevronDown } from 'lucide-react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
+import * as XLSX from 'xlsx';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { ChevronRight, ChevronDown, ChevronLeft, FileDown, FileSpreadsheet, FileText } from 'lucide-react';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
 import EmptyState from '@/components/common/EmptyState';
+import { useNotification } from '@/hooks/useNotification';
 import ServicePOHierarchyNode from './components/ServicePOHierarchyNode';
 import { matchesServicePONode } from '@/utils/organizationOverview';
 
 const ALL = 'all';
+const DEFAULT_LIMIT = 10;
 
 const FILTER_FIELDS = [
   { label: 'Entity', key: 'entityName' },
@@ -21,16 +34,30 @@ const FILTER_FIELDS = [
   { label: 'Service PO', key: 'servicePOName' },
 ];
 
+// Exported as-is (flattened root rows only, matching what's on screen) — a row's own
+// Parent/Child hierarchy is a drill-down detail, not part of this one-row-per-Service-PO export.
+const toExportRows = (rows) => rows.map((r) => ({
+  Project: r.projectName,
+  Client: r.clientName,
+  'Service PO': r.servicePOName,
+  'PO Code': r.poCode !== '—' ? r.poCode : '',
+  'Business Unit': r.buName,
+  Entity: r.entityName,
+}));
+
 // Tab 3 — table shows one row per Service PO (already flattened + tree-built in
 // OrganizationOverview.jsx via normalizeProject); each row's own `children` is its Parent/Child
 // hierarchy, built from the backend's own parent_id-linked `hierarchy` array — never recreated
 // or re-derived on the frontend.
-const ProjectsServicePOsTab = ({ servicePOs, search, isLoading }) => {
+const ProjectsServicePOsTab = ({ servicePOs, search, isLoading, toolbarSlot }) => {
   const roots = servicePOs;
+  const { success, error: showError } = useNotification();
 
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [filters, setFilters] = useState({ entityName: ALL, buName: ALL, projectName: ALL, clientName: ALL, servicePOName: ALL });
   const [expanded, setExpanded] = useState(new Set());
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(DEFAULT_LIMIT);
 
   const optionsFor = (key) => Array.from(new Set(roots.map((r) => r[key]).filter(Boolean))).sort();
   const optionsByKey = useMemo(
@@ -46,6 +73,16 @@ const ProjectsServicePOsTab = ({ servicePOs, search, isLoading }) => {
     );
   }, [roots, search, filters]);
 
+  // A filter/search change can strand `page` past the new (smaller) result set — reset back to
+  // page 1 whenever the filtered set's own inputs change, same as every other paginated list.
+  useEffect(() => setPage(1), [search, filters]);
+
+  const pagedRoots = useMemo(
+    () => filtered.slice((page - 1) * limit, page * limit),
+    [filtered, page, limit],
+  );
+  const totalPages = Math.max(1, Math.ceil(filtered.length / limit));
+
   const activeCount = Object.values(filters).filter((v) => v !== ALL).length;
 
   const clearFilters = () => {
@@ -60,11 +97,73 @@ const ProjectsServicePOsTab = ({ servicePOs, search, isLoading }) => {
       return next;
     });
 
+  // Exports whatever the current search/filters show (`filtered`), not just the current page —
+  // an Admin narrowing to one Entity/BU expects the export to cover that whole narrowed set.
+  const handleExportExcel = () => {
+    if (filtered.length === 0) {
+      showError('No data to export');
+      return;
+    }
+    try {
+      const ws = XLSX.utils.json_to_sheet(toExportRows(filtered));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Projects & Service POs');
+      XLSX.writeFile(wb, 'projects_service_pos_export.xlsx');
+      success('Exported to Excel successfully');
+    } catch (err) {
+      console.error('Excel Export Error:', err);
+      showError('Failed to export Excel');
+    }
+  };
+
+  const handleExportPDF = () => {
+    if (filtered.length === 0) {
+      showError('No data to export');
+      return;
+    }
+    try {
+      const doc = new jsPDF();
+      doc.text('Projects / Service POs', 14, 15);
+      autoTable(doc, {
+        head: [['Project', 'Client', 'Service PO', 'PO Code', 'Business Unit', 'Entity']],
+        body: filtered.map((r) => [r.projectName, r.clientName, r.servicePOName, r.poCode !== '—' ? r.poCode : '-', r.buName, r.entityName]),
+        startY: 20,
+      });
+      doc.save('projects_service_pos_export.pdf');
+      success('Exported to PDF successfully');
+    } catch (err) {
+      console.error('PDF Export Error:', err);
+      showError('Failed to export PDF');
+    }
+  };
+
   return (
-    <div className="space-y-3">
-      <div className="flex justify-end">
-        <FilterToggleButton isOpen={filtersOpen} onToggle={() => setFiltersOpen((o) => !o)} activeCount={activeCount} />
-      </div>
+    <div className="flex h-full min-h-0 flex-col space-y-3">
+      {/* Rendered into the tab-bar row (see OrganizationOverview.jsx) instead of its own row here
+          — this tab is only ever visible while its own portal target exists, so no fallback. */}
+      {toolbarSlot && createPortal(
+        <div className="flex items-center gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="toolbar" className="bg-white">
+                <FileDown className="h-4 w-4" /> Export
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={handleExportExcel} className="cursor-pointer">
+                <FileSpreadsheet className="mr-2 h-4 w-4 text-green-600" />
+                Excel
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportPDF} className="cursor-pointer">
+                <FileText className="mr-2 h-4 w-4 text-red-500" />
+                PDF
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <FilterToggleButton isOpen={filtersOpen} onToggle={() => setFiltersOpen((o) => !o)} activeCount={activeCount} />
+        </div>,
+        toolbarSlot
+      )}
       <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[260px]" gridClassName="grid-cols-2 sm:grid-cols-3 lg:grid-cols-5" onClear={clearFilters} showClear={activeCount > 0}>
         {FILTER_FIELDS.map(({ label, key }) => (
           <div key={key} className="flex flex-col gap-1.5">
@@ -80,8 +179,12 @@ const ProjectsServicePOsTab = ({ servicePOs, search, isLoading }) => {
         ))}
       </FilterPanel>
 
-      <div className="max-h-[55vh] overflow-auto rounded-lg border bg-white">
-        <Table>
+      {/* `containerClassName` (not a second wrapping div) is what makes this Table's own
+          overflow-auto container the ONLY scrolling ancestor — sticky resolves against the
+          nearest scrolling ancestor, and an extra outer `overflow-auto` div here used to give the
+          header a scroll container that itself never scrolled, breaking the sticky effect. Same
+          pattern as DataTable.jsx and every other sticky-header table in this app. */}
+      <Table containerClassName="flex-1 min-h-0 rounded-lg border bg-white">
           <TableHeader className="sticky top-0 z-10 bg-slate-50">
             <TableRow>
               <TableHead className="w-8" />
@@ -108,7 +211,7 @@ const ProjectsServicePOsTab = ({ servicePOs, search, isLoading }) => {
                 </TableCell>
               </TableRow>
             ) : (
-              filtered.map((root) => {
+              pagedRoots.map((root) => {
                 const hasChildren = root.children?.length > 0;
                 const isOpen = expanded.has(root.id);
                 return (
@@ -149,8 +252,37 @@ const ProjectsServicePOsTab = ({ servicePOs, search, isLoading }) => {
               })
             )}
           </TableBody>
-        </Table>
-      </div>
+      </Table>
+
+      {filtered.length > 0 && (
+        <div className="flex shrink-0 flex-col gap-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs text-muted-foreground">
+            Showing {((page - 1) * limit) + 1}–{Math.min(page * limit, filtered.length)} of {filtered.length} results
+          </p>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <span className="whitespace-nowrap text-xs text-muted-foreground">Rows per page</span>
+              <Select value={String(limit)} onValueChange={(v) => { setLimit(Number(v)); setPage(1); }}>
+                <SelectTrigger className="h-8 w-16 bg-white text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {[10, 20, 50, 100].map((size) => (
+                    <SelectItem key={size} value={String(size)}>{size}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-1">
+              <Button variant="outline" size="icon-sm" onClick={() => setPage((p) => p - 1)} disabled={page <= 1}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="px-2 text-xs text-muted-foreground">{page} / {totalPages}</span>
+              <Button variant="outline" size="icon-sm" onClick={() => setPage((p) => p + 1)} disabled={page >= totalPages}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

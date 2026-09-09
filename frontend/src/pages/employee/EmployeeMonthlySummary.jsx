@@ -107,6 +107,7 @@ const MonthlySummaryPage = () => {
   // Month View's own edits, keyed the same way but bucketed under MONTH_DAY_KEY instead of a
   // calendar day.
   const [monthlyEdits, setMonthlyEdits] = useState({});
+  const [monthlyDescriptions, setMonthlyDescriptions] = useState({});
   const [isMonthlySaving, setIsMonthlySaving] = useState(false);
   const [isMonthlyDeleting, setIsMonthlyDeleting] = useState(false);
   const [confirmSaveOpen, setConfirmSaveOpen] = useState(false);
@@ -134,7 +135,12 @@ const MonthlySummaryPage = () => {
     () => buildMonthlySummaryRows([{ date: pseudoMonthDate(year, month), service_pos: monthlyData?.service_pos ?? [] }]),
     [monthlyData, year, month]
   );
-  const monthlyEditedCount = Object.values(monthlyEdits).reduce((n, byDay) => n + Object.keys(byDay).length, 0);
+  const monthlyEditedCount = useMemo(() => {
+    const keys = new Set();
+    Object.entries(monthlyEdits).forEach(([rowKey, byDay]) => { if (byDay?.[MONTH_DAY_KEY] !== undefined) keys.add(rowKey); });
+    Object.entries(monthlyDescriptions).forEach(([rowKey, byDay]) => { if (byDay?.[MONTH_DAY_KEY] !== undefined) keys.add(rowKey); });
+    return keys.size;
+  }, [monthlyEdits, monthlyDescriptions]);
   // `eligible` comes straight from the backend response — never computed here.
   const isMonthlyIneligible = !isMonthlyLoading && monthlyData != null && monthlyData.eligible === false;
   const hasExistingMonthlyEntries = monthlyRows.some((r) => Number(r.hoursByDay?.[MONTH_DAY_KEY] ?? 0) > 0);
@@ -144,6 +150,7 @@ const MonthlySummaryPage = () => {
     setYear(y);
     setEdits({});
     setMonthlyEdits({});
+    setMonthlyDescriptions({});
   };
 
   const handleCellChange = (rowKey, day, value) => {
@@ -193,6 +200,12 @@ const MonthlySummaryPage = () => {
       qc.invalidateQueries({ queryKey: ['employee-worklog'] });
     } catch (err) {
       showError(extractApiError(err));
+      // Neither /daily nor /monthly-summary expose a per-line sync flag yet, so a row that's
+      // since synced to the official Timesheet only surfaces here, as a 409, after the attempt
+      // (possibly with earlier days in this multi-day save already having gone through) —
+      // refetch so the grid reflects current state instead of leaving stale, still-editable-
+      // looking cells for a day that already failed.
+      if (err?.response?.status === 409) qc.invalidateQueries({ queryKey: ['employee-worklog'] });
     } finally {
       setIsSaving(false);
     }
@@ -206,19 +219,35 @@ const MonthlySummaryPage = () => {
     }));
   };
 
-  const handleMonthlyDiscard = () => setMonthlyEdits({});
+  const handleMonthlyDescriptionChange = (rowKey, cellDay, value) => {
+    if (!rowKey) return;
+    setMonthlyDescriptions((prev) => ({
+      ...prev,
+      [rowKey]: { ...prev[rowKey], [cellDay]: value },
+    }));
+  };
+
+  const handleMonthlyDiscard = () => {
+    setMonthlyEdits({});
+    setMonthlyDescriptions({});
+  };
 
   const handleMonthlySaveConfirmed = async () => {
-    const entries = buildDayEntries(monthlyRows, MONTH_DAY_KEY, monthlyEdits);
+    const entries = buildDayEntries(monthlyRows, MONTH_DAY_KEY, monthlyEdits, monthlyDescriptions);
     setIsMonthlySaving(true);
     try {
       await saveMonthMutation.mutateAsync({ month, year, entries });
       success('Monthly work log saved.');
       setMonthlyEdits({});
+      setMonthlyDescriptions({});
       setConfirmSaveOpen(false);
       qc.invalidateQueries({ queryKey: ['employee-worklog'] });
     } catch (err) {
       showError(extractApiError(err));
+      // GET /monthly-worklog doesn't expose a per-line sync flag yet — a synced line only
+      // surfaces here as a 409 after the attempt. Refetch so the table reflects it instead of
+      // leaving the user free to just hit Save again against the same stale read.
+      if (err?.response?.status === 409) qc.invalidateQueries({ queryKey: ['employee-worklog'] });
     } finally {
       setIsMonthlySaving(false);
     }
@@ -230,10 +259,14 @@ const MonthlySummaryPage = () => {
       await deleteMonthMutation.mutateAsync({ month, year });
       success('Monthly work log deleted.');
       setMonthlyEdits({});
+      setMonthlyDescriptions({});
       setConfirmDeleteOpen(false);
       qc.invalidateQueries({ queryKey: ['employee-worklog'] });
     } catch (err) {
       showError(extractApiError(err));
+      // At least one entry in this month has synced — refetch so the table reflects the current
+      // (now-unclearable) state instead of leaving stale, still-"deletable"-looking rows on screen.
+      if (err?.response?.status === 409) qc.invalidateQueries({ queryKey: ['employee-worklog'] });
     } finally {
       setIsMonthlyDeleting(false);
     }
@@ -311,6 +344,8 @@ const MonthlySummaryPage = () => {
             onCellChange={handleMonthlyCellChange}
             hoursCap={MONTHLY_HOURS_CAP}
             emptyMessage="No Service POs mapped."
+            descriptions={monthlyDescriptions}
+            onDescriptionChange={handleMonthlyDescriptionChange}
           />
         </div>
       )}

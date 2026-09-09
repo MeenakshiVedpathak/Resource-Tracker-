@@ -277,7 +277,7 @@ export const assertCanAssignRole = (actorRoleName, targetRoleName) => {
 export const assertValidAdditionalRole = (roleName) => {
   if (!ADDITIONAL_ROLE_NAMES.includes(roleName)) {
     const err = new Error(
-      `"${roleName}" cannot be held as an additional role — only Project Admin, Service PO Admin, Manager, HR, or Employee may be assigned as additional roles.`
+      `"${roleName}" cannot be held as an additional role — only Project Admin, Project Manager, Manager, HR, or Employee may be assigned as additional roles.`
     );
     err.response = { status: 400, data: { success: false, message: err.message } };
     throw err;

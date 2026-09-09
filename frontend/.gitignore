@@ -11,3 +11,4 @@ dist
 *.zip
 *.rar
 .vercel
+old_backups

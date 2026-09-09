@@ -39,9 +39,10 @@ export const employeeBaseFields = {
   total_experience: z.preprocess((v) => (v === '' || v == null ? null : Number(v)), z.number().min(0).max(60).nullable().optional()),
   company_experience: z.preprocess((v) => (v === '' || v == null ? null : Number(v)), z.number().min(0).max(60).nullable().optional()),
   resource_description: z.string().max(2000).optional().or(z.literal('')),
-  payroll_entity: z.string().max(64).optional().or(z.literal('')),
-  location: z.string().max(256).optional().or(z.literal('')),
-  sub_location: z.string().max(256).optional().or(z.literal('')),
+  payroll_entity: z.string().min(1, 'Payroll Entity is required').max(64),
+  location: z.string().min(1, 'Location is required').max(256),
+  sub_location: z.string().min(1, 'Sub Location is required').max(256),
+  original_entity: z.string().min(1, 'Original Entity is required').max(512),
   date_of_joining: z.string().min(1, 'Date of joining is required')
     .refine((v) => v <= todayIsoDate(), 'Date of joining cannot be in the future'),
   // Optional, but when present it must be a real past-or-today date. The "after joining" half of

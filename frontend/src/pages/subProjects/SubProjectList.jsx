@@ -43,14 +43,14 @@ const TruncatedCell = ({ value, maxWidth = '150px', className }) => {
   );
 };
 
-const StatusToggle = ({ subProject }) => {
+const StatusToggle = ({ subProject, canManage }) => {
   const { mutate, isPending } = useToggleSubProjectStatus();
   const isActive = subProject.status === 'active';
   return (
     <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
       <Switch
         checked={isActive}
-        disabled={isPending}
+        disabled={isPending || !canManage}
         onCheckedChange={(checked) =>
           mutate({ id: subProject.id, status: checked ? 'active' : 'inactive' })
         }
@@ -115,8 +115,11 @@ const SubProjectList = () => {
     setPage(1);
   };
 
+  // The actions column holds only Edit, so it's dropped entirely for a read-only role rather than
+  // rendered as a header over empty cells. The next sticky column then shifts into the freed space
+  // — `meta.left` offsets are hand-maintained against the columns actually present.
   const columns = [
-    columnHelper.display({
+    ...(canManage ? [columnHelper.display({
       id: 'actions',
       header: 'Actions',
       size: 96,
@@ -133,11 +136,11 @@ const SubProjectList = () => {
           </Button>
         </div>
       ),
-    }),
+    })] : []),
     columnHelper.accessor('sub_project_name', {
       header: 'Name',
       size: 200,
-      meta: { sticky: true, left: 96 },
+      meta: { sticky: true, left: canManage ? 96 : 0 },
       cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="180px" className="font-medium" />,
     }),
     columnHelper.accessor('servicePO.service_po_name', {
@@ -153,7 +156,7 @@ const SubProjectList = () => {
     columnHelper.accessor('status', {
       header: 'Status',
       size: 140,
-      cell: (info) => <StatusToggle subProject={info.row.original} />,
+      cell: (info) => <StatusToggle subProject={info.row.original} canManage={canManage} />,
     }),
   ];
 

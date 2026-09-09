@@ -40,14 +40,14 @@ const TruncatedCell = ({ value, maxWidth = '150px', className }) => {
   );
 };
 
-const StatusToggle = ({ category }) => {
+const StatusToggle = ({ category, canManage }) => {
   const { mutate, isPending } = useToggleServiceCategoryStatus();
   const isActive = category.status === 'active';
   return (
     <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
       <Switch
         checked={isActive}
-        disabled={isPending}
+        disabled={isPending || !canManage}
         onCheckedChange={(checked) =>
           mutate({ id: category.id, status: checked ? 'active' : 'inactive' })
         }
@@ -106,8 +106,11 @@ const ServiceCategoryList = () => {
     setPage(1);
   };
 
+  // The actions column holds only Edit, so it's dropped entirely for a read-only role rather than
+  // rendered as a header over empty cells. The next sticky column then shifts into the freed space
+  // — `meta.left` offsets are hand-maintained against the columns actually present.
   const columns = [
-    columnHelper.display({
+    ...(canManage ? [columnHelper.display({
       id: 'actions',
       header: 'Actions',
       size: 96,
@@ -125,17 +128,17 @@ const ServiceCategoryList = () => {
             </Button>
           </div>
         ) : null,
-    }),
+    })] : []),
     columnHelper.accessor('name', {
       header: 'Category Name',
       size: 220,
-      meta: { sticky: true, left: 96 },
+      meta: { sticky: true, left: canManage ? 96 : 0 },
       cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="200px" className="font-medium" />,
     }),
     columnHelper.accessor('status', {
       header: 'Status',
       size: 140,
-      cell: (info) => <StatusToggle category={info.row.original} />,
+      cell: (info) => <StatusToggle category={info.row.original} canManage={canManage} />,
     }),
     columnHelper.accessor('created_at', {
       header: 'Created',

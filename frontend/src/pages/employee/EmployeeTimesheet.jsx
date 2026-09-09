@@ -47,11 +47,13 @@ const EmployeeTimesheet = () => {
   const [year, setYear] = useState(today.year());
   const [selectedDate, setSelectedDate] = useState(today);
   const [edits, setEdits] = useState({});
+  const [descriptions, setDescriptions] = useState({});
   const [isSaving, setIsSaving] = useState(false);
 
   const [monthlyYear, setMonthlyYear] = useState(today.year());
   const [selectedMonth, setSelectedMonth] = useState(today.month() + 1);
   const [monthlyEdits, setMonthlyEdits] = useState({});
+  const [monthlyDescriptions, setMonthlyDescriptions] = useState({});
   const [isMonthlySaving, setIsMonthlySaving] = useState(false);
   const [isMonthlyDeleting, setIsMonthlyDeleting] = useState(false);
   const [confirmSaveOpen, setConfirmSaveOpen] = useState(false);
@@ -91,22 +93,21 @@ const EmployeeTimesheet = () => {
 
   const totalHoursToday = rows.reduce((sum, row) => sum + cellValue(row), 0);
 
-  const activeProjectsCount = useMemo(() => {
-    const byPO = new Map();
-    rows.forEach((row) => {
-      const poId = String(row.servicePOId);
-      byPO.set(poId, (byPO.get(poId) || 0) + cellValue(row));
-    });
-    return [...byPO.values()].filter((sum) => sum > 0).length;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, edits, day]);
+  // Every Service PO mapped to the employee, regardless of whether any hours are logged against
+  // it today — `rows` already carries one depth-0 row per mapped PO (see buildMonthlySummaryRows),
+  // so this is simply that count, not filtered by today's hours.
+  const mappedProjectsCount = useMemo(
+    () => rows.filter((row) => row.depth === 0).length,
+    [rows]
+  );
 
   const isSelectedPastOrToday = !selectedDate.isAfter(today, 'day');
   const editedCount = useMemo(() => {
     const keys = new Set();
     Object.entries(edits).forEach(([rowKey, byDay]) => { if (byDay?.[day] !== undefined) keys.add(rowKey); });
+    Object.entries(descriptions).forEach(([rowKey, byDay]) => { if (byDay?.[day] !== undefined) keys.add(rowKey); });
     return keys.size;
-  }, [edits, day]);
+  }, [edits, descriptions, day]);
 
   const handleMonthChange = (nextMonth, nextYear) => {
     setMonth(nextMonth);
@@ -116,6 +117,7 @@ const EmployeeTimesheet = () => {
   const handleSelectDate = (nextDay) => {
     setSelectedDate(nextDay);
     setEdits({});
+    setDescriptions({});
   };
 
   const handleCellChange = (rowKey, cellDay, value) => {
@@ -126,8 +128,17 @@ const EmployeeTimesheet = () => {
     }));
   };
 
+  const handleDescriptionChange = (rowKey, cellDay, value) => {
+    if (!rowKey) return;
+    setDescriptions((prev) => ({
+      ...prev,
+      [rowKey]: { ...prev[rowKey], [cellDay]: value },
+    }));
+  };
+
   const handleDiscard = () => {
     setEdits({});
+    setDescriptions({});
   };
 
   const handleSave = async () => {
@@ -146,7 +157,7 @@ const EmployeeTimesheet = () => {
     // every line the day has (including ones the separate Time Entry form created), so an
     // untouched row here is resent using its current aggregate hours — see
     // utils/employeeTimeEntry.js for the fuller discussion of this fidelity limit.
-    const entries = buildDayEntries(rows, day, edits);
+    const entries = buildDayEntries(rows, day, edits, descriptions);
     const validationError = validateDayEntries(entries, selectedKey, DAILY_HOURS_CAP);
     if (validationError) {
       showError(validationError);
@@ -158,9 +169,15 @@ const EmployeeTimesheet = () => {
       await saveDayMutation.mutateAsync({ timesheet_date: selectedKey, entries });
       success('Work log saved.');
       setEdits({});
+      setDescriptions({});
       qc.invalidateQueries({ queryKey: ['employee-worklog'] });
     } catch (err) {
       showError(extractApiError(err));
+      // GET /daily doesn't expose a per-line sync flag yet, so a row that's since synced to the
+      // official Timesheet only surfaces here, as a 409, after the attempt — refetch so the table
+      // reflects it (and the unsaved edits that caused the conflict are dropped) rather than
+      // leaving the user free to just hit Save again against the same stale read.
+      if (err?.response?.status === 409) qc.invalidateQueries({ queryKey: ['employee-worklog'] });
     } finally {
       setIsSaving(false);
     }
@@ -222,16 +239,23 @@ const EmployeeTimesheet = () => {
   // logged time (see the Monthly-hours note below), so keying the Clear All button off those
   // numbers hid it exactly when it was needed. Clearing a month that turns out to be empty is a
   // harmless no-op, so the button is offered whenever the month is editable at all.
-  const monthlyEditedCount = Object.values(monthlyEdits).reduce((n, byDay) => n + Object.keys(byDay).length, 0);
+  const monthlyEditedCount = useMemo(() => {
+    const keys = new Set();
+    Object.entries(monthlyEdits).forEach(([rowKey, byDay]) => { if (byDay?.[MONTH_DAY_KEY] !== undefined) keys.add(rowKey); });
+    Object.entries(monthlyDescriptions).forEach(([rowKey, byDay]) => { if (byDay?.[MONTH_DAY_KEY] !== undefined) keys.add(rowKey); });
+    return keys.size;
+  }, [monthlyEdits, monthlyDescriptions]);
 
   const handleSelectMonth = (nextMonth) => {
     setSelectedMonth(nextMonth);
     setMonthlyEdits({});
+    setMonthlyDescriptions({});
   };
 
   const handleMonthlyYearChange = (nextYear) => {
     setMonthlyYear(nextYear);
     setMonthlyEdits({});
+    setMonthlyDescriptions({});
   };
 
   const handleMonthlyCellChange = (rowKey, cellDay, value) => {
@@ -242,19 +266,35 @@ const EmployeeTimesheet = () => {
     }));
   };
 
-  const handleMonthlyDiscard = () => setMonthlyEdits({});
+  const handleMonthlyDescriptionChange = (rowKey, cellDay, value) => {
+    if (!rowKey) return;
+    setMonthlyDescriptions((prev) => ({
+      ...prev,
+      [rowKey]: { ...prev[rowKey], [cellDay]: value },
+    }));
+  };
+
+  const handleMonthlyDiscard = () => {
+    setMonthlyEdits({});
+    setMonthlyDescriptions({});
+  };
 
   const handleMonthlySaveConfirmed = async () => {
-    const entries = buildDayEntries(monthlyRows, MONTH_DAY_KEY, monthlyEdits);
+    const entries = buildDayEntries(monthlyRows, MONTH_DAY_KEY, monthlyEdits, monthlyDescriptions);
     setIsMonthlySaving(true);
     try {
       await saveMonthMutation.mutateAsync({ month: selectedMonth, year: monthlyYear, entries });
       success('Monthly work log saved.');
       setMonthlyEdits({});
+      setMonthlyDescriptions({});
       setConfirmSaveOpen(false);
       qc.invalidateQueries({ queryKey: ['employee-worklog'] });
     } catch (err) {
       showError(extractApiError(err));
+      // GET /monthly-worklog doesn't expose a per-line sync flag yet — a synced line only
+      // surfaces here as a 409 after the attempt. Refetch so the table reflects it instead of
+      // leaving the user free to just hit Save again against the same stale read.
+      if (err?.response?.status === 409) qc.invalidateQueries({ queryKey: ['employee-worklog'] });
     } finally {
       setIsMonthlySaving(false);
     }
@@ -266,10 +306,14 @@ const EmployeeTimesheet = () => {
       await deleteMonthMutation.mutateAsync({ month: selectedMonth, year: monthlyYear });
       success('All work log entries cleared for this month.');
       setMonthlyEdits({});
+      setMonthlyDescriptions({});
       setConfirmDeleteOpen(false);
       qc.invalidateQueries({ queryKey: ['employee-worklog'] });
     } catch (err) {
       showError(extractApiError(err));
+      // At least one entry in this month has synced — refetch so the table reflects the current
+      // (now-unclearable) state instead of leaving stale, still-"clearable"-looking rows on screen.
+      if (err?.response?.status === 409) qc.invalidateQueries({ queryKey: ['employee-worklog'] });
     } finally {
       setIsMonthlyDeleting(false);
     }
@@ -330,7 +374,7 @@ const EmployeeTimesheet = () => {
                 <h3 className="text-base font-semibold">{selectedDate.format('dddd, DD MMMM YYYY')}</h3>
               </div>
 
-              <WorkLogDaySummary totalHours={totalHoursToday} activeProjectsCount={activeProjectsCount} />
+              <WorkLogDaySummary totalHours={totalHoursToday} projectsCount={mappedProjectsCount} />
 
               <WorkLogEntryTable
                 rows={rows}
@@ -339,6 +383,8 @@ const EmployeeTimesheet = () => {
                 isPastOrToday={isSelectedPastOrToday}
                 edits={edits}
                 onCellChange={handleCellChange}
+                descriptions={descriptions}
+                onDescriptionChange={handleDescriptionChange}
               />
             </div>
           </div>
@@ -413,6 +459,8 @@ const EmployeeTimesheet = () => {
                 onCellChange={handleMonthlyCellChange}
                 hoursCap={MONTHLY_HOURS_CAP}
                 emptyMessage="No Service POs mapped."
+                descriptions={monthlyDescriptions}
+                onDescriptionChange={handleMonthlyDescriptionChange}
               />
             </div>
           </div>

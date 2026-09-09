@@ -251,8 +251,10 @@ const MonthlyCostList = () => {
     });
   };
 
+  // Both the row-select checkbox column and the Delete-only actions column are dropped outright
+  // for a read-only role — they previously rendered as headers over empty cells.
   const columns = [
-    columnHelper.display({
+    ...(canManage ? [columnHelper.display({
       id: 'select',
       header: () =>
         canManage ? (
@@ -269,8 +271,8 @@ const MonthlyCostList = () => {
             />
           </div>
         ) : null,
-    }),
-    columnHelper.display({
+    })] : []),
+    ...(canManage ? [columnHelper.display({
       id: 'actions',
       header: 'Actions',
       size: 90,
@@ -287,7 +289,7 @@ const MonthlyCostList = () => {
             </Button>
           </div>
         ) : null,
-    }),
+    })] : []),
     columnHelper.accessor((row) => formatMonthYear(row.month, row.year), {
       id: 'month_year',
       header: 'Period',
@@ -412,10 +414,12 @@ const MonthlyCostList = () => {
                 activeCount={activeFilterCount}
                 className="w-full md:w-auto"
               />
-              <Button variant="outline" size="toolbar" className="w-full md:w-auto" onClick={downloadMonthlyCostSample}>
-                <Download className="h-4 w-4" />
-                Download Sample
-              </Button>
+              {canManage && (
+                <Button variant="outline" size="toolbar" className="w-full md:w-auto" onClick={downloadMonthlyCostSample}>
+                  <Download className="h-4 w-4" />
+                  Download Sample
+                </Button>
+              )}
             </div>
             {canManage && (
               <>

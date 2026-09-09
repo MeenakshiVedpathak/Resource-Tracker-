@@ -48,14 +48,17 @@ const TruncatedCell = ({ value, maxWidth = '150px', className }) => {
   );
 };
 
-const StatusToggle = ({ client }) => {
+// `canManage` is required, not optional: this toggle PATCHes client status, so a read-only role
+// (e.g. Delivery Operation Team Members, documented as strictly view-only in roleHierarchy.js)
+// must see the state but not be able to flip it.
+const StatusToggle = ({ client, canManage }) => {
   const { mutate, isPending } = useToggleClientStatus();
   const isActive = client.status === 'active';
   return (
     <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
       <Switch
         checked={isActive}
-        disabled={isPending}
+        disabled={isPending || !canManage}
         onCheckedChange={(checked) =>
           mutate({ id: client.id, status: checked ? 'active' : 'inactive' })
         }
@@ -137,8 +140,12 @@ const ClientList = () => {
     setPage(1);
   };
 
+  // Edit is the actions column's only content, so for a read-only role the whole column is
+  // dropped rather than rendered as a header over empty cells. That also shifts Client Name into
+  // the freed sticky slot — `meta.left` offsets are hand-maintained against the columns actually
+  // present, so they have to follow whether Actions is there or not.
   const columns = [
-    columnHelper.display({
+    ...(canManage ? [columnHelper.display({
       id: 'actions',
       header: 'Actions',
       size: 96,
@@ -156,11 +163,11 @@ const ClientList = () => {
           </Button>
         </div>
       ),
-    }),
+    })] : []),
     columnHelper.accessor('client_name', {
       header: 'Client Name',
       size: 250,
-      meta: { sticky: true, left: 96 },
+      meta: { sticky: true, left: canManage ? 96 : 0 },
       cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="230px" className="font-medium" />,
     }),
     columnHelper.accessor('client_code', {
@@ -178,7 +185,7 @@ const ClientList = () => {
     columnHelper.accessor('status', {
       header: 'Status',
       size: 140,
-      cell: (info) => <StatusToggle client={info.row.original} />,
+      cell: (info) => <StatusToggle client={info.row.original} canManage={canManage} />,
     }),
   ];
 
@@ -598,7 +605,7 @@ const ClientList = () => {
             onSortingChange={(s) => { setSorting(s); setPage(1); }}
             onPageChange={setPage}
             onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
-            onRowClick={(row) => navigate(buildPath(ROUTES.CLIENT_EDIT, { id: row.id }))}
+            onRowClick={canManage ? (row) => navigate(buildPath(ROUTES.CLIENT_EDIT, { id: row.id })) : undefined}
           />
 
           {/* Mobile — compact card list instead of the frozen-column table, same data/handlers. */}
@@ -622,9 +629,9 @@ const ClientList = () => {
                     key={client.id}
                     className={cn(
                       'flex items-center gap-3 rounded-xl border bg-white p-3 shadow-sm transition-colors',
-                      'active:bg-slate-50'
+                      canManage && 'active:bg-slate-50'
                     )}
-                    onClick={() => navigate(buildPath(ROUTES.CLIENT_EDIT, { id: client.id }))}
+                    onClick={canManage ? () => navigate(buildPath(ROUTES.CLIENT_EDIT, { id: client.id })) : undefined}
                   >
                     <Avatar className="h-10 w-10 shrink-0">
                       <AvatarFallback>{getInitials(client.client_name)}</AvatarFallback>
@@ -639,26 +646,28 @@ const ClientList = () => {
                         </span>
                       </p>
                     </div>
-                    {/* Edit is not gated by canManage here — mirrors the desktop actions column,
-                        which renders this same ghost icon button unconditionally. */}
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-10 w-10 shrink-0"
-                          aria-label="Actions"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <MoreVertical className="h-5 w-5" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                        <DropdownMenuItem onClick={() => navigate(buildPath(ROUTES.CLIENT_EDIT, { id: client.id }))}>
-                          <Pencil className="h-4 w-4" /> Edit Client
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    {/* Edit-only menu, so it's dropped entirely for a read-only role rather than
+                        opening to a single action that role isn't allowed to take. */}
+                    {canManage && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-10 w-10 shrink-0"
+                            aria-label="Actions"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <MoreVertical className="h-5 w-5" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                          <DropdownMenuItem onClick={() => navigate(buildPath(ROUTES.CLIENT_EDIT, { id: client.id }))}>
+                            <Pencil className="h-4 w-4" /> Edit Client
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
                   </div>
                 ))
               )}

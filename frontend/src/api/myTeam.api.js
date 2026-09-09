@@ -71,7 +71,7 @@ const mockGrantServicePo = async (employeeId, servicePOId) => {
   await delay();
   const actor = requireActor();
   const owned = getDb().managerServicePoGrants.some((g) => g.manager_user_id === actor.id && g.service_po_id === servicePOId && g.status === 'active');
-  if (!owned) throw mockError(403, 'This Service PO has not been granted to you by a Service PO Admin.');
+  if (!owned) throw mockError(403, 'This Service PO has not been granted to you by a Project Manager.');
   const existing = getDb().employeeServicePoGrants.find((g) => g.employee_id === employeeId && g.service_po_id === servicePOId && g.status === 'active');
   if (existing) throw mockError(409, 'This Service PO is already granted to this Employee.');
   const grant = { id: nextId('employeeServicePoGrants'), employee_id: employeeId, service_po_id: servicePOId, granted_by_manager_user_id: actor.id, status: 'active' };

@@ -144,6 +144,41 @@ const RoleForm = () => {
                   </div>
                 )}
 
+                {/* Was previously in the schema/default value only, with no control to actually
+                    set it — every role got created as "Read & Write" with no way to make a
+                    view-only role (the mechanism useCanWrite relies on globally, same as the
+                    baseline Employee role's own "Read" permission). */}
+                <FormField
+                  control={form.control}
+                  name="permission"
+                  render={({ field }) => (
+                    <FormItem className="space-y-1">
+                      <FormLabel className="text-[11px] text-muted-foreground font-medium">Permission</FormLabel>
+                      <FormControl>
+                        <div className="flex items-center rounded-md border overflow-hidden h-8 text-sm bg-white">
+                          {['Read', 'Read & Write'].map((option) => (
+                            <button
+                              key={option}
+                              type="button"
+                              disabled={isSystem}
+                              onClick={() => field.onChange(option)}
+                              className={cn(
+                                'flex-1 h-full px-2 font-medium text-center transition-colors border-r last:border-r-0 disabled:opacity-40',
+                                field.value === option
+                                  ? 'bg-primary text-primary-foreground'
+                                  : 'bg-background text-muted-foreground hover:bg-muted'
+                              )}
+                            >
+                              {option}
+                            </button>
+                          ))}
+                        </div>
+                      </FormControl>
+                      <FormMessage className="text-[10px]" />
+                    </FormItem>
+                  )}
+                />
+
                 <FormField
                   control={form.control}
                   name="status"

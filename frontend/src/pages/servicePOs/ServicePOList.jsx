@@ -7,6 +7,7 @@ import { useServicePOs } from '@/hooks/useServicePOs';
 import { servicePOsApi } from '@/api/servicePOs.api';
 import { useActiveClients } from '@/hooks/useClients';
 import { useCompanies } from '@/hooks/useCompanies';
+import { useActiveEntities } from '@/hooks/useEntities';
 import { useActiveServicePOs } from '@/hooks/useServicePOs';
 import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
 import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
@@ -113,15 +114,30 @@ const ServicePOList = () => {
   // which BUs that dropdown offers. companiesData already carries entity_id/entity per BU (same
   // company master every other Entity+BU filter pair derives entity info from), so no extra fetch.
   const [adminEntityFilter, setAdminEntityFilter] = useState('all');
+  // Deactivated Entities must not be offered here. The company master carries `entity.entity_name`
+  // but NOT the Entity's own status, so the names derived below can't be status-checked on their
+  // own — GET /entities?status=active is the only source of that, and an Admin can read it.
+  // Intersected rather than used directly as the option source: an Entity with no BUs at all would
+  // otherwise be selectable and then narrow nothing (companiesForAdminEntity comes back empty, so
+  // neither needsAdminBuChoice nor the auto-pick effect below fires and the list silently keeps
+  // showing every BU). Guarded — while this is still loading it returns nothing, and blanking the
+  // filter mid-load would strand a selection the user already made.
+  const { data: activeEntities } = useActiveEntities({ enabled: isAdminActor });
+  const activeEntityIds = useMemo(
+    () => new Set((activeEntities ?? []).map((e) => String(e.id))),
+    [activeEntities]
+  );
   const adminBuEntityOptions = useMemo(() => {
     const byId = new Map();
     (companiesData?.data ?? []).forEach((c) => {
       const id = c.entity_id ?? c.entity?.id;
       const name = c.entity?.entity_name;
-      if (id != null && name && !byId.has(id)) byId.set(id, { id, name });
+      if (id == null || !name || byId.has(id)) return;
+      if (activeEntityIds.size > 0 && !activeEntityIds.has(String(id))) return;
+      byId.set(id, { id, name });
     });
     return Array.from(byId.values());
-  }, [companiesData]);
+  }, [companiesData, activeEntityIds]);
   const companiesForAdminEntity = useMemo(
     () => (adminEntityFilter === 'all'
       ? (companiesData?.data ?? [])

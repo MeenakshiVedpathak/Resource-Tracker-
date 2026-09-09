@@ -63,6 +63,13 @@ export const QUERY_KEYS = {
   // Organization Overview (Platform Admin only — one API, all tabs read from this one cache entry)
   ORGANIZATION_OVERVIEW: ['organization-overview'],
 
+  // Organization Overview's "Total Admins" / "Employee Work Log" tabs — their own dedicated
+  // endpoints (GET /platform-admin/total-admins and .../employee-work-log-synced), independent
+  // of ORGANIZATION_OVERVIEW above.
+  PLATFORM_ADMIN_TOTAL_ADMINS: (params) => ['platform-admin', 'total-admins', params],
+  // month/year-scoped, so params must stay in the key.
+  PLATFORM_ADMIN_EMPLOYEE_WORK_LOG: (params) => ['platform-admin', 'employee-work-log-synced', params],
+
   // Entity Admins (Admin tier)
   ENTITY_ADMINS: (params) => ['entity-admins', params],
   ENTITY_ADMIN: (id) => ['entity-admins', id],

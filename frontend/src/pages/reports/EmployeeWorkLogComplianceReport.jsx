@@ -1,26 +1,40 @@
-import { useState, useMemo, useCallback } from 'react';
+﻿import { useState, useMemo, useCallback } from 'react';
 import * as XLSX from 'xlsx';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Bell, Download, Search, RefreshCw, Loader2, X } from 'lucide-react';
+import { Bell, Download, RefreshCw, Loader2, Info } from 'lucide-react';
+import { getInitials } from '@/utils/formatters';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { cn } from '@/utils/cn';
 import dayjs from 'dayjs';
 import { reportsApi } from '@/api/reports.api';
+import { ROUTES } from '@/constants/routes';
 import PageHeader from '@/components/common/PageHeader';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
 import DataTable from '@/components/common/DataTable';
+import SearchInput from '@/components/common/SearchInput';
+import SegmentedToggle from '@/components/common/SegmentedToggle';
+import SelectionBar from '@/components/common/SelectionBar';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import BusinessUnitFilter, { ALL_BUS } from '@/components/common/BusinessUnitFilter';
 import EntityFilter, { ALL_ENTITIES } from '@/components/common/EntityFilter';
 import BulkReminderProgressModal from '@/components/common/BulkReminderProgressModal';
+import EmptyState from '@/components/common/EmptyState';
+import MobilePagination from '@/components/common/MobilePagination';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Label } from '@/components/ui/label';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import { DatePicker } from '@/components/ui/date-picker';
-import { cn } from '@/utils/cn';
 import { useNotification } from '@/hooks/useNotification';
+
+const MODE_OPTIONS = [
+  { value: 'date', label: 'Date' },
+  { value: 'month', label: 'Month' },
+];
 
 const columnHelper = createColumnHelper();
 
@@ -213,7 +227,7 @@ const EmployeeWorkLogComplianceReport = () => {
   const [date, setDate] = useState(yesterdayStr);
   const [monthYear, setMonthYear] = useState({ month: DEFAULT_MONTH, year: DEFAULT_YEAR });
   const [search, setSearch] = useState('');
-  const [filtersOpen, setFiltersOpen] = useState(true);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [buId, setBuId] = useState(ALL_BUS);
   const [entityId, setEntityId] = useState(ALL_ENTITIES);
 
@@ -271,11 +285,14 @@ const EmployeeWorkLogComplianceReport = () => {
 
   // ── Query params ──
   const reportParams = useMemo(() => {
-    const base = buId !== ALL_BUS ? { buId } : {};
+    const base = {
+      ...(buId !== ALL_BUS && { buId }),
+      ...(entityId !== ALL_ENTITIES && { entityId }),
+    };
     return mode === 'date'
       ? { ...base, date }
       : { ...base, month: monthYear.month, year: monthYear.year };
-  }, [mode, date, monthYear, buId]);
+  }, [mode, date, monthYear, buId, entityId]);
 
   // ── Data query ──
   const { data, isPending, isError, error, refetch } = useQuery({
@@ -395,37 +412,103 @@ const EmployeeWorkLogComplianceReport = () => {
 
   const emptyMessage = 'No employees found below the required threshold for this period.';
 
+  // Mobile card — one row = one employee record (Master-style: avatar/initials + name +
+  // BU/hours/shortfall as the secondary lines + a single action), instead of DataTable's generic
+  // label/value fallback card, which had nothing to use as a title here (this report's columns
+  // are select/action/name/BU/hours — none tagged `meta: { sticky: true }` — so the fallback
+  // picked the "select" checkbox column as the card's bold title and left everything else
+  // effectively unreadable).
+  const renderMobileCard = (emp) => {
+    const isSending = remindingIds.has(emp.employee_id);
+    return (
+      <div className="flex items-center gap-3 rounded-xl border bg-white p-3 shadow-sm">
+        <Checkbox
+          checked={selectedIds.has(emp.employee_id)}
+          onCheckedChange={() => toggleRow(emp.employee_id)}
+          aria-label={`Select ${emp.employee_name}`}
+          className="shrink-0"
+        />
+        <Avatar className="h-10 w-10 shrink-0">
+          <AvatarFallback>{getInitials(emp.employee_name)}</AvatarFallback>
+        </Avatar>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium text-slate-900">{emp.employee_name || '—'}</p>
+          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+            {emp.business_unit ? `${emp.business_unit} · ` : ''}
+            {emp.logged_hours != null ? Number(emp.logged_hours).toFixed(2) : '0.00'}h logged
+            {emp.required_hours != null ? ` / ${Number(emp.required_hours)}h required` : ''}
+          </p>
+          <p className="mt-0.5 truncate text-xs font-semibold text-destructive">
+            Shortfall: {emp.shortfall_hours != null ? Number(emp.shortfall_hours).toFixed(2) : '0.00'}h
+          </p>
+        </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          className={cn('h-10 w-10 shrink-0', isSending && 'text-muted-foreground')}
+          disabled={isSending || isBulkSending}
+          title={isSending ? 'Sending…' : 'Send reminder'}
+          onClick={() => handleRemind(emp)}
+        >
+          {isSending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Bell className="h-5 w-5" />}
+        </Button>
+      </div>
+    );
+  };
+
   return (
-    <div>
+    <div className="flex h-full min-h-0 flex-col space-y-4">
       <PageHeader
-        title="Employee Work Log Compliance"
-        description="Employees whose total logged hours fall below the required threshold for the selected period."
+        title={(
+          // The explanatory line used to render as a full `description` paragraph under the
+          // title — its un-wrapped width made PageHeader's flex row treat the title block as
+          // very wide, which pushed the whole actions toolbar (search/Filters/Remind All/Export)
+          // down onto its own line well before the viewport was actually narrow enough to need
+          // that. Collapsing it into this "i" tooltip keeps the title block short, so the toolbar
+          // stays beside it on the right at the same widths that used to wrap.
+          <span className="inline-flex items-center gap-1.5">
+            Employee Work Log Compliance
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:text-foreground"
+                  aria-label="About this report"
+                >
+                  <Info className="h-4 w-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="max-w-xs">
+                Employees whose total logged hours fall below the required threshold for the selected period.
+              </TooltipContent>
+            </Tooltip>
+          </span>
+        )}
+        // Overrides ReportsLayout's inherited back target — this report is reached from the
+        // Manager Timesheet Approval screen's "Remind"/compliance flow, so its own back arrow
+        // should return there instead of the generic Reports Center every other report falls
+        // back to.
+        backTo={ROUTES.MANAGER_TIMESHEET_APPROVAL}
+        backLabel="Back to Timesheet Approval"
         actions={
-          <div className="flex items-center gap-2">
-            {/* Search */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search name or code…"
-                value={search}
-                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-                className="h-9 w-64 pl-9 text-sm"
-              />
-            </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <SearchInput
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              placeholder="Search name or code…"
+            />
 
             <FilterToggleButton
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((p) => !p)}
               activeCount={(entityId !== ALL_ENTITIES ? 1 : 0) + (buId !== ALL_BUS ? 1 : 0)}
-              className="h-9"
             />
 
             {/* Remind Selected */}
             {selectedCount > 0 && (
               <Button
                 variant="outline"
-                size="sm"
-                className="h-9 gap-1.5"
+                size="toolbar"
                 disabled={isBulkSending}
                 onClick={handleRemindSelected}
               >
@@ -441,8 +524,8 @@ const EmployeeWorkLogComplianceReport = () => {
                 notice and act on, not blend in next to Filters/Export. */}
             {hasRecords && (
               <Button
-                size="sm"
-                className="relative h-9 gap-1.5 bg-amber-500 text-white shadow-md shadow-amber-500/30 hover:bg-amber-600"
+                size="toolbar"
+                className="relative bg-amber-500 text-white shadow-md shadow-amber-500/30 hover:bg-amber-600"
                 disabled={isBulkSending || selectedCount > 0}
                 onClick={handleRemindAll}
               >
@@ -461,7 +544,7 @@ const EmployeeWorkLogComplianceReport = () => {
 
             {/* Export */}
             {hasRecords && (
-              <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={handleExport}>
+              <Button variant="outline" size="toolbar" onClick={handleExport}>
                 <Download className="h-4 w-4" />Export Excel
               </Button>
             )}
@@ -472,7 +555,6 @@ const EmployeeWorkLogComplianceReport = () => {
       {/* Collapsible filter panel */}
       <FilterPanel
         isOpen={filtersOpen}
-        maxHeightClass="max-h-[300px]"
         onClear={() => { setEntityId(ALL_ENTITIES); setBuId(ALL_BUS); clearSelection(); }}
         showClear={entityId !== ALL_ENTITIES || buId !== ALL_BUS}
       >
@@ -484,23 +566,7 @@ const EmployeeWorkLogComplianceReport = () => {
         {/* Mode toggle */}
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Mode</Label>
-          <div className="flex items-center rounded-md border overflow-hidden h-9 text-sm bg-white">
-            {['date', 'month'].map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => handleModeChange(m)}
-                className={cn(
-                  'flex-1 h-full font-medium capitalize whitespace-nowrap transition-colors border-r last:border-r-0',
-                  mode === m
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-background text-muted-foreground hover:bg-muted'
-                )}
-              >
-                {m === 'date' ? 'Date' : 'Month'}
-              </button>
-            ))}
-          </div>
+          <SegmentedToggle options={MODE_OPTIONS} value={mode} onChange={handleModeChange} />
         </div>
 
         {/* Period picker */}
@@ -529,7 +595,7 @@ const EmployeeWorkLogComplianceReport = () => {
 
       {/* Error banner */}
       {isError && (
-        <div className="mt-4 flex items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+        <div className="flex items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
           <span className="flex-1">
             {error?.response?.data?.message ?? 'Failed to load report. Please try again.'}
           </span>
@@ -541,35 +607,63 @@ const EmployeeWorkLogComplianceReport = () => {
 
       {/* Selection status bar */}
       {selectedCount > 0 && (
-        <div className="mt-3 flex items-center gap-3 rounded-lg border border-primary/20 bg-primary/5 px-4 py-2 text-sm">
-          <span className="font-medium text-primary">
-            {selectedCount} employee{selectedCount !== 1 ? 's' : ''} selected
-          </span>
-          <button
-            type="button"
-            onClick={clearSelection}
-            className="ml-auto flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors"
-          >
-            <X className="h-3.5 w-3.5" />Clear selection
-          </button>
-        </div>
+        <SelectionBar count={selectedCount} noun="employee" onClear={clearSelection} />
       )}
 
+      {/* Desktop — unchanged. */}
       <DataTable
-        tableContainerClassName="max-h-[50vh]"
+        className="hidden md:flex"
         columns={columns}
         data={pagedRecords}
         isLoading={isPending}
         pagination={{ page, limit, total: filteredRecords.length }}
         onPageChange={setPage}
         onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
-        emptyMessage={emptyMessage}
+        emptyState={<EmptyState title="No records found" description={emptyMessage} />}
         meta={{ remindingIds, isBulkSending, handleRemind, selectedIds, toggleRow, togglePageSelection, pagedIds, allFilteredIds: filteredRecords.map((r) => r.employee_id) }}
       />
 
+      {/* Mobile — Master-style card list built directly in this page (not DataTable's generic
+          `mobileCards`/`mobileCardRenderer`, whose shared `flex-1 min-h-0 overflow-y-auto` region
+          only ever rendered one visible card here regardless of what the renderer produced — this
+          mirrors the same self-contained pattern already used successfully on the Master pages
+          instead of chasing that shared component's layout). */}
+      <div className="flex min-h-0 flex-1 flex-col gap-3 md:hidden">
+        <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
+          {isPending ? (
+            Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3 rounded-xl border bg-white p-3 shadow-sm">
+                <Skeleton className="h-10 w-10 shrink-0 rounded-full" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-4 w-2/3" />
+                  <Skeleton className="h-3 w-1/3" />
+                </div>
+              </div>
+            ))
+          ) : pagedRecords.length === 0 ? (
+            <EmptyState title="No records found" description={emptyMessage} />
+          ) : (
+            pagedRecords.map((emp) => (
+              <div key={emp.employee_id}>{renderMobileCard(emp)}</div>
+            ))
+          )}
+        </div>
+
+        <MobilePagination
+          className="shrink-0"
+          page={page}
+          totalPages={Math.max(1, Math.ceil(filteredRecords.length / limit))}
+          total={filteredRecords.length}
+          limit={limit}
+          itemLabel="employee"
+          onPrev={() => setPage(page - 1)}
+          onNext={() => setPage(page + 1)}
+        />
+      </div>
+
       {/* Summary bar */}
       {summary && (
-        <div className="mt-4 rounded-lg border bg-muted/40 px-4 py-3">
+        <div className="rounded-lg border bg-muted/40 px-4 py-3">
           <p className="mb-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
             Summary (all pages)
           </p>

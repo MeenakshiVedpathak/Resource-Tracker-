@@ -25,7 +25,15 @@
       "Bash(NODE_PATH=\"C:\\\\Users\\\\Admin\\\\AppData\\\\Local\\\\npm-cache\\\\_npx\\\\e41f203b7505f1fb\\\\node_modules\" node pagecheck.js)",
       "Bash(NODE_PATH=\"C:\\\\Users\\\\Admin\\\\AppData\\\\Local\\\\npm-cache\\\\_npx\\\\e41f203b7505f1fb\\\\node_modules\" node pagbtn.js)",
       "Bash(NODE_PATH=\"C:\\\\Users\\\\Admin\\\\AppData\\\\Local\\\\npm-cache\\\\_npx\\\\e41f203b7505f1fb\\\\node_modules\" node timesheetcheck.js)",
-      "Bash(NODE_PATH=\"C:\\\\Users\\\\Admin\\\\AppData\\\\Local\\\\npm-cache\\\\_npx\\\\e41f203b7505f1fb\\\\node_modules\" node toolbarcheck.js)"
+      "Bash(NODE_PATH=\"C:\\\\Users\\\\Admin\\\\AppData\\\\Local\\\\npm-cache\\\\_npx\\\\e41f203b7505f1fb\\\\node_modules\" node toolbarcheck.js)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://localhost:5173/ --max-time 5)",
+      "Bash(netstat -ano)",
+      "Bash(curl -s \"http://localhost:5173/src/pages/organizationOverview/OrganizationOverview.jsx\" --max-time 8)",
+      "Bash(chromium-cli --help)",
+      "Bash(node -e \"require.resolve\\('playwright'\\)\")",
+      "Bash(npx --yes playwright --version)",
+      "Bash(npx --yes playwright install --dry-run chromium)",
+      "Bash(npx --yes -p playwright node check_org_overview.js)"
     ]
   }
 }

@@ -102,6 +102,7 @@ const mockCreate = async (payload) => {
     payroll_entity: payload.payroll_entity ?? null,
     location: payload.location ?? null,
     sub_location: payload.sub_location ?? null,
+    original_entity: payload.original_entity ?? null,
     date_of_joining: payload.date_of_joining,
     date_of_leaving: payload.date_of_leaving ?? null,
     status: payload.status ?? 'active',

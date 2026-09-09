@@ -108,8 +108,11 @@ const ServiceTypeList = () => {
 
   const handleExport = () => exportToExcel(rows, categoryMap);
 
+  // The actions column holds only Edit, so it's dropped entirely for a read-only role rather than
+  // rendered as a header over empty cells. The next sticky column then shifts into the freed space
+  // — `meta.left` offsets are hand-maintained against the columns actually present.
   const columns = [
-    columnHelper.display({
+    ...(canManage ? [columnHelper.display({
       id: 'actions',
       header: 'Actions',
       size: 96,
@@ -127,11 +130,11 @@ const ServiceTypeList = () => {
             </Button>
           </div>
         ) : null,
-    }),
+    })] : []),
     columnHelper.accessor('service_type_name', {
       header: 'Service Type Name',
       size: 220,
-      meta: { sticky: true, left: 96 },
+      meta: { sticky: true, left: canManage ? 96 : 0 },
       cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="200px" className="font-medium" />,
     }),
     columnHelper.accessor('service_category_id', {

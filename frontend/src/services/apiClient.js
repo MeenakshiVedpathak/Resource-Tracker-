@@ -1,7 +1,10 @@
 import axios from 'axios';
 import { ROLE_NAMES, NO_COMPANY_ROLES } from '@/constants/roleHierarchy';
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+// Runtime config, not a build-time env var: /env-config.js is a static file served
+// alongside the bundle and swapped per environment at deploy time, so one build
+// artifact works on localhost/trackio/rutqa/railway/rut-portal without rebuilding.
+const BASE_URL = window.APP_CONFIG.apiUrl;
 
 // ── Plain axios for refresh (bypasses interceptor to prevent infinite loop) ──
 const plainAxios = axios.create({ baseURL: BASE_URL });

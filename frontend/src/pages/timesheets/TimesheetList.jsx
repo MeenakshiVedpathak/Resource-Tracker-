@@ -5,7 +5,7 @@ import { createColumnHelper } from '@tanstack/react-table';
 import { Upload, Info, Download, Trash2, Loader2, RefreshCw, FileSpreadsheet, MoreVertical } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useTimesheetHistory, useDeleteTimesheetImport, useDeleteTimesheetImports } from '@/hooks/useTimesheets';
-import { useCanViewOriginalData } from '@/hooks/usePermissions';
+import { useCanViewOriginalData, useCanWrite } from '@/hooks/usePermissions';
 import { useAuth } from '@/hooks/useAuth';
 import { useCompanies } from '@/hooks/useCompanies';
 import { timesheetsApi } from '@/api/timesheets.api';
@@ -41,6 +41,10 @@ const TimesheetList = () => {
   const queryClient = useQueryClient();
   const { success, error: showError } = useNotification();
   const canViewOriginal = useCanViewOriginalData();
+  // Upload / Sync / Download Sample / Delete all mutate timesheet data, so they're gated on the
+  // role's read-vs-write permission. canViewOriginal is a DIFFERENT question (Modified vs Original
+  // hours visibility) and was never a write gate — a read-only role with it still must not upload.
+  const canWrite = useCanWrite();
   const { businessUnits } = useAuth();
 
   // The login's own BU mapping (GET /employees/:id/business-units) doesn't carry entity info —
@@ -333,6 +337,7 @@ const TimesheetList = () => {
           </p>
           <p className="mt-1 text-xs text-muted-foreground">{formatDate(rowData.created_at)}</p>
         </div>
+        {canWrite && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
@@ -354,6 +359,7 @@ const TimesheetList = () => {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        )}
       </div>
     );
   };
@@ -371,7 +377,7 @@ const TimesheetList = () => {
   };
 
   const columns = [
-    columnHelper.display({
+    ...(canWrite ? [columnHelper.display({
       id: 'select',
       header: () => (
         <Checkbox
@@ -390,8 +396,9 @@ const TimesheetList = () => {
           />
         </div>
       ),
-    }),
-    columnHelper.display({
+    })] : []),
+    // Delete-only column: dropped outright for a read-only role rather than left as an empty column.
+    ...(canWrite ? [columnHelper.display({
       id: 'actions',
       header: 'Actions',
       size: 90,
@@ -407,7 +414,7 @@ const TimesheetList = () => {
           </Button>
         </div>
       ),
-    }),
+    })] : []),
     columnHelper.accessor('file_name', {
       header: 'File Name',
       size: 150,
@@ -539,17 +546,21 @@ const TimesheetList = () => {
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
-            <Button variant="outline" size="sm" onClick={handleDownloadSample}>
-              <Download className="mr-1.5 h-4 w-4" />
-              Download Sample
-            </Button>
+            {canWrite && (
+              <Button variant="outline" size="sm" onClick={handleDownloadSample}>
+                <Download className="mr-1.5 h-4 w-4" />
+                Download Sample
+              </Button>
+            )}
             {/* Hidden on mobile — the sticky full-width button below the list (mobile list mock)
                 covers this same action there. */}
-            <Button variant="outline" size="sm" className="hidden md:inline-flex" onClick={() => setIsSyncDialogOpen(true)}>
-              <RefreshCw className="mr-1.5 h-4 w-4" />
-              Sync Employee Work Logs
-            </Button>
-            {canViewOriginal && (
+            {canWrite && (
+              <Button variant="outline" size="sm" className="hidden md:inline-flex" onClick={() => setIsSyncDialogOpen(true)}>
+                <RefreshCw className="mr-1.5 h-4 w-4" />
+                Sync Employee Work Logs
+              </Button>
+            )}
+            {canViewOriginal && canWrite && (
               <Button size="sm" onClick={handleUploadClick}>
                 <Upload className="mr-1.5 h-4 w-4" />
                 Upload Excel
@@ -593,7 +604,7 @@ const TimesheetList = () => {
         </div>
       )}
 
-      {selectedIds.length > 0 && (
+      {canWrite && selectedIds.length > 0 && (
         <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-3 py-2">
           <span className="text-sm font-medium">{selectedIds.length} selected</span>
           <div className="flex items-center gap-2">
@@ -638,10 +649,12 @@ const TimesheetList = () => {
       {/* Mobile-only — mirrors the header's "Sync Employee Work Logs" action as a full-width
           button below the list, matching the mobile list mock. Hidden on desktop, where the
           header button above already covers it. */}
+      {canWrite && (
       <Button className="h-11 w-full shrink-0 md:hidden" onClick={() => setIsSyncDialogOpen(true)}>
         <RefreshCw className="mr-1.5 h-4 w-4" />
         Sync Employee Work Logs
       </Button>
+      )}
 
       <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
         <DialogContent className="sm:max-w-[400px]">

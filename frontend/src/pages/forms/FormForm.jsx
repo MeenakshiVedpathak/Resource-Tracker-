@@ -281,7 +281,13 @@ const FormForm = () => {
     : isModule ? 'Add New Module' : 'Add New Form';
 
   return (
-    <Sheet open={true} onOpenChange={(open) => !open && handleClose()}>
+    // `modal={false}` — the FormList table behind this drawer relies on the page's own scroll
+    // (it has no bounded height / overflow-y-auto of its own), and Radix's default modal Dialog
+    // globally disables scrolling everywhere outside its own content while open (not just the
+    // body — any background scroll container loses it too), which froze the table solid the
+    // moment this drawer opened. Non-modal keeps the dismiss-on-outside-click/Escape behavior
+    // and the dimming overlay, it just stops trapping focus and locking background scroll.
+    <Sheet open={true} onOpenChange={(open) => !open && handleClose()} modal={false}>
       <SheetContent side="right" className="w-full sm:max-w-lg p-0 flex flex-col bg-white overflow-hidden">
         <SheetHeader className="px-5 py-3 border-b">
           <SheetTitle className="text-base font-medium text-left">{title}</SheetTitle>

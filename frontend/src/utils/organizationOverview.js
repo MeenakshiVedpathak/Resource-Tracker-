@@ -86,8 +86,13 @@ export const normalizeUser = (u) => ({
   email: u.email ?? '—',
   employeeId: u.employee_id ?? '—',
   // Always an array — a user can hold more than one role (the contract is explicit that this is
-  // never a single role_id).
-  roles: (u.roles ?? []).map((r) => r?.name).filter(Boolean),
+  // never a single role_id). Defensive against the real backend sending something other than an
+  // array here (a single role object, a plain name string, null) — seen crashing this whole page
+  // (not just this tab, since normalizeUser runs unconditionally for every tab) when some user
+  // row's `roles` didn't match the expected shape.
+  roles: (Array.isArray(u.roles) ? u.roles : (u.roles != null ? [u.roles] : []))
+    .map((r) => (typeof r === 'string' ? r : r?.name))
+    .filter(Boolean),
   buId: u.bu?.id ?? null,
   buName: u.bu?.name ?? PLATFORM_WIDE,
   entityId: u.entity?.id ?? null,

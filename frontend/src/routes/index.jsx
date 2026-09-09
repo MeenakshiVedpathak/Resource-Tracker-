@@ -317,8 +317,8 @@ const AppRoutes = () => {
         </Route>
 
         {/* Organization Overview — Platform Admin's read-only, whole-platform screen. One route,
-            one form, tabs inside (Overview/Business Units/Projects & POs/Users) — see
-            pages/organizationOverview/OrganizationOverview.jsx. */}
+            one form, tabs inside (Overview/Business Units/Projects & POs/Users/Total Admins/
+            Employee Work Log) — see pages/organizationOverview/OrganizationOverview.jsx. */}
         <Route path={ROUTES.ORGANIZATION_OVERVIEW} element={<ProtectedRoute platformAdminOnly><OrganizationOverview /></ProtectedRoute>} />
 
         {/* Admin tier — manages Entity Admins platform-wide. Same drawer-over-list pattern as

@@ -6,7 +6,7 @@ import { z } from 'zod';
 import dayjs from 'dayjs';
 import { useQueryClient } from '@tanstack/react-query';
 import {
-  Save, CalendarDays, AlertCircle, BarChart3, Loader2, Trash2,
+  Save, CalendarDays, AlertCircle, BarChart3, Loader2, Lock, Trash2,
 } from 'lucide-react';
 import {
   Form, FormField, FormItem, FormLabel, FormControl, FormMessage,
@@ -63,6 +63,11 @@ const totalHoursTone = (hours) => {
   if (hours >= DAILY_HOURS_CAP * 0.75) return { badge: 'warning', bar: 'bg-warning', text: 'text-warning' };
   return { badge: 'success', bar: 'bg-success', text: 'text-success' };
 };
+
+// Once an entry has synced to the official Timesheet, the backend 409s any edit/delete on it —
+// this pre-empts that by graying the row out and disabling the actions instead of letting the
+// user try one that's now guaranteed to fail.
+const isConflict = (err) => err?.response?.status === 409;
 
 // "09:30:00" / "09:30" -> "09:30 AM", for the read-only Entries panel. The API hands back
 // "HH:mm:ss"; anything unparseable is echoed through rather than rendered as NaN.
@@ -225,11 +230,15 @@ const EmployeeTimeEntry = () => {
         // to split a (project, node) pair across rows), so they're collected rather than assumed
         // to be a single id. Block ids can't be used — they identify segments, which have no
         // endpoint of their own (removing one block is an edit + save, not a delete).
-        groups.set(key, { key, label, displayName, servicePoId, moduleNodeId, taskNodeId, hours: 0, blocks: [], rowIds: [] });
+        groups.set(key, { key, label, displayName, servicePoId, moduleNodeId, taskNodeId, hours: 0, blocks: [], rowIds: [], isSynced: false });
       }
       const group = groups.get(key);
       group.hours += Number(row.hours ?? 0);
       if (row.id != null) group.rowIds.push(row.id);
+      // Any one of a group's underlying rows already synced to the official Timesheet is enough
+      // to lock the whole group — editing/deleting it is a single PUT/DELETE (or a whole-day
+      // replace) that the backend will 409 regardless of which row within the pair caused it.
+      if (row.status === 'synced') group.isSynced = true;
 
       const segments = row.timeEntries ?? row.time_entries ?? [];
       if (segments.length) {
@@ -360,6 +369,14 @@ const EmployeeTimeEntry = () => {
       // just wrote. The prefill guard already points at this selection, so nothing reloads.
       qc.invalidateQueries({ queryKey: ['employee-worklog'] });
     } catch (err) {
+      if (isConflict(err)) {
+        // One of the lines this whole-day replace would have touched has since synced to the
+        // official Timesheet — the server's own message already names it. Refetch rather than
+        // leave the editor on the now-stale pre-read, which would just 409 again unchanged.
+        showError(extractApiError(err));
+        qc.invalidateQueries({ queryKey: ['employee-worklog'] });
+        return;
+      }
       const fieldErrors = extractFieldErrors(err);
       if (Object.keys(fieldErrors).length) {
         Object.entries(fieldErrors).forEach(([field, message]) => form.setError(field, { message }));
@@ -415,6 +432,10 @@ const EmployeeTimeEntry = () => {
       success('Time entry deleted.');
     } catch (err) {
       showError(extractApiError(err));
+      // A 409 here means one of this group's rows synced to the official Timesheet between the
+      // panel's last read and this delete — refetch so it re-renders locked instead of still
+      // offering an action that will keep failing the same way.
+      if (isConflict(err)) qc.invalidateQueries({ queryKey: ['employee-worklog'] });
     } finally {
       setDeleteTarget(null);
     }
@@ -654,38 +675,65 @@ const EmployeeTimeEntry = () => {
                   {savedGroups.map((group) => (
                     <div key={group.key} className="space-y-2">
                       {/* Edit and delete sit side by side as siblings — the heading is itself a
-                          button, and a button can't be nested inside another. */}
+                          button, and a button can't be nested inside another. Once any row in
+                          the group has synced to the official Timesheet, both actions would just
+                          409 — swap them for a plain (non-interactive) heading + a lock icon and
+                          "Synced" badge instead of inviting an edit/delete that's now guaranteed
+                          to fail. */}
                       <div className="-mx-1 flex items-start gap-1">
-                        <button
-                          type="button"
-                          onClick={() => handleEditGroup(group)}
-                          title="Edit this entry"
-                          className="group/entry flex min-w-0 flex-1 items-baseline justify-between gap-2 rounded-md px-1 py-1 text-left transition-colors hover:bg-muted/60"
-                        >
-                          <span className="min-w-0 truncate text-sm font-semibold transition-colors group-hover/entry:text-primary">
-                            {group.label.length
-                              ? group.label.map((part, i) => (
-                                  <span key={part + i}>
-                                    {i > 0 && <span className="mx-1 font-normal text-muted-foreground">&gt;</span>}
-                                    {part}
-                                  </span>
-                                ))
-                              : group.displayName}
-                          </span>
-                          <span className="shrink-0 text-sm font-semibold tabular-nums">
-                            {formatHoursMinutes(group.hours)}
-                          </span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setDeleteTarget(group)}
-                          disabled={deleteEntryMutation.isPending || isSaving}
-                          title="Delete this entry"
-                          aria-label={`Delete the entry for ${group.label.length ? group.label.join(' > ') : group.displayName}`}
-                          className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-destructive transition-colors hover:bg-destructive/10 disabled:pointer-events-none disabled:opacity-40"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+                        {group.isSynced ? (
+                          <div className="flex min-w-0 flex-1 items-baseline justify-between gap-2 rounded-md px-1 py-1">
+                            <span className="flex min-w-0 items-center gap-1.5 truncate text-sm font-semibold text-muted-foreground">
+                              <Lock className="h-3 w-3 shrink-0" />
+                              {group.label.length
+                                ? group.label.map((part, i) => (
+                                    <span key={part + i}>
+                                      {i > 0 && <span className="mx-1 font-normal">&gt;</span>}
+                                      {part}
+                                    </span>
+                                  ))
+                                : group.displayName}
+                            </span>
+                            <span className="shrink-0 text-sm font-semibold tabular-nums text-muted-foreground">
+                              {formatHoursMinutes(group.hours)}
+                            </span>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleEditGroup(group)}
+                            title="Edit this entry"
+                            className="group/entry flex min-w-0 flex-1 items-baseline justify-between gap-2 rounded-md px-1 py-1 text-left transition-colors hover:bg-muted/60"
+                          >
+                            <span className="min-w-0 truncate text-sm font-semibold transition-colors group-hover/entry:text-primary">
+                              {group.label.length
+                                ? group.label.map((part, i) => (
+                                    <span key={part + i}>
+                                      {i > 0 && <span className="mx-1 font-normal text-muted-foreground">&gt;</span>}
+                                      {part}
+                                    </span>
+                                  ))
+                                : group.displayName}
+                            </span>
+                            <span className="shrink-0 text-sm font-semibold tabular-nums">
+                              {formatHoursMinutes(group.hours)}
+                            </span>
+                          </button>
+                        )}
+                        {group.isSynced ? (
+                          <Badge variant="success" className="mt-0.5 shrink-0 text-[10px]">Synced</Badge>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setDeleteTarget(group)}
+                            disabled={deleteEntryMutation.isPending || isSaving}
+                            title="Delete this entry"
+                            aria-label={`Delete the entry for ${group.label.length ? group.label.join(' > ') : group.displayName}`}
+                            className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-destructive transition-colors hover:bg-destructive/10 disabled:pointer-events-none disabled:opacity-40"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
                       </div>
 
                       {group.blocks.map((block) => (

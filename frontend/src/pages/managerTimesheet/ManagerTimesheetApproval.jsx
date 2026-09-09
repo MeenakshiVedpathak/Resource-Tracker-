@@ -5,6 +5,7 @@ import { BellRing } from 'lucide-react';
 import { useMyTeamEmployees, useMyTeamEmployeesAcrossBus } from '@/hooks/useMyTeam';
 import { useSelectableBusinessUnits } from '@/hooks/useSelectableBusinessUnits';
 import { useIsMobile } from '@/hooks/useMediaQuery';
+import { useCanWrite } from '@/hooks/usePermissions';
 import { ROUTES } from '@/constants/routes';
 import BusinessUnitFilter, { ALL_BUS } from '@/components/common/BusinessUnitFilter';
 import EntityFilter, { ALL_ENTITIES } from '@/components/common/EntityFilter';
@@ -60,6 +61,9 @@ const monthYearToRange = ({ month, year }) => {
 const ManagerTimesheetApproval = () => {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  // "Check Pending & Remind" leads to the compliance report's reminder-sending flow, so it's a
+  // write action for gating purposes — hidden for a read-only role.
+  const canWrite = useCanWrite();
   const [searchParams] = useSearchParams();
   // Read once on mount — changes to the query string after mount are intentionally ignored so
   // that the manager's manual dropdown selection is never overwritten mid-session.
@@ -277,6 +281,7 @@ const ManagerTimesheetApproval = () => {
                 owns per-employee/bulk "Remind" sending) instead of duplicating that flow here.
                 Styled as the same warm, solid CTA as that report's own "Remind All" button so the
                 two read as one connected action rather than another outline button among many. */}
+            {canWrite && (
             <Button
               size="toolbar"
               className="relative bg-amber-500 text-white shadow-md shadow-amber-500/30 hover:bg-amber-600"
@@ -289,6 +294,7 @@ const ManagerTimesheetApproval = () => {
               </span>
               Check Pending &amp; Remind
             </Button>
+            )}
           </div>
         }
       />
@@ -313,6 +319,7 @@ const ManagerTimesheetApproval = () => {
             onToggle={() => setFiltersOpen((prev) => !prev)}
             activeCount={activeFilterCount}
           />
+          {canWrite && (
           <Button
             size="toolbar"
             className="relative flex-1 bg-amber-500 text-white shadow-md shadow-amber-500/30 hover:bg-amber-600"
@@ -325,6 +332,7 @@ const ManagerTimesheetApproval = () => {
             </span>
             Check Pending &amp; Remind
           </Button>
+          )}
         </div>
       </div>
 

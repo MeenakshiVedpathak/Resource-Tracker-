@@ -8,6 +8,7 @@ import {
   useMyTeamEmployeesMonthlyWorkLogTotals,
 } from '@/hooks/useMyTeam';
 import { useSelectableBusinessUnits } from '@/hooks/useSelectableBusinessUnits';
+import { useCanWrite } from '@/hooks/usePermissions';
 import PageHeader from '@/components/common/PageHeader';
 import SearchInput from '@/components/common/SearchInput';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
@@ -77,6 +78,9 @@ const ManagerFillWorkLog = () => {
   const [activeEmployee, setActiveEmployee] = useState(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [monthPromptOpen, setMonthPromptOpen] = useState(false);
+  // Bulk upload writes work-log entries, so it's hidden for a read-only role even if that role
+  // has somehow been granted this form.
+  const canWrite = useCanWrite();
 
   const selectedBuId = buFilter !== ALL_BUS ? Number(buFilter) : null;
 
@@ -180,23 +184,21 @@ const ManagerFillWorkLog = () => {
       size: 140,
       cell: (info) => <span className="whitespace-nowrap text-sm text-muted-foreground">{info.getValue() ?? '—'}</span>,
     }),
-    columnHelper.accessor('designation', {
-      header: 'Designation',
-      size: 220,
-      cell: (info) => <span className="whitespace-nowrap text-sm text-muted-foreground">{info.getValue() ?? '—'}</span>,
-    }),
-    columnHelper.accessor('business_unit_ids', {
+    columnHelper.display({
+      id: 'business_unit',
       header: 'Business Unit',
       size: 180,
-      cell: (info) => {
-        const ids = info.getValue() ?? [];
-        const names = ids.map((id) => buNameById.get(String(id)) ?? `#${id}`);
-        return (
-          <span className="whitespace-nowrap text-sm text-muted-foreground">
-            {names.length ? names.join(', ') : '—'}
-          </span>
-        );
+      cell: ({ row }) => {
+        const names = (row.original.business_unit_ids ?? [])
+          .map((id) => buNameById.get(String(id)))
+          .filter(Boolean);
+        return <span className="whitespace-nowrap text-sm text-muted-foreground">{names.length ? names.join(', ') : '—'}</span>;
       },
+    }),
+    columnHelper.accessor('designation', {
+      header: 'Designation',
+      size: 240,
+      cell: (info) => <span className="whitespace-nowrap text-sm text-muted-foreground">{info.getValue() ?? '—'}</span>,
     }),
     columnHelper.display({
       id: 'total_hours',
@@ -245,12 +247,16 @@ const ManagerFillWorkLog = () => {
                 onToggle={() => setFiltersOpen((prev) => !prev)}
                 activeCount={activeFilterCount}
               />
-              <Button variant="outline" size="sm" className="bg-white" onClick={downloadTemplate}>
-                <Download className="mr-1.5 h-4 w-4" /> Download Sample
-              </Button>
-              <Button type="button" size="sm" onClick={() => setMonthPromptOpen(true)}>
-                <Upload className="mr-1.5 h-4 w-4" /> Import Excel
-              </Button>
+              {canWrite && (
+                <>
+                  <Button variant="outline" size="sm" className="bg-white" onClick={downloadTemplate}>
+                    <Download className="mr-1.5 h-4 w-4" /> Download Sample
+                  </Button>
+                  <Button type="button" size="sm" onClick={() => setMonthPromptOpen(true)}>
+                    <Upload className="mr-1.5 h-4 w-4" /> Import Excel
+                  </Button>
+                </>
+              )}
             </div>
           )
         }

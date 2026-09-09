@@ -1,10 +1,11 @@
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Pencil, RotateCcw, Trash2, ChevronLeft, ChevronRight, XCircle, X } from 'lucide-react';
 import { useEmployeeEntries, useDeleteWorkLogEntry, useResubmitWorkLogEntry } from '@/hooks/useEmployeeWorkLog';
 import { useEmployeeMappedProjects } from '@/hooks/useEmployeeProjects';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
-import { formatDate, formatDateTime } from '@/utils/formatters';
+import { formatDate, formatDateTime, formatHoursMinutes } from '@/utils/formatters';
 import { sortServicePOsHierarchically } from '@/utils/servicePOHierarchy';
 import EmptyState from '@/components/common/EmptyState';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
@@ -24,6 +25,7 @@ const emptyFilters = { poId: '', startDate: '', endDate: '' };
 // since those expose no per-entry id for Edit/Resubmit/Delete to target.
 const EmployeeRejectedEntries = () => {
   const { success, error: showError } = useNotification();
+  const qc = useQueryClient();
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState(emptyFilters);
   const [editTask, setEditTask] = useState(null);
@@ -78,6 +80,9 @@ const EmployeeRejectedEntries = () => {
       setDeleteTarget(null);
     } catch (err) {
       showError(extractApiError(err));
+      // Synced to the official Timesheet since this list last loaded — refetch so it drops off
+      // (or otherwise stops offering an action that will keep 409-ing) instead of sitting stale.
+      if (err?.response?.status === 409) qc.invalidateQueries({ queryKey: ['employee-worklog'] });
     }
   };
 
@@ -148,7 +153,7 @@ const EmployeeRejectedEntries = () => {
                 <div>
                   <p className="text-sm font-semibold">{projectName(entry.service_po_id)}</p>
                   <p className="text-xs text-muted-foreground">
-                    {formatDate(entry.timesheet_date ?? entry.work_date)} · {Number(entry.hours ?? 0).toFixed(2)} hrs
+                    {formatDate(entry.timesheet_date ?? entry.work_date)} · {formatHoursMinutes(entry.hours)}
                   </p>
                 </div>
               </div>

@@ -1,6 +1,8 @@
 // The RBAC redesign's fixed 9-role hierarchy (spec §0). Assignable roles are exactly these —
-// anything else (Super Admin, Head Manager, BU HR Head, Division Head, Project Manager,
-// Management, Finance, Company Admin) no longer exists.
+// anything else (Super Admin, Head Manager, BU HR Head, Division Head, Management, Finance,
+// Company Admin) no longer exists. ("Project Manager" was also on that legacy-name list, but it's
+// since been reused below (2026-09) as the renamed SERVICE_PO_ADMIN value — coincidental
+// name collision with the old removed role, not a resurrection of it.)
 export const ROLE_NAMES = {
   PLATFORM_ADMIN: 'Platform Admin',
   ADMIN: 'Admin',
@@ -11,12 +13,15 @@ export const ROLE_NAMES = {
   // `company_id`. Never rename/remove BU Admin when touching this.
   BU_HEAD: 'BU Head',
   PROJECT_ADMIN: 'Project Admin',
-  // Backend renamed this role to fold "Delivery Head" into the same tier (see the Manage
-  // Service PO Mapping spec's "soon to include Delivery Head in the same role" note) — the exact
-  // string must match GET /roles' `role_name` verbatim or every comparison against it
-  // (ADDITIONAL_ROLE_NAMES, ROLE_CREATION_MATRIX, the Employee Master PO-mapping trigger) silently
-  // stops matching.
-  SERVICE_PO_ADMIN: 'Service PO Admin/Delivery head',
+  // Renamed via Role Master from "Service PO Admin/Delivery head" to "Project Manager" (2026-09) —
+  // the `SERVICE_PO_ADMIN` key below is now just this constant's historical name, not its value.
+  // Every place that needs this role (ADDITIONAL_ROLE_NAMES, ROLE_CREATION_MATRIX, the Employee
+  // Master PO-mapping trigger, Team Mapping's route guard, UserMenu's role icon) reads it through
+  // this one constant rather than a literal string, so this is the only line that had to change —
+  // but the exact string here must always match GET /roles' current `role_name` verbatim, or every
+  // one of those comparisons silently stops matching again (which is exactly what happened after
+  // the rename, before this constant was updated to match).
+  SERVICE_PO_ADMIN: 'Project Manager',
   MANAGER: 'Manager',
   EMPLOYEE: 'Employee',
   HR: 'HR',
@@ -69,13 +74,20 @@ export const ROLE_CREATION_MATRIX = {
 
 export const getAssignableRoleNames = (actorRoleName) => ROLE_CREATION_MATRIX[actorRoleName] ?? [];
 
+// A custom role created after the RBAC redesign (via Role Master's "Add Role", not one of the
+// 9 fixed system roles above) — layered on as an additional operational role the same way HR/
+// Manager are, but meant to be strictly view-only. That's governed by its own `permission` field
+// on the Role Master (see RoleForm.jsx), the same "Read" mechanism the baseline Employee role
+// above already relies on — not anything hardcoded here.
+export const DELIVERY_OPERATION_TEAM_MEMBERS_ROLE_NAME = 'Delivery Operation Team Members';
+
 // Multi-role support: a user's primary role (drives hierarchy tier/scoping) can carry these
 // additional operational roles on top, purely additive permissions. Senior tiers (Platform
 // Admin, Admin, Entity Admin, BU Admin) can only ever be someone's one primary role — the
 // backend 400s if one is sent as an additional role, so this list must stay in sync with it.
 export const ADDITIONAL_ROLE_NAMES = [
   ROLE_NAMES.PROJECT_ADMIN, ROLE_NAMES.SERVICE_PO_ADMIN, ROLE_NAMES.MANAGER,
-  ROLE_NAMES.HR, ROLE_NAMES.EMPLOYEE,
+  ROLE_NAMES.HR, ROLE_NAMES.EMPLOYEE, DELIVERY_OPERATION_TEAM_MEMBERS_ROLE_NAME,
 ];
 
 // The tiers that can only ever be a primary role, never additional — a user can hold at most

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, Outlet } from 'react-router-dom';
-import { Pencil, Plus, Search, GripVertical, GripHorizontal, ChevronDown, ChevronRight, FolderTree, FolderCog, ArrowRightLeft } from 'lucide-react';
+import { Pencil, Plus, GripVertical, GripHorizontal, ChevronDown, ChevronRight, FolderTree, FolderCog, ArrowRightLeft } from 'lucide-react';
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors,
 } from '@dnd-kit/core';
@@ -18,9 +18,9 @@ import { buildPath, ROUTES } from '@/constants/routes';
 import PageHeader from '@/components/common/PageHeader';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
+import SearchInput from '@/components/common/SearchInput';
 import MoveFormDialog from './MoveFormDialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/utils/cn';
@@ -341,36 +341,39 @@ const FormList = () => {
   };
 
   return (
-    <div className="space-y-4">
+    // Deliberately NOT `h-full min-h-0` — this page has no pagination and no sticky footer bar
+    // worth preserving, so there's no reason to opt out of MainLayout's page-level scroll
+    // fallback and manage a bounded/scrolling region ourselves (that requires flex-1, which
+    // stretches the table to fill all remaining height even when there's only a few collapsed
+    // rows — a big empty gap, not a fix). Just grow with content like a normal page; `<main>`'s
+    // own overflow-y-auto scrolls the whole thing once it's actually taller than the viewport.
+    <div className="flex flex-col space-y-4">
       <PageHeader
         title="Forms"
         description="Manage modules and forms available for role-based access control"
         actions={
           <div className="flex items-center gap-3">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search forms…"
-                className="pl-9 w-[220px] h-9 text-sm bg-white"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </div>
+            <SearchInput
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search forms…"
+              className="w-[220px]"
+            />
             <FilterToggleButton
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((prev) => !prev)}
               activeCount={activeFilterCount}
             />
-            <Button size="sm" variant="outline" onClick={() => navigate(ROUTES.FORM_CATEGORIES)}>
-              <FolderCog className="mr-1.5 h-4 w-4" /> Manage Categories
+            <Button size="toolbar" variant="outline" onClick={() => navigate(ROUTES.FORM_CATEGORIES)}>
+              <FolderCog className="h-4 w-4" /> Manage Categories
             </Button>
             {canWrite && (
               <>
-                <Button size="sm" variant="outline" onClick={() => navigate(`${ROUTES.FORM_NEW}?type=module`)}>
-                  <FolderTree className="mr-1.5 h-4 w-4" /> Add Module
+                <Button size="toolbar" variant="outline" onClick={() => navigate(`${ROUTES.FORM_NEW}?type=module`)}>
+                  <FolderTree className="h-4 w-4" /> Add Module
                 </Button>
-                <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => navigate(`${ROUTES.FORM_NEW}?type=form`)}>
-                  <Plus className="mr-1.5 h-4 w-4" /> Add Form
+                <Button size="toolbar" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => navigate(`${ROUTES.FORM_NEW}?type=form`)}>
+                  <Plus className="h-4 w-4" /> Add Form
                 </Button>
               </>
             )}

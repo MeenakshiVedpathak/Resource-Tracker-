@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -94,6 +95,7 @@ const buildSegmentsFromTask = (task) => {
 // them alongside this one, or they'll be deleted (see employeeWorkLog.api.js).
 const WorkLogEntryModal = ({ open, onOpenChange, date, task }) => {
   const { success, error: showError } = useNotification();
+  const qc = useQueryClient();
   const saveDayMutation = useSaveWorkLogDay();
   const updateMutation = useUpdateWorkLogEntry();
   const resubmitMutation = useResubmitWorkLogEntry();
@@ -186,6 +188,14 @@ const WorkLogEntryModal = ({ open, onOpenChange, date, task }) => {
         onOpenChange(false);
       }
     } catch (err) {
+      if (err?.response?.status === 409) {
+        // The entry synced to the official Timesheet after this modal opened (or between the
+        // update and the auto-resubmit above) — the server's own message already names it.
+        // Refetch so the list this modal was opened from stops offering the same dead action.
+        showError(extractApiError(err));
+        qc.invalidateQueries({ queryKey: ['employee-worklog'] });
+        return;
+      }
       const fieldErrors = extractFieldErrors(err);
       if (Object.keys(fieldErrors).length) {
         Object.entries(fieldErrors).forEach(([field, message]) => form.setError(field, { message }));

@@ -27,6 +27,7 @@ import { formatDate, getInitials } from '@/utils/formatters';
 import { cn } from '@/utils/cn';
 import DataTable from '@/components/common/DataTable';
 import BusinessUnitFilter from '@/components/common/BusinessUnitFilter';
+import EntityFilter from '@/components/common/EntityFilter';
 import PageHeader from '@/components/common/PageHeader';
 import StatusBadge from '@/components/common/StatusBadge';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
@@ -71,6 +72,12 @@ const columnHelper = createColumnHelper();
 // nearest scrolling ancestor, so an extra overflow div around the Table would break it.
 const STICKY_HEAD = 'sticky top-0 z-10 bg-background';
 
+// Sentinel for the mapping dialog's own Entity filter (local to this dialog — narrows which rows
+// the Business Units table below it shows, same "All X" convention as EntityFilter.jsx's own
+// ALL_ENTITIES, just not shared with it since that component owns its own actor-scoped entity
+// list while this one is derived straight from the BU rows already fetched for the dialog).
+const ALL_MAPPING_ENTITIES = 'all';
+
 const TruncatedCell = ({ value, maxWidth = '150px', className }) => {
   if (!value) return <span className="text-sm text-muted-foreground">—</span>;
   return (
@@ -99,6 +106,7 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
   const [selectedBuIds, setSelectedBuIds] = useState([]);
   const [selectedPoIds, setSelectedPoIds] = useState([]);
   const [poSearch, setPoSearch] = useState('');
+  const [buEntityFilter, setBuEntityFilter] = useState(ALL_MAPPING_ENTITIES);
 
   // GET /employees (list) carries no role/BU data, so the row this dialog opened from can't seed
   // the checkboxes — fetch the employee's actual mappings fresh instead (see
@@ -109,6 +117,34 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
       setSelectedBuIds(mappings.business_unit_ids ?? []);
     }
   }, [mappings]);
+
+  // The dialog instance stays mounted across different rows' clicks (only `employee` changes) —
+  // reset the Entity filter per employee so it doesn't carry over a previous row's narrowed view.
+  useEffect(() => {
+    setBuEntityFilter(ALL_MAPPING_ENTITIES);
+  }, [employee?.id]);
+
+  // Entity options for that filter, derived straight from the BU rows already fetched for this
+  // dialog (GET /companies — see EmployeeList's own useCompanies call) rather than a second fetch:
+  // every company row carries its own entity_id/entity.entity_name, same fields
+  // useSelectableEntities reads off the identical endpoint for the page-level Entity filter.
+  const buEntities = useMemo(() => {
+    const byId = new Map();
+    businessUnits.forEach((bu) => {
+      const id = bu.entity_id ?? bu.entity?.id;
+      const name = bu.entity?.entity_name;
+      if (id != null && name && !byId.has(id)) byId.set(id, { id, name });
+    });
+    return Array.from(byId.values());
+  }, [businessUnits]);
+
+  // Narrows which rows the table below renders — never touches selectedBuIds, so a BU picked
+  // under one Entity stays checked even once the filter moves to a different Entity (same
+  // "selections hidden by a filter are never touched" rule the Service PO search below follows).
+  const filteredBusinessUnits = useMemo(() => {
+    if (buEntityFilter === ALL_MAPPING_ENTITIES) return businessUnits;
+    return businessUnits.filter((bu) => String(bu.entity_id ?? bu.entity?.id) === buEntityFilter);
+  }, [businessUnits, buEntityFilter]);
 
   // Every row here IS an employee, so plain Employee is a mandatory baseline role — pinned
   // checked & disabled, same standing bypass EmployeeForm.jsx used to apply for HR (whose
@@ -244,6 +280,20 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
           </div>
           <div className="space-y-1.5 min-w-0">
             <Label className="text-xs">Business Units</Label>
+            {buEntities.length > 0 && (
+              <SearchableSelect
+                options={[
+                  { label: 'All Entities', value: ALL_MAPPING_ENTITIES },
+                  ...buEntities.map((e) => ({ label: e.name, value: String(e.id) })),
+                ]}
+                value={buEntityFilter}
+                onValueChange={(v) => v && setBuEntityFilter(v)}
+                placeholder="All Entities"
+                searchPlaceholder="Search entity..."
+                showSearch={buEntities.length > 6}
+                className="h-8 w-full text-sm bg-white"
+              />
+            )}
             <Table containerClassName="border rounded-md max-h-[240px]">
                 <TableHeader>
                   <TableRow>
@@ -252,16 +302,24 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {businessUnits.map((bu) => (
-                    <TableRow key={bu.id}>
-                      <TableCell>
-                        <Checkbox checked={selectedBuIds.includes(bu.id)} onCheckedChange={() => toggleBu(bu.id)} />
-                      </TableCell>
-                      <TableCell>
-                        <TruncatedCell value={bu.company_name} maxWidth="220px" />
+                  {filteredBusinessUnits.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={2} className="text-center text-sm text-muted-foreground py-6">
+                        No Business Units for this Entity.
                       </TableCell>
                     </TableRow>
-                  ))}
+                  ) : (
+                    filteredBusinessUnits.map((bu) => (
+                      <TableRow key={bu.id}>
+                        <TableCell>
+                          <Checkbox checked={selectedBuIds.includes(bu.id)} onCheckedChange={() => toggleBu(bu.id)} />
+                        </TableCell>
+                        <TableCell>
+                          <TruncatedCell value={bu.company_name} maxWidth="220px" />
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
                 </TableBody>
             </Table>
           </div>
@@ -388,7 +446,22 @@ const EmployeeList = () => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [roleFilter, setRoleFilter] = useState('all');
-  const { buId: buFilter, setBuId: setBuFilter, showBuFilter, isBuFiltered, resetBuId } = useMasterBuFilter();
+  // Entity + BU as one coordinated pair, same as every other master: the Entity choice narrows
+  // which BUs the filter below it offers, and useMasterBuFilter's own setEntityId resets the BU
+  // selection whenever the Entity changes (the old BU may not even belong to the new Entity).
+  //
+  // The Entity value is deliberately NOT forwarded to GET /employees, unlike the masters that
+  // spread `buParams` — same call the Timesheet Imports filter makes. This endpoint scopes by BU
+  // through the X-Company-Id header alone (see employees.api's getAll, which strips
+  // business_unit_id out of the query string on purpose) and has no confirmed `entity_id` filter:
+  // its own note in employees.api flags the whole GET /employees filter contract as an agreed
+  // target rather than a live one, and the RBAC mock ignores entity_id outright. So Entity's job
+  // here is narrowing the BU options; the BU pick is what actually scopes the list. Forward it as
+  // a real query-string field (and teach mockGetAll to honour it) once the backend confirms.
+  const {
+    entityId, setEntityId, showEntityFilter, isEntityFiltered, resetEntityId,
+    buId: buFilter, setBuId: setBuFilter, showBuFilter, isBuFiltered, resetBuId,
+  } = useMasterBuFilter();
   const [mappingTarget, setMappingTarget] = useState(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
@@ -442,50 +515,54 @@ const EmployeeList = () => {
   const activeFilterCount =
     (statusFilter !== 'all' ? 1 : 0)
     + (roleFilter !== 'all' ? 1 : 0)
+    + (isEntityFiltered ? 1 : 0)
     + (isBuFiltered ? 1 : 0);
 
   const clearFilters = () => {
     setStatusFilter('all');
     setRoleFilter('all');
+    resetEntityId();
     resetBuId();
     setPage(1);
   };
 
+  // The whole actions column is dropped for a login with no actions in it, rather than rendering
+  // a header over empty cells (its only contents are Edit and Map Roles, both `isHR`-only). The
+  // two sticky columns after it then shift into the freed space — `meta.left` offsets are
+  // hand-maintained against the columns actually present, so they follow the same condition.
   const columns = useMemo(() => [
-    columnHelper.display({
+    ...(isHR ? [columnHelper.display({
       id: 'actions',
       header: 'Actions',
       size: 150,
       meta: { sticky: true, left: 0 },
-      cell: ({ row }) => {
-        return isHR ? (
-          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-            {canManageEmployees && (
-              <Button
-                size="sm"
-                title="Edit"
-                onClick={() => navigate(buildPath(ROUTES.EMPLOYEE_EDIT, { id: row.original.id }))}
-                className="h-6 w-6 p-0 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
-              >
-                <Pencil className="h-3 w-3" />
-              </Button>
-            )}
+      cell: ({ row }) => (
+        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+          {canManageEmployees && (
             <Button
               size="sm"
-              className="h-6 w-6 p-0 bg-teal-600 hover:bg-teal-700 text-white rounded transition-colors"
-              title="Map Roles & Business Units"
-              onClick={() => setMappingTarget(row.original)}
+              title="Edit"
+              onClick={() => navigate(buildPath(ROUTES.EMPLOYEE_EDIT, { id: row.original.id }))}
+              className="h-6 w-6 p-0 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
             >
-              <UserCog className="h-3 w-3" />
+              <Pencil className="h-3 w-3" />
             </Button>
-          </div>
-        ) : null;
-      },
-    }),
+          )}
+          <Button
+            size="sm"
+            className="h-6 w-6 p-0 bg-teal-600 hover:bg-teal-700 text-white rounded transition-colors"
+            title="Map Roles & Business Units"
+            onClick={() => setMappingTarget(row.original)}
+          >
+            <UserCog className="h-3 w-3" />
+          </Button>
+        </div>
+      ),
+    })] : []),
     columnHelper.accessor('employee_code', {
       header: 'Employee ID',
       size: 130,
-      meta: { sticky: true, left: 120 },
+      meta: { sticky: true, left: isHR ? 120 : 0 },
       cell: (info) => (
         <TruncatedCell value={info.getValue()} maxWidth="100px" className="font-medium" />
       ),
@@ -493,7 +570,7 @@ const EmployeeList = () => {
     columnHelper.accessor('full_name', {
       header: 'Name',
       size: 200,
-      meta: { sticky: true, left: 250 },
+      meta: { sticky: true, left: isHR ? 250 : 130 },
       cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="160px" />,
     }),
     columnHelper.accessor('email', {
@@ -505,6 +582,11 @@ const EmployeeList = () => {
       header: 'Designation',
       size: 180,
       cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="160px" />,
+    }),
+    columnHelper.accessor('original_entity', {
+      header: 'Original Entity',
+      size: 160,
+      cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="140px" />,
     }),
     columnHelper.accessor('payroll_entity', {
       header: 'Payroll Entity',
@@ -606,6 +688,7 @@ const EmployeeList = () => {
       'Payroll Entity': 'GTT India Pvt Ltd',
       'Location': 'Pune',
       'Sub Location': 'Hinjewadi',
+      'Original Entity': 'GTT Client Entity',
       'Date of Joining': '2023-01-15',
       'Date of Leaving': '',
       'Business Units': 'Finance BU, Delivery BU'
@@ -708,6 +791,7 @@ const EmployeeList = () => {
         'Payroll Entity': emp.payroll_entity,
         'Location': emp.location,
         'Sub Location': emp.sub_location,
+        'Original Entity': emp.original_entity,
         'Business Units': (emp.businessUnits ?? []).map(bu => bu.name ?? bu.company_name).join(', '),
         'Total Experience (yrs)': emp.total_experience,
         'Company Experience (yrs)': emp.company_experience,
@@ -1086,9 +1170,13 @@ const EmployeeList = () => {
             className="h-9 w-full text-sm bg-white"
           />
         </div>
+        {showEntityFilter && (
+          <EntityFilter value={entityId} onChange={(v) => { setEntityId(v); setPage(1); }} />
+        )}
         {showBuFilter && (
           <BusinessUnitFilter
             value={buFilter}
+            entityId={entityId}
             onChange={(v) => { setBuFilter(v); setPage(1); }}
           />
         )}
