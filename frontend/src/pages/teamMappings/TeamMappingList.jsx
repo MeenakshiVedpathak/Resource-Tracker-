@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Plus, Trash2, UserCog, Briefcase } from 'lucide-react';
 import {
-  useTeamMappings, useAvailableManagers, useAddTeamManager, useRemoveTeamManager,
+  useTeamMappings, useAvailableTeamLeads, useAddTeamLead, useRemoveTeamLead,
   useTeamServicePoGrants, useGrantTeamServicePo, useRevokeTeamServicePo,
 } from '@/hooks/useTeamMappings';
 import { useActiveServicePOs } from '@/hooks/useServicePOs';
@@ -25,7 +25,7 @@ import {
 
 // Service PO Admin's own team self-service (§7) — replaces the old BU-Admin-assigns-on-
 // someone's-behalf Manager Mapping. Every call here uses the caller's own identity.
-const ServicePoPanel = ({ manager, onOpenChange }) => {
+const ServicePoPanel = ({ teamLead, onOpenChange }) => {
   const { success, error: showError } = useNotification();
   const [selectedPoId, setSelectedPoId] = useState('');
 
@@ -34,8 +34,8 @@ const ServicePoPanel = ({ manager, onOpenChange }) => {
   const grantMutation = useGrantTeamServicePo();
   const revokeMutation = useRevokeTeamServicePo();
 
-  const managerGrants = grants.filter((g) => g.manager_user_id === manager?.manager_user_id);
-  const grantedPoIds = new Set(managerGrants.map((g) => g.service_po_id));
+  const teamLeadGrants = grants.filter((g) => g.manager_user_id === teamLead?.manager_user_id);
+  const grantedPoIds = new Set(teamLeadGrants.map((g) => g.service_po_id));
   const poOptions = activePOs
     .filter((po) => !grantedPoIds.has(po.id))
     .map((po) => ({ value: String(po.id), label: po.service_po_name ?? po.service_po_code }));
@@ -45,7 +45,7 @@ const ServicePoPanel = ({ manager, onOpenChange }) => {
   const handleGrant = () => {
     if (!selectedPoId) return;
     grantMutation.mutate(
-      { managerUserId: manager.manager_user_id, servicePOId: Number(selectedPoId) },
+      { teamLeadUserId: teamLead.manager_user_id, servicePOId: Number(selectedPoId) },
       {
         onSuccess: () => { success('Service PO granted.'); setSelectedPoId(''); },
         onError: (err) => showError(extractApiError(err)),
@@ -55,17 +55,17 @@ const ServicePoPanel = ({ manager, onOpenChange }) => {
 
   const handleRevoke = (servicePOId) => {
     revokeMutation.mutate(
-      { managerUserId: manager.manager_user_id, servicePOId },
+      { teamLeadUserId: teamLead.manager_user_id, servicePOId },
       { onError: (err) => showError(extractApiError(err)) }
     );
   };
 
   return (
-    <Dialog open={!!manager} onOpenChange={onOpenChange}>
+    <Dialog open={!!teamLead} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><Briefcase className="h-4 w-4" /> Service POs</DialogTitle>
-          <DialogDescription>Service POs granted to {manager?.manager_email}.</DialogDescription>
+          <DialogDescription>Service POs granted to {teamLead?.manager_email}.</DialogDescription>
         </DialogHeader>
 
         <div className="flex items-center gap-2">
@@ -85,11 +85,11 @@ const ServicePoPanel = ({ manager, onOpenChange }) => {
         <div className="max-h-64 overflow-y-auto rounded-md border">
           {isPending ? (
             <div className="p-3"><Skeleton className="h-5 w-full" /></div>
-          ) : managerGrants.length === 0 ? (
+          ) : teamLeadGrants.length === 0 ? (
             <p className="p-4 text-center text-sm text-muted-foreground">No Service POs granted yet.</p>
           ) : (
             <ul className="divide-y">
-              {managerGrants.map((g) => (
+              {teamLeadGrants.map((g) => (
                 <li key={g.id} className="flex items-center justify-between px-3 py-2 text-sm">
                   {poName(g.service_po_id)}
                   <Button
@@ -119,32 +119,32 @@ const TeamMappingList = () => {
   const { success, error: showError } = useNotification();
 
   const [addOpen, setAddOpen] = useState(false);
-  const [selectedManagerId, setSelectedManagerId] = useState('');
+  const [selectedTeamLeadId, setSelectedTeamLeadId] = useState('');
   const [removeTarget, setRemoveTarget] = useState(null);
   const [servicePoTarget, setServicePoTarget] = useState(null);
 
   const { data: mappings = [], isPending } = useTeamMappings();
-  const { data: availableManagers = [], isPending: isLoadingManagers } = useAvailableManagers();
-  const addMutation = useAddTeamManager();
-  const removeMutation = useRemoveTeamManager();
+  const { data: availableTeamLeads = [], isPending: isLoadingTeamLeads } = useAvailableTeamLeads();
+  const addMutation = useAddTeamLead();
+  const removeMutation = useRemoveTeamLead();
 
   const onMyTeamIds = useMemo(() => new Set(mappings.map((m) => m.manager_user_id)), [mappings]);
 
-  const managerOptions = useMemo(
+  const teamLeadOptions = useMemo(
     () =>
-      availableManagers
+      availableTeamLeads
         .filter((m) => !onMyTeamIds.has(m.id) && !m.current_owner)
         .map((m) => ({ value: String(m.id), label: m.email })),
-    [availableManagers, onMyTeamIds]
+    [availableTeamLeads, onMyTeamIds]
   );
 
   const handleAdd = () => {
-    if (!selectedManagerId) return;
-    addMutation.mutate(Number(selectedManagerId), {
+    if (!selectedTeamLeadId) return;
+    addMutation.mutate(Number(selectedTeamLeadId), {
       onSuccess: () => {
-        success('Manager added to your team successfully.');
+        success('Team Lead added to your team successfully.');
         setAddOpen(false);
-        setSelectedManagerId('');
+        setSelectedTeamLeadId('');
       },
       onError: (err) => showError(extractApiError(err)),
     });
@@ -153,7 +153,7 @@ const TeamMappingList = () => {
   const handleRemove = () => {
     removeMutation.mutate(removeTarget.manager_user_id, {
       onSuccess: () => {
-        success('Manager removed from your team.');
+        success('Team Lead removed from your team.');
         setRemoveTarget(null);
       },
       onError: (err) => {
@@ -167,10 +167,10 @@ const TeamMappingList = () => {
     <div className="flex h-full min-h-0 flex-col space-y-4">
       <PageHeader
         title="Team Mapping"
-        description="Managers on your team, and the Service POs granted to them"
+        description="Team Leads on your team, and the Service POs granted to them"
         actions={
           <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => setAddOpen(true)}>
-            <Plus className="mr-1.5 h-4 w-4" /> Add Manager
+            <Plus className="mr-1.5 h-4 w-4" /> Add Team Lead
           </Button>
         }
       />
@@ -179,7 +179,7 @@ const TeamMappingList = () => {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Manager</TableHead>
+              <TableHead>Team Lead</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="w-40 text-right">Actions</TableHead>
             </TableRow>
@@ -195,7 +195,7 @@ const TeamMappingList = () => {
               <TableRow>
                 <TableCell colSpan={3} className="py-10 text-center text-sm text-muted-foreground">
                   <UserCog className="mx-auto mb-2 h-8 w-8 text-muted-foreground/50" />
-                  No Managers on your team yet.
+                  No Team Leads on your team yet.
                 </TableCell>
               </TableRow>
             ) : (
@@ -230,25 +230,25 @@ const TeamMappingList = () => {
         </Table>
       </div>
 
-      <Dialog open={addOpen} onOpenChange={(open) => { setAddOpen(open); if (!open) setSelectedManagerId(''); }}>
+      <Dialog open={addOpen} onOpenChange={(open) => { setAddOpen(open); if (!open) setSelectedTeamLeadId(''); }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-base">Add a Manager to your team</DialogTitle>
+            <DialogTitle className="text-base">Add a Team Lead to your team</DialogTitle>
           </DialogHeader>
           <SearchableSelect
-            options={managerOptions}
-            value={selectedManagerId}
-            onValueChange={setSelectedManagerId}
-            disabled={isLoadingManagers}
-            placeholder="Select Manager"
-            searchPlaceholder="Search Managers…"
+            options={teamLeadOptions}
+            value={selectedTeamLeadId}
+            onValueChange={setSelectedTeamLeadId}
+            disabled={isLoadingTeamLeads}
+            placeholder="Select Team Lead"
+            searchPlaceholder="Search Team Leads…"
           />
           <DialogFooter className="gap-2">
             <Button variant="outline" size="sm" onClick={() => setAddOpen(false)} disabled={addMutation.isPending}>
               Cancel
             </Button>
-            <Button size="sm" onClick={handleAdd} disabled={!selectedManagerId || addMutation.isPending}>
-              {addMutation.isPending ? 'Adding…' : 'Add Manager'}
+            <Button size="sm" onClick={handleAdd} disabled={!selectedTeamLeadId || addMutation.isPending}>
+              {addMutation.isPending ? 'Adding…' : 'Add Team Lead'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -257,14 +257,14 @@ const TeamMappingList = () => {
       <ConfirmDialog
         open={!!removeTarget}
         onOpenChange={(open) => !open && setRemoveTarget(null)}
-        title="Remove Manager?"
+        title="Remove Team Lead?"
         description={`${removeTarget?.manager_email} will be removed from your team.`}
         confirmLabel="Remove"
         onConfirm={handleRemove}
         isLoading={removeMutation.isPending}
       />
 
-      <ServicePoPanel manager={servicePoTarget} onOpenChange={(open) => !open && setServicePoTarget(null)} />
+      <ServicePoPanel teamLead={servicePoTarget} onOpenChange={(open) => !open && setServicePoTarget(null)} />
     </div>
   );
 };

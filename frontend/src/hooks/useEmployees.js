@@ -53,14 +53,14 @@ export const useEmployeeMappings = (id) =>
     enabled: !!id,
   });
 
-// Employee Identity Migration: Primary/Secondary Manager pickers. GET /employees (list)
+// Employee Identity Migration: Primary/Secondary Team Lead pickers. GET /employees (list)
 // deliberately carries no role/BU data (pagination cost), so eligibility can't be filtered off
 // that response client-side — this pre-filters server-side via GET /employees/eligible-managers,
 // the same manager.view_mapped_employees rule assertValidManager() enforces at save time.
-export const useAssignableManagers = () =>
+export const useAssignableTeamLeads = () =>
   useQuery({
-    queryKey: QUERY_KEYS.ELIGIBLE_MANAGERS,
-    queryFn: employeesApi.getEligibleManagers,
+    queryKey: QUERY_KEYS.ELIGIBLE_TEAM_LEADS,
+    queryFn: employeesApi.getEligibleTeamLeads,
     select: (data) => {
       if (Array.isArray(data)) return data;
       if (Array.isArray(data?.data)) return data.data;

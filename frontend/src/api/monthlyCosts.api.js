@@ -1,7 +1,12 @@
 import apiClient, { explicitBuScope } from '@/services/apiClient';
 
 export const monthlyCostsApi = {
-  getAll: (params) => apiClient.get('/monthly-costs', { params }).then((r) => r.data),
+  // `buId` isn't used by any current caller (monthlyCostSample.js, ResourceRecommendations.jsx,
+  // WhatIfSimulator.jsx, MonthlyCostDetail.jsx all omit it, so explicitBuScope(undefined) is a
+  // no-op and behavior is unchanged) — handled defensively so a future BU-filtered caller doesn't
+  // silently inherit the stale global X-Company-Id header, the same bug clients.api.js had.
+  getAll: ({ buId, ...params } = {}) =>
+    apiClient.get('/monthly-costs', { params, ...explicitBuScope(buId) }).then((r) => r.data),
   getById: (id) => apiClient.get(`/monthly-costs/${id}`).then((r) => r.data?.data),
   create: (payload) => apiClient.post('/monthly-costs', payload).then((r) => r.data),
   update: (id, payload) => apiClient.put(`/monthly-costs/${id}`, payload).then((r) => r.data),

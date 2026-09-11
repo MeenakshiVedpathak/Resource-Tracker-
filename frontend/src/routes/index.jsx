@@ -149,18 +149,18 @@ const EmployeeAIProfile = lazy(() => import('@/pages/ai/EmployeeAIProfile'));
 // it's gated by allowedRoles) ──
 const TeamMappingList = lazy(() => import('@/pages/teamMappings/TeamMappingList'));
 
-// ── My Team (Manager self-service — same allowedRoles gating as Team Mapping above) ──
+// ── My Team (Team Lead self-service — same allowedRoles gating as Team Mapping above) ──
 const MyTeamList = lazy(() => import('@/pages/myTeam/MyTeamList'));
 
-// ── Log Work for My Team (Manager self-service, net-new — gated by formName like every other
+// ── Log Work for My Team (Team Lead self-service, net-new — gated by formName like every other
 // RBAC-driven screen; see rbacForms.js) ──
-const ManagerFillWorkLog = lazy(() => import('@/pages/myTeam/ManagerFillWorkLog'));
+const TeamLeadFillWorkLog = lazy(() => import('@/pages/myTeam/TeamLeadFillWorkLog'));
 
-// ── Service PO Monthly Budget (Manager self-service, net-new — same allowedRoles gating) ──
+// ── Service PO Monthly Budget (Team Lead self-service, net-new — same allowedRoles gating) ──
 const ServicePoMonthlyBudgetPage = lazy(() => import('@/pages/servicePoMonthlyBudget/ServicePoMonthlyBudgetPage'));
 
-// ── Timesheet Approval (Manager self-service, net-new — split off from My Work Log) ──
-const ManagerTimesheetApproval = lazy(() => import('@/pages/managerTimesheet/ManagerTimesheetApproval'));
+// ── Timesheet Approval (Team Lead self-service, net-new — split off from My Work Log) ──
+const TeamLeadTimesheetApproval = lazy(() => import('@/pages/teamLeadTimesheet/TeamLeadTimesheetApproval'));
 
 // ── Cost Budget / Resource Budget (net-new, per Service PO + month) ──
 const CostBudgetList = lazy(() => import('@/pages/costBudgets/CostBudgetList'));
@@ -214,12 +214,12 @@ const employeeSelfServiceRoutes = () => (
 );
 
 const AppRoutes = () => {
-  // A multi-role account (e.g. Employee + Manager) must reach Employee self-service screens
+  // A multi-role account (e.g. Employee + Team Lead) must reach Employee self-service screens
   // (My Work Log, PO Wise Report, etc.) inside the SAME MainLayout/Sidebar shell as its other
   // forms — Sidebar.jsx already renders nav links for these whenever they're mapped (module ->
   // form, same as everything else), but until now those links 404'd because the routes only
-  // existed under the separate employeeOnly-gated EmployeeLayout tree, which a Manager holding
-  // Employee only as a secondary role would bounce into and out of, losing Manager-only nav
+  // existed under the separate employeeOnly-gated EmployeeLayout tree, which a Team Lead holding
+  // Employee only as a secondary role would bounce into and out of, losing Team-Lead-only nav
   // (My Team, Team Mapping) and the AI Copilot widget along the way. Only an account whose SOLE
   // role is Employee (isEmployeeOnly) still gets the separate, reduced EmployeeLayout shell.
   const { isEmployeeOnly } = useAuth();
@@ -256,7 +256,7 @@ const AppRoutes = () => {
         {/* Dashboard — gated like every other screen by whether it's actually mapped to the
             caller's roles; the zero-forms safety net (nothing mapped at all) still lands on the
             real Dashboard (empty state). An account with OTHER real forms mapped but not
-            Dashboard itself (e.g. an Entity Admin, or a Manager mapped to reporting/self-service
+            Dashboard itself (e.g. an Entity Admin, or a Team Lead mapped to reporting/self-service
             screens only) gets WelcomeNoDashboard instead of the old dead-end 404 bounce — see
             DashboardGate.jsx, which reuses computeHomeRoute rather than duplicating the check. */}
         <Route path={ROUTES.DASHBOARD} element={<DashboardGate />} />
@@ -437,8 +437,8 @@ const AppRoutes = () => {
           <Route path={ROUTES.REPORT_SERVICE_PO_HOURS_BUDGET} element={<ProtectedRoute formName={FORM_NAMES.REPORT_SERVICE_PO_HOURS_BUDGET}><ServicePOHoursBudget /></ProtectedRoute>} />
           <Route path={ROUTES.REPORT_EMPLOYEE_WORK_LOG_HOURS_SUMMARY} element={<ProtectedRoute formName={FORM_NAMES.REPORT_EMPLOYEE_WORK_LOG_HOURS_SUMMARY} allowIfNoFormsMapped><EmployeeWorkLogHoursSummaryReport /></ProtectedRoute>} />
           {/* No formName gate — reachable by any authenticated login regardless of Role-Form
-              Mapping, since Manager Timesheet Approval's "Check Pending & Remind" button links
-              here directly and a Manager role may not have this form explicitly granted. */}
+              Mapping, since Team Lead Timesheet Approval's "Check Pending & Remind" button links
+              here directly and a Team Lead role may not have this form explicitly granted. */}
           <Route path={ROUTES.REPORT_EMPLOYEE_WORK_LOG_COMPLIANCE} element={<ProtectedRoute><EmployeeWorkLogComplianceReport /></ProtectedRoute>} />
         </Route>
 
@@ -464,19 +464,19 @@ const AppRoutes = () => {
             automatically. */}
         <Route path={ROUTES.MY_TEAM} element={<ProtectedRoute formName={FORM_NAMES.MY_TEAM}><MyTeamList /></ProtectedRoute>} />
 
-        {/* Log Work for My Team — Manager fills a mapped Employee's monthly work log on their
+        {/* Log Work for My Team — Team Lead fills a mapped Employee's monthly work log on their
             behalf (auto-approved), gated by its own formName distinct from My Team/Approval. */}
-        <Route path={ROUTES.MANAGER_FILL_WORKLOG} element={<ProtectedRoute formName={FORM_NAMES.MANAGER_FILL_WORKLOG}><ManagerFillWorkLog /></ProtectedRoute>} />
+        <Route path={ROUTES.TEAM_LEAD_FILL_WORKLOG} element={<ProtectedRoute formName={FORM_NAMES.TEAM_LEAD_FILL_WORKLOG}><TeamLeadFillWorkLog /></ProtectedRoute>} />
 
         {/* Service PO Monthly Budget — Business module Form Master row (confirmed via
             GET /roles/forms), now gated dynamically by formName like every other RBAC-driven
             screen instead of a hardcoded allowedRoles whitelist, so any role the admin maps
-            this form to (Manager, Service PO Admin, BU Admin, etc.) gets access automatically. */}
+            this form to (Team Lead, Service PO Admin, BU Admin, etc.) gets access automatically. */}
         <Route path={ROUTES.SERVICE_PO_MONTHLY_BUDGET} element={<ProtectedRoute formName={FORM_NAMES.SERVICE_PO_MONTHLY_BUDGET}><ServicePoMonthlyBudgetPage /></ProtectedRoute>} />
 
         {/* Timesheet Approval — Resources module Form Master row ("Timesheet Approval"), split
             off (2026-08-23) from the employee selector that used to live inside My Work Log. */}
-        <Route path={ROUTES.MANAGER_TIMESHEET_APPROVAL} element={<ProtectedRoute formName={FORM_NAMES.MANAGER_TIMESHEET_APPROVAL}><ManagerTimesheetApproval /></ProtectedRoute>} />
+        <Route path={ROUTES.TEAM_LEAD_TIMESHEET_APPROVAL} element={<ProtectedRoute formName={FORM_NAMES.TEAM_LEAD_TIMESHEET_APPROVAL}><TeamLeadTimesheetApproval /></ProtectedRoute>} />
 
         {/* Cost Budget / Resource Budget — net-new, gated by formName like every other
             RBAC-driven screen (see rbacForms.js for the guessed Form Master names). */}
@@ -489,7 +489,7 @@ const AppRoutes = () => {
         <Route path={ROUTES.NOTIFICATIONS} element={<Notifications />} />
 
         {/* Employee self-service, rendered here (same shell, same formName gating as every
-            other screen above) for any account that ISN'T employee-only — a Manager who also
+            other screen above) for any account that ISN'T employee-only — a Team Lead who also
             holds Employee, for instance, keeps My Team/Team Mapping/AI Copilot while using
             My Work Log or PO Wise Report instead of losing them to a shell swap. */}
         {!isEmployeeOnly && employeeSelfServiceRoutes()}
@@ -499,7 +499,7 @@ const AppRoutes = () => {
       </Route>
 
       {/* Employee self-service for an account whose SOLE role is Employee (isEmployeeOnly) —
-          the separate, reduced shell (no AICopilotWidget, no Manager/Admin nav) still applies
+          the separate, reduced shell (no AICopilotWidget, no Team-Lead/Admin nav) still applies
           only here; anyone holding an additional role gets the block above instead. Dashboard
           alone carries `allowIfNoFormsMapped` so a brand-new Employee with nothing mapped yet
           still has a landing page instead of an infinite Not-Authorized <-> MainLayout-redirect

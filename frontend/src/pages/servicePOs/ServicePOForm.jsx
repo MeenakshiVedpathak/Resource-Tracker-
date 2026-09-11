@@ -8,7 +8,7 @@ import { useServicePO, useCreateServicePO, useUpdateServicePO } from '@/hooks/us
 import { useAuth } from '@/hooks/useAuth';
 import { NO_COMPANY_ROLES, ROLE_NAMES } from '@/constants/roleHierarchy';
 import { useSelectableBusinessUnits } from '@/hooks/useSelectableBusinessUnits';
-import { useActiveClients } from '@/hooks/useClients';
+import { useActiveClients, useClients } from '@/hooks/useClients';
 import { useCompanies } from '@/hooks/useCompanies';
 import { useProjectsByClient } from '@/hooks/useProjects';
 import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
@@ -150,10 +150,10 @@ const ServicePOForm = () => {
 
   // Company-less actors (Admin/Entity Admin/Platform Admin) always pick a BU per Service PO,
   // from the full BU master fetched below — they have no BU of their own. A BU-scoped actor
-  // (BU Admin, Service PO Admin, BU Head, ...) mapped to exactly one BU still has nothing to
-  // choose — theirs comes from the X-Company-Id header/activeBuId, same as the Excel import. But
-  // one mapped to MORE than one BU does need to choose which of their own BUs this PO belongs
-  // to — the same rule Client/Project creation already enforce via useSelectableBusinessUnits;
+  // (BU Admin, Project Manager, ...) mapped to exactly one BU still has nothing to choose —
+  // theirs comes from the X-Company-Id header/activeBuId, same as the Excel import. But one
+  // mapped to MORE than one BU does need to choose which of their own BUs this PO belongs to —
+  // the same rule Client/Project creation already enforce via useSelectableBusinessUnits;
   // showBuScopedPicker below closes that gap for Service PO creation.
   const isCompanyLessActor = hasRole(...NO_COMPANY_ROLES);
   const { units: mappedBusinessUnits, canFilter: hasMultipleMappedBus } = useSelectableBusinessUnits();
@@ -199,6 +199,23 @@ const ServicePOForm = () => {
   // Drives the Business Unit field's required/disabled state — a Centralised Service PO has no
   // BU (see company_id's superRefine in poSchema above).
   const isCentralised = form.watch('is_centralised');
+
+  // The Client list must be scoped to the chosen BU whenever the BU field is shown (company-less
+  // actor or a multi-BU BU-scoped one) — same rule Project create enforces. The backend resolves
+  // the client WITHIN the company_id sent on the request, so offering clients from outside the
+  // picked BU lets the two fields disagree and the create fails with "Client not found." Held
+  // until a BU is picked — there is nothing sensible to list before then.
+  const showBuField = isCompanyLessActor || showBuScopedPicker;
+  const selectedBuId = form.watch('company_id');
+  const { data: scopedClients, isPending: isLoadingScopedClients } = useClients(
+    { buId: selectedBuId, status: 'active', limit: 200 },
+    { enabled: showBuField && !!selectedBuId }
+  );
+
+  const clientOptions = (showBuField ? (scopedClients?.data ?? []) : activeClients)
+    .map((c) => ({ value: String(c.id), label: c.client_name }));
+  const clientsLoading = showBuField ? isLoadingScopedClients : isLoadingClients;
+  const clientDisabled = showBuField ? (!selectedBuId || clientsLoading) : clientsLoading;
 
   // Project dropdown is scoped to whichever Client is currently selected — refetches whenever
   // it changes, and is disabled until a Client is picked (see Project field below).
@@ -402,6 +419,39 @@ const ServicePOForm = () => {
                 )}
               />
 
+              {/* Asked before Client whenever this actor has more than one BU to choose between
+                  (or none of their own at all) — the Client list right below is then scoped to
+                  whichever BU is picked here, so the two fields can never disagree. */}
+              {(isCompanyLessActor || showBuScopedPicker) && !isCentralised && (
+                <FormField
+                  control={form.control}
+                  name="company_id"
+                  render={({ field }) => (
+                    <FormItem className="space-y-1">
+                      <FormLabel className="text-[13px]">
+                        <span className="text-destructive">*</span> BU Name
+                      </FormLabel>
+                      <SearchableSelect
+                        options={buFieldOptions}
+                        value={field.value}
+                        onValueChange={(val) => {
+                          field.onChange(val ? parseInt(val, 10) : undefined);
+                          // Changing BU invalidates whatever Client/Project were picked under
+                          // the previous one — never carry them over.
+                          form.setValue('client_id', '');
+                          form.setValue('project_id', '');
+                        }}
+                        disabled={isCompanyLessActor && isLoadingCompanies}
+                        placeholder="Select business unit"
+                        searchPlaceholder="Search business unit..."
+                        className="h-8 text-sm"
+                      />
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
               <FormField
                 control={form.control}
                 name="client_id"
@@ -411,10 +461,7 @@ const ServicePOForm = () => {
                       <span className="text-destructive">*</span> Client
                     </FormLabel>
                     <SearchableSelect
-                      options={activeClients.map(c => ({
-                        value: String(c.id),
-                        label: c.client_name
-                      }))}
+                      options={clientOptions}
                       value={field.value}
                       onValueChange={(val) => {
                         field.onChange(val ? parseInt(val, 10) : undefined);
@@ -422,8 +469,8 @@ const ServicePOForm = () => {
                         // previous Client — never carry it over (§3).
                         form.setValue('project_id', '');
                       }}
-                      disabled={isLoadingClients}
-                      placeholder="Select client"
+                      disabled={clientDisabled}
+                      placeholder={showBuField && !selectedBuId ? 'Select a business unit first' : 'Select client'}
                       searchPlaceholder="Search client..."
                       className="h-8 text-sm"
                     />
@@ -483,30 +530,6 @@ const ServicePOForm = () => {
                     className="h-8 text-sm"
                   />
               </div>
-
-              {(isCompanyLessActor || showBuScopedPicker) && !isCentralised && (
-                <FormField
-                  control={form.control}
-                  name="company_id"
-                  render={({ field }) => (
-                    <FormItem className="space-y-1">
-                      <FormLabel className="text-[13px]">
-                        <span className="text-destructive">*</span> BU Name
-                      </FormLabel>
-                      <SearchableSelect
-                        options={buFieldOptions}
-                        value={field.value}
-                        onValueChange={(val) => field.onChange(val ? parseInt(val, 10) : undefined)}
-                        disabled={isCompanyLessActor && isLoadingCompanies}
-                        placeholder="Select business unit"
-                        searchPlaceholder="Search business unit..."
-                        className="h-8 text-sm"
-                      />
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              )}
 
               <FormField
                 control={form.control}

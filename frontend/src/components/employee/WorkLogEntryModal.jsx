@@ -48,7 +48,7 @@ const hoursTaskSchema = z.object({
     .number({ invalid_type_error: 'Hours is required.' })
     .gt(0, 'Hours must be greater than 0.')
     .max(DAILY_HOURS_CAP, 'Hours cannot exceed 12 per day'),
-  description: z.string().min(1, 'Description is required').max(1000),
+  description: z.string().min(1, 'Description is required').max(500),
   timesheet_date: z.string().min(1, 'Date is required'),
 });
 const timeBasedTaskSchema = hoursTaskSchema.extend({ hours: z.coerce.number().optional() });
@@ -349,7 +349,7 @@ const WorkLogEntryModal = ({ open, onOpenChange, date, task }) => {
                 <FormItem>
                   <FormLabel>Description</FormLabel>
                   <FormControl>
-                    <Textarea placeholder="What did you work on?" disabled={isSaving} {...field} />
+                    <Textarea placeholder="What did you work on?" disabled={isSaving} maxLength={500} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

@@ -28,7 +28,7 @@ export const ROUTES = {
   EMPLOYEE_PROJECT_HOURS_REPORT: '/employee/project-hours-report',
   EMPLOYEE_TIMESHEET_APPROVAL_STATUS_REPORT: '/employee/timesheet-approval-status-report',
   EMPLOYEE_WORK_LOG_TIME_REPORT: '/employee/work-log-time-report',
-  // Work Log Rejection Workflow (2026-08-23), Employee side — entries a Manager rejected.
+  // Work Log Rejection Workflow (2026-08-23), Employee side — entries a Team Lead rejected.
   EMPLOYEE_REJECTED_ENTRIES: '/employee/rejected-entries',
 
   // AI Copilot — new pages added on top of the existing app, reachable from the
@@ -160,21 +160,21 @@ export const ROUTES = {
   // Team Mapping — Service PO Admin self-service (§7)
   TEAM_MAPPINGS: '/team-mappings',
 
-  // My Team — Manager self-service (§8)
+  // My Team — Team Lead self-service (§8)
   MY_TEAM: '/my-team',
 
-  // Service PO Monthly Budget — Manager self-service, net-new (Service PO Manager screen)
+  // Service PO Monthly Budget — Team Lead self-service, net-new (Service PO Team Lead screen)
   SERVICE_PO_MONTHLY_BUDGET: '/service-po-monthly-budget',
 
-  // Timesheet Approval — Manager self-service, net-new; split off from My Work Log into its
+  // Timesheet Approval — Team Lead self-service, net-new; split off from My Work Log into its
   // own screen (2026-08-23) so approving a team's timesheets no longer lives behind the
   // employee selector on the work-log page.
-  MANAGER_TIMESHEET_APPROVAL: '/manager/timesheet-approval',
+  TEAM_LEAD_TIMESHEET_APPROVAL: '/team-lead/timesheet-approval',
 
-  // Log Work for My Team — Manager self-service, net-new (2026-09-08): a Manager fills a mapped
-  // Employee's monthly work log on their behalf (auto-approved), distinct from the review queue
-  // above.
-  MANAGER_FILL_WORKLOG: '/manager/fill-worklog',
+  // Log Work for My Team — Team Lead self-service, net-new (2026-09-08): a Team Lead fills a
+  // mapped Employee's monthly work log on their behalf (auto-approved), distinct from the review
+  // queue above.
+  TEAM_LEAD_FILL_WORKLOG: '/team-lead/fill-worklog',
 
   // Cost Budget / Resource Budget — net-new, per Service PO + month
   COST_BUDGETS: '/cost-budgets',

@@ -16,7 +16,7 @@ export const useMyTeamEmployees = (params = {}, { enabled = true } = {}) =>
 // Confirmed live even for a nominally "cross-BU" Admin login (an Employee mapped under one
 // specific BU was missing under "All Business Units" but appeared once that BU was picked
 // explicitly), so this is used for ANY login with more than one selectable BU, not only BU-scoped
-// multi-BU ones — see the call site in ManagerTimesheetApproval.jsx for the exact condition. Fans
+// multi-BU ones — see the call site in TeamLeadTimesheetApproval.jsx for the exact condition. Fans
 // out one GET /my-team/employees call per BU (`units`, from useSelectableBusinessUnits) and merges
 // the results, deduped by id. Each per-BU query shares its cache entry with
 // useMyTeamEmployees({ buId }) above (same query key shape), so picking that same BU from the
@@ -87,8 +87,8 @@ export const useRevokeMyTeamServicePo = () => {
   });
 };
 
-// Manager Timesheet Approval's default landing table — every mapped Employee's approval-summary
-// buckets in one combined list, tagged with which Employee each row belongs to, so the Manager
+// Team Lead Timesheet Approval's default landing table — every mapped Employee's approval-summary
+// buckets in one combined list, tagged with which Employee each row belongs to, so the Team Lead
 // never has to open an Employee individually just to see whether they have anything pending.
 // There's no "every Employee at once" backend endpoint, so this fans out one request per Employee
 // (useQueries) and flattens the results client-side. Each request is capped to the summary
@@ -154,8 +154,8 @@ export const useApproveMyTeamTimesheetEntry = () => {
   });
 };
 
-// "Log Work for My Team" — a Manager filling in a mapped Employee's monthly work log on their
-// behalf (see pages/myTeam/ManagerFillWorkLog.jsx). `enabled` follows the caller (only fetch once
+// "Log Work for My Team" — a Team Lead filling in a mapped Employee's monthly work log on their
+// behalf (see pages/myTeam/TeamLeadFillWorkLog.jsx). `enabled` follows the caller (only fetch once
 // both an Employee and a Month/Year are picked).
 export const useEmployeeMonthlyWorkLog = (employeeId, { month, year } = {}, { enabled = true } = {}) =>
   useQuery({
@@ -197,8 +197,8 @@ export const useImportMyTeamMonthlyWorkLog = () => {
   });
 };
 
-// Mirrors ManagerFillWorkLogDrawer's own filter — a hierarchy node nested under a Service PO is
-// shown there for context only, never editable by the Manager, so it's excluded here too: this
+// Mirrors TeamLeadFillWorkLogDrawer's own filter — a hierarchy node nested under a Service PO is
+// shown there for context only, never editable by the Team Lead, so it's excluded here too: this
 // total must read as "what the drawer would show as already filled in" for that Employee, not a
 // bigger number the drawer itself never displays.
 const isTopLevelServicePO = (po) =>

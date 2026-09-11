@@ -5,7 +5,7 @@ import { Plus, Pencil, Download, Upload, CheckCircle2, AlertCircle, MoreVertical
 import * as XLSX from 'xlsx';
 import { useClients, useToggleClientStatus, useImportClients } from '@/hooks/useClients';
 import { clientsApi } from '@/api/clients.api';
-import { useCanWrite } from '@/hooks/usePermissions';
+import { useCanManageClientProjectPO } from '@/hooks/usePermissions';
 import { useNotification } from '@/hooks/useNotification';
 import { useDebounce } from '@/hooks/useDebounce';
 import { extractApiError } from '@/services/apiClient';
@@ -53,6 +53,7 @@ const TruncatedCell = ({ value, maxWidth = '150px', className }) => {
 // must see the state but not be able to flip it.
 const StatusToggle = ({ client, canManage }) => {
   const { mutate, isPending } = useToggleClientStatus();
+  const { error: showError } = useNotification();
   const isActive = client.status === 'active';
   return (
     <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
@@ -60,7 +61,10 @@ const StatusToggle = ({ client, canManage }) => {
         checked={isActive}
         disabled={isPending || !canManage}
         onCheckedChange={(checked) =>
-          mutate({ id: client.id, status: checked ? 'active' : 'inactive' })
+          mutate(
+            { id: client.id, status: checked ? 'active' : 'inactive' },
+            { onError: (err) => showError(extractApiError(err)) }
+          )
         }
       />
       <span className={cn('text-xs font-medium', isActive ? 'text-green-600' : 'text-slate-400')}>
@@ -81,7 +85,7 @@ const ClientList = () => {
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const debouncedSearch = useDebounce(search, 400);
-  const canManage = useCanWrite();
+  const canManage = useCanManageClientProjectPO();
 
   const [sorting, setSorting] = useState([]);
 
@@ -285,7 +289,9 @@ const ClientList = () => {
         setPreviewData(null);
       },
       onError: (err) => {
-        if (err.response?.data) {
+        if (err?.response?.status === 403) {
+          showError(extractApiError(err));
+        } else if (err.response?.data) {
           setImportResult(err.response.data);
           setIsPreviewOpen(false);
           setPreviewFile(null);

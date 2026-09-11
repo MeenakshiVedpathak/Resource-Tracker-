@@ -10,7 +10,7 @@ import { ROUTES } from '@/constants/routes';
 // mapped, the zero-forms safety net) — anything else means the caller has other real forms but
 // not this one, which used to bounce straight to the shared 404/Not Authorized page. Showing
 // WelcomeNoDashboard there instead avoids that dead-end for an account whose role just wasn't
-// given the Dashboard form (e.g. a Manager mapped to reporting/self-service screens only).
+// given the Dashboard form (e.g. a Team Lead mapped to reporting/self-service screens only).
 const DashboardGate = () => {
   const { accessibleForms, accessibleFormsLoaded } = useAuth();
 

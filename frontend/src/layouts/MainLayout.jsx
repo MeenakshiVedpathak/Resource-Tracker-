@@ -23,7 +23,7 @@ const MainLayout = () => {
   // Dynamic login: an account whose ONLY role is Employee has no business on any RBAC-driven
   // Admin/User route — enforced here (not just by hiding nav items) so a direct URL visit still
   // bounces them to their own dashboard, same as the Platform Admin check below. A multi-role
-  // account (e.g. Employee + Manager) must still reach MainLayout for its other role's screens,
+  // account (e.g. Employee + Team Lead) must still reach MainLayout for its other role's screens,
   // so this checks `isEmployeeOnly`, not just `isEmployee`. Uses useAuth's form-aware `homeRoute`
   // rather than hardcoding ROUTES.EMPLOYEE_DASHBOARD — an Employee not mapped to the "Employee
   // Dashboard" form itself (only to other Employee forms) would otherwise bounce straight into

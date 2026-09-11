@@ -38,7 +38,7 @@ export const employeeReportsApi = {
   getMonthly: (params) => getReport('/employee-reports/monthly', params, 'work-log-monthly'),
   getRange: (params) => getReport('/employee-reports/range', params, 'work-log-range'),
   // One row per work-log entry (never aggregated), sorted by date desc then start time asc.
-  // Exactly one of {startDate,endDate} or {month,year} must be present; employee_id (Manager
+  // Exactly one of {startDate,endDate} or {month,year} must be present; employee_id (Team Lead
   // only), service_po_id, project_id are optional filters. startTime/endTime come back null for
   // older entries logged before start/end time existed — never fabricate them client-side.
   getWorkLogTime: (params) => getReport('/employee-reports/work-log-time', params, 'work-log-time'),

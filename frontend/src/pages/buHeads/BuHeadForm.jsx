@@ -25,7 +25,7 @@ import {
 
 // Reuses the exact same Employee field/validation schema Employee Master and Company creation's
 // bundled Employee both already share (constants/employeeFormSchema.js) — no role picker (§4:
-// BU Head + Employee are backend-auto-assigned, never a free selector) and no Reporting/Manager
+// BU Head + Employee are backend-auto-assigned, never a free selector) and no Reporting/Team Lead
 // section (a senior tier like BU Head doesn't report to anyone in this model, same as BU Admin's
 // bundled Employee creation in CompanyForm.jsx).
 //

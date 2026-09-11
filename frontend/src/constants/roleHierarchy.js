@@ -22,7 +22,7 @@ export const ROLE_NAMES = {
   // one of those comparisons silently stops matching again (which is exactly what happened after
   // the rename, before this constant was updated to match).
   SERVICE_PO_ADMIN: 'Project Manager',
-  MANAGER: 'Manager',
+  TEAM_LEAD: 'Team Lead',
   EMPLOYEE: 'Employee',
   HR: 'HR',
 };
@@ -38,7 +38,7 @@ export const ROLE_HIERARCHY = [
   { name: ROLE_NAMES.BU_HEAD, hierarchy_rank: 4, inherits_role_id: null },
   { name: ROLE_NAMES.PROJECT_ADMIN, hierarchy_rank: 5, inherits_role_id: null },
   { name: ROLE_NAMES.SERVICE_PO_ADMIN, hierarchy_rank: 6, inherits_role_id: null },
-  { name: ROLE_NAMES.MANAGER, hierarchy_rank: 7, inherits_role_id: null },
+  { name: ROLE_NAMES.TEAM_LEAD, hierarchy_rank: 7, inherits_role_id: null },
   { name: ROLE_NAMES.EMPLOYEE, hierarchy_rank: 8, inherits_role_id: null },
   // HR is a parallel branch, not part of the numeric chain.
   { name: ROLE_NAMES.HR, hierarchy_rank: null, inherits_role_id: null },
@@ -52,9 +52,9 @@ export const ROLE_CREATION_MATRIX = {
   [ROLE_NAMES.ADMIN]: [ROLE_NAMES.ENTITY_ADMIN, ROLE_NAMES.BU_ADMIN],
   [ROLE_NAMES.ENTITY_ADMIN]: [ROLE_NAMES.BU_ADMIN],
   // BU Admin can now also assign Employee and HR (backend contract update) — previously only
-  // Project Admin / Service PO Admin / Manager.
+  // Project Admin / Service PO Admin / Team Lead.
   [ROLE_NAMES.BU_ADMIN]: [
-    ROLE_NAMES.PROJECT_ADMIN, ROLE_NAMES.SERVICE_PO_ADMIN, ROLE_NAMES.MANAGER,
+    ROLE_NAMES.PROJECT_ADMIN, ROLE_NAMES.SERVICE_PO_ADMIN, ROLE_NAMES.TEAM_LEAD,
     ROLE_NAMES.EMPLOYEE, ROLE_NAMES.HR,
   ],
   // BU Head gets the same assignable set as BU Admin (§14 of the BU Head spec: same forms/
@@ -63,11 +63,11 @@ export const ROLE_CREATION_MATRIX = {
   // only ever be minted via the dedicated BU Head Master "Add BU Head" flow (§16/§19), never as
   // a checkbox in the generic Employee Master role picker.
   [ROLE_NAMES.BU_HEAD]: [
-    ROLE_NAMES.PROJECT_ADMIN, ROLE_NAMES.SERVICE_PO_ADMIN, ROLE_NAMES.MANAGER,
+    ROLE_NAMES.PROJECT_ADMIN, ROLE_NAMES.SERVICE_PO_ADMIN, ROLE_NAMES.TEAM_LEAD,
     ROLE_NAMES.EMPLOYEE, ROLE_NAMES.HR,
   ],
   [ROLE_NAMES.PROJECT_ADMIN]: [ROLE_NAMES.SERVICE_PO_ADMIN],
-  [ROLE_NAMES.SERVICE_PO_ADMIN]: [ROLE_NAMES.MANAGER],
+  [ROLE_NAMES.SERVICE_PO_ADMIN]: [ROLE_NAMES.TEAM_LEAD],
   // HR creates Employee via the dedicated Employee-creation flow, not the generic Users screen.
   [ROLE_NAMES.HR]: [],
 };
@@ -76,7 +76,7 @@ export const getAssignableRoleNames = (actorRoleName) => ROLE_CREATION_MATRIX[ac
 
 // A custom role created after the RBAC redesign (via Role Master's "Add Role", not one of the
 // 9 fixed system roles above) — layered on as an additional operational role the same way HR/
-// Manager are, but meant to be strictly view-only. That's governed by its own `permission` field
+// Team Lead are, but meant to be strictly view-only. That's governed by its own `permission` field
 // on the Role Master (see RoleForm.jsx), the same "Read" mechanism the baseline Employee role
 // above already relies on — not anything hardcoded here.
 export const DELIVERY_OPERATION_TEAM_MEMBERS_ROLE_NAME = 'Delivery Operation Team Members';
@@ -86,7 +86,7 @@ export const DELIVERY_OPERATION_TEAM_MEMBERS_ROLE_NAME = 'Delivery Operation Tea
 // Admin, Admin, Entity Admin, BU Admin) can only ever be someone's one primary role — the
 // backend 400s if one is sent as an additional role, so this list must stay in sync with it.
 export const ADDITIONAL_ROLE_NAMES = [
-  ROLE_NAMES.PROJECT_ADMIN, ROLE_NAMES.SERVICE_PO_ADMIN, ROLE_NAMES.MANAGER,
+  ROLE_NAMES.PROJECT_ADMIN, ROLE_NAMES.SERVICE_PO_ADMIN, ROLE_NAMES.TEAM_LEAD,
   ROLE_NAMES.HR, ROLE_NAMES.EMPLOYEE, DELIVERY_OPERATION_TEAM_MEMBERS_ROLE_NAME,
 ];
 

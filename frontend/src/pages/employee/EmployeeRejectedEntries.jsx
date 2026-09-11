@@ -91,7 +91,7 @@ const EmployeeRejectedEntries = () => {
       <div>
         <h1 className="text-xl font-bold tracking-tight">Rejected Entries</h1>
         <p className="text-sm text-muted-foreground">
-          Entries your Manager sent back — edit and resubmit, or delete them.
+          Entries your Team Lead sent back — edit and resubmit, or delete them.
         </p>
       </div>
 

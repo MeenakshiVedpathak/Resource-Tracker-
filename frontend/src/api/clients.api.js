@@ -12,14 +12,26 @@ import apiClient from '@/services/apiClient';
 // `buId` is extracted from the params object so it lands in the React Query key and triggers
 // a refetch on change, but is forwarded as `company_id` in the query string rather than as
 // a header. `buId === 'all'` or null/undefined → omitted entirely (no filter param).
+//
+// `skipCompanyHeader: true` is required here — without it, the request interceptor still
+// attaches X-Company-Id from the globally-active BU (frozen to the login's first mapped BU
+// since the navbar switcher that used to change it is commented out in UserMenu.jsx)
+// regardless of what this screen's own BU filter says, and the backend was observed scoping
+// by that stale header even with no company_id sent — so "All Business Units" silently
+// narrowed to just the one frozen BU instead of every BU the caller can see. Same fix as
+// timesheets.api.js's getHistory for the identical symptom.
 export const clientsApi = {
   getAll: ({ buId, ...params } = {}) => {
     const companyIdParam = buId && buId !== 'all' ? { company_id: buId } : {};
     return apiClient
-      .get('/clients', { params: { ...params, ...companyIdParam } })
+      .get('/clients', { params: { ...params, ...companyIdParam }, skipCompanyHeader: true })
       .then((r) => r.data);
   },
-  getActiveList: () => apiClient.get('/clients/active/list').then((r) => r.data?.data ?? []),
+  // Same header-scoping pitfall as getAll above: without skipCompanyHeader, the interceptor
+  // attaches X-Company-Id from the globally-active BU regardless of the caller, silently narrowing
+  // a multi-BU login's clients to just that one BU (e.g. Service PO/Project create's Client
+  // dropdown, which must span every BU that login is mapped to).
+  getActiveList: () => apiClient.get('/clients/active/list', { skipCompanyHeader: true }).then((r) => r.data?.data ?? []),
   getById: (id) => apiClient.get(`/clients/${id}`).then((r) => r.data?.data),
   create: (payload) => apiClient.post('/clients', payload).then((r) => r.data),
   update: (id, payload) => apiClient.put(`/clients/${id}`, payload).then((r) => r.data),

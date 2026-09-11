@@ -90,35 +90,35 @@ export const FORM_NAMES = {
   EMPLOYEE_PROJECT_HOURS_REPORT: 'Project Hours Report',
   // Guessed name — same caveat as the rest of this file's Employee self-service entries; confirm
   // against the actual Form Master row once one is seeded for this new report. Shared by both
-  // Employee and Manager logins (single endpoint auto-resolves "own" vs "team" data), so whichever
-  // role(s) this form gets mapped to will reach the same page/route.
+  // Employee and Team Lead logins (single endpoint auto-resolves "own" vs "team" data), so
+  // whichever role(s) this form gets mapped to will reach the same page/route.
   EMPLOYEE_TIMESHEET_APPROVAL_STATUS_REPORT: 'Timesheet Approval Status Report',
   // Guessed name — same caveat as the rest of this file's Employee self-service entries; confirm
   // against the actual Form Master row once one is seeded for this new report (backend spec
-  // dated 2026-08-20, GET /employee-reports/work-log-time). Shared by both Employee and Manager
+  // dated 2026-08-20, GET /employee-reports/work-log-time). Shared by both Employee and Team Lead
   // logins, same as EMPLOYEE_PROJECT_HOURS_REPORT above.
   EMPLOYEE_WORK_LOG_TIME_REPORT: 'Work Log Time Report',
   // Guessed name — same caveat as the rest of this file's Employee self-service entries; confirm
   // against the actual Form Master row once one is seeded. Work Log Rejection Workflow
-  // (2026-08-23) — entries a Manager rejected, awaiting Employee edit+resubmit or delete.
+  // (2026-08-23) — entries a Team Lead rejected, awaiting Employee edit+resubmit or delete.
   EMPLOYEE_REJECTED_ENTRIES: 'Rejected Entries',
-  // Manager Timesheet Access & Approval — the backend's Form Master grants Managers these two
+  // Team Lead Timesheet Access & Approval — the backend's Form Master grants Team Leads these two
   // Resources-module rows (distinct from the Employee Self-Service "My Work Log" row an Employee
   // gets). "Timesheet" still points at the same EmployeeTimesheet page as "My Work Log" (a
-  // Manager logs their own hours the same way an Employee does). "Timesheet Approval" moved
-  // (2026-08-23) to its own dedicated screen — see pages/managerTimesheet/ManagerTimesheetApproval.jsx.
-  MANAGER_TIMESHEET: 'Timesheet',
-  MANAGER_TIMESHEET_APPROVAL: 'Timesheet Approval',
-  // "Log Work for My Team" (net-new, 2026-09-08 spec) — a Manager fills a mapped Employee's
+  // Team Lead logs their own hours the same way an Employee does). "Timesheet Approval" moved
+  // (2026-08-23) to its own dedicated screen — see pages/teamLeadTimesheet/TeamLeadTimesheetApproval.jsx.
+  TEAM_LEAD_TIMESHEET: 'Timesheet',
+  TEAM_LEAD_TIMESHEET_APPROVAL: 'Timesheet Approval',
+  // "Log Work for My Team" (net-new, 2026-09-08 spec) — a Team Lead fills a mapped Employee's
   // monthly work log hours on their behalf (auto-approved), distinct from Timesheet Approval
   // above, which only approves/rejects entries the Employee submitted themself. Guessed name —
   // same caveat as the rest of this file: confirm against the actual Form Master row once seeded.
-  MANAGER_FILL_WORKLOG: 'Log Work for My Team',
+  TEAM_LEAD_FILL_WORKLOG: 'Log Work for My Team',
   // Business module, Service PO Admin login (confirmed via GET /roles/forms) — the Form Master
   // row now exists on the backend, so this is picked up automatically by Sidebar's RBAC-driven
-  // buildNavGroups() instead of the Manager-only hardcoded injection below.
+  // buildNavGroups() instead of the Team-Lead-only hardcoded injection below.
   SERVICE_PO_MONTHLY_BUDGET: 'Monthly PO Reporting',
-  // People module, Manager login (confirmed via GET /roles/forms) — the Form Master row now
+  // People module, Team Lead login (confirmed via GET /roles/forms) — the Form Master row now
   // exists on the backend, so this is picked up automatically by buildNavGroups() instead of
   // the MY_TEAM_ROLES hardcoded injection in Sidebar.jsx.
   MY_TEAM: 'My Team',
@@ -205,9 +205,9 @@ export const FORM_ROUTE_CONFIG = {
   [FORM_NAMES.EMPLOYEE_TIMESHEET_APPROVAL_STATUS_REPORT]: { to: ROUTES.EMPLOYEE_TIMESHEET_APPROVAL_STATUS_REPORT, icon: ListChecks },
   [FORM_NAMES.EMPLOYEE_WORK_LOG_TIME_REPORT]: { to: ROUTES.EMPLOYEE_WORK_LOG_TIME_REPORT, icon: Timer },
   [FORM_NAMES.EMPLOYEE_REJECTED_ENTRIES]: { to: ROUTES.EMPLOYEE_REJECTED_ENTRIES, icon: XCircle, exact: true },
-  [FORM_NAMES.MANAGER_TIMESHEET]: { to: ROUTES.EMPLOYEE_TIMESHEET, icon: Clock },
-  [FORM_NAMES.MANAGER_TIMESHEET_APPROVAL]: { to: ROUTES.MANAGER_TIMESHEET_APPROVAL, icon: ClipboardCheck, exact: true },
-  [FORM_NAMES.MANAGER_FILL_WORKLOG]: { to: ROUTES.MANAGER_FILL_WORKLOG, icon: CalendarPlus, exact: true },
+  [FORM_NAMES.TEAM_LEAD_TIMESHEET]: { to: ROUTES.EMPLOYEE_TIMESHEET, icon: Clock },
+  [FORM_NAMES.TEAM_LEAD_TIMESHEET_APPROVAL]: { to: ROUTES.TEAM_LEAD_TIMESHEET_APPROVAL, icon: ClipboardCheck, exact: true },
+  [FORM_NAMES.TEAM_LEAD_FILL_WORKLOG]: { to: ROUTES.TEAM_LEAD_FILL_WORKLOG, icon: CalendarPlus, exact: true },
   [FORM_NAMES.SERVICE_PO_MONTHLY_BUDGET]: { to: ROUTES.SERVICE_PO_MONTHLY_BUDGET, icon: Wallet, exact: true },
   [FORM_NAMES.MY_TEAM]: { to: ROUTES.MY_TEAM, icon: Network, exact: true },
   [FORM_NAMES.TEAM_MAPPING]: { to: ROUTES.TEAM_MAPPINGS, icon: UserCog, exact: true },

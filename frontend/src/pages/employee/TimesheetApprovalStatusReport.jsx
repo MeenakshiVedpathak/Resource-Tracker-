@@ -133,7 +133,7 @@ const bucketKey = (bucket) => `bucket-${bucket.employee_id}-${bucket.date ?? `${
 const periodLabel = (bucket) =>
   bucket.log_type === 'monthly' ? formatMonthYear(bucket.month, bucket.year) : formatDate(bucket.date);
 
-// Deliberately carries no "Remind Manager" control of its own: the reminder endpoint takes no
+// Deliberately carries no "Remind Team Lead" control of its own: the reminder endpoint takes no
 // date or bucket, so every per-bucket button would have fired the exact same tenant-wide "all my
 // pending logs" request. One button in the page header says that honestly — see handleRemind.
 const BucketCard = ({ bucket, showEmployeeName, expandedKeys, onToggle }) => {
@@ -194,7 +194,7 @@ const TimesheetApprovalStatusReport = () => {
     ],
     [myTeam]
   );
-  const isManager = myTeam.length > 0;
+  const isTeamLead = myTeam.length > 0;
 
   const hasSelection = reportType !== 'range' || !!range;
 
@@ -211,13 +211,13 @@ const TimesheetApprovalStatusReport = () => {
 
   const params = {
     ...periodParams,
-    ...(isManager && employeeId !== 'all' ? { employee_id: employeeId } : {}),
+    ...(isTeamLead && employeeId !== 'all' ? { employee_id: employeeId } : {}),
   };
 
   const { data, isLoading, isError, error } = useTimesheetApprovalStatusReport(params, hasSelection);
 
   const buckets = data ?? [];
-  const showEmployeeName = isManager && (employeeId === 'all' || buckets.length > 1);
+  const showEmployeeName = isTeamLead && (employeeId === 'all' || buckets.length > 1);
   const errorMessage = isError ? extractApiError(error) : null;
   const showLoading = hasSelection && isLoading;
 
@@ -230,26 +230,26 @@ const TimesheetApprovalStatusReport = () => {
     });
   };
 
-  const activeFilterCount = (isManager && employeeId !== 'all' ? 1 : 0) + (reportType === 'range' && aggregateMonthly ? 1 : 0);
+  const activeFilterCount = (isTeamLead && employeeId !== 'all' ? 1 : 0) + (reportType === 'range' && aggregateMonthly ? 1 : 0);
 
   const clearFilters = () => {
     setEmployeeId('all');
     setAggregateMonthly(false);
   };
 
-  // The "Remind Manager" action always concerns the VIEWER's own pending logs — the endpoint
-  // resolves the employee from the token, not from a param — so it's hidden while a Manager has
-  // drilled into one team member, where a button labelled "Remind Manager" would read as "nudge
+  // The "Remind Team Lead" action always concerns the VIEWER's own pending logs — the endpoint
+  // resolves the employee from the token, not from a param — so it's hidden while a Team Lead has
+  // drilled into one team member, where a button labelled "Remind Team Lead" would read as "nudge
   // this person's approver" and in fact do something else entirely.
   //
-  // Not a permission gate: `employeeId === 'all'` is true for (a) every non-manager Employee,
-  // who only ever sees their own data, and (b) a Manager on the default "My Whole Team" filter,
+  // Not a permission gate: `employeeId === 'all'` is true for (a) every non-team-lead Employee,
+  // who only ever sees their own data, and (b) a Team Lead on the default "My Whole Team" filter,
   // which surfaces their own buckets too. So anyone who can see their own timesheet can use it.
   const showRemindButton = employeeId === 'all';
 
   // Purely a notification: no query invalidation and no refetch, so nothing on screen shifts and
   // the reminder can't be mistaken for a status change. The request carries no body — the backend
-  // resolves both the employee and their primary manager from the bearer token, and the period /
+  // resolves both the employee and their primary Team Lead from the bearer token, and the period /
   // pending count in the response are its own computation over ALL of the caller's pending logs,
   // not whatever period this report is currently filtered to.
   const handleRemind = async () => {
@@ -257,7 +257,7 @@ const TimesheetApprovalStatusReport = () => {
     setIsReminding(true);
     try {
       const res = await employeeWorkLogApi.remindApproval();
-      success(res?.data?.message ?? res?.message ?? 'Reminder sent to the primary manager.');
+      success(res?.data?.message ?? res?.message ?? 'Reminder sent to the primary Team Lead.');
     } catch (err) {
       // Show the exact API message verbatim — these strings are written to be user-facing.
       const msg =
@@ -283,7 +283,7 @@ const TimesheetApprovalStatusReport = () => {
                 className="relative bg-amber-500 text-white shadow-md shadow-amber-500/30 hover:bg-amber-600"
                 onClick={handleRemind}
                 disabled={isReminding}
-                title="Email your primary manager about your work logs awaiting approval"
+                title="Email your primary Team Lead about your work logs awaiting approval"
               >
                 {isReminding ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -294,7 +294,7 @@ const TimesheetApprovalStatusReport = () => {
                     <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-white" />
                   </span>
                 )}
-                {isReminding ? 'Sending…' : 'Remind Manager'}
+                {isReminding ? 'Sending…' : 'Remind Team Lead'}
               </Button>
             )}
             <FilterToggleButton
@@ -361,7 +361,7 @@ const TimesheetApprovalStatusReport = () => {
           </>
         )}
 
-        {isManager && (
+        {isTeamLead && (
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs">Employee</Label>
             <SearchableSelect

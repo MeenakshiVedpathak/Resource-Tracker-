@@ -11,7 +11,7 @@ import { useActiveEntities } from '@/hooks/useEntities';
 import { useActiveServicePOs } from '@/hooks/useServicePOs';
 import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
 import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
-import { useCanWrite } from '@/hooks/usePermissions';
+import { useCanManageClientProjectPO } from '@/hooks/usePermissions';
 import { useAuth } from '@/hooks/useAuth';
 import { NO_COMPANY_ROLES, ROLE_NAMES } from '@/constants/roleHierarchy';
 import { downloadServicePoSample } from '@/utils/servicePoSample';
@@ -176,7 +176,7 @@ const ServicePOList = () => {
 
   const debouncedSearch = useDebounce(search, 400);
 
-  const canManage = useCanWrite();
+  const canManage = useCanManageClientProjectPO();
 
   const [sorting, setSorting] = useState([]);
 

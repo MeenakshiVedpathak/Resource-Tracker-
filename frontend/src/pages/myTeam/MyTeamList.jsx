@@ -25,9 +25,9 @@ import {
 const MyTeamList = () => {
   const navigate = useNavigate();
   const { success, error: showError } = useNotification();
-  // Separately grantable capability — a Manager can have "My Team" (this list) without also
+  // Separately grantable capability — a Team Lead can have "My Team" (this list) without also
   // having "Log Work for My Team" (filling hours on an Employee's behalf).
-  const canFillWorkLog = useHasForm(FORM_NAMES.MANAGER_FILL_WORKLOG);
+  const canFillWorkLog = useHasForm(FORM_NAMES.TEAM_LEAD_FILL_WORKLOG);
 
   const [addOpen, setAddOpen] = useState(false);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
@@ -71,7 +71,7 @@ const MyTeamList = () => {
               <Button
                 size="sm"
                 className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                onClick={() => navigate(ROUTES.MANAGER_FILL_WORKLOG)}
+                onClick={() => navigate(ROUTES.TEAM_LEAD_FILL_WORKLOG)}
               >
                 <CalendarPlus className="mr-1.5 h-4 w-4" /> Log Work for Team
               </Button>

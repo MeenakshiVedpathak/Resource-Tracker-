@@ -21,7 +21,7 @@ const MapBuModal = ({ buHead, open, onOpenChange }) => {
   const [selected, setSelected] = useState([]);
 
   // Bounded "all options" fetch — same workaround pattern already used elsewhere in this app for
-  // picker dropdowns (e.g. useAssignableManagers) since there's no dedicated "active companies"
+  // picker dropdowns (e.g. useAssignableTeamLeads) since there's no dedicated "active companies"
   // endpoint here.
   const { data: companiesData, isLoading: isLoadingCompanies } = useCompanies({ limit: 200 });
   const { data: mappedCompanies, isLoading: isLoadingMapped } = useBuHeadMappedCompanies(buHead?.id);

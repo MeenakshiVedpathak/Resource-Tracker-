@@ -36,7 +36,7 @@ export const useHasForm = (formName) => {
 // Who may CREATE/EDIT an employee RECORD, as opposed to merely MAPPING roles & Business Units
 // onto one that already exists. Employee Master is granted to the BU-scoped senior tier (BU
 // Admin / BU Head) purely so they can run that mapping for their own BU — the record itself
-// (identity, login, manager, joining/leaving dates, active status, bulk import) stays with
+// (identity, login, Team Lead, joining/leaving dates, active status, bulk import) stays with
 // HR / Admin / Entity Admin.
 //
 // Note this can't be expressed with useCanWrite alone: a BU Admin's role DOES carry
@@ -67,6 +67,22 @@ export const useCanManageEmployeeRecords = () => {
 export const useCanManageBusinessUnits = () => {
   const { hasRole, isPlatformAdmin } = useAuth();
   return isPlatformAdmin || hasRole(ROLE_NAMES.ADMIN, ROLE_NAMES.ENTITY_ADMIN);
+};
+
+// Who may CREATE/EDIT/DELETE/IMPORT a Client, Project, or Service PO record. The backend now
+// restricts these actions to a fixed role allowlist (2026-09) regardless of the role's own
+// Read/Write flag, so this is narrower than useCanWrite alone — same shape as
+// useCanManageBusinessUnits, but ANDed with useCanWrite rather than replacing it, so this only
+// ever narrows access and never grants more than a role's own permission already allowed.
+export const useCanManageClientProjectPO = () => {
+  const { hasRole, isPlatformAdmin } = useAuth();
+  const canWrite = useCanWrite();
+  return canWrite && (isPlatformAdmin || hasRole(
+    ROLE_NAMES.ADMIN,
+    ROLE_NAMES.PROJECT_ADMIN,
+    ROLE_NAMES.SERVICE_PO_ADMIN,
+    ROLE_NAMES.BU_ADMIN,
+  ));
 };
 
 // Gates the Modified/Original hours-source toggle in Reports & Dashboard, and the Modified

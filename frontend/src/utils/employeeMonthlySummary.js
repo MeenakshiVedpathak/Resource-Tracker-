@@ -102,8 +102,8 @@ export const buildMonthlySummaryRows = (dayEntries = []) => {
 // Plain-hours only — the Work Log form never sends time_entries (that's the separate Time Entry
 // form's job, see utils/employeeTimeEntry.js and pages/employee/EmployeeTimeEntry.jsx).
 // `descriptions` is the same `{ [rowKey]: { [day]: text } }` shape as `edits`, holding whatever
-// the user typed into WorkLogEntryTable's Description column; falls back to the row's own label
-// (then a generic placeholder) when left blank, since the entries API requires a description.
+// the user typed into WorkLogEntryTable's Description column; sent as-is, including empty, so a
+// blank box stays blank rather than being auto-filled with the row's task/project label.
 //
 // ⚠️ KNOWN BACKEND GAP — a saved description doesn't read back. This does send `description` per
 // entry on save, but GET /employee-timesheets/daily, /monthly-summary and /monthly never include
@@ -119,7 +119,7 @@ export const buildDayEntries = (rows, day, edits, descriptions) =>
       const edited = edits?.[row.rowKey]?.[day];
       const hours = edited !== undefined ? Number(edited || 0) : Number(row.hoursByDay?.[day] ?? 0);
       const editedDescription = descriptions?.[row.rowKey]?.[day];
-      const description = editedDescription?.trim() || row.descriptionByDay?.[day]?.trim() || row.label || 'Logged via Monthly Summary';
+      const description = editedDescription !== undefined ? editedDescription.trim() : (row.descriptionByDay?.[day]?.trim() || '');
       return { row, hours, description };
     })
     .filter(({ hours }) => hours > 0)

@@ -12,7 +12,7 @@ const AuthLayout = () => {
   return (
     <div className="min-h-screen flex">
       {/* Left panel — branding */}
-      <div className="hidden lg:flex lg:w-[52%] bg-sidebar relative flex-col justify-between p-12 overflow-hidden">
+      <div className="hidden lg:flex lg:w-[52%] bg-sidebar relative flex-col p-12 overflow-hidden">
         {/* Decorative gradient orbs */}
         <div className="absolute -top-24 -left-24 h-96 w-96 rounded-full bg-primary/20 blur-3xl" />
         <div className="absolute bottom-0 right-0 h-80 w-80 rounded-full bg-primary/10 blur-3xl" />
@@ -24,12 +24,11 @@ const AuthLayout = () => {
           transition={{ duration: 0.7, ease: 'easeOut' }}
         >
           <motion.img
-            src="/logo.svg"
-            alt="Logo"
-            className="h-24 object-contain"
+            src="/logo-dark.png"
+            alt="Trackio"
+            className="h-20 object-contain"
             animate={{
-              scale: [1, 1.12, 1],
-              rotate: [0, 1.2, 0, -1.2, 0],
+              scale: [1, 1.05, 1],
               filter: [
                 'drop-shadow(0 0 6px rgba(139,92,246,0.5))',
                 'drop-shadow(0 0 22px rgba(37,99,235,0.75))',
@@ -41,7 +40,7 @@ const AuthLayout = () => {
         </motion.div>
 
         {/* Center copy */}
-        <div className="relative z-10 space-y-6">
+        <div className="relative z-10 space-y-6 mt-10">
           <h1 className="text-4xl font-bold text-white leading-tight">
             Manage resources,<br />
             track costs,<br />
@@ -64,7 +63,7 @@ const AuthLayout = () => {
         </div>
 
         {/* Bottom tagline */}
-        <p className="relative z-10 text-xs text-white/30">
+        <p className="relative z-10 mt-auto text-xs text-white/30">
           © {new Date().getFullYear()} GTT Data Solutions Ltd. All Rights Reserved.
         </p>
       </div>
@@ -72,18 +71,17 @@ const AuthLayout = () => {
       {/* Right panel — form */}
       <div className="flex flex-1 flex-col items-center justify-center bg-background px-6 py-12">
         <motion.div
-          className="mb-8 flex items-center justify-center lg:hidden"
+          className="mb-8 flex items-center justify-center rounded-xl bg-sidebar px-4 py-3 lg:hidden"
           initial={{ opacity: 0, y: -14, scale: 0.9 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ duration: 0.7, ease: 'easeOut' }}
         >
           <motion.img
-            src="/logo.svg"
-            alt="Logo"
-            className="h-16 object-contain"
+            src="/logo-dark.png"
+            alt="Trackio"
+            className="h-10 object-contain"
             animate={{
-              scale: [1, 1.1, 1],
-              rotate: [0, 1, 0, -1, 0],
+              scale: [1, 1.05, 1],
               filter: [
                 'drop-shadow(0 0 4px rgba(139,92,246,0.35))',
                 'drop-shadow(0 0 14px rgba(37,99,235,0.5))',

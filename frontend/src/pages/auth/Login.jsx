@@ -70,7 +70,7 @@ const Login = () => {
   const completeLogin = (data) => {
     const { employee, accessToken, refreshToken, roles, forms } = data;
     // Employee-only means Employee is the account's SOLE role — a multi-role account (e.g.
-    // Employee + Manager) must land wherever `forms` sends it below, not always the Employee
+    // Employee + Team Lead) must land wherever `forms` sends it below, not always the Employee
     // dashboard, so this checks the full `roles[]` array rather than a singular role.
     const isEmployeeOnly = (roles ?? []).length > 0 && (roles ?? []).every((r) => r.name === 'Employee');
 

@@ -71,7 +71,7 @@ export const crossBuScopeForAdmin = () =>
 //   · an account with no mapped BU sends no header regardless (activeBuId is null);
 //   · Platform Admin / Admin / Entity Admin are cross-BU by role — they carry no company_id
 //     (NO_COMPANY_ROLES), which is exactly why crossBuScopeForAdmin can drop the header for them.
-// Every other login (BU Admin, BU Head, Project Admin, Manager, Employee, HR…) is BU-scoped.
+// Every other login (BU Admin, BU Head, Project Admin, Team Lead, Employee, HR…) is BU-scoped.
 // Reads from storage rather than Redux for the same reason as crossBuScopeForAdmin above.
 export const canScopeAcrossBus = () =>
   getStoredActiveBuId() == null || getStoredRoles().some((r) => NO_COMPANY_ROLES.includes(r.name));
@@ -95,16 +95,14 @@ const mappedBuCount = () => getStoredBusinessUnits().length;
 //                 banner a BU Admin used to hit on every report the moment they touched this
 //                 filter — and their one BU is by definition "all of theirs" anyway, so sending
 //                 it answers the question exactly rather than working around it.
-//                 ⚠️ A BU-scoped login mapped to SEVERAL BUs (BU Head, a multi-BU BU Admin) has
-//                 no single header that means "all of mine", so a true cross-BU answer needs the
+//                 A BU-scoped login mapped to SEVERAL BUs (BU Head, a multi-BU BU Admin) has no
+//                 single header that means "all of mine", so a true cross-BU answer needs the
 //                 backend to accept a header-less request and scope it to every BU that caller is
-//                 mapped to. Until that ships they get the active BU rather than a 400: this
-//                 filter now sits on ~30 reports and masters and defaults to "All Business
-//                 Units", so erroring here would greet that role with a red banner on every
-//                 screen. The trade is that "All Business Units" under-reports for them — it
-//                 shows their active BU only — which is why the backend change matters. When it
-//                 lands, delete the mappedBuCount() term below and 'all' becomes genuinely all
-//                 for every login in one line.
+//                 mapped to — which shipped 2026-09 (see the auto-map-creator change: a new
+//                 Project/Service PO's BU is now resolved from its selected Client rather than
+//                 the active header). So only the genuinely-single-BU case still falls back to
+//                 leaving the header in place below; every multi-BU case now gets NO_BU_SCOPE and
+//                 a true "all of mine" answer.
 //   a BU id    -> that id is sent instead of the active one, without touching the global
 //                 selection, so switching a report's BU never changes any other screen.
 //   undefined  -> opt out entirely and leave the interceptor's global-BU behaviour alone. This
@@ -118,7 +116,7 @@ const mappedBuCount = () => getStoredBusinessUnits().length;
 export const explicitBuScope = (buId) => {
   if (buId === undefined) return {};
   if (buId === null || buId === 'all') {
-    return !canScopeAcrossBus() && mappedBuCount() >= 1 ? {} : NO_BU_SCOPE;
+    return !canScopeAcrossBus() && mappedBuCount() === 1 ? {} : NO_BU_SCOPE;
   }
   return { ...NO_BU_SCOPE, headers: { 'X-Company-Id': String(buId) } };
 };

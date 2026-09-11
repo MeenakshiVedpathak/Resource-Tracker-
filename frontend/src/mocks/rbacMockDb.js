@@ -44,10 +44,10 @@ const buildSeed = () => {
     created_at: '2026-01-01T00:00:00.000Z',
   }));
   const roleId = (name) => roles.find((r) => r.role_name === name).id;
-  // Project Admin / Service PO Admin "inherit Manager's capabilities" per spec §3.1, modeled as
-  // a chain matching the hierarchy diagram: Project Admin -> Service PO Admin -> Manager.
+  // Project Admin / Service PO Admin "inherit Team Lead's capabilities" per spec §3.1, modeled as
+  // a chain matching the hierarchy diagram: Project Admin -> Service PO Admin -> Team Lead.
   roles.find((r) => r.role_name === ROLE_NAMES.SERVICE_PO_ADMIN).inherits_role_id = roleId(ROLE_NAMES.PROJECT_ADMIN);
-  roles.find((r) => r.role_name === ROLE_NAMES.PROJECT_ADMIN).inherits_role_id = roleId(ROLE_NAMES.MANAGER);
+  roles.find((r) => r.role_name === ROLE_NAMES.PROJECT_ADMIN).inherits_role_id = roleId(ROLE_NAMES.TEAM_LEAD);
 
   // Companies are real-backend-only in this app (never mocked — see companies.api.js), so this
   // is a small denormalized placeholder table purely so mock employees have something to hold
@@ -72,8 +72,8 @@ const buildSeed = () => {
     { id: 5, employee_code: 'EMP-MULTI', full_name: 'Morgan MultiBu', designation: 'BU Admin', total_experience: 8, company_experience: 4, resource_description: '', date_of_joining: '2021-03-01', date_of_leaving: null, status: 'active', email: 'multibu@mock.test', password: MOCK_PASSWORD, role_ids: [roleId(ROLE_NAMES.BU_ADMIN), roleId(ROLE_NAMES.EMPLOYEE)], business_unit_ids: [1, 2], primary_manager_employee_id: null, secondary_manager_employee_id: null, is_timesheet_approval_required: true },
     { id: 6, employee_code: 'EMP-PROJ', full_name: 'Priti ProjectAdmin', designation: 'Project Admin', total_experience: 7, company_experience: 3, resource_description: '', date_of_joining: '2022-01-01', date_of_leaving: null, status: 'active', email: 'projectadmin@mock.test', password: MOCK_PASSWORD, role_ids: [roleId(ROLE_NAMES.PROJECT_ADMIN), roleId(ROLE_NAMES.EMPLOYEE)], business_unit_ids: [1], primary_manager_employee_id: null, secondary_manager_employee_id: null, is_timesheet_approval_required: true },
     { id: 7, employee_code: 'EMP-SPOA', full_name: 'Sanjay ServicePoAdmin', designation: 'Service PO Admin', total_experience: 6, company_experience: 3, resource_description: '', date_of_joining: '2022-03-01', date_of_leaving: null, status: 'active', email: 'servicepoadmin@mock.test', password: MOCK_PASSWORD, role_ids: [roleId(ROLE_NAMES.SERVICE_PO_ADMIN), roleId(ROLE_NAMES.EMPLOYEE)], business_unit_ids: [1], primary_manager_employee_id: null, secondary_manager_employee_id: null, is_timesheet_approval_required: true },
-    { id: 8, employee_code: 'EMP-MGR1', full_name: 'Manisha Manager', designation: 'Manager', total_experience: 6, company_experience: 3, resource_description: '', date_of_joining: '2022-04-01', date_of_leaving: null, status: 'active', email: 'manager@mock.test', password: MOCK_PASSWORD, role_ids: [roleId(ROLE_NAMES.MANAGER), roleId(ROLE_NAMES.EMPLOYEE)], business_unit_ids: [1], primary_manager_employee_id: null, secondary_manager_employee_id: null, is_timesheet_approval_required: true },
-    { id: 9, employee_code: 'EMP-MGR2', full_name: 'Rohit Manager', designation: 'Manager', total_experience: 5, company_experience: 2, resource_description: '', date_of_joining: '2022-05-01', date_of_leaving: null, status: 'active', email: 'manager2@mock.test', password: MOCK_PASSWORD, role_ids: [roleId(ROLE_NAMES.MANAGER), roleId(ROLE_NAMES.EMPLOYEE)], business_unit_ids: [1], primary_manager_employee_id: null, secondary_manager_employee_id: null, is_timesheet_approval_required: true },
+    { id: 8, employee_code: 'EMP-MGR1', full_name: 'Manisha Team Lead', designation: 'Team Lead', total_experience: 6, company_experience: 3, resource_description: '', date_of_joining: '2022-04-01', date_of_leaving: null, status: 'active', email: 'manager@mock.test', password: MOCK_PASSWORD, role_ids: [roleId(ROLE_NAMES.TEAM_LEAD), roleId(ROLE_NAMES.EMPLOYEE)], business_unit_ids: [1], primary_manager_employee_id: null, secondary_manager_employee_id: null, is_timesheet_approval_required: true },
+    { id: 9, employee_code: 'EMP-MGR2', full_name: 'Rohit Team Lead', designation: 'Team Lead', total_experience: 5, company_experience: 2, resource_description: '', date_of_joining: '2022-05-01', date_of_leaving: null, status: 'active', email: 'manager2@mock.test', password: MOCK_PASSWORD, role_ids: [roleId(ROLE_NAMES.TEAM_LEAD), roleId(ROLE_NAMES.EMPLOYEE)], business_unit_ids: [1], primary_manager_employee_id: null, secondary_manager_employee_id: null, is_timesheet_approval_required: true },
     { id: 10, employee_code: 'EMP-HR01', full_name: 'Hema HR', designation: 'HR', total_experience: 4, company_experience: 2, resource_description: '', date_of_joining: '2022-07-01', date_of_leaving: null, status: 'active', email: 'hr@mock.test', password: MOCK_PASSWORD, role_ids: [roleId(ROLE_NAMES.HR), roleId(ROLE_NAMES.EMPLOYEE)], business_unit_ids: [1], primary_manager_employee_id: null, secondary_manager_employee_id: null, is_timesheet_approval_required: true },
     { id: 11, employee_code: 'EMP-0001', full_name: 'Stage3 Smoketest Employee', designation: 'Software Engineer', total_experience: 3.5, company_experience: 1.0, resource_description: '', date_of_joining: '2025-01-15', date_of_leaving: null, status: 'active', email: 'employee@mock.test', password: MOCK_PASSWORD, role_ids: [roleId(ROLE_NAMES.EMPLOYEE)], business_unit_ids: [1], primary_manager_employee_id: 8, secondary_manager_employee_id: null, is_timesheet_approval_required: true },
     // Extra non-login-documented row purely for list-page variety/pagination testing.
@@ -233,7 +233,7 @@ const FORMS_BY_ROLE = {
   },
   [ROLE_NAMES.PROJECT_ADMIN]: {},
   [ROLE_NAMES.SERVICE_PO_ADMIN]: {},
-  [ROLE_NAMES.MANAGER]: {},
+  [ROLE_NAMES.TEAM_LEAD]: {},
   [ROLE_NAMES.HR]: { People: [{ id: 105, name: 'Employee Master' }] },
   [ROLE_NAMES.EMPLOYEE]: {
     Core: [{ id: 401, name: 'Employee Dashboard' }],
@@ -277,7 +277,7 @@ export const assertCanAssignRole = (actorRoleName, targetRoleName) => {
 export const assertValidAdditionalRole = (roleName) => {
   if (!ADDITIONAL_ROLE_NAMES.includes(roleName)) {
     const err = new Error(
-      `"${roleName}" cannot be held as an additional role — only Project Admin, Project Manager, Manager, HR, or Employee may be assigned as additional roles.`
+      `"${roleName}" cannot be held as an additional role — only Project Admin, Project Manager, Team Lead, HR, or Employee may be assigned as additional roles.`
     );
     err.response = { status: 400, data: { success: false, message: err.message } };
     throw err;

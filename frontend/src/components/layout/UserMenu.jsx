@@ -40,7 +40,7 @@ const ROLE_ICONS = {
   [ROLE_NAMES.BU_HEAD]: Building2,
   [ROLE_NAMES.PROJECT_ADMIN]: FolderKanban,
   [ROLE_NAMES.SERVICE_PO_ADMIN]: Briefcase,
-  [ROLE_NAMES.MANAGER]: Users,
+  [ROLE_NAMES.TEAM_LEAD]: Users,
   [ROLE_NAMES.EMPLOYEE]: User,
   [ROLE_NAMES.HR]: HeartHandshake,
 };

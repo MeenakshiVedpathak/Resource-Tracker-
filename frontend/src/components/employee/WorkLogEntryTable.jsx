@@ -13,7 +13,7 @@ import { formatHoursMinutes, parseHourMinuteInput, formatHourMinuteValue } from 
 import { DAILY_HOURS_CAP } from './WorkLogEntryModal';
 
 const STEP = 0.5;
-const DESCRIPTION_MAX_LENGTH = 150;
+export const DESCRIPTION_MAX_LENGTH = 500;
 
 const buildChildrenByParent = (rows) => {
   const map = new Map();
@@ -36,7 +36,7 @@ const clampHours = (n, cap) => Math.min(cap, Math.max(0, n));
 // Starts at a single line and grows only once typed content actually wraps to a next line,
 // instead of always reserving a fixed multi-line block regardless of how short the text is.
 // Exported for reuse by any other per-row description field in the app (see
-// pages/myTeam/ManagerFillWorkLog.jsx) rather than re-implementing the same resize logic.
+// pages/myTeam/TeamLeadFillWorkLog.jsx) rather than re-implementing the same resize logic.
 export const AutoResizeTextarea = ({ value, className, ...props }) => {
   const ref = useRef(null);
 

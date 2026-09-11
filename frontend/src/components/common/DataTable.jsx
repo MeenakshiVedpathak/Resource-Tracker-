@@ -261,7 +261,16 @@ const DataTable = ({
                     return (
                       <TableCell
                         key={cell.id}
-                        className={cn(isSticky && 'sticky-col', align === 'right' && 'text-right')}
+                        // `overflow-hidden` matches TableHead above — without it, a cell whose own
+                        // content forgets `truncate` (or is simply wider than a fixed/computed
+                        // column size) visually bleeds into the next column instead of clipping,
+                        // which is what makes an over-long value look like it's overlapping its
+                        // neighbor rather than just being cut off. This is a safety net at the
+                        // table level, not a substitute for sizing a column to its real content —
+                        // see the per-page `size`/width calculations (e.g. Business Unit columns)
+                        // for that. Dropdowns/popovers/tooltips rendered from a cell (row actions,
+                        // etc.) are unaffected — they portal to `document.body`, not into the `<td>`.
+                        className={cn('overflow-hidden', isSticky && 'sticky-col', align === 'right' && 'text-right')}
                         style={{
                           ...(w ? { width: w, minWidth: w, maxWidth: w } : {}),
                           ...(isSticky ? { left } : {})

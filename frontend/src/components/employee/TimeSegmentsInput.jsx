@@ -14,9 +14,9 @@ export const BLANK_SEGMENT = { start_time: '', end_time: '', description: '' };
 // (every other one is shrink-0). A floor here would push the footer actions off screen.
 const ROWS_MAX_HEIGHT = 'max-h-[300px] min-h-0';
 
-// Description's 150-char cap — shared by the `maxLength` on the input and the live counter under
+// Description's 500-char cap — shared by the `maxLength` on the input and the live counter under
 // it, so the two can never drift apart.
-const DESCRIPTION_MAX_LENGTH = 150;
+const DESCRIPTION_MAX_LENGTH = 500;
 
 // Shared between the header captions and every row so the two stay in lockstep — a column added
 // here shifts both at once. Kept as one fixed 5-column row (not a responsive stack) — the page

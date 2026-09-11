@@ -485,10 +485,10 @@ const EmployeeWorkLogComplianceReport = () => {
           </span>
         )}
         // Overrides ReportsLayout's inherited back target — this report is reached from the
-        // Manager Timesheet Approval screen's "Remind"/compliance flow, so its own back arrow
+        // Team Lead Timesheet Approval screen's "Remind"/compliance flow, so its own back arrow
         // should return there instead of the generic Reports Center every other report falls
         // back to.
-        backTo={ROUTES.MANAGER_TIMESHEET_APPROVAL}
+        backTo={ROUTES.TEAM_LEAD_TIMESHEET_APPROVAL}
         backLabel="Back to Timesheet Approval"
         actions={
           <div className="flex flex-wrap items-center gap-2">
@@ -520,7 +520,7 @@ const EmployeeWorkLogComplianceReport = () => {
             )}
 
             {/* Remind All — deliberately its own solid, warm-colored CTA rather than another
-                outline button: this is the one action on the page a Manager should actually
+                outline button: this is the one action on the page a Team Lead should actually
                 notice and act on, not blend in next to Filters/Export. */}
             {hasRecords && (
               <Button

@@ -7,6 +7,7 @@ import { useEmployeeWorkLogTimeReport } from '@/hooks/useEmployeeReports';
 import { useEmployeeProjectHoursFilterTree } from '@/hooks/useEmployeeProjectHoursReport';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyTeamEmployees } from '@/hooks/useMyTeam';
+import { ROLE_NAMES } from '@/constants/roleHierarchy';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import { downloadBlob } from '@/utils/download';
@@ -80,15 +81,15 @@ const TotalHoursBar = ({ totalHours }) => (
 // entries, and `module` is null when no hierarchy node was tagged at all — both shown as "—"
 // rather than fabricated. `combinedHours`/`combinedHoursLabel` repeat the same
 // Module/Task/date-level total (e.g. "1 hr 50 mins") across every one of that entry's segment
-// rows, distinct from `totalHours` which is that one segment's own duration. A Manager
+// rows, distinct from `totalHours` which is that one segment's own duration. A Team Lead
 // additionally gets an employee picker (own team, or "My Work Log" for just themselves) and an
 // Employee column; a plain Employee only ever sees their own rows so that column is redundant
 // and left out.
 const EmployeeWorkLogTimeReport = () => {
   const { error: showError } = useNotification();
   const { hasRole } = useAuth();
-  const isManager = hasRole('Manager');
-  const { data: mappedEmployees = [] } = useMyTeamEmployees({ enabled: isManager });
+  const isTeamLead = hasRole(ROLE_NAMES.TEAM_LEAD);
+  const { data: mappedEmployees = [] } = useMyTeamEmployees({ enabled: isTeamLead });
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
   const employeeOptions = [
     { value: '', label: 'My Work Log' },
@@ -128,7 +129,7 @@ const EmployeeWorkLogTimeReport = () => {
   const params = {
     ...periodParams,
     ...filterParams,
-    ...(isManager && selectedEmployeeId ? { employee_id: selectedEmployeeId } : {}),
+    ...(isTeamLead && selectedEmployeeId ? { employee_id: selectedEmployeeId } : {}),
   };
 
   const { data, isLoading, isError } = useEmployeeWorkLogTimeReport(params, hasSelection);
@@ -142,7 +143,7 @@ const EmployeeWorkLogTimeReport = () => {
         cell: (info) => <span className="whitespace-nowrap text-sm">{formatDate(info.getValue())}</span>,
       }),
     ];
-    if (isManager) {
+    if (isTeamLead) {
       cols.push(
         columnHelper.accessor('name', {
           header: 'Employee',
@@ -194,7 +195,7 @@ const EmployeeWorkLogTimeReport = () => {
       })
     );
     return cols;
-  }, [isManager]);
+  }, [isTeamLead]);
 
   const handleExport = async (format) => {
     if (!hasSelection) return;
@@ -251,7 +252,7 @@ const EmployeeWorkLogTimeReport = () => {
       />
 
       <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[260px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
-        {isManager && (
+        {isTeamLead && (
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs">Employee</Label>
             <SearchableSelect

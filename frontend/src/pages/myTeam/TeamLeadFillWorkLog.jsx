@@ -17,8 +17,8 @@ import BusinessUnitFilter, { ALL_BUS } from '@/components/common/BusinessUnitFil
 import EntityFilter, { ALL_ENTITIES } from '@/components/common/EntityFilter';
 import EmptyState from '@/components/common/EmptyState';
 import DataTable from '@/components/common/DataTable';
-import ManagerFillWorkLogDrawer from '@/components/myTeam/ManagerFillWorkLogDrawer';
-import ManagerFillWorkLogBulkUpload, { downloadTemplate } from '@/components/myTeam/ManagerFillWorkLogBulkUpload';
+import TeamLeadFillWorkLogDrawer from '@/components/myTeam/TeamLeadFillWorkLogDrawer';
+import TeamLeadFillWorkLogBulkUpload, { downloadTemplate } from '@/components/myTeam/TeamLeadFillWorkLogBulkUpload';
 import { formatHoursMinutes } from '@/utils/formatters';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -71,13 +71,13 @@ const measureColumnWidth = (rows, getText, { min = 120, max = 320 } = {}) => {
   return Math.min(max, Math.max(min, (longest * 7.5) + 40));
 };
 
-// Manager self-service, net-new — a Manager fills a mapped Employee's monthly work log hours on
-// their behalf, either one Employee at a time (Manual Entry) or many at once via an Excel/CSV
-// file (Bulk Upload). Distinct from Timesheet Approval (ManagerTimesheetApproval.jsx), which only
+// Team Lead self-service, net-new — a Team Lead fills a mapped Employee's monthly work log hours
+// on their behalf, either one Employee at a time (Manual Entry) or many at once via an Excel/CSV
+// file (Bulk Upload). Distinct from Timesheet Approval (TeamLeadTimesheetApproval.jsx), which only
 // approves/rejects entries the Employee submitted themself: everything saved here is created
 // already-approved, so this is a different action entirely, not another way to reach the same
 // review queue.
-const ManagerFillWorkLog = () => {
+const TeamLeadFillWorkLog = () => {
   const [monthYear, setMonthYear] = useState(defaultMonthYear);
   const [mode, setMode] = useState('manual');
   const [search, setSearch] = useState('');
@@ -96,7 +96,7 @@ const ManagerFillWorkLog = () => {
   const selectedBuId = buFilter !== ALL_BUS ? Number(buFilter) : null;
 
   // "All Business Units" has no single request confirmed to mean "every BU this login can see"
-  // (same gap/workaround as ManagerTimesheetApproval.jsx) — fan out one GET /my-team/employees
+  // (same gap/workaround as TeamLeadTimesheetApproval.jsx) — fan out one GET /my-team/employees
   // call per BU whenever more than one is selectable, narrowed by the Entity filter (this
   // endpoint has no entity_id concept of its own).
   const { units: myBusinessUnits } = useSelectableBusinessUnits(entityId);
@@ -183,7 +183,7 @@ const ManagerFillWorkLog = () => {
   };
 
   // Picking a different Entity can strand a BU that no longer belongs to it — reset the BU
-  // filter the same way ManagerTimesheetApproval.jsx does for the same reason.
+  // filter the same way TeamLeadTimesheetApproval.jsx does for the same reason.
   const handleEntityChange = (v) => {
     setEntityId(v);
     setBuFilter(ALL_BUS);
@@ -349,11 +349,11 @@ const ManagerFillWorkLog = () => {
           }
         />
       ) : (
-        <ManagerFillWorkLogBulkUpload monthYear={monthYear} monthLabel={monthLabel} />
+        <TeamLeadFillWorkLogBulkUpload monthYear={monthYear} monthLabel={monthLabel} />
       )}
 
       {activeEmployee && (
-        <ManagerFillWorkLogDrawer
+        <TeamLeadFillWorkLogDrawer
           key={activeEmployee.id}
           employee={activeEmployee}
           monthYear={monthYear}
@@ -401,4 +401,4 @@ const ManagerFillWorkLog = () => {
   );
 };
 
-export default ManagerFillWorkLog;
+export default TeamLeadFillWorkLog;

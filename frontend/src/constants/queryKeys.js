@@ -14,7 +14,7 @@ export const QUERY_KEYS = {
   EMPLOYEES: (params) => ['employees', params],
   EMPLOYEES_ACTIVE: ['employees', 'active'],
   ELIGIBLE_DELIVERY_HEADS: ['employees', 'eligible-delivery-heads'],
-  ELIGIBLE_MANAGERS: ['employees', 'eligible-managers'],
+  ELIGIBLE_TEAM_LEADS: ['employees', 'eligible-team-leads'],
   EMPLOYEE: (id) => ['employees', id],
   EMPLOYEE_MAPPINGS: (id) => ['employees', id, 'mappings'],
 
@@ -45,10 +45,10 @@ export const QUERY_KEYS = {
 
   // Team Mapping (Service PO Admin self-service)
   TEAM_MAPPINGS: ['team-mappings'],
-  TEAM_MAPPING_AVAILABLE_MANAGERS: ['team-mappings', 'available-managers'],
+  TEAM_MAPPING_AVAILABLE_TEAM_LEADS: ['team-mappings', 'available-team-leads'],
   TEAM_MAPPING_SERVICE_PO_GRANTS: ['team-mappings', 'service-po-grants'],
 
-  // My Team (Manager self-service)
+  // My Team (Team Lead self-service)
   MY_TEAM_EMPLOYEES: ['my-team', 'employees'],
   MY_TEAM_SERVICE_POS: ['my-team', 'service-pos'],
   MY_TEAM_APPROVAL_SUMMARY: (params) => ['my-team', 'approval-summary', params],
@@ -214,6 +214,6 @@ export const QUERY_KEYS = {
   EMPLOYEE_PROJECT_HOURS_FILTER_TREE: ['employee-project-hours-report', 'filter-tree'],
   EMPLOYEE_PROJECT_HOURS_REPORT: (params) => ['employee-project-hours-report', 'report', params],
 
-  // Timesheet Approval Status Report (Employee sees own, Manager sees mapped team — one endpoint)
+  // Timesheet Approval Status Report (Employee sees own, Team Lead sees mapped team — one endpoint)
   TIMESHEET_APPROVAL_STATUS_REPORT: (params) => ['timesheet-approval-status-report', params],
 };

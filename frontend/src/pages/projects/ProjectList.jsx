@@ -4,7 +4,7 @@ import { createColumnHelper } from '@tanstack/react-table';
 import { Plus, Pencil, Download, Upload, CheckCircle2, AlertCircle, MoreVertical, ChevronLeft, ChevronRight } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useProjects, useToggleProjectStatus, useImportProjects } from '@/hooks/useProjects';
-import { useCanWrite } from '@/hooks/usePermissions';
+import { useCanManageClientProjectPO } from '@/hooks/usePermissions';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -53,6 +53,7 @@ const TruncatedCell = ({ value, maxWidth = '150px', className }) => {
 // must see the state but not be able to flip it.
 const StatusToggle = ({ project, canManage }) => {
   const { mutate, isPending } = useToggleProjectStatus();
+  const { error: showError } = useNotification();
   const isActive = project.status === 'active';
   return (
     <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
@@ -60,7 +61,10 @@ const StatusToggle = ({ project, canManage }) => {
         checked={isActive}
         disabled={isPending || !canManage}
         onCheckedChange={(checked) =>
-          mutate({ id: project.id, status: checked ? 'active' : 'inactive' })
+          mutate(
+            { id: project.id, status: checked ? 'active' : 'inactive' },
+            { onError: (err) => showError(extractApiError(err)) }
+          )
         }
       />
       <span className={cn('text-xs font-medium', isActive ? 'text-green-600' : 'text-slate-400')}>
@@ -81,7 +85,7 @@ const ProjectList = () => {
   const [filtersOpen, setFiltersOpen] = useState(false);
  
   const debouncedSearch = useDebounce(search, 400);
-  const canManage = useCanWrite();
+  const canManage = useCanManageClientProjectPO();
  
   const [sorting, setSorting] = useState([]);
  
@@ -272,6 +276,10 @@ const ProjectList = () => {
         closePreview();
       },
       onError: (err) => {
+        if (err?.response?.status === 403) {
+          showError(extractApiError(err));
+          return;
+        }
         // Row-level rejections can come back on a 4xx body too, so a structured response is a
         // result to render, not a toast.
         if (err.response?.data) {

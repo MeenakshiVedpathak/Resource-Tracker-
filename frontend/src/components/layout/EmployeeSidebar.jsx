@@ -9,7 +9,7 @@ import { useFormModules, useForms } from '@/hooks/useForms';
 import { useEmployeeEntries } from '@/hooks/useEmployeeWorkLog';
 import { resolveFormRoute } from '@/constants/rbacForms';
 import { ROUTES } from '@/constants/routes';
-import { ChevronLeft, ChevronRight, ChevronDown, Folder } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, Folder, LayoutDashboard } from 'lucide-react';
 import ScrollOnHoverText from '@/components/common/ScrollOnHoverText';
 
 // Modules whose group label becomes a direct link to a hub/landing page instead of a plain
@@ -101,6 +101,9 @@ const buildNavGroups = (accessibleForms, { moduleRank, formRank, categoryOf }) =
 const isActive = (to, pathname, exact) =>
   exact ? pathname === to : pathname === to || pathname.startsWith(to + '/');
 
+// Styled to match PinnedDashboardItem's gradient pill below — the whole sidebar (Dashboard
+// included) shares one "active" treatment now instead of Dashboard alone getting the gradient
+// while every other item fell back to the plain flat-blue .nav-item.active class.
 const EmployeeNavItem = ({ item, active, collapsed, badgeCount }) => {
   const [hovered, setHovered] = useState(false);
   const hasBadge = badgeCount > 0;
@@ -111,15 +114,15 @@ const EmployeeNavItem = ({ item, active, collapsed, badgeCount }) => {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       className={cn(
-        'nav-item group relative flex items-center gap-3 transition-all',
-        active && 'active',
-        collapsed && 'justify-center px-2'
+        'group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all',
+        collapsed && 'justify-center px-2',
+        active
+          ? 'text-white shadow-lg shadow-primary/30'
+          : 'text-sidebar-foreground/70 hover:bg-sidebar-hover hover:text-sidebar-foreground'
       )}
+      style={active ? { background: 'linear-gradient(135deg, #6d28d9, #2563eb)' } : undefined}
       title={collapsed ? `${item.label}${hasBadge ? ` (${badgeCount})` : ''}` : undefined}
     >
-      {active && (
-        <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.5 rounded-r-full bg-primary" />
-      )}
       <span className="relative shrink-0">
         <item.icon className={cn('shrink-0', collapsed ? 'h-5 w-5' : 'h-4 w-4')} />
         {hasBadge && collapsed && (
@@ -140,13 +143,46 @@ const EmployeeNavItem = ({ item, active, collapsed, badgeCount }) => {
   );
 };
 
+// "Employee Dashboard" is pinned above every module group (its own always-visible entry
+// point, styled like the reference design's gradient "Dashboard" pill) instead of sitting
+// inside whichever module it happens to be mapped under.
+const isDashboardItem = (item) => item.to === ROUTES.EMPLOYEE_DASHBOARD;
+
+const PinnedDashboardItem = ({ active, collapsed }) => (
+  <Link
+    to={ROUTES.EMPLOYEE_DASHBOARD}
+    className={cn(
+      'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all',
+      collapsed && 'justify-center px-2',
+      active
+        ? 'text-white shadow-lg shadow-primary/30'
+        : 'text-sidebar-foreground/70 hover:bg-sidebar-hover hover:text-sidebar-foreground'
+    )}
+    style={active ? { background: 'linear-gradient(135deg, #6d28d9, #2563eb)' } : undefined}
+    title={collapsed ? 'Dashboard' : undefined}
+  >
+    <LayoutDashboard className={cn('shrink-0', collapsed ? 'h-5 w-5' : 'h-4 w-4')} />
+    {!collapsed && <span>Dashboard</span>}
+  </Link>
+);
+
 const EmployeeSidebar = () => {
   const dispatch = useDispatch();
   const collapsed = useSelector(selectSidebarCollapsed);
   const { pathname } = useLocation();
   const { accessibleForms } = useAuth();
   const { moduleRank, formRank, categoryOf } = useMenuRank();
-  const navGroups = useMemo(() => buildNavGroups(accessibleForms, { moduleRank, formRank, categoryOf }), [accessibleForms, moduleRank, formRank, categoryOf]);
+  const allNavGroups = useMemo(() => buildNavGroups(accessibleForms, { moduleRank, formRank, categoryOf }), [accessibleForms, moduleRank, formRank, categoryOf]);
+  const hasDashboardItem = useMemo(() => allNavGroups.some((g) => g.items.some(isDashboardItem)), [allNavGroups]);
+  // Every other group, with the Dashboard item filtered out of whichever one it was mapped
+  // under — a group left with no items after that (e.g. one that only ever held Dashboard)
+  // is dropped entirely rather than rendered as an empty header.
+  const navGroups = useMemo(
+    () => allNavGroups
+      .map((g) => ({ ...g, items: g.items.filter((i) => !isDashboardItem(i)) }))
+      .filter((g) => g.items.length > 0),
+    [allNavGroups]
+  );
 
   const hasRejectedEntriesTab = useMemo(
     () => navGroups.some((g) => g.items.some((i) => i.to === ROUTES.EMPLOYEE_REJECTED_ENTRIES)),
@@ -223,24 +259,52 @@ const EmployeeSidebar = () => {
         animate={{ width: collapsed ? 64 : 224 }}
         transition={{ duration: 0.2, ease: 'easeInOut' }}
         className={cn(
-          'fixed inset-y-0 left-0 z-50 flex h-full shrink-0 flex-col bg-sidebar border-r border-sidebar-border overflow-hidden transition-transform duration-200',
+          'fixed inset-y-0 left-0 z-50 flex h-full shrink-0 flex-col border-r border-sidebar-border overflow-hidden transition-transform duration-200',
           'md:relative md:z-auto md:translate-x-0',
           collapsed ? '-translate-x-full md:translate-x-0' : 'translate-x-0'
         )}
+        style={{ background: 'linear-gradient(180deg, hsl(222 47% 9%) 0%, hsl(230 42% 13%) 55%, hsl(240 38% 11%) 100%)' }}
       >
+        {/* Decorative glow + contour lines, purely visual — sits behind the logo/nav/collapse
+            content (all given relative z-10 below) so it never intercepts clicks. */}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-0 h-2/3 overflow-hidden">
+          <div
+            className="absolute inset-x-0 bottom-0 h-full opacity-40 blur-2xl"
+            style={{ background: 'radial-gradient(60% 55% at 50% 100%, rgba(99,102,241,0.45), transparent 70%)' }}
+          />
+          <svg className="absolute inset-x-0 bottom-0 h-2/3 w-full" viewBox="0 0 224 200" preserveAspectRatio="none" fill="none">
+            <path d="M-10 140 C 50 100, 90 170, 140 130 S 220 90, 240 130" stroke="white" strokeOpacity="0.06" strokeWidth="1.5" />
+            <path d="M-10 170 C 60 130, 100 200, 150 160 S 210 120, 240 160" stroke="white" strokeOpacity="0.05" strokeWidth="1.5" />
+          </svg>
+        </div>
+
         <div
           className={cn(
-            'flex h-16 shrink-0 items-center border-b border-sidebar-border px-4 gap-3',
+            'relative z-10 flex h-16 shrink-0 items-center border-b border-sidebar-border px-4',
             collapsed ? 'justify-center px-2' : ''
           )}
         >
-          <img src="/logo.svg" alt="Logo" className={cn('object-contain', collapsed ? 'w-10' : 'h-12')} />
-          {!collapsed && (
-            <span className="font-bold text-lg text-white whitespace-nowrap overflow-hidden">Trackio</span>
-          )}
+          <div
+            className={cn(
+              'flex shrink-0 items-center overflow-hidden rounded-md',
+              collapsed ? 'h-11 w-11 justify-center' : 'h-14 justify-start px-1'
+            )}
+          >
+            <img
+              src="/logo-dark.png"
+              alt="Trackio"
+              className={collapsed ? 'h-full w-full object-cover object-left' : 'h-full w-auto object-contain'}
+            />
+          </div>
         </div>
 
-        <nav className="flex-1 overflow-y-auto overflow-x-hidden py-2 px-2 space-y-2 scrollbar-thin">
+        {hasDashboardItem && (
+          <div className={cn('relative z-10 shrink-0 px-2 pt-2', collapsed && 'px-2')}>
+            <PinnedDashboardItem active={isActive(ROUTES.EMPLOYEE_DASHBOARD, pathname, true)} collapsed={collapsed} />
+          </div>
+        )}
+
+        <nav className="relative z-10 flex-1 overflow-y-auto overflow-x-hidden py-2 px-2 space-y-2 scrollbar-thin">
           {navGroups.map((group) => {
             const overviewRoute = MODULE_OVERVIEW_ROUTES[group.label.trim().toLowerCase()];
             const hasCategories = group.items.some((item) => item.hasCategory);

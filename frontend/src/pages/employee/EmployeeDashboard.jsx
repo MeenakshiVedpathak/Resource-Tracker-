@@ -11,7 +11,7 @@ import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import { useAuth } from '@/hooks/useAuth';
 import { useEmployeeCalendar, useEmployeeMonthlySummary, useEmployeeEntries } from '@/hooks/useEmployeeWorkLog';
 import { STANDARD_MONTHLY_HOURS } from '@/components/employee/MonthlyHoursCard';
-import GreetingIllustration from '@/components/employee/dashboard/GreetingIllustration';
+import WeatherHeroBanner from '@/components/employee/dashboard/WeatherHeroBanner';
 import HoursTrendCard from '@/components/employee/dashboard/HoursTrendCard';
 import WorkLogStatusCard from '@/components/employee/dashboard/WorkLogStatusCard';
 import MonthlyProgressCard from '@/components/employee/dashboard/MonthlyProgressCard';
@@ -25,13 +25,6 @@ import { classifyWorkDay, isNonWorkingDay } from '@/utils/workDayStatus';
 
 const WORK_LOG_STATUS_DAYS = 5;
 const TREND_WEEK_BUCKETS = 4; // 4 x 7 = 28 days, always covered by current + previous month
-
-const TIPS = [
-  'Small consistent steps lead to big things.',
-  'Consistency beats intensity — log a little every day.',
-  'Great work starts with a great log.',
-  'Stay on track with your work log.',
-];
 
 const getGreeting = (hour) => {
   if (hour < 12) return 'Good morning';
@@ -191,7 +184,6 @@ const EmployeeDashboard = () => {
   const displayName = employee?.full_name ?? employee?.email ?? 'there';
   const firstName = displayName.split(' ')[0];
   const greeting = getGreeting(today.hour());
-  const tip = TIPS[today.date() % TIPS.length];
   const monthLabelShort = selectedMonthStart.format('MMM YYYY').toUpperCase();
   const monthLabelFull = selectedMonthStart.format('MMMM YYYY');
 
@@ -250,32 +242,31 @@ const EmployeeDashboard = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight">{greeting}, {firstName} 👋</h1>
-          <p className="text-sm text-muted-foreground">Let's keep your work log up to date.</p>
-        </div>
-
-        <div className="hidden items-center gap-2 lg:flex">
-          <p className="max-w-[160px] text-right text-xs italic text-muted-foreground">&ldquo;{tip}&rdquo;</p>
-          <GreetingIllustration className="h-16 w-28 shrink-0" />
-        </div>
-
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
+      <WeatherHeroBanner
+        greeting={greeting}
+        firstName={firstName}
+        datePicker={(
           <MonthYearPicker
             value={selectedMonthYear}
             onChange={(v) => v && setSelectedMonthYear(v)}
             clearable={false}
-            className="h-9 w-36 rounded-lg text-xs"
+            className="h-9 w-auto rounded-xl border-0 bg-white/90 text-xs font-semibold text-slate-800 shadow-sm hover:bg-white"
           />
-          <Link to={ROUTES.EMPLOYEE_TIMESHEET} className={cn(buttonVariants({ size: 'sm' }))}>
-            <Plus className="h-4 w-4" /> Log Today's Work
-          </Link>
-          <Link to={ROUTES.EMPLOYEE_MONTHLY_SUMMARY} className={cn(buttonVariants({ size: 'sm', variant: 'outline' }))}>
-            <BarChart3 className="h-4 w-4" /> View Monthly Summary
-          </Link>
-        </div>
-      </div>
+        )}
+        actions={(
+          <>
+            <Link to={ROUTES.EMPLOYEE_TIMESHEET} className={cn(buttonVariants({ size: 'sm' }), 'rounded-xl shadow-sm')}>
+              <Plus className="h-4 w-4" /> Log Today's Work
+            </Link>
+            <Link
+              to={ROUTES.EMPLOYEE_MONTHLY_SUMMARY}
+              className={cn(buttonVariants({ size: 'sm', variant: 'outline' }), 'rounded-xl border-0 bg-white/90 text-slate-800 shadow-sm hover:bg-white')}
+            >
+              <BarChart3 className="h-4 w-4" /> View Monthly Summary
+            </Link>
+          </>
+        )}
+      />
 
       {(isError || isSelectedMonthError) && (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">

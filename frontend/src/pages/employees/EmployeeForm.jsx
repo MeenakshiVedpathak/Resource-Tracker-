@@ -4,7 +4,7 @@ import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Eye, EyeOff, IdCard, Lock, Users, Briefcase, ClipboardList, Building2 } from 'lucide-react';
-import { useEmployee, useCreateEmployee, useUpdateEmployee, useAssignableManagers } from '@/hooks/useEmployees';
+import { useEmployee, useCreateEmployee, useUpdateEmployee, useAssignableTeamLeads } from '@/hooks/useEmployees';
 import { useRoles } from '@/hooks/useRoles';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
@@ -30,7 +30,7 @@ const baseFields = employeeBaseFields;
 const passwordField = employeePasswordField;
 
 // Create requires a Password (Employee Master IS the login now — there's no more separate User
-// Master) — Primary Manager stays optional. Roles/Business Units are no longer picked here at
+// Master) — Primary Team Lead stays optional. Roles/Business Units are no longer picked here at
 // all — every new employee is sent to the backend with the plain "Employee" role by default
 // (see onSubmit), and both Roles and Business Units are managed afterwards via the "Map Roles &
 // Business Units" table action on Employee List.
@@ -48,7 +48,7 @@ const createSchema = refineEmploymentDates(
     })
 );
 
-// Manager reassignment is optional on update — password is never editable here (use the
+// Team Lead reassignment is optional on update — password is never editable here (use the
 // Employee List's Reset Password action instead). Roles/Business Units are edited exclusively
 // via Employee List's mapping table, not this form, so they're neither shown nor submitted here.
 const editSchema = refineEmploymentDates(
@@ -73,7 +73,7 @@ const EmployeeForm = () => {
   const { success, error: showError } = useNotification();
 
   const { data: employee, isPending: isLoadingEmployee } = useEmployee(id);
-  const { data: managers = [], isPending: isLoadingManagers } = useAssignableManagers();
+  const { data: teamLeads = [], isPending: isLoadingTeamLeads } = useAssignableTeamLeads();
   // Only fetched to resolve the plain "Employee" role's id — every new employee is sent to the
   // backend with that role by default, since Roles are no longer selectable on this form (see
   // onSubmit and [[project_employee_identity_migration]] for why the mapping moved to the list).
@@ -118,20 +118,20 @@ const EmployeeForm = () => {
 
   const dateOfJoining = useWatch({ control: form.control, name: 'date_of_joining' });
   const formStatus = useWatch({ control: form.control, name: 'status' });
-  const primaryManagerId = useWatch({ control: form.control, name: 'primary_manager_employee_id' });
+  const primaryTeamLeadId = useWatch({ control: form.control, name: 'primary_manager_employee_id' });
   const timesheetApprovalRequired = useWatch({ control: form.control, name: 'is_timesheet_approval_required' });
 
-  // Nobody can report to themselves, so the employee being edited is never a valid manager for
+  // Nobody can report to themselves, so the employee being edited is never a valid Team Lead for
   // their own record — drop them from the list rather than relying on the user not picking it.
-  const managerOptions = managers
+  const teamLeadOptions = teamLeads
     .filter((m) => !isEdit || String(m.id) !== String(id))
     .map((m) => ({
       label: m.full_name ?? m.email,
       value: String(m.id),
     }));
-  const secondaryManagerOptions = [
+  const secondaryTeamLeadOptions = [
     { label: 'None', value: 'none' },
-    ...managerOptions.filter((o) => o.value !== String(primaryManagerId)),
+    ...teamLeadOptions.filter((o) => o.value !== String(primaryTeamLeadId)),
   ];
 
   useEffect(() => {
@@ -194,7 +194,7 @@ const EmployeeForm = () => {
     if (primary_manager_employee_id) {
       clean.primary_manager_employee_id = primary_manager_employee_id;
     }
-    // Always sent explicitly (even null) so clearing the Secondary Manager on update actually
+    // Always sent explicitly (even null) so clearing the Secondary Team Lead on update actually
     // reaches the backend/mock — the blanket filter above would otherwise drop a `null`.
     clean.secondary_manager_employee_id = secondary_manager_employee_id ?? null;
 
@@ -452,14 +452,14 @@ const EmployeeForm = () => {
                       name="primary_manager_employee_id"
                       render={({ field }) => (
                         <FormItem className="space-y-1">
-                          <FormLabel className="text-[11px] text-muted-foreground font-medium">Primary Manager</FormLabel>
+                          <FormLabel className="text-[11px] text-muted-foreground font-medium">Primary Team Lead</FormLabel>
                           <SearchableSelect
-                            options={managerOptions}
+                            options={teamLeadOptions}
                             value={field.value != null ? String(field.value) : ''}
                             onValueChange={(v) => field.onChange(v ? Number(v) : null)}
-                            disabled={isLoadingManagers}
-                            placeholder="Select manager"
-                            searchPlaceholder="Search managers…"
+                            disabled={isLoadingTeamLeads}
+                            placeholder="Select Team Lead"
+                            searchPlaceholder="Search Team Leads…"
                             className="h-8 text-sm border-gray-200"
                           />
                           <FormMessage className="text-[10px]" />
@@ -472,14 +472,14 @@ const EmployeeForm = () => {
                       name="secondary_manager_employee_id"
                       render={({ field }) => (
                         <FormItem className="space-y-1">
-                          <FormLabel className="text-[11px] text-muted-foreground font-medium">Secondary Manager</FormLabel>
+                          <FormLabel className="text-[11px] text-muted-foreground font-medium">Secondary Team Lead</FormLabel>
                           <SearchableSelect
-                            options={secondaryManagerOptions}
+                            options={secondaryTeamLeadOptions}
                             value={field.value != null ? String(field.value) : 'none'}
                             onValueChange={(v) => field.onChange(v === 'none' ? null : Number(v))}
-                            disabled={isLoadingManagers}
-                            placeholder="Select manager"
-                            searchPlaceholder="Search managers…"
+                            disabled={isLoadingTeamLeads}
+                            placeholder="Select Team Lead"
+                            searchPlaceholder="Search Team Leads…"
                             className="h-8 text-sm border-gray-200"
                           />
                           <FormMessage className="text-[10px]" />

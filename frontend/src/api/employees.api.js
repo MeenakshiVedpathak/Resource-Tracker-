@@ -390,12 +390,12 @@ export const employeesApi = {
   getEligibleDeliveryHeads: () =>
     apiClient.get('/employees/eligible-delivery-heads').then((r) => r.data),
 
-  // Add/Edit Employee's Primary/Secondary Manager dropdowns. GET /employees (list) deliberately
+  // Add/Edit Employee's Primary/Secondary Team Lead dropdowns. GET /employees (list) deliberately
   // skips the role/BU join for pagination cost reasons, so eligibility can't be filtered
   // client-side off that response — this dedicated endpoint applies the same
   // manager.view_mapped_employees eligibility rule assertValidManager() enforces at save time,
   // server-side, in one query. Always hits the real backend regardless of RBAC_MOCK_ENABLED.
-  getEligibleManagers: () =>
+  getEligibleTeamLeads: () =>
     apiClient.get('/employees/eligible-managers').then((r) => r.data),
 
   // Unaffected by this migration — always hits the real backend.

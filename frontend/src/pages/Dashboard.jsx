@@ -794,7 +794,7 @@ const Dashboard = () => {
               styling, not that component's stacked label+field cell. */}
           {showEntityFilter && (
             <div className="flex items-center gap-1.5">
-              <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <FilterIconBadge icon={Building2} color="emerald" />
               <SearchableSelect
                 options={entityOptions}
                 value={entityId}
@@ -815,7 +815,7 @@ const Dashboard = () => {
               label+field cell. Hidden below two selectable BUs, same rule as everywhere else. */}
           {showBuFilter && (
             <div className="flex items-center gap-1.5">
-              <Landmark className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <FilterIconBadge icon={Landmark} color="primary" />
               <SearchableSelect
                 options={buOptions}
                 value={buId}

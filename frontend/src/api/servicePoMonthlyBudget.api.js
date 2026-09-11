@@ -2,7 +2,7 @@ import apiClient, { explicitBuScope } from '@/services/apiClient';
 
 export const servicePoMonthlyBudgetApi = {
   // Active Service POs the logged-in user is allowed to save budgets for — role-scoped on the
-  // backend (Manager: only mapped POs; everyone else: full company). No budget data here.
+  // backend (Team Lead: only mapped POs; everyone else: full company). No budget data here.
   // Internal-no-invoice POs are never billed, so they carry no monthly budget — excluded here so
   // no consumer of this list (picker, lookup maps) has to filter them out itself.
   // `buId` (Monthly PO Reporting's Business Unit filter) scopes this the same way it scopes

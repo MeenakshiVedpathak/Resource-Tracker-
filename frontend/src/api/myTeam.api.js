@@ -45,8 +45,8 @@ const mockMapEmployee = async (employeeId) => {
   if (!employee) throw mockError(404, 'Employee not found.');
   const actorBuIds = new Set(actor.business_unit_ids ?? []);
   if (!(employee.business_unit_ids ?? []).some((id) => actorBuIds.has(id))) throw mockError(404, 'Employee not found.');
-  if (employee.primary_manager_employee_id === actor.id) throw mockError(409, 'You are already this Employee\'s Primary manager.');
-  if (employee.secondary_manager_employee_id) throw mockError(409, 'This Employee already has a Secondary manager.');
+  if (employee.primary_manager_employee_id === actor.id) throw mockError(409, 'You are already this Employee\'s Primary Team Lead.');
+  if (employee.secondary_manager_employee_id) throw mockError(409, 'This Employee already has a Secondary Team Lead.');
   employee.secondary_manager_employee_id = actor.id;
   persist();
   return {
@@ -100,15 +100,15 @@ const mockRevokeServicePo = async (employeeId, servicePOId) => {
 const fetchApprovalSummaryPage = (params) =>
   apiClient.get('/my-team/timesheets/approval-summary', { params }).then((r) => r.data);
 
-// Manager self-service (§8). GET employees/service-pos existed pre-redesign; POST/DELETE
-// employees (claim/release the Secondary-manager slot) are net-new.
+// Team Lead self-service (§8). GET employees/service-pos existed pre-redesign; POST/DELETE
+// employees (claim/release the Secondary-Team-Lead slot) are net-new.
 export const myTeamApi = {
   getEmployees: (params) => {
     if (RBAC_MOCK_ENABLED) return mockGetEmployees(params);
     const { buId, ...restParams } = params || {};
     // My Team's mapped-Employee list must NEVER be silently narrowed by the navbar's globally-
     // active Business Unit — a mapped Employee can legitimately sit in a Business Unit the
-    // Manager themself doesn't belong to (manager_employee_mappings is the access grant, not
+    // Team Lead themself doesn't belong to (manager_employee_mappings is the access grant, not
     // shared BU membership; see the backend's resolveMyTeamBusinessUnitScope.js /
     // managerSelfServiceService.getMyEmployees). Unlike explicitBuScope('all')'s Reports-oriented
     // fallback (a single-BU login's one BU counts as "all of theirs" there), that assumption does
@@ -120,7 +120,7 @@ export const myTeamApi = {
       ...scope,
     }).then((r) => r.data?.data ?? []);
   },
-  // Manager Timesheet Access & Approval — real backend only, no mock (RBAC_MOCK_ENABLED is
+  // Team Lead Timesheet Access & Approval — real backend only, no mock (RBAC_MOCK_ENABLED is
   // false in this environment and the mock db has no timesheet fixtures).
   // Aggregated approval table: one row per date (log_type=daily) or per month (log_type=monthly),
   // pre-totaled server-side, each embedding its own underlying entries inline (so the drill-down
@@ -142,7 +142,7 @@ export const myTeamApi = {
   // chars, trimmed) but the UI must also block submit on empty remark, not rely on the 422 alone.
   rejectTimesheetEntry: (id, remark) =>
     apiClient.put(`/my-team/timesheets/${id}/reject`, { remark }).then((r) => r.data),
-  // Single-row approve — exists alongside the bulk date/month endpoint above so a Manager can
+  // Single-row approve — exists alongside the bulk date/month endpoint above so a Team Lead can
   // approve one still-pending entry inside a bucket that also has rejected entries (bulk approve
   // would otherwise be the only option and doesn't distinguish per-entry status).
   approveTimesheetEntry: (id) =>
@@ -172,12 +172,12 @@ export const myTeamApi = {
     return apiClient.delete(`/my-team/employees/${employeeId}/service-pos/${servicePOId}`).then((r) => r.data);
   },
 
-  // "Log Work for My Team" (net-new) — a Manager filling in an Employee's monthly work log hours
-  // on their behalf, separate from the approval flow above (that only approves/rejects entries
-  // the Employee submitted themself). `service_pos` in the response is the Employee's mapped
-  // Service PO list for the month, each carrying any hours/description already filled in — see
-  // pages/myTeam/ManagerFillWorkLog.jsx for how Parent/Child hierarchy nodes under a PO (present
-  // for display only) are excluded from what the Manager can actually pick.
+  // "Log Work for My Team" (net-new) — a Team Lead filling in an Employee's monthly work log
+  // hours on their behalf, separate from the approval flow above (that only approves/rejects
+  // entries the Employee submitted themself). `service_pos` in the response is the Employee's
+  // mapped Service PO list for the month, each carrying any hours/description already filled in —
+  // see pages/myTeam/TeamLeadFillWorkLog.jsx for how Parent/Child hierarchy nodes under a PO
+  // (present for display only) are excluded from what the Team Lead can actually pick.
   getEmployeeMonthlyWorkLog: (employeeId, { month, year }) =>
     apiClient
       .get(`/my-team/employees/${employeeId}/monthly-worklog`, { params: { month, year } })
@@ -189,7 +189,7 @@ export const myTeamApi = {
       .post(`/my-team/employees/${employeeId}/monthly-worklog`, { month, year, entries })
       .then((r) => r.data),
   // Deletes EVERY entry for this Employee+month, not only ones created via the save above — the
-  // caller must confirm before calling this (see ManagerFillWorkLog's ConfirmDialog).
+  // caller must confirm before calling this (see TeamLeadFillWorkLog's ConfirmDialog).
   deleteEmployeeMonthlyWorkLog: (employeeId, { month, year }) =>
     apiClient
       .delete(`/my-team/employees/${employeeId}/monthly-worklog`, { params: { month, year } })
@@ -198,7 +198,7 @@ export const myTeamApi = {
   // Bulk Upload mode of "Log Work for My Team" — one Excel/CSV file covering many Employees at
   // once, instead of the single-Employee drawer above. Whole-file, all-or-nothing validation
   // (a single bad row 422s the entire file, nothing partially saved) — see
-  // components/myTeam/ManagerFillWorkLogBulkUpload.jsx for how the 422 body's
+  // components/myTeam/TeamLeadFillWorkLogBulkUpload.jsx for how the 422 body's
   // `phase: 'format'|'ownership'|'service_po'` is rendered. No BU scoping: this is resolved
   // entirely from the caller's own Primary-managed Employees, not a BU-filtered list.
   importMonthlyWorkLog: ({ file, month, year, onUploadProgress }) => {

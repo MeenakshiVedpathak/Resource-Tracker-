@@ -78,7 +78,7 @@ export const employeeWorkLogApi = {
   deleteMonthly: ({ month, year }) =>
     apiClient.delete('/employee-timesheets/monthly', { params: { month, year } }).then((r) => r.data),
   // POST /employee-timesheets/remind-approval
-  // No request body — the backend resolves the employee and their primary manager from the
+  // No request body — the backend resolves the employee and their primary Team Lead from the
   // Bearer token alone. Returns { success, message, data: { managerName, pendingCount, period } }.
   // 400 / 429 / 502 are user-facing errors; callers should surface err.response.data.message
   // verbatim rather than a generic fallback.

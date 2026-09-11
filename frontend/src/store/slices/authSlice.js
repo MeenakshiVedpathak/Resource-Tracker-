@@ -217,13 +217,13 @@ export const selectIsPlatformAdmin = createSelector(
 );
 
 // An Employee login is identified by its role name — checks ANY held role, not just one: an
-// account can hold Employee alongside another role (e.g. Employee + Manager), and it must still
+// account can hold Employee alongside another role (e.g. Employee + Team Lead), and it must still
 // pass this to reach Employee self-service routes (ProtectedRoute's `employeeOnly` gate).
 export const selectIsEmployee = (state) => (state.auth.roles ?? EMPTY_ROLES).some((r) => r.name === 'Employee');
 
 // True only when Employee is the account's SOLE role. MainLayout uses this (not selectIsEmployee)
 // to decide whether to bounce a user straight to the Employee dashboard — a genuinely multi-role
-// account (Employee + Manager) must still be able to reach MainLayout for its other role's
+// account (Employee + Team Lead) must still be able to reach MainLayout for its other role's
 // screens, not just the Employee-only ones.
 export const selectIsEmployeeOnly = (state) => {
   const roles = state.auth.roles ?? EMPTY_ROLES;

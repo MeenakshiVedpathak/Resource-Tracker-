@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useDispatch, useSelector } from 'react-redux';
@@ -170,6 +170,15 @@ const isActive = (to, pathname, exact) => {
   return pathname === to || pathname.startsWith(to + '/');
 };
 
+// True when the current route lives inside this module's group — either a plain leaf item or
+// one nested a level deeper under a Category sub-header (see CategoryNavGroup below).
+const groupHasActiveRoute = (group, pathname) =>
+  group.items.some((item) =>
+    item.isCategory
+      ? item.items.some((child) => isActive(child.to, pathname, child.exact))
+      : isActive(item.to, pathname, item.exact)
+  );
+
 // Indented child link rendered below a parent with children
 const SubNavItem = ({ item, onNavAttempt, onQuickAdd }) => {
   const { pathname } = useLocation();
@@ -179,14 +188,16 @@ const SubNavItem = ({ item, onNavAttempt, onQuickAdd }) => {
   return (
     // Background/rounding live on this row wrapper (not the Link) so an active item's pill
     // extends under the "+" button too, instead of the button sitting outside it on the bare
-    // sidebar background.
+    // sidebar background. Active styling (gradient + white text) mirrors NavItem/EmployeeSidebar,
+    // so a selected item reads the same way everywhere — nested under a Category or not.
     <div
       className={cn(
         'group relative flex items-center rounded-md pl-8 pr-2 py-1 text-xs transition-colors min-w-0',
         active
-          ? 'text-sidebar-foreground font-medium bg-sidebar-hover/70'
+          ? 'text-white font-medium'
           : 'text-sidebar-foreground/55 hover:text-sidebar-foreground hover:bg-sidebar-hover/40'
       )}
+      style={active ? { background: 'linear-gradient(135deg, #6d28d9, #2563eb)' } : undefined}
     >
       <Link
         to={item.to}
@@ -196,9 +207,6 @@ const SubNavItem = ({ item, onNavAttempt, onQuickAdd }) => {
         className="relative flex flex-1 items-center min-w-0"
         title={item.label}
       >
-        {active && (
-          <span className="absolute left-[-8px] top-1/2 -translate-y-1/2 h-3.5 w-0.5 rounded-full bg-primary/70" />
-        )}
         <ScrollOnHoverText text={item.label} hovered={hovered} className="min-w-0" />
       </Link>
       {item.addTo && (
@@ -246,14 +254,17 @@ const NavItem = ({ item, collapsed, onNavAttempt, onQuickAdd }) => {
   return (
     <div>
       {/* Background/rounding live on this row wrapper (nav-item/active), not the Link, so an
-          active item's blue pill extends under the "+" button instead of the button sitting
-          outside it on the bare sidebar background. */}
+          active item's gradient pill extends under the "+" button instead of the button sitting
+          outside it on the bare sidebar background. Active styling (gradient + white text +
+          shadow) mirrors EmployeeSidebar's EmployeeNavItem/PinnedDashboardItem, so the selected
+          item reads the same way in both sidebars. */}
       <div
         className={cn(
-          'nav-item group relative flex items-center gap-3 transition-all min-w-0',
-          active && 'active',
+          'nav-item group relative flex items-center gap-3 rounded-xl transition-all min-w-0',
+          active ? 'text-white shadow-lg shadow-primary/30' : '',
           collapsed && 'justify-center px-2'
         )}
+        style={active ? { background: 'linear-gradient(135deg, #6d28d9, #2563eb)' } : undefined}
       >
         <Link
           to={item.to}
@@ -263,9 +274,6 @@ const NavItem = ({ item, collapsed, onNavAttempt, onQuickAdd }) => {
           className={cn('relative flex flex-1 items-center gap-3 min-w-0', collapsed && 'flex-initial justify-center')}
           title={item.label}
         >
-          {active && (
-            <span className="absolute left-[-12px] top-1/2 -translate-y-1/2 h-5 w-0.5 rounded-r-full bg-primary" />
-          )}
           <item.icon className={cn('shrink-0', collapsed ? 'h-5 w-5' : 'h-4 w-4')} />
           <AnimatePresence initial={false}>
             {!collapsed && (
@@ -366,6 +374,20 @@ const Sidebar = () => {
     });
   };
 
+  // The module holding the current route, so the first render doesn't leave the user staring at
+  // nothing but collapsed headers — same seeding EmployeeSidebar already does. Seeded once (not
+  // on every navigation) so a module the user has since collapsed by hand stays collapsed.
+  const activeGroupLabel = useMemo(
+    () => navGroups.find((g) => groupHasActiveRoute(g, pathname))?.label ?? null,
+    [navGroups, pathname]
+  );
+  const seededRef = useRef(false);
+  useEffect(() => {
+    if (seededRef.current || !activeGroupLabel) return;
+    seededRef.current = true;
+    setExpandedModules(new Set([activeGroupLabel]));
+  }, [activeGroupLabel]);
+
   const handleNavAttempt = (e, to) => {
     if (!isDirty) return;
     e.preventDefault();
@@ -425,57 +447,52 @@ const Sidebar = () => {
         animate={{ width: collapsed ? 64 : 224 }}
         transition={{ duration: 0.2, ease: 'easeInOut' }}
         className={cn(
-          'fixed inset-y-0 left-0 z-50 flex h-full shrink-0 flex-col bg-sidebar border-r border-sidebar-border overflow-hidden transition-transform duration-200',
+          'fixed inset-y-0 left-0 z-50 flex h-full shrink-0 flex-col border-r border-sidebar-border overflow-hidden transition-transform duration-200',
           'md:relative md:z-auto md:translate-x-0',
           collapsed ? '-translate-x-full md:translate-x-0' : 'translate-x-0'
         )}
+        style={{ background: 'linear-gradient(180deg, hsl(222 47% 9%) 0%, hsl(230 42% 13%) 55%, hsl(240 38% 11%) 100%)' }}
       >
+      {/* Decorative glow + contour lines, purely visual — sits behind the logo/nav/collapse
+          content (all given relative z-10 below) so it never intercepts clicks. Mirrors
+          EmployeeSidebar's background so both sidebars look the same. */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-0 h-2/3 overflow-hidden">
+        <div
+          className="absolute inset-x-0 bottom-0 h-full opacity-40 blur-2xl"
+          style={{ background: 'radial-gradient(60% 55% at 50% 100%, rgba(99,102,241,0.45), transparent 70%)' }}
+        />
+        <svg className="absolute inset-x-0 bottom-0 h-2/3 w-full" viewBox="0 0 224 200" preserveAspectRatio="none" fill="none">
+          <path d="M-10 140 C 50 100, 90 170, 140 130 S 220 90, 240 130" stroke="white" strokeOpacity="0.06" strokeWidth="1.5" />
+          <path d="M-10 170 C 60 130, 100 200, 150 160 S 210 120, 240 160" stroke="white" strokeOpacity="0.05" strokeWidth="1.5" />
+        </svg>
+      </div>
+
       {/* Logo */}
       <div className={cn(
-        'flex h-16 shrink-0 items-center border-b border-sidebar-border px-4 gap-3',
+        'relative z-10 flex h-16 shrink-0 items-center border-b border-sidebar-border px-4',
         collapsed ? 'justify-center px-2' : ''
       )}>
         <motion.div
-          className="relative flex shrink-0 items-center justify-center"
-          initial={{ opacity: 0, scale: 0.7, rotate: -8 }}
-          animate={{ opacity: 1, scale: 1, rotate: 0 }}
+          className={cn(
+            'relative flex shrink-0 items-center overflow-hidden rounded-md',
+            collapsed ? 'h-11 w-11 justify-center' : 'h-14 justify-start px-1'
+          )}
+          initial={{ opacity: 0, scale: 0.7 }}
+          animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.5 }}
-          whileHover={{ scale: 1.08 }}
+          whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.94 }}
         >
-          <motion.img
-            src="/logo.svg"
-            alt="Logo"
-            className={cn("object-contain", collapsed ? "w-10" : "h-12")}
-            animate={{
-              scale: [1, 1.15, 1],
-              rotate: [0, 2, 0, -2, 0],
-              filter: [
-                'drop-shadow(0 0 4px rgba(139,92,246,0.5))',
-                'drop-shadow(0 0 16px rgba(37,99,235,0.8))',
-                'drop-shadow(0 0 4px rgba(139,92,246,0.5))',
-              ],
-            }}
-            transition={{ duration: 2.8, repeat: Infinity, ease: 'easeInOut' }}
+          <img
+            src="/logo-dark.png"
+            alt="Trackio"
+            className={collapsed ? 'h-full w-full object-cover object-left' : 'h-full w-auto object-contain'}
           />
         </motion.div>
-        <AnimatePresence initial={false}>
-          {!collapsed && (
-            <motion.span
-              initial={{ opacity: 0, width: 0 }}
-              animate={{ opacity: 1, width: 'auto' }}
-              exit={{ opacity: 0, width: 0 }}
-              transition={{ duration: 0.15 }}
-              className="font-bold text-lg text-white whitespace-nowrap overflow-hidden"
-            >
-              Trackio
-            </motion.span>
-          )}
-        </AnimatePresence>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto overflow-x-hidden py-2 px-2 space-y-2 scrollbar-thin">
+      <nav className="relative z-10 flex-1 overflow-y-auto overflow-x-hidden py-2 px-2 space-y-2 scrollbar-thin">
         {navGroups.map((group) => {
           const overviewRoute = MODULE_OVERVIEW_ROUTES[group.label.trim().toLowerCase()];
           const hasCategories = group.items.some((item) => item.isCategory);
@@ -544,7 +561,7 @@ const Sidebar = () => {
       </nav>
 
       {/* Collapse toggle */}
-      <div className="shrink-0 border-t border-sidebar-border p-2">
+      <div className="relative z-10 shrink-0 border-t border-sidebar-border p-2">
         <button
           onClick={() => dispatch(toggleSidebar())}
           className={cn(

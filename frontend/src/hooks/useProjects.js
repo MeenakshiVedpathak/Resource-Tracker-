@@ -19,10 +19,13 @@ export const useActiveProjects = () =>
 // Service PO create/edit's Project dropdown is scoped to the selected Client — reuses the
 // existing paginated /projects list (no new API method needed) with client_id + status=active.
 // Disabled until a client is picked; refetches whenever clientId changes.
+// buId: 'all' drops the ambient X-Company-Id header (see explicitBuScope) — client_id alone is
+// already unambiguous, and a multi-BU actor's selected Client may belong to a different one of
+// their mapped BUs than whichever is currently active in the global switcher.
 export const useProjectsByClient = (clientId) =>
   useQuery({
     queryKey: QUERY_KEYS.PROJECTS_BY_CLIENT(clientId),
-    queryFn: () => projectsApi.getAll({ client_id: clientId, status: 'active', limit: 200 }),
+    queryFn: () => projectsApi.getAll({ client_id: clientId, status: 'active', limit: 200, buId: 'all' }),
     select: (data) => (Array.isArray(data?.data) ? data.data : []),
     enabled: !!clientId,
   });
