@@ -19,7 +19,7 @@ import {
   ListTree, ListChecks, Banknote, CalendarClock, Timer, Hourglass,
   TrendingUp, LineChart, Target, Percent, Award, BatteryCharging, AlertTriangle, Crown,
   ReceiptText, GitCompare, Scale, BarChart3, Building, Activity, Armchair, Users2,
-  ClipboardCheck, XCircle, UserCog, CalendarPlus,
+  ClipboardCheck, XCircle, UserCog, CalendarPlus, Briefcase,
 } from 'lucide-react';
 import { ROUTES } from '@/constants/routes';
 
@@ -158,6 +158,11 @@ export const FORM_NAMES = {
   // Same caveat as the block above — guessed names pending real Form Master rows.
   REPORT_RESOURCE_UTILIZATION_TREND: 'Resource Utilization Trend',
   REPORT_SERVICE_PO_HOURS_BUDGET: 'PO Hours & Budget',
+  // Project Manager Dashboard (net-new, backend spec 2026-09-11) — not formName-gated (see
+  // ProtectedRoute's allowedRoles in routes/index.jsx, same as Team Mapping), so this entry
+  // exists purely so the sidebar picks it up automatically the moment a real Form Master row
+  // + Role Form Mapping gets created for it, same as every other screen here.
+  PM_DASHBOARD: 'Project Manager Dashboard',
 };
 
 // form_name (lowercased/trimmed) -> { to, icon, exact, addTo?, addLabel? }. Icons are used by
@@ -232,6 +237,7 @@ export const FORM_ROUTE_CONFIG = {
   [FORM_NAMES.REPORT_EMPLOYEE_WORK_LOG_COMPLIANCE]: { to: ROUTES.REPORT_EMPLOYEE_WORK_LOG_COMPLIANCE, icon: ClipboardList, description: 'Employees whose total logged hours fall below the required threshold for the selected period.' },
   [FORM_NAMES.REPORT_RESOURCE_UTILIZATION_TREND]: { to: ROUTES.REPORT_RESOURCE_UTILIZATION_TREND, icon: LineChart, description: 'Monthly utilization per resource — billable hours as a share of total hours.' },
   [FORM_NAMES.REPORT_SERVICE_PO_HOURS_BUDGET]: { to: ROUTES.REPORT_SERVICE_PO_HOURS_BUDGET, icon: Wallet, description: "Hours delivered against each Service PO's month-specific cost budget." },
+  [FORM_NAMES.PM_DASHBOARD]: { to: ROUTES.PM_DASHBOARD, icon: Briefcase, exact: true },
 };
 
 const NORMALIZED_CONFIG = Object.fromEntries(

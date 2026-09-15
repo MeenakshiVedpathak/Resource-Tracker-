@@ -115,7 +115,7 @@ const ForgotPasswordOtp = () => {
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
       <div className="mb-8">
-        <h2 className="text-2xl font-bold tracking-tight">Enter verification code</h2>
+        <h2 className="text-2xl font-bold tracking-tight text-foreground">Enter verification code</h2>
         <p className="mt-1.5 text-sm text-muted-foreground">
           We've sent a 6-digit code to <span className="font-medium text-foreground">{email}</span>.
         </p>

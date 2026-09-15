@@ -57,7 +57,13 @@ const ReportsLayout = () => {
     <div className="flex h-full min-h-0 flex-col">
       {/* Mobile horizontal tabs — desktop nav is in the main sidebar */}
       {showMobileNav && (
-        <div className="shrink-0 md:hidden -mx-6 -mt-6 mb-5 border-b bg-muted/20 overflow-x-auto">
+        // `-mx-*` must mirror MainLayout's own content padding (`px-3 sm:px-4 md:px-6`)
+        // breakpoint-for-breakpoint — a flat `-mx-6` overshoots the actual `px-3` (12px) gutter
+        // on mobile by 12px per side, so this strip's own box (not just its overflow-x-auto
+        // content) rendered 24px wider than the viewport and forced the whole page into a
+        // horizontal scroll, on every report under this layout. Same fix as the employee-side
+        // peer, EmployeeReportsLayout.jsx.
+        <div className="shrink-0 md:hidden -mx-3 sm:-mx-4 md:-mx-6 -mt-6 mb-5 border-b bg-muted/20 overflow-x-auto">
           <nav className="flex gap-1 px-4 py-2 min-w-max">
             {NAV.map(({ label, to }) => (
               <NavLink

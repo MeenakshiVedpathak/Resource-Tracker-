@@ -1,4 +1,5 @@
 ﻿import { useState, useMemo, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { createColumnHelper } from '@tanstack/react-table';
@@ -223,9 +224,18 @@ const EmployeeWorkLogComplianceReport = () => {
   const { success: toastSuccess, error: toastError } = useNotification();
 
   // ── Filter state ──
+  // Optional `?month=&year=` seeds the initial period — e.g. the PM Dashboard's "Missing Work
+  // Logs" KPI links here pre-filtered to the month it's already showing. Absent (every other
+  // entry point) falls back to DEFAULT_MONTH/DEFAULT_YEAR exactly as before; read once on mount
+  // only, same as every other initial-state useState here — the picker below is what changes it
+  // from then on.
+  const [searchParams] = useSearchParams();
+  const initialMonth = Number(searchParams.get('month')) || DEFAULT_MONTH;
+  const initialYear = Number(searchParams.get('year')) || DEFAULT_YEAR;
+
   const [mode, setMode] = useState('month');  // 'date' | 'month'
   const [date, setDate] = useState(yesterdayStr);
-  const [monthYear, setMonthYear] = useState({ month: DEFAULT_MONTH, year: DEFAULT_YEAR });
+  const [monthYear, setMonthYear] = useState({ month: initialMonth, year: initialYear });
   const [search, setSearch] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [buId, setBuId] = useState(ALL_BUS);

@@ -163,7 +163,10 @@ const ProjectGroup = ({
 
       {isOpen && (
         <div className="border-t bg-card">
-          <div className="grid grid-cols-[1.75rem_1.3fr_7rem_1.1fr] gap-3 border-b bg-muted/50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          {/* Column header only makes sense once there's an actual grid to label — below `sm`
+              every row is a stacked card instead (see the row markup below), so this is hidden
+              rather than squeezed into 4 columns that no longer exist there. */}
+          <div className="hidden gap-3 border-b bg-muted/50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground sm:grid sm:grid-cols-[1.75rem_1.3fr_7rem_1.1fr]">
             <span>#</span>
             <span>Task / Activity</span>
             <span className="text-right">Hours</span>
@@ -185,42 +188,58 @@ const ProjectGroup = ({
               <div
                 key={row.rowKey}
                 className={cn(
-                  'grid grid-cols-[1.75rem_1.3fr_7rem_1.1fr] items-start gap-3 px-3 py-2 transition-colors hover:bg-muted/30',
+                  // Below `sm`: a stacked card — name+hours on one line, description underneath —
+                  // instead of forcing the same 4 fixed columns into a phone-width row, which is
+                  // what used to squeeze the stepper and description down to nearly nothing.
+                  // `sm:` restores the original grid exactly as it was.
+                  'flex flex-col gap-2 px-3 py-2.5 transition-colors hover:bg-muted/30',
+                  'sm:grid sm:grid-cols-[1.75rem_1.3fr_7rem_1.1fr] sm:items-start sm:gap-3 sm:py-2',
                   i > 0 && 'border-t border-border/60',
                 )}
               >
-                <span className="pt-1.5 text-[11px] text-muted-foreground">{i + 1}</span>
-                <span
-                  className={cn(
-                    'flex items-center gap-1 truncate pt-1.5 text-xs',
-                    row.relDepth === 0 ? 'font-semibold text-foreground' : 'text-muted-foreground',
-                  )}
-                  style={{ paddingLeft: row.relDepth * 14 }}
-                >
-                  {row.relDepth > 0 && <span className="text-muted-foreground/50">{'└'}</span>}
-                  {hasChildren && (
-                    <button
-                      type="button"
-                      onClick={() => onToggleRowCollapse(row.rowKey)}
-                      className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
-                    >
-                      {isRowCollapsed ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
-                    </button>
-                  )}
-                  <span className="truncate">{row.label}</span>
-                  {isDirty && <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" title="Unsaved change" />}
-                </span>
-                <div className="flex justify-end pt-1">
-                  {canEditRow ? (
-                    <HourStepper value={value} onChange={(v) => onCellChange(row.rowKey, day, String(v))} hoursCap={hoursCap} />
-                  ) : (
+                {/* `sm:contents` on both wrapper levels unwraps them at desktop width, so the
+                    index/name/hours elements fall back into being 3 independent cells of the
+                    grid above, exactly as before — neither wrapper carries any color/font
+                    utility of its own (only layout), so there's nothing for those cells to
+                    inherit that didn't already exist on them individually. Below `sm` they're
+                    real flex rows instead: name+chevron on the left, the hours stepper pinned to
+                    the right on the same line. */}
+                <div className="flex items-center justify-between gap-2 sm:contents">
+                  <div className="flex min-w-0 items-center gap-1 sm:contents">
+                    <span className="hidden shrink-0 text-[11px] text-muted-foreground sm:inline sm:pt-1.5">{i + 1}</span>
                     <span
-                      className={cn('text-xs font-medium tabular-nums text-muted-foreground', isRolledUp && 'italic')}
-                      title={isRolledUp ? 'Total of this task and everything under it — expand to edit' : undefined}
+                      className={cn(
+                        'flex min-w-0 items-center gap-1 text-xs sm:pt-1.5',
+                        row.relDepth === 0 ? 'font-semibold text-foreground' : 'text-muted-foreground',
+                      )}
+                      style={{ paddingLeft: row.relDepth * 14 }}
                     >
-                      {formatHoursMinutes(value)}
+                      {row.relDepth > 0 && <span className="shrink-0 text-muted-foreground/50">{'└'}</span>}
+                      {hasChildren && (
+                        <button
+                          type="button"
+                          onClick={() => onToggleRowCollapse(row.rowKey)}
+                          className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground sm:h-3.5 sm:w-3.5"
+                        >
+                          {isRowCollapsed ? <ChevronDown className="h-3.5 w-3.5 sm:h-3 sm:w-3" /> : <ChevronUp className="h-3.5 w-3.5 sm:h-3 sm:w-3" />}
+                        </button>
+                      )}
+                      <span className="truncate">{row.label}</span>
+                      {isDirty && <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" title="Unsaved change" />}
                     </span>
-                  )}
+                  </div>
+                  <div className="shrink-0 sm:flex sm:justify-end sm:pt-1">
+                    {canEditRow ? (
+                      <HourStepper value={value} onChange={(v) => onCellChange(row.rowKey, day, String(v))} hoursCap={hoursCap} />
+                    ) : (
+                      <span
+                        className={cn('text-xs font-medium tabular-nums text-muted-foreground', isRolledUp && 'italic')}
+                        title={isRolledUp ? 'Total of this task and everything under it — expand to edit' : undefined}
+                      >
+                        {formatHoursMinutes(value)}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="min-w-0">
                   {canEditRow ? (
@@ -239,7 +258,7 @@ const ProjectGroup = ({
                     </div>
                   ) : (
                     <span
-                      className={cn('block pt-1.5 text-xs', descriptionValue ? 'text-muted-foreground' : 'italic text-muted-foreground/40')}
+                      className={cn('block text-xs sm:pt-1.5', descriptionValue ? 'text-muted-foreground' : 'italic text-muted-foreground/40')}
                       title={descriptionValue || undefined}
                     >
                       {descriptionValue || 'No description'}

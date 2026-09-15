@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import dayjs from 'dayjs';
+import { MoveHorizontal } from 'lucide-react';
 import {
   Table, TableHeader, TableBody, TableFooter, TableRow, TableHead, TableCell,
 } from '@/components/ui/table';
@@ -139,10 +140,18 @@ const SummaryTable = ({ month, year, rows, isLoading, edits, onCellChange }) => 
   );
 
   return (
-    <Table
-      className="table-fixed border-collapse"
-      containerClassName="max-h-[70vh] overflow-auto rounded-xl border bg-card"
-    >
+    <>
+      {/* A month's worth of day columns is always wider than a phone screen no matter how this
+          table is styled, so the scroll container below is genuinely swipeable rather than
+          broken — this just makes that discoverable instead of reading as a hard cutoff. */}
+      <p className="mb-1.5 flex items-center gap-1 text-[11px] text-muted-foreground sm:hidden">
+        <MoveHorizontal className="h-3 w-3 shrink-0" />
+        Swipe to see more days
+      </p>
+      <Table
+        className="table-fixed border-collapse"
+        containerClassName="max-h-[min(605px,70vh)] overflow-auto rounded-xl border bg-card"
+      >
       <TableHeader>
         <TableRow className="hover:bg-transparent">
           <TableHead
@@ -226,6 +235,7 @@ const SummaryTable = ({ month, year, rows, isLoading, edits, onCellChange }) => 
         </TableFooter>
       )}
     </Table>
+    </>
   );
 };
 

@@ -216,4 +216,11 @@ export const QUERY_KEYS = {
 
   // Timesheet Approval Status Report (Employee sees own, Team Lead sees mapped team — one endpoint)
   TIMESHEET_APPROVAL_STATUS_REPORT: (params) => ['timesheet-approval-status-report', params],
+
+  // Project Manager Dashboard
+  PM_DASHBOARD_SUMMARY: (params) => ['pm-dashboard', 'summary', params],
+  PM_DASHBOARD_PROJECTS: (params) => ['pm-dashboard', 'projects', params],
+  PM_DASHBOARD_TEAM: (params) => ['pm-dashboard', 'team', params],
+  PM_DASHBOARD_WORKLOG: (params) => ['pm-dashboard', 'worklog', params],
+  PM_DASHBOARD_ACTION_REQUIRED: (params) => ['pm-dashboard', 'action-required', params],
 };

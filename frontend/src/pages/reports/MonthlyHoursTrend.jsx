@@ -438,7 +438,7 @@ const MonthlyHoursTrend = () => {
           <ReportSection title="Hours by Category">
             <DataTable
               mobileCards
-              tableContainerClassName="max-h-[40vh]"
+              tableContainerClassName="max-h-[min(346px,40vh)]"
               columns={hoursColumns}
               data={hoursByCategory}
               isLoading={isPending}
@@ -454,7 +454,7 @@ const MonthlyHoursTrend = () => {
           <ReportSection title="Cost by Category">
             <DataTable
               mobileCards
-              tableContainerClassName="max-h-[40vh]"
+              tableContainerClassName="max-h-[min(346px,40vh)]"
               columns={costColumns}
               data={costRows}
               isLoading={isPending}
@@ -470,7 +470,7 @@ const MonthlyHoursTrend = () => {
           <ReportSection title="Utilization">
             <DataTable
               mobileCards
-              tableContainerClassName="max-h-[40vh]"
+              tableContainerClassName="max-h-[min(346px,40vh)]"
               columns={utilizationColumns}
               data={utilization}
               isLoading={isPending}
@@ -486,7 +486,7 @@ const MonthlyHoursTrend = () => {
           <ReportSection title="Leave / No-Work Hours">
             <DataTable
               mobileCards
-              tableContainerClassName="max-h-[40vh]"
+              tableContainerClassName="max-h-[min(346px,40vh)]"
               columns={leaveNoWorkColumns}
               data={leaveNoWorkRows}
               isLoading={isPending}

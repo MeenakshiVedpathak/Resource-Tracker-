@@ -1,8 +1,9 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import dayjs from 'dayjs';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useIsMobile } from '@/hooks/useMediaQuery';
 import { cn } from '@/utils/cn';
 import { formatHourMinuteValue } from '@/utils/formatters';
 import { EXPECTED_DAILY_HOURS } from './WorkLogEntryModal';
@@ -69,6 +70,47 @@ const TimesheetCalendar = ({ month, year, onMonthChange, calendarByDate, selecte
     onMonthChange(next.month() + 1, next.year());
   };
 
+  // Mobile only: the full grid+legend is the tallest thing on the page, sitting above the actual
+  // work log entry form (this screen stacks to a single column below `lg` — see
+  // EmployeeTimesheet.jsx). Starts collapsed on mobile — a date is always already selected
+  // (defaults to today), so there's nothing to gain from showing the whole grid before the user
+  // has asked to change it. Tapping the summary re-expands it; picking a new day re-collapses it.
+  // Desktop never sees this — `isMobile` gates it off entirely there, so the `lg:` two-column
+  // layout keeps the calendar permanently visible exactly as before.
+  const isMobile = useIsMobile();
+  const [collapsed, setCollapsed] = useState(isMobile);
+
+  const handleSelectDate = (day) => {
+    onSelectDate(day);
+    if (isMobile) setCollapsed(true);
+  };
+
+  if (isMobile && collapsed) {
+    const dateKey = selectedDate.format('YYYY-MM-DD');
+    const dayInfo = calendarByDate?.[dateKey];
+    const isFuture = selectedDate.isAfter(today, 'day') || !!dayInfo?.futureDisabled;
+    const isWeekend = selectedDate.day() === 0 || selectedDate.day() === 6;
+    const status = dayStatus({ dayInfo, isWeekend, isFuture });
+    const dot = LEGEND.find((l) => l.key === status)?.dot ?? LEGEND[2].dot;
+
+    return (
+      <button
+        type="button"
+        onClick={() => setCollapsed(false)}
+        className="flex w-full items-center justify-between gap-2 rounded-xl border bg-card px-4 py-3 text-left transition-colors hover:bg-muted/40"
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          <span className={cn('h-2.5 w-2.5 shrink-0 rounded-full', dot)} />
+          <span className="min-w-0 truncate text-sm font-semibold">{selectedDate.format('ddd, DD MMM YYYY')}</span>
+        </span>
+        <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+          {status === 'weekend' ? 'Weekend' : `${formatHourMinuteValue(dayInfo?.totalHours ?? 0)} logged`}
+          <ChevronDown className="h-4 w-4" />
+        </span>
+      </button>
+    );
+  }
+
   return (
     <div className="rounded-xl border bg-card p-4">
       <div className="mb-4 flex items-center justify-between">
@@ -101,7 +143,7 @@ const TimesheetCalendar = ({ month, year, onMonthChange, calendarByDate, selecte
               key={dateKey}
               type="button"
               disabled={isFuture || !inMonth}
-              onClick={() => onSelectDate(day)}
+              onClick={() => handleSelectDate(day)}
               className={cn(
                 'relative flex min-h-[56px] flex-col items-center justify-center gap-0.5 rounded-lg text-xs transition-colors',
                 !inMonth ? 'cursor-default text-muted-foreground/25' : STATUS_STYLES[status],

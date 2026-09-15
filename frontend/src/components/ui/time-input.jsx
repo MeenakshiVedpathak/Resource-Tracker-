@@ -157,7 +157,7 @@ export const TimeInput = ({
             className,
           )}
         >
-          <span className={cn('flex-1 text-xs tabular-nums', !(hh && mm !== undefined) && 'text-muted-foreground')}>
+          <span className={cn('flex-1 whitespace-nowrap text-xs tabular-nums', !(hh && mm !== undefined) && 'text-muted-foreground')}>
             {formatDisplay(value)}
           </span>
           <span

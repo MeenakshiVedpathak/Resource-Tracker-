@@ -1,12 +1,15 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Folder, ChevronRight } from 'lucide-react';
+import { Search, Folder, ChevronRight, ChevronDown } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useForms } from '@/hooks/useForms';
 import { useFormCategories } from '@/hooks/useFormCategories';
+import { useIsMobile } from '@/hooks/useMediaQuery';
 import { resolveFormRoute, FORM_NAMES } from '@/constants/rbacForms';
 import PageHeader from '@/components/common/PageHeader';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from '@/components/ui/sheet';
 import { cn } from '@/utils/cn';
 
 // The set of form names that belong to the employee self-service reports section.
@@ -32,6 +35,11 @@ const EmployeeReportsCenter = () => {
   const { data: categories = [] } = useFormCategories({});
   const [search, setSearch] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState(null); // null = "All Reports"
+  const isMobile = useIsMobile();
+  const [categorySheetOpen, setCategorySheetOpen] = useState(false);
+  // Draft selection inside the mobile category sheet — only committed to `selectedCategoryId` on
+  // "Apply", same select-then-Apply flow as the admin ReportsCenter this hub mirrors.
+  const [draftCategoryId, setDraftCategoryId] = useState(selectedCategoryId);
 
   // The granted form IDs, not their names. Matching on name looks equivalent but isn't: a
   // form_name is not unique across the Form Master, so two rows in different modules can share
@@ -68,6 +76,7 @@ const EmployeeReportsCenter = () => {
           name: f.form_name,
           to: cfg.to,
           icon: cfg.icon,
+          description: cfg.description ?? null,
           categoryId: f.category_id ?? null,
           seq: f.seq ?? 0,
         };
@@ -113,11 +122,134 @@ const EmployeeReportsCenter = () => {
       ? 'All Reports'
       : categoryFolders.find((c) => c.id === selectedCategoryId)?.name ?? 'Reports';
 
+  const openCategorySheet = () => {
+    setDraftCategoryId(selectedCategoryId);
+    setCategorySheetOpen(true);
+  };
+
   return (
-    <div className="flex flex-col h-[calc(100vh-8.5rem)]">
+    // Fills the bounded box the shell hands down (EmployeeLayout <main> -> EmployeeReportsLayout)
+    // rather than re-deriving it from the viewport — see the same change in the admin peer,
+    // pages/reports/ReportsCenter.jsx.
+    <div className="flex h-full min-h-0 flex-col">
       <PageHeader title="Reports Center" description="Browse reports by category" />
 
-      <div className="flex flex-1 gap-4 overflow-hidden">
+      {/* Mobile: flat searchable report list + a category bottom sheet, instead of the desktop
+          two-pane folder browser — mirrors the admin ReportsCenter's mobile treatment exactly.
+          Same reportRows/categoryFolders/visibleRows data and search/setSelectedCategoryId
+          handlers as the desktop pane below, just different markup. */}
+      <div className="flex flex-1 min-h-0 flex-col gap-3 md:hidden">
+        <div className="relative shrink-0">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search reports..."
+            className="h-11 pl-9 text-sm"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+
+        <button
+          type="button"
+          onClick={openCategorySheet}
+          className="flex h-11 shrink-0 items-center justify-between rounded-lg border bg-white px-3.5 text-sm font-medium"
+        >
+          <span className="truncate">
+            {activeLabel} ({selectedCategoryId == null ? reportRows.length : categoryFolders.find((c) => c.id === selectedCategoryId)?.items.length ?? 0})
+          </span>
+          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+        </button>
+
+        <p className="shrink-0 text-sm font-semibold text-foreground">
+          {visibleRows.length} Report{visibleRows.length !== 1 ? 's' : ''}
+        </p>
+
+        <div className="flex-1 space-y-2 overflow-y-auto pb-2">
+          {visibleRows.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed py-14 text-center text-sm text-muted-foreground">
+              <Search className="h-6 w-6 text-muted-foreground/50" />
+              <p className="font-medium text-foreground">No reports found</p>
+              <p className="text-xs">Try a different keyword or category.</p>
+            </div>
+          ) : (
+            visibleRows.map((r) => (
+              <button
+                type="button"
+                key={r.id}
+                onClick={() => navigate(r.to)}
+                className="flex w-full items-start gap-3 rounded-lg border bg-white p-3.5 text-left active:bg-muted/40"
+              >
+                <r.icon className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-foreground">{r.name}</p>
+                  {r.description && (
+                    <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{r.description}</p>
+                  )}
+                </div>
+                <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+              </button>
+            ))
+          )}
+        </div>
+      </div>
+
+      {isMobile && (
+        <Sheet open={categorySheetOpen} onOpenChange={setCategorySheetOpen}>
+          <SheetContent side="bottom" className="flex max-h-[80vh] flex-col gap-0 rounded-t-2xl p-0">
+            <SheetHeader className="shrink-0 border-b px-4 py-3 text-left">
+              <SheetTitle>Select Category</SheetTitle>
+            </SheetHeader>
+            <div className="flex-1 overflow-y-auto p-2">
+              <button
+                type="button"
+                onClick={() => setDraftCategoryId(null)}
+                className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-sm hover:bg-muted/50"
+              >
+                <span className={cn(
+                  'flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2',
+                  draftCategoryId == null ? 'border-primary' : 'border-muted-foreground/40'
+                )}>
+                  {draftCategoryId == null && <span className="h-2 w-2 rounded-full bg-primary" />}
+                </span>
+                <span className="flex-1 font-medium">All Reports</span>
+                <span className="text-xs text-muted-foreground">{reportRows.length}</span>
+              </button>
+              {categoryFolders.map((cat) => (
+                <button
+                  type="button"
+                  key={cat.id}
+                  onClick={() => setDraftCategoryId(cat.id)}
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-sm hover:bg-muted/50"
+                >
+                  <span className={cn(
+                    'flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2',
+                    draftCategoryId === cat.id ? 'border-primary' : 'border-muted-foreground/40'
+                  )}>
+                    {draftCategoryId === cat.id && <span className="h-2 w-2 rounded-full bg-primary" />}
+                  </span>
+                  <span className="flex-1 truncate font-medium">{cat.name}</span>
+                  <span className="text-xs text-muted-foreground">{cat.items.length}</span>
+                </button>
+              ))}
+            </div>
+            <SheetFooter className="shrink-0 border-t p-3">
+              <Button
+                type="button"
+                className="h-11 w-full"
+                onClick={() => {
+                  setSelectedCategoryId(draftCategoryId);
+                  setCategorySheetOpen(false);
+                }}
+              >
+                Apply
+              </Button>
+            </SheetFooter>
+          </SheetContent>
+        </Sheet>
+      )}
+
+      {/* Desktop / tablet: unchanged two-pane folder browser */}
+      <div className="hidden flex-1 gap-4 overflow-hidden md:flex">
         {/* Left panel — category folder list */}
         <div className="w-64 shrink-0 flex flex-col rounded-lg border bg-white overflow-hidden">
           <div className="p-3 border-b">

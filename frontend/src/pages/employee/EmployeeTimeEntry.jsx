@@ -450,12 +450,15 @@ const EmployeeTimeEntry = () => {
         </p>
       </div>
 
-      {/* Form + Entries panel stay side by side at every width — never stacked. Each column has
-          its own sensible minimum width (660px form, 360px panel); once the two can't both fit
-          the viewport, this row overflows and the wrapper scrolls horizontally instead of either
-          column shrinking below its minimum or the panel dropping underneath the form. */}
-      <div className="-mx-1 overflow-x-auto px-1 pb-1">
-        <div className="flex min-w-fit items-start gap-6">
+      {/* Below `md`: the Entries panel stacks under the form, both full width — a phone has no
+          room for a 660px+360px side-by-side row to begin with, so there's nothing to usefully
+          scroll horizontally to. At `md` and up: unchanged — form + Entries panel stay side by
+          side, each column keeping its own sensible minimum width (660px form, 360px panel); once
+          the two can't both fit the viewport, this row overflows and the wrapper scrolls
+          horizontally instead of either column shrinking below its minimum or the panel dropping
+          underneath the form. */}
+      <div className="md:-mx-1 md:overflow-x-auto md:px-1 md:pb-1">
+        <div className="flex flex-col gap-6 md:min-w-fit md:flex-row md:items-start">
           {/* No viewport-height cap here — TimeSegmentsInput's own row list already caps itself
               at a fixed 300px (see ROWS_MAX_HEIGHT) so many blocks can't grow the page unbounded.
               Pinning this card's height to `100dvh - <fixed offset>` on top of that used to work,
@@ -463,7 +466,7 @@ const EmployeeTimeEntry = () => {
               budget can be smaller than the Module/Task fields + heading + even one row need,
               squeezing the row list into an unusably short scroll box. Sizing naturally and
               letting the page itself scroll vertically avoids that regardless of viewport height. */}
-          <div className="min-w-[660px] flex-1 space-y-2.5">
+          <div className="min-w-0 flex-1 space-y-2.5 md:min-w-[660px]">
           <Card className="overflow-hidden">
             <Form {...form}>
               <form onSubmit={form.handleSubmit(submit)} className="flex min-h-0 flex-col">
@@ -644,7 +647,7 @@ const EmployeeTimeEntry = () => {
           </Card>
         </div>
 
-          <div className="w-[360px] shrink-0 space-y-4">
+          <div className="w-full shrink-0 space-y-4 md:w-[360px]">
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-sm">

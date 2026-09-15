@@ -205,7 +205,16 @@ const ServicePOForm = () => {
   // the client WITHIN the company_id sent on the request, so offering clients from outside the
   // picked BU lets the two fields disagree and the create fails with "Client not found." Held
   // until a BU is picked — there is nothing sensible to list before then.
-  const showBuField = isCompanyLessActor || showBuScopedPicker;
+  // `&& !isCentralised` matters here independently of the BU field's own render condition below:
+  // a Centralised PO hides that field for EVERY actor (it's BU-less by design — "not linked to a
+  // specific business unit"), but without this, a multi-BU/company-less actor who flips the
+  // Centralised toggle still had this flag stuck `true` from `isCompanyLessActor`/
+  // `showBuScopedPicker` alone — scoping Client to a `company_id` that no field exists to ever
+  // set, so the dropdown stayed permanently disabled on "Select a business unit first" with no
+  // way to pick a Client at all. Falling back to the unfiltered `activeClients` list instead is
+  // correct here: Centralised POs reach across every BU on purpose, so there's no "wrong BU"
+  // mismatch for the backend to reject in the first place.
+  const showBuField = (isCompanyLessActor || showBuScopedPicker) && !isCentralised;
   const selectedBuId = form.watch('company_id');
   const { data: scopedClients, isPending: isLoadingScopedClients } = useClients(
     { buId: selectedBuId, status: 'active', limit: 200 },

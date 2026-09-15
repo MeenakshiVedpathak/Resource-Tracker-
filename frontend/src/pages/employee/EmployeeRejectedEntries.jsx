@@ -105,22 +105,31 @@ const EmployeeRejectedEntries = () => {
             searchPlaceholder="Search projects…"
           />
         </div>
-        <DatePicker
-          value={filters.startDate}
-          onChange={(d) => updateFilter({ startDate: d })}
-          placeholder="From date"
-          ariaLabel="From date"
-          clearable
-          className="w-auto min-w-[9.5rem]"
-        />
-        <DatePicker
-          value={filters.endDate}
-          onChange={(d) => updateFilter({ endDate: d })}
-          placeholder="To date"
-          ariaLabel="To date"
-          clearable
-          className="w-auto min-w-[9.5rem]"
-        />
+        {/* `sm:contents` — at `sm` and up this wrapper drops out of the box model entirely, so
+            both DatePickers become direct children of the flex-wrap row above exactly as before
+            (their own `sm:w-auto sm:min-w-[9.5rem] sm:flex-none` restores the original compact
+            sizing there, completely unchanged). Below `sm`, where they already wrap onto their
+            own line under "All Projects", this becomes a real full-width flex row so `flex-1` on
+            each field can split it evenly instead of each one sitting at its own min-width with
+            empty space left over on the right. */}
+        <div className="flex w-full gap-2 sm:contents">
+          <DatePicker
+            value={filters.startDate}
+            onChange={(d) => updateFilter({ startDate: d })}
+            placeholder="From date"
+            ariaLabel="From date"
+            clearable
+            className="min-w-0 flex-1 sm:w-auto sm:min-w-[9.5rem] sm:flex-none"
+          />
+          <DatePicker
+            value={filters.endDate}
+            onChange={(d) => updateFilter({ endDate: d })}
+            placeholder="To date"
+            ariaLabel="To date"
+            clearable
+            className="min-w-0 flex-1 sm:w-auto sm:min-w-[9.5rem] sm:flex-none"
+          />
+        </div>
         {hasActiveFilters && (
           <Button variant="ghost" size="sm" onClick={() => updateFilter(emptyFilters)}>
             <X className="mr-1.5 h-3.5 w-3.5" />

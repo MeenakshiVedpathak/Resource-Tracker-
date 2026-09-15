@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { TimeRangePicker } from '@/components/ui/time-range-picker';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { sumSegmentHours } from '@/utils/employeeTimeEntry';
 import { formatHoursMinutes } from '@/utils/formatters';
 import { cn } from '@/utils/cn';
@@ -19,15 +20,16 @@ const ROWS_MAX_HEIGHT = 'max-h-[300px] min-h-0';
 const DESCRIPTION_MAX_LENGTH = 500;
 
 // Shared between the header captions and every row so the two stay in lockstep — a column added
-// here shifts both at once. Kept as one fixed 5-column row (not a responsive stack) — the page
-// around this table handles narrow viewports via horizontal scroll with a minimum form width,
-// not by rearranging this row's own columns.
+// here shifts both at once. Below `md`: not a grid at all — the Time Entry screen's own form
+// column now stacks full-width on a phone (see EmployeeTimeEntry.jsx), so this row has no spare
+// horizontal room for 5 fixed columns and gets its own mobile card markup instead (see the
+// `md:hidden` block per row below). `md:` and up: the original fixed 5-column row, untouched.
 // `items-start`, not `items-center`: every cell used to be the same h-9 height so it made no
 // difference, but the Description cell is now taller (input + character counter beneath it), and
 // top-aligning keeps Start/End/Hours/remove-button level with the description INPUT rather than
 // centered against the counter's extra height.
 const ROW_GRID =
-  'grid items-start gap-2.5 grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,72px)_minmax(0,1.6fr)_auto]';
+  'md:grid md:items-start md:gap-2.5 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,72px)_minmax(0,1.6fr)_auto]';
 
 // Exported so a caller can place the control somewhere other than under the rows — the Time Entry
 // screen sits it beside its section heading. Styling lives here so both placements stay identical.
@@ -120,11 +122,14 @@ const TimeSegmentsInput = ({
 
   if (showDescription) {
     const table = (
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 md:space-y-1.5">
+            {/* Column captions — desktop only; the mobile card below captions its own fields
+                (TimeRangePicker's own "labeled" layout, plus inline "Hours"/"Description" text)
+                instead of relying on a column header above a grid that no longer exists there. */}
             <div
               className={cn(
                 ROW_GRID,
-                'px-1 text-xs font-medium text-muted-foreground',
+                'hidden px-1 text-xs font-medium text-muted-foreground md:grid',
                 // Captions stay put while the rows scroll under them; bg-card matches the Card so
                 // rows can't show through.
                 scrollRows && 'sticky top-0 z-10 bg-card pb-2'
@@ -143,10 +148,65 @@ const TimeSegmentsInput = ({
               const isComplete = !!segment.start_time && !!segment.end_time;
               const isPartial = !segment.start_time !== !segment.end_time;
               const duration = isComplete ? sumSegmentHours([segment]) : 0;
+              const descriptionField = (
+                <div className="flex flex-col gap-0.5">
+                  <Input
+                    value={segment.description ?? ''}
+                    onChange={(e) => updateSegment(index, { description: e.target.value.slice(0, DESCRIPTION_MAX_LENGTH) })}
+                    disabled={disabled}
+                    maxLength={DESCRIPTION_MAX_LENGTH}
+                    placeholder="What did you work on?"
+                    aria-label={`Description for time block ${index + 1}`}
+                  />
+                  <span className="self-end text-[10px] tabular-nums text-muted-foreground">
+                    {(segment.description ?? '').length} / {DESCRIPTION_MAX_LENGTH}
+                  </span>
+                </div>
+              );
+              // Mobile-only — a full multi-line Textarea instead of the desktop row's single-line
+              // Input, since the mobile card has the vertical room a dense table row doesn't.
+              // Desktop's `descriptionField` above is untouched.
+              const descriptionFieldMobile = (
+                <div className="flex flex-col gap-1">
+                  <Textarea
+                    value={segment.description ?? ''}
+                    onChange={(e) => updateSegment(index, { description: e.target.value.slice(0, DESCRIPTION_MAX_LENGTH) })}
+                    disabled={disabled}
+                    maxLength={DESCRIPTION_MAX_LENGTH}
+                    placeholder="What did you work on?"
+                    aria-label={`Description for time block ${index + 1}`}
+                    className="min-h-24"
+                  />
+                  <span className="self-end text-[10px] tabular-nums text-muted-foreground">
+                    {(segment.description ?? '').length} / {DESCRIPTION_MAX_LENGTH}
+                  </span>
+                </div>
+              );
+              const hoursField = (
+                <div
+                  className="flex h-9 items-center rounded-md border bg-muted/50 px-3 text-sm font-medium tabular-nums text-muted-foreground"
+                  title="Calculated from your start and end times"
+                >
+                  {formatHoursMinutes(duration)}
+                </div>
+              );
+              const removeButton = (
+                <button
+                  type="button"
+                  onClick={() => removeSegment(index)}
+                  disabled={disabled}
+                  title={removeLabel}
+                  aria-label={`${isOnlySegment ? 'Clear' : 'Remove'} time block ${index + 1}`}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border text-destructive transition-colors hover:border-destructive/40 hover:bg-destructive/10 disabled:pointer-events-none disabled:opacity-40"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              );
 
               return (
                 <div key={index}>
-                  <div className={cn(ROW_GRID, 'px-1 py-1.5')}>
+                  {/* Desktop — unchanged fixed 5-column row. */}
+                  <div className={cn(ROW_GRID, 'hidden px-1 py-1.5 md:grid')}>
                     <TimeRangePicker
                       startValue={segment.start_time ?? ''}
                       endValue={segment.end_time ?? ''}
@@ -156,38 +216,51 @@ const TimeSegmentsInput = ({
                       className="col-span-2 grid-cols-2"
                       minInclusive={minTime}
                     />
+                    {hoursField}
+                    {descriptionField}
+                    {removeButton}
+                  </div>
 
-                    <div
-                      className="flex h-9 items-center rounded-md border bg-muted/50 px-3 text-sm font-medium tabular-nums text-muted-foreground"
-                      title="Calculated from your start and end times"
-                    >
-                      {formatHoursMinutes(duration)}
+                  {/* Mobile — a stacked card. TimeRangePicker switches to its own compact
+                      "inline" layout (start – end on one line) with the calculated duration
+                      shown as a highlighted badge alongside it, instead of stacked
+                      Start-time/End-time fields with a separate Hours row below. */}
+                  <div className="flex flex-col gap-3 rounded-xl border p-3.5 md:hidden">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-medium text-muted-foreground">Time Block {index + 1}</span>
+                      {removeButton}
                     </div>
 
-                    <div className="flex flex-col gap-0.5">
-                      <Input
-                        value={segment.description ?? ''}
-                        onChange={(e) => updateSegment(index, { description: e.target.value.slice(0, DESCRIPTION_MAX_LENGTH) })}
-                        disabled={disabled}
-                        maxLength={DESCRIPTION_MAX_LENGTH}
-                        placeholder="What did you work on?"
-                        aria-label={`Description for time block ${index + 1}`}
-                      />
-                      <span className="self-end text-[10px] tabular-nums text-muted-foreground">
-                        {(segment.description ?? '').length} / {DESCRIPTION_MAX_LENGTH}
-                      </span>
+                    <div className="space-y-1.5">
+                      <p className="text-sm font-semibold text-foreground">
+                        Time &amp; Hours <span className="text-destructive">*</span>
+                      </p>
+                      <div className="flex items-center gap-2 rounded-lg border bg-muted/20 p-1.5">
+                        <TimeRangePicker
+                          startValue={segment.start_time ?? ''}
+                          endValue={segment.end_time ?? ''}
+                          onChange={(start, end) => updateSegment(index, { start_time: start, end_time: end })}
+                          disabled={disabled}
+                          layout="inline"
+                          className="min-w-0 flex-1"
+                          minInclusive={minTime}
+                        />
+                        <div className="h-6 w-px shrink-0 bg-border" />
+                        <div
+                          className="flex shrink-0 items-center rounded-md bg-primary/10 px-2.5 py-1.5 text-xs font-bold text-primary"
+                          title="Calculated from your start and end times"
+                        >
+                          {formatHoursMinutes(duration)}
+                        </div>
+                      </div>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => removeSegment(index)}
-                      disabled={disabled}
-                      title={removeLabel}
-                      aria-label={`${isOnlySegment ? 'Clear' : 'Remove'} time block ${index + 1}`}
-                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border text-destructive transition-colors hover:border-destructive/40 hover:bg-destructive/10 disabled:pointer-events-none disabled:opacity-40"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    <div className="space-y-1.5">
+                      <p className="text-sm font-semibold text-foreground">
+                        Work Description <span className="text-xs font-normal text-muted-foreground">(optional)</span>
+                      </p>
+                      {descriptionFieldMobile}
+                    </div>
                   </div>
 
                   {isPartial && (

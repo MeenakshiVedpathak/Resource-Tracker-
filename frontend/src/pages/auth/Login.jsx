@@ -5,7 +5,9 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { motion } from 'framer-motion';
 import { useMsal } from '@azure/msal-react';
-import { Eye, EyeOff, LogIn } from 'lucide-react';
+import {
+  Eye, EyeOff, LogIn, Mail, Lock, X, ShieldCheck,
+} from 'lucide-react';
 import { authApi } from '@/api/auth.api';
 import { employeesApi } from '@/api/employees.api';
 import { rolesApi } from '@/api/roles.api';
@@ -15,6 +17,7 @@ import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import { applyFieldErrors } from '@/utils/authErrors';
 import { emailSchema } from '@/utils/validators';
+import { cn } from '@/utils/cn';
 import { ROUTES } from '@/constants/routes';
 import { computeHomeRoute, FORM_NAMES } from '@/constants/rbacForms';
 import {
@@ -33,6 +36,11 @@ const MICROSOFT_ERROR_COPY = {
   MICROSOFT_SSO_NOT_CONFIGURED: "Microsoft sign-in isn't available right now. Please use your email and password.",
 };
 const MICROSOFT_POPUP_CANCELLED = 'Sign-in was cancelled. Please try again — or check that pop-ups are allowed for this site.';
+
+// Taller, tinted pill inputs (icon-left) for this screen only — the shared Input component keeps
+// its plain compact look everywhere else (tables, filters, forms), so this is applied via
+// className override here rather than changed globally.
+const LOGIN_INPUT_CLASS = 'h-12 rounded-xl border-transparent bg-muted/70 pl-10 text-[15px] focus-visible:bg-background focus-visible:ring-1 focus-visible:ring-ring';
 
 const loginSchema = z.object({
   email: emailSchema,
@@ -224,7 +232,7 @@ const Login = () => {
         transition={{ duration: 0.3 }}
       >
         <div className="mb-8">
-          <h2 className="text-2xl font-bold tracking-tight">Choose a role</h2>
+          <h2 className="text-2xl font-bold tracking-tight text-foreground">Choose a role</h2>
           <p className="mt-1.5 text-sm text-muted-foreground">
             Your account has more than one role. Pick which one to sign in as — you'll only have
             that role's access for this session.
@@ -264,15 +272,19 @@ const Login = () => {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
     >
-      <div className="mb-8">
-        <h2 className="text-2xl font-bold tracking-tight">Welcome back</h2>
+      {/* mb-5 (was mb-8 unconditionally) on mobile only, restored via lg:mb-8 — part of fitting
+          the whole mobile hero/card/footer stack into a real phone viewport without scrolling;
+          desktop's spacing is untouched. Same pattern on the form's own space-y, the divider's
+          my-6, and the admin-contact line's mt-6 below. */}
+      <div className="mb-3 lg:mb-8">
+        <h2 className="text-3xl font-extrabold tracking-tight text-foreground">Welcome back</h2>
         <p className="mt-1.5 text-sm text-muted-foreground">
           Sign in to your Trackio account
         </p>
       </div>
 
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-2.5 lg:space-y-4">
           <FormField
             control={form.control}
             name="email"
@@ -280,13 +292,35 @@ const Login = () => {
               <FormItem>
                 <FormLabel>Email</FormLabel>
                 <FormControl>
-                  <Input
-                    type="email"
-                    placeholder="Enter your email"
-                    autoComplete="email"
-                    autoFocus
-                    {...field}
-                  />
+                  <div className="relative">
+                    <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      type="email"
+                      placeholder="Enter your email"
+                      autoComplete="email"
+                      autoFocus
+                      // Mobile-only clear button needs room; `lg:pr-3` puts desktop's padding
+                      // back to Input's own unmodified default regardless of `field.value`, so
+                      // desktop's input is byte-for-byte the same size it always was.
+                      className={cn(LOGIN_INPUT_CLASS, field.value && 'pr-10', 'lg:pr-3')}
+                      {...field}
+                    />
+                    {/* Clear button — mobile only (`lg:hidden`), matching the reference design's
+                        email field affordance; desktop never had one and doesn't gain one here.
+                        Password field intentionally has no equivalent: its own trailing slot is
+                        already the show/hide toggle. */}
+                    {field.value && (
+                      <button
+                        type="button"
+                        onClick={() => field.onChange('')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full text-muted-foreground hover:text-foreground transition-colors lg:hidden"
+                        tabIndex={-1}
+                        aria-label="Clear email"
+                      >
+                        <X className="h-4 w-4 rounded-full bg-muted-foreground/15 p-0.5" />
+                      </button>
+                    )}
+                  </div>
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -301,20 +335,36 @@ const Login = () => {
                 <FormLabel>Password</FormLabel>
                 <FormControl>
                   <div className="relative">
+                    <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                     <Input
                       type={showPassword ? 'text' : 'password'}
                       placeholder="Enter your password"
                       autoComplete="current-password"
-                      className="pr-10"
+                      className={cn(LOGIN_INPUT_CLASS, 'pr-10')}
                       {...field}
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword((v) => !v)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                       tabIndex={-1}
                     >
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      {/* Mobile shows the field's CURRENT state (crossed eye while masked, plain
+                          eye once revealed), matching the reference. Desktop keeps its original
+                          icon-as-action convention unchanged (open eye while masked = "click to
+                          reveal") — both icons render, `lg:`/non-`lg:` visibility picks the right
+                          one per breakpoint instead of changing what desktop showed before. */}
+                      {showPassword ? (
+                        <>
+                          <EyeOff className="hidden h-4 w-4 lg:block" />
+                          <Eye className="h-4 w-4 lg:hidden" />
+                        </>
+                      ) : (
+                        <>
+                          <Eye className="hidden h-4 w-4 lg:block" />
+                          <EyeOff className="h-4 w-4 lg:hidden" />
+                        </>
+                      )}
                     </button>
                   </div>
                 </FormControl>
@@ -329,7 +379,7 @@ const Login = () => {
             </Link>
           </div>
 
-          <Button type="submit" className="w-full mt-2" disabled={isBusy} size="lg">
+          <Button type="submit" className="mt-2 h-12 w-full rounded-xl text-[15px]" disabled={isBusy} size="lg">
             {isLoading ? (
               <span className="flex items-center gap-2">
                 <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
@@ -345,7 +395,7 @@ const Login = () => {
         </form>
       </Form>
 
-      <div className="my-6 flex items-center gap-3">
+      <div className="my-2 flex items-center gap-3 lg:my-6">
         <Separator className="flex-1" />
         <span className="text-xs text-muted-foreground">or</span>
         <Separator className="flex-1" />
@@ -353,7 +403,10 @@ const Login = () => {
 
       <MicrosoftSignInButton onClick={handleMicrosoftSignIn} disabled={isBusy} loading={isMsLoading} />
 
-      <p className="mt-6 text-center text-xs text-muted-foreground">
+      {/* `flex` + `justify-center` here renders identically to the original plain `text-center`
+          block once the icon is hidden (lg:hidden below), so desktop's line is unaffected. */}
+      <p className="mt-2 flex items-center justify-center gap-1.5 text-center text-xs text-muted-foreground lg:mt-6">
+        <ShieldCheck className="h-3.5 w-3.5 shrink-0 lg:hidden" />
         Contact your administrator if you don't have access.
       </p>
     </motion.div>

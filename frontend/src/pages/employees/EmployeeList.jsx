@@ -238,7 +238,12 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
 
   return (
     <Dialog open={!!employee} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl md:max-w-3xl flex max-h-[90vh] flex-col">
+      <DialogContent
+        className={cn(
+          'flex max-h-[90vh] flex-col',
+          showServicePoSection ? 'max-w-2xl md:max-w-5xl' : 'max-w-2xl md:max-w-3xl',
+        )}
+      >
         <DialogHeader className="shrink-0">
           <DialogTitle>Map Roles &amp; Business Units</DialogTitle>
           <DialogDescription>Assign roles and business units for {employee?.full_name}.</DialogDescription>
@@ -247,10 +252,14 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
             stretching the dialog past the viewport. */}
         <div className="flex-1 min-h-0 space-y-4 overflow-y-auto px-1 -mx-1">
         {/* Stays single-column through tablet-portrait widths (sm/640px was too early — it forced
-            two cramped columns before there was room, wrapping role/BU names onto a second line
-            and desyncing the two tables' row heights) and only splits into two once md/768px
-            actually has the width to spare. */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            cramped columns before there was room, wrapping role/BU names onto a second line and
+            desyncing the tables' row heights) and only splits into columns once md/768px actually
+            has the width to spare. Service POs joins as a third column (rather than its own
+            full-width row below, which used to push the dialog's height around whenever Service
+            PO Admin got checked) only while showServicePoSection is true — the Dialog's own
+            max-w-5xl above only widens when this does, so three columns actually gets the room a
+            plain 3-column split of the original max-w-3xl never would. */}
+        <div className={cn('grid grid-cols-1 gap-4', showServicePoSection ? 'md:grid-cols-3' : 'md:grid-cols-2')}>
           <div className="space-y-1.5 min-w-0">
             <Label className="text-xs">Roles</Label>
             <Table containerClassName="border rounded-md max-h-[240px]">
@@ -323,10 +332,9 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
                 </TableBody>
             </Table>
           </div>
-        </div>
-        {showServicePoSection && (
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-2">
+          {showServicePoSection && (
+          <div className="space-y-1.5 min-w-0">
+            <div className="flex flex-wrap items-center gap-1.5">
               <Label className="text-xs">Service POs</Label>
               <Badge variant="secondary" className="text-[10px]">Company-wide access</Badge>
               {selectedPoIds.length > 0 && (
@@ -349,7 +357,7 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
                 onChange={(e) => setPoSearch(e.target.value)}
               />
             </div>
-            <Table containerClassName="border rounded-md max-h-[260px]">
+            <Table containerClassName="border rounded-md max-h-[240px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead className={cn('w-10', STICKY_HEAD)}>
@@ -389,11 +397,11 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
                         <TableCell>
                           <TruncatedCell
                             value={po.service_po_code ? `${po.service_po_name} (${po.service_po_code})` : po.service_po_name}
-                            maxWidth="260px"
+                            maxWidth="140px"
                           />
                         </TableCell>
                         <TableCell>
-                          <TruncatedCell value={po.client?.client_name} maxWidth="180px" className="text-muted-foreground" />
+                          <TruncatedCell value={po.client?.client_name} maxWidth="100px" className="text-muted-foreground" />
                         </TableCell>
                       </TableRow>
                     ))
@@ -401,7 +409,8 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
                 </TableBody>
             </Table>
           </div>
-        )}
+          )}
+        </div>
         </div>
         <DialogFooter className="shrink-0">
           <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={isSaving}>
@@ -1198,7 +1207,7 @@ const EmployeeList = () => {
             <CardTitle className="text-lg font-medium text-slate-800">Preview Import Data</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="overflow-auto max-h-[60vh]">
+            <div className="overflow-auto max-h-[min(518px,60vh)]">
               {previewData && previewData.length > 0 && (
                 <Table>
                   <TableHeader>

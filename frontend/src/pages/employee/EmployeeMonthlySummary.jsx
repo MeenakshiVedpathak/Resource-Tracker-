@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
+import PageHeader from '@/components/common/PageHeader';
 
 // Month View has no real per-day date, so every row is bucketed under this one pseudo-day key —
 // same trick My Work Log's Monthly tab uses — letting it reuse the exact same row-building
@@ -274,35 +275,35 @@ const MonthlySummaryPage = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight">Monthly Summary</h1>
-          <p className="text-sm text-muted-foreground">
-            {viewMode === 'day'
-              ? 'Hours logged per Service/Project for each day of the month.'
-              : 'Log your total hours per Service/Project for the whole month.'}
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <Tabs value={viewMode} onValueChange={setViewMode}>
-            <TabsList>
-              <TabsTrigger value="day">Day View</TabsTrigger>
-              <TabsTrigger value="month">Month View</TabsTrigger>
-            </TabsList>
-          </Tabs>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => (viewMode === 'day'
-              ? exportSummaryToExcel(rows, edits, month, year)
-              : exportMonthlyWorkLogToExcel(monthlyRows, monthlyEdits, month, year))}
-            disabled={viewMode === 'day' ? (isLoading || rows.length === 0) : (isMonthlyLoading || monthlyRows.length === 0)}
-          >
-            <Download className="mr-1.5 h-4 w-4" />
-            Export Excel
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title="Monthly Summary"
+        description={
+          viewMode === 'day'
+            ? 'Hours logged per Service/Project for each day of the month.'
+            : 'Log your total hours per Service/Project for the whole month.'
+        }
+        actions={(
+          <>
+            <Tabs value={viewMode} onValueChange={setViewMode}>
+              <TabsList>
+                <TabsTrigger value="day" className="px-2 text-xs sm:px-3 sm:text-sm">Day View</TabsTrigger>
+                <TabsTrigger value="month" className="px-2 text-xs sm:px-3 sm:text-sm">Month View</TabsTrigger>
+              </TabsList>
+            </Tabs>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => (viewMode === 'day'
+                ? exportSummaryToExcel(rows, edits, month, year)
+                : exportMonthlyWorkLogToExcel(monthlyRows, monthlyEdits, month, year))}
+              disabled={viewMode === 'day' ? (isLoading || rows.length === 0) : (isMonthlyLoading || monthlyRows.length === 0)}
+            >
+              <Download className="mr-1.5 h-4 w-4" />
+              Export Excel
+            </Button>
+          </>
+        )}
+      />
 
       {viewMode === 'day' && isError && (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">

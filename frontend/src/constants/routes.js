@@ -15,6 +15,11 @@ export const ROUTES = {
   // Core
   DASHBOARD: '/',
   AI_INSIGHTS: '/ai-insights',
+  // Project Manager Dashboard — Project Manager (role name 'Project Manager', the
+  // ROLE_NAMES.SERVICE_PO_ADMIN constant)/Project Admin self-service overview, net-new
+  // (backend spec 2026-09-11). Gated by allowedRoles (see routes/index.jsx), same convention
+  // as Team Mapping — no Form Master row exists for this yet.
+  PM_DASHBOARD: '/pm-dashboard',
 
   // Employee self-service (dynamic login)
   EMPLOYEE_DASHBOARD: '/employee/dashboard',

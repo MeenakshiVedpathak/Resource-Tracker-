@@ -219,7 +219,7 @@ const ClientCostAnalytics = () => {
         <TabsContent value="top">
           <DataTable
             mobileCards
-            tableContainerClassName="max-h-[55vh]"
+            tableContainerClassName="max-h-[min(475px,55vh)]"
             columns={topClientsColumns}
             data={topClients}
             isLoading={isPending}
@@ -237,7 +237,7 @@ const ClientCostAnalytics = () => {
         <TabsContent value="all">
           <DataTable
             mobileCards
-            tableContainerClassName="max-h-[55vh]"
+            tableContainerClassName="max-h-[min(475px,55vh)]"
             columns={allClientsColumns}
             data={clients}
             isLoading={isPending}
@@ -248,7 +248,7 @@ const ClientCostAnalytics = () => {
         <TabsContent value="category">
           <DataTable
             mobileCards
-            tableContainerClassName="max-h-[55vh]"
+            tableContainerClassName="max-h-[min(475px,55vh)]"
             columns={categoryColumns}
             data={categoryMatrix}
             isLoading={isPending}

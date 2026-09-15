@@ -59,7 +59,7 @@ const ForgotPasswordEmail = () => {
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
       <div className="mb-8">
-        <h2 className="text-2xl font-bold tracking-tight">Forgot password?</h2>
+        <h2 className="text-2xl font-bold tracking-tight text-foreground">Forgot password?</h2>
         <p className="mt-1.5 text-sm text-muted-foreground">
           Enter your email and we'll send you a one-time code to reset your password.
         </p>

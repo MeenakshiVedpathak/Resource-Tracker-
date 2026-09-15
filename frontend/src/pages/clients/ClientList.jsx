@@ -540,7 +540,7 @@ const ClientList = () => {
             <CardTitle className="text-lg font-medium text-slate-800">Preview Import Data</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="overflow-auto max-h-[60vh]">
+            <div className="overflow-auto max-h-[min(518px,60vh)]">
               {previewData && previewData.length > 0 && (
                 <Table>
                   <TableHeader>

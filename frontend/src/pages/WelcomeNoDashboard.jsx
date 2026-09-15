@@ -33,7 +33,9 @@ const WelcomeNoDashboard = () => {
   }, [accessibleForms]);
 
   return (
-    <div className="flex min-h-[70vh] items-center justify-center px-4">
+    // Centres in the bounded space the shell hands down rather than a fixed 70% of the viewport
+    // — see the same change in pages/Dashboard.jsx.
+    <div className="flex min-h-full items-center justify-center px-4">
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}

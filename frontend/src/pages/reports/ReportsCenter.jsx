@@ -102,7 +102,12 @@ const ReportsCenter = () => {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-8.5rem)]">
+    // Fills the bounded box the shell already hands down (MainLayout <main> -> ReportsLayout),
+    // instead of re-deriving it from the viewport. The `h-[calc(100vh-8.5rem)]` this replaces
+    // hardcoded the combined topbar/footer/padding height, so it was only ever right on the one
+    // screen it was measured against: it left a constant dead gap at the bottom, and drifted
+    // further at any other viewport height, browser zoom, or OS display-scaling level.
+    <div className="flex h-full min-h-0 flex-col">
       <PageHeader title="Reports Center" description="Browse reports by category" />
 
       {/* Mobile: flat searchable report list + a category bottom sheet, instead of the desktop

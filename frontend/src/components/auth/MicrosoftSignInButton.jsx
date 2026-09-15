@@ -1,6 +1,9 @@
 // Fixed Microsoft identity brand asset — per Microsoft's sign-in button guideline, this keeps
 // the exact same white surface / #8C8C8C border / Segoe UI look in both light and dark app
-// themes, so it deliberately avoids the app's themed Button/CSS-variable system.
+// themes, so it deliberately avoids the app's themed Button/CSS-variable system. Corner radius
+// is the one property Microsoft's guideline leaves up to the host app, so it's rounded here to
+// match the rest of Trackio's pill-shaped controls instead of Microsoft's own sharp-cornered
+// default.
 const SEGOE_FONT_STACK = '"Segoe UI", "Segoe UI Web", -apple-system, BlinkMacSystemFont, sans-serif';
 
 const MicrosoftLogo = () => (
@@ -26,7 +29,7 @@ export const MicrosoftSignInButton = ({ onClick, disabled = false, loading = fal
     onClick={onClick}
     disabled={disabled}
     style={{ fontFamily: SEGOE_FONT_STACK }}
-    className="inline-flex h-[41px] w-full items-center justify-center gap-3 rounded-[4px] border border-[#8C8C8C] bg-white px-4 text-[15px] text-[#5E5E5E] transition-colors hover:bg-[#F3F3F3] focus-visible:shadow-[0_0_0_3px_rgba(20,23,28,0.08),0_0_0_1px_#2B3A67_inset] focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-55"
+    className="inline-flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-[#8C8C8C] bg-white px-4 text-[15px] text-[#5E5E5E] transition-colors hover:bg-[#F3F3F3] focus-visible:shadow-[0_0_0_3px_rgba(20,23,28,0.08),0_0_0_1px_#2B3A67_inset] focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-55"
   >
     {loading ? <Spinner /> : <MicrosoftLogo />}
     {loading ? 'Signing in…' : 'Sign in with Microsoft'}

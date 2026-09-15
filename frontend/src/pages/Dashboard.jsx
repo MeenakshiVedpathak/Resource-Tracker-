@@ -423,7 +423,12 @@ const Dashboard = () => {
     fiscalYear,
     hoursSource,
     roleId: roleObjects[0]?.id,
-    ...(buId        && { buId }),
+    // '' ("All Business Units") must still ride along as an explicit 'all', not be dropped —
+    // omitting the key entirely leaves dashboard.api's withBuScope with nothing to act on, so it
+    // falls back to whatever BU is globally active instead of truly scoping across every BU this
+    // login can reach (the same stale-header pitfall already fixed for the Client dropdown in
+    // clients.api.js).
+    buId: buId || 'all',
     ...(quarter     && { quarter }),
     ...(employeeId  && { employeeId }),
     ...(clientId    && { clientId }),
@@ -443,7 +448,7 @@ const Dashboard = () => {
     year:  bottomMonthYear.year,
     hoursSource,
     roleId: roleObjects[0]?.id,
-    ...(buId        && { buId }),
+    buId: buId || 'all',
     ...(employeeId  && { employeeId }),
     ...(clientId    && { clientId }),
     ...(servicePOId && { poId: servicePOId }),
@@ -496,13 +501,28 @@ const Dashboard = () => {
   const monthlyAnalyticsTiles  = monthlyAnalyticsRaw?.tiles  ?? {};
   const monthlyAnalyticsCharts = monthlyAnalyticsRaw?.charts ?? {};
 
+  // The KPI row's Employees/Clients/Service POs tiles are meant to read as
+  // plain totals ("how many do I have"), not "how many had activity in the
+  // selected period" — tiles.active_employees/active_clients/active_service_pos
+  // are the latter (period-scoped, via the timesheet-joined Analytics query)
+  // and can legitimately be much smaller than the real count. workforce.*/
+  // portfolio.* are the all-time headcounts, unaffected by the period filter
+  // — override the same tile keys with those instead, same pattern already
+  // used below for total_po_value_current_year (sourced from financials.*,
+  // a different section of the same response).
   const mergedTiles = useMemo(() => ({
     ...tiles,
+    active_employees: Number(analyticsData?.workforce?.total_employees ?? 0),
+    active_clients: Number(analyticsData?.portfolio?.total_clients ?? 0),
+    active_service_pos: Number(analyticsData?.portfolio?.active_pos ?? 0),
     total_po_value_current_year: Number(analyticsData?.financials?.total_po_value_fiscal_year ?? 0),
   }), [tiles, analyticsData]);
 
   const mergedMonthlyTiles = useMemo(() => ({
     ...monthlyAnalyticsTiles,
+    active_employees: Number(monthlyAnalyticsRaw?.workforce?.total_employees ?? 0),
+    active_clients: Number(monthlyAnalyticsRaw?.portfolio?.total_clients ?? 0),
+    active_service_pos: Number(monthlyAnalyticsRaw?.portfolio?.active_pos ?? 0),
     total_po_value_current_year: Number(monthlyAnalyticsRaw?.financials?.total_po_value_fiscal_year ?? 0),
   }), [monthlyAnalyticsTiles, monthlyAnalyticsRaw]);
 
@@ -734,7 +754,10 @@ const Dashboard = () => {
 
   if (hasNoAccessibleForms) {
     return (
-      <div className="flex min-h-[70vh] items-center justify-center px-4">
+      /* Centres in the space the shell actually hands down, not a fixed slice of the viewport —
+         `min-h-[70vh]` pinned this block to 70% of the window, so the message sat at a different
+         height on every screen and left dead space below it on a tall one. */
+      <div className="flex min-h-full items-center justify-center px-4">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}

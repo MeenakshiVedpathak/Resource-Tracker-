@@ -152,10 +152,13 @@ const OrganizationOverview = () => {
           {/* Modern underline-style switcher (GitHub/Linear-style tab bar) — a deliberate,
               page-local override of the shared Tabs pill styling via className, not a change to
               the shared component itself (which every other screen still uses unchanged). The
-              active tab's own Filters/Export buttons portal into the slot below, on their own
-              row underneath the tab switcher rather than squeezed onto the same row (that made
-              the row cramped/cut off once a tab had several filters plus an Export button). */}
-          <div className="flex shrink-0 items-center border-b">
+              active tab's own Filters/Export buttons portal into the slot on the right of this
+              same row when there's room for both — one shared `flex-wrap` container (not two
+              always-separate blocks) lets the toolbar share the tab switcher's line whenever it
+              fits, and only drops to its own line below (via wrap, `ml-auto` keeping it
+              right-aligned there too) once a tab has enough filters that it genuinely doesn't —
+              the original cramped/cut-off case this was written to avoid. */}
+          <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-b">
             <TabsList className="h-auto w-auto justify-start gap-1 rounded-none bg-transparent p-0">
               {TABS.map((tab) => {
                 const Icon = tab.icon;
@@ -171,8 +174,8 @@ const OrganizationOverview = () => {
                 );
               })}
             </TabsList>
+            <div ref={setToolbarSlot} className="ml-auto flex shrink-0 flex-wrap items-center gap-2 py-2 empty:hidden" />
           </div>
-          <div ref={setToolbarSlot} className="flex shrink-0 flex-wrap items-center justify-end gap-2 pt-3 empty:hidden" />
 
           <div className="mt-3 flex flex-1 min-h-0 flex-col">
             {activeTab === 'overview' && (

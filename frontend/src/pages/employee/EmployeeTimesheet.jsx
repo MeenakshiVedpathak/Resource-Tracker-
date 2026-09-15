@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import dayjs from 'dayjs';
 import { useQueryClient } from '@tanstack/react-query';
-import { Save, Trash2, Calendar as CalendarIcon } from 'lucide-react';
+import { Save, Trash2, Calendar as CalendarIcon, ChevronDown } from 'lucide-react';
+import { useIsMobile } from '@/hooks/useMediaQuery';
 import {
   useEmployeeCalendar,
   useEmployeeDailyWorkLog,
@@ -42,6 +43,7 @@ const pseudoMonthDate = (year, month) => `${year}-${String(month).padStart(2, '0
 // entry table itself never disagree on totals.
 const EmployeeTimesheet = () => {
   const today = dayjs().startOf('day');
+  const isMobile = useIsMobile();
   const [mode, setMode] = useState('daily'); // 'daily' | 'monthly'
   const [month, setMonth] = useState(today.month() + 1);
   const [year, setYear] = useState(today.year());
@@ -50,8 +52,13 @@ const EmployeeTimesheet = () => {
   const [descriptions, setDescriptions] = useState({});
   const [isSaving, setIsSaving] = useState(false);
 
-  const [monthlyYear, setMonthlyYear] = useState(today.year());
-  const [selectedMonth, setSelectedMonth] = useState(today.month() + 1);
+  // Monthly mode defaults to the CURRENT month only on its very last day (the one day it's
+  // actually eligible — see `eligible` from the backend below); every other day of the month it
+  // defaults to last month instead, so an employee isn't dropped onto a locked
+  // "not open for editing" month by default and has to manually click back a tile first.
+  const defaultMonthlyDate = today.date() === today.daysInMonth() ? today : today.subtract(1, 'month');
+  const [monthlyYear, setMonthlyYear] = useState(defaultMonthlyDate.year());
+  const [selectedMonth, setSelectedMonth] = useState(defaultMonthlyDate.month() + 1);
   const [monthlyEdits, setMonthlyEdits] = useState({});
   const [monthlyDescriptions, setMonthlyDescriptions] = useState({});
   const [isMonthlySaving, setIsMonthlySaving] = useState(false);
@@ -246,10 +253,19 @@ const EmployeeTimesheet = () => {
     return keys.size;
   }, [monthlyEdits, monthlyDescriptions]);
 
+  // Mobile only, mirrors TimesheetCalendar's own day-collapse: the "Select Month" panel sits
+  // above the actual monthly work log table in this screen's single-column mobile stack. Starts
+  // collapsed on mobile — a month is always already selected (defaults to the current one), so
+  // there's nothing to gain from showing the whole 12-tile grid before the user has asked to
+  // change it — and a deliberate pick re-collapses it the same way. `isMobile` keeps this off
+  // entirely on desktop's two-column layout, same guard as the Daily tab.
+  const [monthlyPanelCollapsed, setMonthlyPanelCollapsed] = useState(isMobile);
+
   const handleSelectMonth = (nextMonth) => {
     setSelectedMonth(nextMonth);
     setMonthlyEdits({});
     setMonthlyDescriptions({});
+    if (isMobile) setMonthlyPanelCollapsed(true);
   };
 
   const handleMonthlyYearChange = (nextYear) => {
@@ -367,7 +383,11 @@ const EmployeeTimesheet = () => {
             </div>
 
             <div className="space-y-4 rounded-xl border bg-card p-4">
-              <div className="flex items-center gap-2">
+              {/* Hidden on mobile — the collapsed calendar summary right above already shows the
+                  selected date, so repeating it here just duplicates the same line and eats space
+                  above the work log form. Desktop keeps it: the calendar sits in its own column
+                  there, so this heading is the only place the date shows at all. */}
+              <div className="hidden items-center gap-2 md:flex">
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                   <CalendarIcon className="h-4 w-4" />
                 </span>
@@ -415,21 +435,42 @@ const EmployeeTimesheet = () => {
           )}
 
           <div className="grid gap-6 lg:grid-cols-[380px_1fr]">
-            <div className="space-y-4 rounded-xl border bg-card p-4">
-              <div className="flex items-center justify-between gap-2">
-                <h2 className="text-sm font-semibold">Select Month</h2>
-                <div className="w-28">
-                  <SearchableSelect
-                    options={yearOptions}
-                    value={String(monthlyYear)}
-                    onValueChange={(v) => handleMonthlyYearChange(Number(v))}
-                    placeholder="Year"
-                    searchPlaceholder="Search year..."
-                  />
+            {isMobile && monthlyPanelCollapsed ? (
+              <button
+                type="button"
+                onClick={() => setMonthlyPanelCollapsed(false)}
+                className="flex w-full items-center justify-between gap-2 rounded-xl border bg-card px-4 py-3 text-left transition-colors hover:bg-muted/40"
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                    <CalendarIcon className="h-3.5 w-3.5" />
+                  </span>
+                  <span className="min-w-0 truncate text-sm font-semibold">
+                    {dayjs(pseudoMonthDate(monthlyYear, selectedMonth)).format('MMMM YYYY')}
+                  </span>
+                </span>
+                <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+                  {formatHoursMinutes(monthStats[selectedMonth]?.hours)} logged
+                  <ChevronDown className="h-4 w-4" />
+                </span>
+              </button>
+            ) : (
+              <div className="space-y-4 rounded-xl border bg-card p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <h2 className="text-sm font-semibold">Select Month</h2>
+                  <div className="w-28">
+                    <SearchableSelect
+                      options={yearOptions}
+                      value={String(monthlyYear)}
+                      onValueChange={(v) => handleMonthlyYearChange(Number(v))}
+                      placeholder="Year"
+                      searchPlaceholder="Search year..."
+                    />
+                  </div>
                 </div>
+                <MonthSelector selectedMonth={selectedMonth} onSelectMonth={handleSelectMonth} monthStats={monthStats} />
               </div>
-              <MonthSelector selectedMonth={selectedMonth} onSelectMonth={handleSelectMonth} monthStats={monthStats} />
-            </div>
+            )}
 
             <div className="space-y-4 rounded-xl border bg-card p-4">
               <div className="flex items-center gap-2">

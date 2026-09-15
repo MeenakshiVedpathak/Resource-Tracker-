@@ -26,34 +26,50 @@ const WeatherHeroBanner = ({ greeting, firstName, datePicker, actions }) => {
   const quote = (isRainy ? RAINY_QUOTES : SUNNY_QUOTES)[dayIdx % 3];
 
   return (
-    <div className="relative min-h-[108px] overflow-hidden rounded-3xl shadow-md sm:min-h-[120px] lg:min-h-[136px]">
+    // `flex items-center` (not two independently absolute+translate-y-1/2 blocks) — neither
+    // block used to know the other's width, so at container widths where the sidebar/a longer
+    // name/the quote left less room than expected, the greeting and controls overlapped instead
+    // of making room for each other. A normal flex row fixes that at any resolution: `min-h-*` is
+    // only a floor (so the banner still reads as a hero on short content), and `flex-wrap` below
+    // drops the controls to their own line — instead of colliding with the greeting — the moment
+    // there truly isn't room for both on one line, on a real phone or a merely-narrow desktop
+    // window alike.
+    <div className="relative flex min-h-[108px] items-center overflow-hidden rounded-3xl shadow-md sm:min-h-[120px] lg:min-h-[136px]">
       <WeatherBannerScene isRainy={isRainy} />
 
-      {/* `absolute inset-0` (not `h-full`) — the outer banner's height comes only from its
-          min-height, so a percentage-based h-full here would resolve against no definite parent
-          height and collapse to auto, breaking the greeting's top-1/2 vertical centering below. */}
-      <div className="absolute inset-0 p-3 sm:p-4">
-        {/* Top-right block: the date-picker/weather-pill/action-buttons row, with the quote
-            centered directly below the date picker — not the whole row — since that's the one
-            item it's meant to sit under. Absolutely positioned (not a flex sibling of the
-            greeting) so its own height never shifts where the greeting block below ends up
-            centering.
-            `pb-8`/`sm:pb-9` reserves the quote's own height as bottom padding on this row, since
-            the quote itself is positioned `absolute` below (so it doesn't grow the row's box on
-            its own) — without this, `top-1/2` centers only the thin pills row, leaving the quote
-            to hang well past the visual middle and down near the banner's bottom edge instead of
-            sitting close beneath the row as one balanced block. */}
-        <div className="absolute right-4 top-1/2 flex -translate-y-1/2 flex-wrap items-start justify-end gap-2.5 pb-8 sm:right-5 sm:gap-3 sm:pb-9">
-          {/* `relative` + the quote as an `absolute` overlay below — the quote is wider than the
-              date picker, so sizing this wrapper by flex content (e.g. flex-col items-center)
-              would stretch it to the quote's width and shove the date picker off its normal
-              spot, pushing every sibling after it (divider/weather pill/buttons) to the right.
-              Absolute positioning keeps this wrapper exactly as wide as the date picker itself,
-              so nothing else in the row moves; the quote just centers underneath it. */}
-          <div className="relative">
+      <div className="relative z-10 flex w-full flex-wrap items-center justify-between gap-3 p-3 sm:gap-4 sm:p-4">
+        {/* Greeting — `min-w-0` lets this shrink instead of forcing the row wider than the
+            banner, so it wraps onto its own line above the controls rather than pushing them
+            off/under the edge. */}
+        <div className="min-w-0 sm:max-w-md">
+          <h1 className="text-lg font-black tracking-tight text-slate-900 [text-shadow:0_1px_3px_rgba(255,255,255,0.75)] sm:text-xl lg:text-2xl">
+            {greeting}, {firstName} 👋
+          </h1>
+          <p className="mt-1 text-xs font-semibold text-slate-800 [text-shadow:0_1px_2px_rgba(255,255,255,0.6)] sm:text-sm">
+            Let&apos;s keep your work log up to date.
+          </p>
+        </div>
+
+        {/* Below `sm`: an even 2x2 grid (date + weather, then both buttons stretched to match
+            widths) — reads as a deliberate, modern mobile layout instead of everything sitting
+            at whatever width its own label happens to need, which is what made two
+            differently-sized buttons on the same row look unpolished. No reserved space below it
+            here — the quote is hidden below `sm` (see it further down), so there's nothing to
+            leave room for; reserving it anyway used to stretch the banner and expose more of the
+            decorative scene underneath than intended.
+            `sm:flex` switches this back to the original single wrapping row exactly as it was on
+            desktop, where `sm:pb-9` DOES reserve room below the row for the quote, which sits
+            directly under the date picker specifically (not the whole row) via the
+            `relative`/`absolute` pairing just inside it. `sm:items-start` there is what keeps the
+            quote inside that reserved space — it's anchored to the date picker's own bottom edge
+            via `top-full` below, which only stays inside that space if the date picker sits flush
+            at the row's top instead of vertically centered within it. `self-center` on the
+            divider opts just that element back into looking centered against its neighbors. */}
+        <div className="relative grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-start sm:gap-2.5 sm:pb-9">
+          <div className="relative w-full sm:w-auto">
             {datePicker}
             {/* `whitespace-nowrap` (no max-w) — a wrap to a second line would grow past the
-                banner's own height and clip under the card's overflow-hidden, as happened before. */}
+                reserved pb-8/pb-9 below and clip under the card's overflow-hidden. */}
             <div className="absolute left-1/2 top-full mt-2 hidden -translate-x-1/2 sm:block">
               <div className="mx-auto h-0.5 w-10 rounded bg-blue-500/70" />
               <p className="mt-2 whitespace-nowrap text-center text-xs italic font-bold text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.35)] sm:text-sm">
@@ -61,25 +77,14 @@ const WeatherHeroBanner = ({ greeting, firstName, datePicker, actions }) => {
               </p>
             </div>
           </div>
-          <div className="hidden h-5 w-px bg-slate-400/40 sm:block" />
-          <div className="flex items-center gap-1.5 rounded-full bg-white/90 px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-sm">
-            <span className="text-sm leading-none">{isLoading || !weather ? '⛅' : weather.icon}</span>
+          <div className="hidden h-5 w-px self-center bg-slate-400/40 sm:block" />
+          <div className="flex h-7 items-center justify-center gap-1 rounded-full bg-white/90 px-2.5 text-[11px] font-semibold text-slate-700 shadow-sm sm:h-8 sm:gap-1.5 sm:px-3.5 sm:text-xs">
+            <span className="text-xs leading-none sm:text-sm">{isLoading || !weather ? '⛅' : weather.icon}</span>
             <span>{isLoading || !weather ? '--°C' : `${weather.tempC}°C`}</span>
             <span className="text-slate-300">|</span>
             <span className="font-medium text-slate-500">{isLoading || !weather ? 'Loading…' : weather.label}</span>
           </div>
           {actions}
-        </div>
-
-        {/* Greeting block — truly vertically centered on the banner itself (not just the
-            leftover space below the controls), left-aligned, same as the reference. */}
-        <div className="absolute left-4 top-1/2 max-w-md -translate-y-1/2 sm:left-5">
-          <h1 className="text-lg font-black tracking-tight text-slate-900 [text-shadow:0_1px_3px_rgba(255,255,255,0.75)] sm:text-xl lg:text-2xl">
-            {greeting}, {firstName} 👋
-          </h1>
-          <p className="mt-1 text-xs font-semibold text-slate-800 [text-shadow:0_1px_2px_rgba(255,255,255,0.6)] sm:text-sm">
-            Let&apos;s keep your work log up to date.
-          </p>
         </div>
       </div>
     </div>

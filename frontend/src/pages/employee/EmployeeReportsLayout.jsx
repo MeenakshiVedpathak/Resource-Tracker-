@@ -51,10 +51,20 @@ const EmployeeReportsLayout = () => {
   const backTarget = isHub ? null : BACK_TO_REPORTS;
 
   return (
-    <div>
+    // `h-full min-h-0 flex-col` passes the bounded height EmployeeLayout's <main> hands this
+    // route down to whichever report the nested <Outlet/> renders — same as the admin peer,
+    // ReportsLayout. Without it this was a plain block div that shrink-wrapped to its content,
+    // so a child needing the remaining space had no bounded box to resolve against and had to
+    // guess the viewport instead (the `h-[calc(100vh-8.5rem)]` this replaces).
+    <div className="flex h-full min-h-0 flex-col">
       {/* Mobile horizontal tabs — desktop nav is in the sidebar */}
       {navItems.length > 0 && (
-        <div className="md:hidden -mx-6 -mt-6 mb-5 border-b bg-muted/20 overflow-x-auto">
+        // `-mx-*` must mirror EmployeeLayout's own content padding (`px-3 sm:px-4 md:px-6`)
+        // breakpoint-for-breakpoint — a flat `-mx-6` overshoots the actual `px-3` (12px) gutter
+        // on mobile by 12px per side, so this strip's own box (not just its overflow-x-auto
+        // content) rendered 24px wider than the viewport and forced the whole page into a
+        // horizontal scroll, on every report under this layout.
+        <div className="shrink-0 md:hidden -mx-3 sm:-mx-4 md:-mx-6 -mt-6 mb-5 border-b bg-muted/20 overflow-x-auto">
           <nav className="flex gap-1 px-4 py-2 min-w-max">
             {navItems.map(({ label, to }) => (
               <NavLink
@@ -76,9 +86,11 @@ const EmployeeReportsLayout = () => {
         </div>
       )}
 
-      <PageHeaderBackProvider value={backTarget}>
-        <Outlet />
-      </PageHeaderBackProvider>
+      <div className="flex flex-1 min-h-0 flex-col">
+        <PageHeaderBackProvider value={backTarget}>
+          <Outlet />
+        </PageHeaderBackProvider>
+      </div>
     </div>
   );
 };

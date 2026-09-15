@@ -167,7 +167,15 @@ const TeamLeadTimesheetApproval = () => {
   // ── Log type / period filter (lifted up so it lives in the same FilterPanel as BU/Employee) ───
   const [logType, setLogType] = useState('daily');
   const [dateRange, setDateRange] = useState(null);
-  const [monthYear, setMonthYear] = useState(currentMonthYear);
+  // Same `?month=&year=` deep-link convention as `deepLinkEmployeeId` above — e.g. the PM
+  // Dashboard's "Pending Approvals" KPI links here pre-filtered to the month it's already
+  // showing. Read once on mount only; absent (every other entry point) falls back to the
+  // current month exactly as before.
+  const [monthYear, setMonthYear] = useState(() => {
+    const month = Number(searchParams.get('month'));
+    const year = Number(searchParams.get('year'));
+    return month && year ? { month, year } : currentMonthYear();
+  });
   const [statusFilter, setStatusFilter] = useState('all');
 
   // The table always takes a single {startDate, endDate} range regardless of Daily/Monthly — for

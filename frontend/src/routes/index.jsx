@@ -152,6 +152,10 @@ const TeamMappingList = lazy(() => import('@/pages/teamMappings/TeamMappingList'
 // ── My Team (Team Lead self-service — same allowedRoles gating as Team Mapping above) ──
 const MyTeamList = lazy(() => import('@/pages/myTeam/MyTeamList'));
 
+// ── Project Manager Dashboard (Project Manager/Project Admin/senior-tier self-service — same
+// allowedRoles gating as Team Mapping above; no Form Master row exists for this yet either) ──
+const PmDashboard = lazy(() => import('@/pages/pmDashboard/PmDashboard'));
+
 // ── Log Work for My Team (Team Lead self-service, net-new — gated by formName like every other
 // RBAC-driven screen; see rbacForms.js) ──
 const TeamLeadFillWorkLog = lazy(() => import('@/pages/myTeam/TeamLeadFillWorkLog'));
@@ -457,6 +461,27 @@ const AppRoutes = () => {
         {/* Team Mapping — Service PO Admin's own team self-service (§7). Gated by allowedRoles
             rather than formName since there's no Form Master row for this feature. */}
         <Route path={ROUTES.TEAM_MAPPINGS} element={<ProtectedRoute allowedRoles={[ROLE_NAMES.SERVICE_PO_ADMIN]}><TeamMappingList /></ProtectedRoute>} />
+
+        {/* Project Manager Dashboard — backend enforces Project Manager (ROLE_NAMES.
+            SERVICE_PO_ADMIN — renamed from Service PO Admin, see roleHierarchy.js)/Project Admin/
+            senior tier (Admin/Entity Admin/BU Admin/Platform Admin) with a 403 for everyone else;
+            allowedRoles mirrors that here for the same reason Team Mapping above uses it — no
+            Form Master row exists for this brand-new feature yet. BU Head included alongside BU
+            Admin since it's that role's additive, same-tier peer everywhere else in this app. */}
+        <Route
+          path={ROUTES.PM_DASHBOARD}
+          element={(
+            <ProtectedRoute
+              allowedRoles={[
+                ROLE_NAMES.SERVICE_PO_ADMIN, ROLE_NAMES.PROJECT_ADMIN,
+                ROLE_NAMES.ADMIN, ROLE_NAMES.ENTITY_ADMIN, ROLE_NAMES.BU_ADMIN, ROLE_NAMES.BU_HEAD,
+                ROLE_NAMES.PLATFORM_ADMIN,
+              ]}
+            >
+              <PmDashboard />
+            </ProtectedRoute>
+          )}
+        />
 
         {/* My Team — People module Form Master row (confirmed via GET /roles/forms), now gated
             dynamically by formName like every other RBAC-driven screen instead of a hardcoded

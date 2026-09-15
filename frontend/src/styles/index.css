@@ -123,6 +123,18 @@
     overflow-x: hidden;
   }
 
+  /* This app is designed/tested at the effective ~1536px-wide viewport a 1920×1080 screen
+     renders at Windows' default 125% display scaling. A device left at 100% scaling shows that
+     same 1920px viewport at full physical size instead, so every rem-based Tailwind size (fonts,
+     padding, gaps, icons) reads ~25% larger than intended — the layout itself doesn't change,
+     only its scale. Scaling the root font-size down by that same ratio (1536 / 1920 = 0.8)
+     reproduces the 125%-scaled look on any screen ≥1920px wide, with no component/markup change. */
+  @media (min-width: 1920px) {
+    html {
+      font-size: 80%;
+    }
+  }
+
   /* ── Custom scrollbar ── */
   ::-webkit-scrollbar {
     width: 6px;

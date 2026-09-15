@@ -250,19 +250,25 @@ const EmployeeDashboard = () => {
             value={selectedMonthYear}
             onChange={(v) => v && setSelectedMonthYear(v)}
             clearable={false}
-            className="h-9 w-auto rounded-xl border-0 bg-white/90 text-xs font-semibold text-slate-800 shadow-sm hover:bg-white"
+            className="h-7 w-full justify-center rounded-xl border-0 bg-white/90 px-2 text-[11px] font-semibold text-slate-800 shadow-sm hover:bg-white sm:h-8 sm:w-auto sm:px-3 sm:text-xs"
           />
         )}
         actions={(
           <>
-            <Link to={ROUTES.EMPLOYEE_TIMESHEET} className={cn(buttonVariants({ size: 'sm' }), 'rounded-xl shadow-sm')}>
-              <Plus className="h-4 w-4" /> Log Today's Work
+            <Link
+              to={ROUTES.EMPLOYEE_TIMESHEET}
+              className={cn(buttonVariants({ size: 'sm' }), 'h-7 rounded-xl px-2 text-[11px] shadow-sm sm:h-8 sm:px-3 sm:text-xs')}
+            >
+              <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> Log Today's Work
             </Link>
             <Link
               to={ROUTES.EMPLOYEE_MONTHLY_SUMMARY}
-              className={cn(buttonVariants({ size: 'sm', variant: 'outline' }), 'rounded-xl border-0 bg-white/90 text-slate-800 shadow-sm hover:bg-white')}
+              className={cn(
+                buttonVariants({ size: 'sm', variant: 'outline' }),
+                'h-7 rounded-xl border-0 bg-white/90 px-2 text-[11px] text-slate-800 shadow-sm hover:bg-white sm:h-8 sm:px-3 sm:text-xs'
+              )}
             >
-              <BarChart3 className="h-4 w-4" /> View Monthly Summary
+              <BarChart3 className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> View Monthly Summary
             </Link>
           </>
         )}
@@ -274,32 +280,37 @@ const EmployeeDashboard = () => {
         </div>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {/* `grid-cols-2` from the base breakpoint up (not just `sm:`) — a phone-width viewport
+          gets the same 2-up layout as tablet, instead of stacking to a single column; `lg:` and
+          up is completely untouched (still 4-across), so the desktop view never changes. Padding/
+          text sizes below step up at `sm:` to their exact original values for the same reason —
+          only the sub-`sm` (phone) sizes are new. */}
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         {statCards.map((c) => (
           <div key={c.key} className="relative overflow-hidden rounded-2xl border bg-card shadow-sm transition-shadow hover:shadow-md">
             <div className={cn('absolute inset-x-0 top-0 h-[3px]', c.bar)} />
-            <div className="px-4 pb-4 pt-5">
-              <div className="mb-2.5 flex items-start justify-between gap-1">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{c.title}</p>
+            <div className="px-3 pb-3 pt-4 sm:px-4 sm:pb-4 sm:pt-5">
+              <div className="mb-2 flex items-start justify-between gap-1 sm:mb-2.5">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">{c.title}</p>
                 <div className="flex shrink-0 items-center gap-1.5">
                   {c.badge && (
-                    <span className="whitespace-nowrap rounded-full bg-muted px-2 py-0.5 text-[9px] font-semibold text-muted-foreground">
+                    <span className="hidden whitespace-nowrap rounded-full bg-muted px-2 py-0.5 text-[9px] font-semibold text-muted-foreground sm:inline-block">
                       {c.badge}
                     </span>
                   )}
-                  <div className={cn('shrink-0 rounded-lg p-1.5', c.iconBg)}>
-                    <c.icon className={cn('h-4 w-4', c.iconColor)} />
+                  <div className={cn('shrink-0 rounded-lg p-1 sm:p-1.5', c.iconBg)}>
+                    <c.icon className={cn('h-3.5 w-3.5 sm:h-4 sm:w-4', c.iconColor)} />
                   </div>
                 </div>
               </div>
               {c.loading ? (
                 <>
-                  <Skeleton className="h-7 w-20" />
-                  <Skeleton className="mt-2 h-3 w-28" />
+                  <Skeleton className="h-6 w-16 sm:h-7 sm:w-20" />
+                  <Skeleton className="mt-2 h-3 w-24 sm:w-28" />
                 </>
               ) : (
                 <>
-                  <p className="text-2xl font-bold leading-none tracking-tight">{c.value}</p>
+                  <p className="text-lg font-bold leading-none tracking-tight sm:text-2xl">{c.value}</p>
                   {c.extra}
                 </>
               )}
