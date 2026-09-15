@@ -15,6 +15,7 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { Checkbox } from '@/components/ui/checkbox';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
+import { WeekPicker } from '@/components/ui/week-picker';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import PageHeader from '@/components/common/PageHeader';
 import EmptyState from '@/components/common/EmptyState';
@@ -22,8 +23,14 @@ import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
 import StatusBadge from '@/components/common/StatusBadge';
 
+// 'weekly' shares the same `range` state as 'range' below — WeekPicker just snaps selection to a
+// Mon-Sat business week instead of two free clicks, emitting the identical {startDate, endDate} shape, so
+// periodParams/hasSelection need no separate weekly case. It deliberately skips Range's "Aggregate
+// into monthly buckets" checkbox — collapsing one week into a single monthly bucket defeats the
+// point of narrowing to a week in the first place.
 const REPORT_TYPES = [
   { label: 'Daily', value: 'daily' },
+  { label: 'Weekly', value: 'weekly' },
   { label: 'Monthly', value: 'monthly' },
   { label: 'Range', value: 'range' },
 ];
@@ -196,18 +203,23 @@ const TimesheetApprovalStatusReport = () => {
   );
   const isTeamLead = myTeam.length > 0;
 
-  const hasSelection = reportType !== 'range' || !!range;
+  const hasSelection = (reportType !== 'range' && reportType !== 'weekly') || !!range;
 
+  // Weekly gets its own branch rather than falling into Range's — otherwise a stale
+  // `aggregateMonthly` checked earlier in Range mode would silently collapse a selected week into
+  // one monthly bucket after switching tabs, with no checkbox visible in Weekly to explain why.
   const periodParams =
     reportType === 'daily'
       ? { date }
       : reportType === 'monthly'
         ? { month: monthYear?.month, year: monthYear?.year }
-        : {
-            startDate: range?.startDate,
-            endDate: range?.endDate,
-            ...(aggregateMonthly ? { log_type: 'monthly' } : {}),
-          };
+        : reportType === 'weekly'
+          ? { startDate: range?.startDate, endDate: range?.endDate }
+          : {
+              startDate: range?.startDate,
+              endDate: range?.endDate,
+              ...(aggregateMonthly ? { log_type: 'monthly' } : {}),
+            };
 
   const params = {
     ...periodParams,
@@ -343,6 +355,13 @@ const TimesheetApprovalStatusReport = () => {
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs">Month</Label>
             <MonthYearPicker value={monthYear} onChange={setMonthYear} className="h-9 w-full text-sm bg-white" />
+          </div>
+        )}
+
+        {reportType === 'weekly' && (
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Week</Label>
+            <WeekPicker value={range} onChange={setRange} placeholder="Select a week" className="w-full" />
           </div>
         )}
 

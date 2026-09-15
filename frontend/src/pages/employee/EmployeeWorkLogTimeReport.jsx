@@ -18,6 +18,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
+import { WeekPicker } from '@/components/ui/week-picker';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import DataTable from '@/components/common/DataTable';
@@ -26,8 +27,12 @@ import EmptyState from '@/components/common/EmptyState';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
 
+// 'weekly' shares the same `range` state as 'range' below — WeekPicker just snaps selection to a
+// Mon-Sat business week instead of two free clicks, emitting the identical {startDate, endDate} shape, so
+// periodParams/hasSelection need no separate weekly case.
 const PERIOD_TYPES = [
   { label: 'Daily', value: 'daily' },
+  { label: 'Weekly', value: 'weekly' },
   { label: 'Monthly', value: 'monthly' },
   { label: 'Range', value: 'range' },
 ];
@@ -109,7 +114,7 @@ const EmployeeWorkLogTimeReport = () => {
   const { data: filterTree = [] } = useEmployeeProjectHoursFilterTree();
   const filterOptions = useMemo(() => buildFilterOptions(filterTree), [filterTree]);
 
-  const hasSelection = periodType !== 'range' || !!range;
+  const hasSelection = (periodType !== 'range' && periodType !== 'weekly') || !!range;
 
   const periodParams =
     periodType === 'daily'
@@ -302,6 +307,13 @@ const EmployeeWorkLogTimeReport = () => {
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs">Month</Label>
             <MonthYearPicker value={monthYear} onChange={setMonthYear} className="h-9 w-full text-sm bg-white" />
+          </div>
+        )}
+
+        {periodType === 'weekly' && (
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Week</Label>
+            <WeekPicker value={range} onChange={setRange} placeholder="Select a week" className="w-full" />
           </div>
         )}
 

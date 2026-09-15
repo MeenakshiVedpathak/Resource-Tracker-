@@ -281,14 +281,19 @@ export const employeesApi = {
     // scoped to whatever BU the navbar's global switcher happens to have active.
     // explicitBuScope(undefined) would leave the interceptor's global header in place — that's
     // the wrong behaviour when the caller explicitly asked for the unscoped list.
-    // BU scope rides on the X-Company-Id header only (explicitBuScope) — not also as a
-    // `business_unit_id` query param, which this used to send alongside the header. That
-    // duplication was never confirmed against the real controller and is the one way this
-    // endpoint's BU scoping differed from every other master (Projects, Reports, …), which all
-    // scope by header alone.
+    // GET /employees does NOT actually scope by the X-Company-Id header alone — confirmed live:
+    // picking a Business Unit in the filter left the list unfiltered. The header is still sent
+    // (harmless, and every other master's convention), but `business_unit_id` also has to ride
+    // along as a real query-string field for the real controller to apply it — the same
+    // combination this endpoint used to send before an earlier cleanup dropped the query param on
+    // the (unconfirmed) assumption the header alone would do. Left off the role_id branch below,
+    // since that combination was the one that previously risked a 400.
     const scope = buId && buId !== 'all' ? explicitBuScope(buId) : explicitBuScope(null);
     const res = await apiClient
-      .get('/employees', { params: employeeParams, ...scope })
+      .get('/employees', {
+        params: { ...employeeParams, ...(buId && buId !== 'all' ? { business_unit_id: buId } : {}) },
+        ...scope,
+      })
       .then((r) => r.data);
     // Nothing matched server-side — the search may have been an email, which GET /employees
     // doesn't look at. Resolve it locally before reporting "no records found".

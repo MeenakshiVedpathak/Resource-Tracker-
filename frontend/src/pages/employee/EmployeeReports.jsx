@@ -14,14 +14,20 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
+import { WeekPicker } from '@/components/ui/week-picker';
 import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
 import EmptyState from '@/components/common/EmptyState';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
 
+// 'weekly' reuses useEmployeeRangeReport exactly like 'range' does — WeekPicker just snaps
+// selection to a Mon-Sat business week instead of two free clicks, writing the same `range` state, so
+// every "not daily, not monthly" branch below (the query choice, hasSelection, handleExport)
+// already covers it with no separate case needed.
 const REPORT_TYPES = [
   { label: 'Daily', value: 'daily' },
+  { label: 'Weekly', value: 'weekly' },
   { label: 'Monthly', value: 'monthly' },
   { label: 'Range', value: 'range' },
 ];
@@ -77,14 +83,14 @@ const EmployeeReports = () => {
     reportType === 'monthly' ? monthYear?.year : undefined
   );
   const rangeQuery = useEmployeeRangeReport(
-    reportType === 'range' ? range?.startDate : undefined,
-    reportType === 'range' ? range?.endDate : undefined
+    reportType === 'range' || reportType === 'weekly' ? range?.startDate : undefined,
+    reportType === 'range' || reportType === 'weekly' ? range?.endDate : undefined
   );
 
   const { data, isLoading, isError } =
     reportType === 'daily' ? daily : reportType === 'monthly' ? monthly : rangeQuery;
 
-  const hasSelection = reportType !== 'range' || !!range;
+  const hasSelection = (reportType !== 'range' && reportType !== 'weekly') || !!range;
   const rows = hasSelection ? (data?.rows ?? []) : [];
 
   const handleExport = async () => {
@@ -165,6 +171,13 @@ const EmployeeReports = () => {
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs">Month</Label>
               <MonthYearPicker value={monthYear} onChange={setMonthYear} className="h-9 w-full text-sm bg-white" />
+            </div>
+          )}
+
+          {reportType === 'weekly' && (
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs">Week</Label>
+              <WeekPicker value={range} onChange={setRange} placeholder="Select a week" className="w-full" />
             </div>
           )}
 

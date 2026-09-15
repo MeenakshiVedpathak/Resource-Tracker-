@@ -460,13 +460,13 @@ const EmployeeList = () => {
   // selection whenever the Entity changes (the old BU may not even belong to the new Entity).
   //
   // The Entity value is deliberately NOT forwarded to GET /employees, unlike the masters that
-  // spread `buParams` — same call the Timesheet Imports filter makes. This endpoint scopes by BU
-  // through the X-Company-Id header alone (see employees.api's getAll, which strips
-  // business_unit_id out of the query string on purpose) and has no confirmed `entity_id` filter:
-  // its own note in employees.api flags the whole GET /employees filter contract as an agreed
-  // target rather than a live one, and the RBAC mock ignores entity_id outright. So Entity's job
-  // here is narrowing the BU options; the BU pick is what actually scopes the list. Forward it as
-  // a real query-string field (and teach mockGetAll to honour it) once the backend confirms.
+  // spread `buParams` — same call the Timesheet Imports filter makes. This endpoint has no
+  // confirmed `entity_id` filter: its own note in employees.api flags the whole GET /employees
+  // filter contract as an agreed target rather than a live one, and the RBAC mock ignores
+  // entity_id outright. So Entity's job here is narrowing the BU options; the BU pick (forwarded
+  // as `business_unit_id` — see employees.api's getAll) is what actually scopes the list. Forward
+  // entity_id too as a real query-string field (and teach mockGetAll to honour it) once the
+  // backend confirms.
   const {
     entityId, setEntityId, showEntityFilter, isEntityFiltered, resetEntityId,
     buId: buFilter, setBuId: setBuFilter, showBuFilter, isBuFiltered, resetBuId,

@@ -112,6 +112,10 @@ export default {
           '0%, 100%': { opacity: '1' },
           '50%': { opacity: '0.5' },
         },
+        'glow-pulse': {
+          '0%, 100%': { boxShadow: '0 0 0 0 rgba(37, 99, 235, 0.55)' },
+          '50%': { boxShadow: '0 0 0 8px rgba(37, 99, 235, 0)' },
+        },
       },
       animation: {
         'accordion-down': 'accordion-down 0.2s ease-out',
@@ -120,6 +124,7 @@ export default {
         'slide-in-right': 'slide-in-right 0.3s ease-out',
         shimmer: 'shimmer 1.5s infinite linear',
         pulse: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+        'glow-pulse': 'glow-pulse 1.8s ease-in-out infinite',
       },
     },
   },

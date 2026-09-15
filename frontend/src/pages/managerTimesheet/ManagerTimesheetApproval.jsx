@@ -20,6 +20,7 @@ import { Label } from '@/components/ui/label';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
+import { WeekPicker } from '@/components/ui/week-picker';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 
@@ -170,9 +171,11 @@ const ManagerTimesheetApproval = () => {
   const [monthYear, setMonthYear] = useState(currentMonthYear);
   const [statusFilter, setStatusFilter] = useState('all');
 
-  // The table always takes a single {startDate, endDate} range regardless of Daily/Monthly — for
-  // Monthly that range is just always exactly one calendar month wide, never cleared to "no month".
-  const effectiveDateRange = logType === 'daily' ? dateRange : monthYearToRange(monthYear);
+  // The table always takes a single {startDate, endDate} range regardless of Daily/Weekly/Monthly
+  // — for Monthly that range is just always exactly one calendar month wide, never cleared to "no
+  // month". Weekly shares Daily's `dateRange` state (WeekPicker just snaps selection to a Mon-Sat business
+  // week instead of two free clicks), so only Monthly needs a distinct branch here.
+  const effectiveDateRange = logType === 'monthly' ? monthYearToRange(monthYear) : dateRange;
 
   const employeesInScope = useMemo(() => {
     const base = selectedEmployee ? [selectedEmployee] : employeeList;
@@ -188,7 +191,7 @@ const ManagerTimesheetApproval = () => {
     + (selectedBuId != null ? 1 : 0)
     + (selectedEmployeeId ? 1 : 0)
     + (logType !== 'daily' ? 1 : 0)
-    + (logType === 'daily' && dateRange?.startDate ? 1 : 0)
+    + (logType !== 'monthly' && dateRange?.startDate ? 1 : 0)
     + (statusFilter !== 'all' ? 1 : 0);
 
   const clearFilters = () => {
@@ -213,22 +216,15 @@ const ManagerTimesheetApproval = () => {
         <Tabs value={logType} onValueChange={setLogType}>
           <TabsList className="w-full">
             <TabsTrigger value="daily" className="flex-1">Daily</TabsTrigger>
+            <TabsTrigger value="weekly" className="flex-1">Weekly</TabsTrigger>
             <TabsTrigger value="monthly" className="flex-1">Monthly</TabsTrigger>
           </TabsList>
         </Tabs>
       </div>
 
-      {logType === 'daily' ? (
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">Date Range</Label>
-          <DateRangePicker
-            value={dateRange}
-            onChange={setDateRange}
-            placeholder="Select a date range"
-            className="h-9 w-full text-sm bg-white"
-          />
-        </div>
-      ) : (
+      {/* Weekly shares Daily's `dateRange` state — WeekPicker just snaps selection to a Mon-Sat business
+          week instead of two free clicks, emitting the same {startDate, endDate} shape. */}
+      {logType === 'monthly' ? (
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Month &amp; Year</Label>
           <MonthYearPicker
@@ -237,6 +233,26 @@ const ManagerTimesheetApproval = () => {
             placeholder="Select month"
             className="w-full"
             clearable={false}
+          />
+        </div>
+      ) : logType === 'weekly' ? (
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Week</Label>
+          <WeekPicker
+            value={dateRange}
+            onChange={setDateRange}
+            placeholder="Select week"
+            className="w-full"
+          />
+        </div>
+      ) : (
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Date Range</Label>
+          <DateRangePicker
+            value={dateRange}
+            onChange={setDateRange}
+            placeholder="Select a date range"
+            className="h-9 w-full text-sm bg-white"
           />
         </div>
       )}

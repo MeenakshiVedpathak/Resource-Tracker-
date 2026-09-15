@@ -9,7 +9,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useFormModules, useForms } from '@/hooks/useForms';
 import { useFormCategories } from '@/hooks/useFormCategories';
 import { resolveFormRoute, FORM_NAMES } from '@/constants/rbacForms';
-import { useCanManageBusinessUnits, useCanManageEmployeeRecords } from '@/hooks/usePermissions';
+import { useCanManageBusinessUnits, useCanManageEmployeeRecords, useCanManageClientProjectPO, useCanWrite } from '@/hooks/usePermissions';
 import { ROUTES } from '@/constants/routes';
 import { ChevronLeft, ChevronRight, ChevronDown, UserPlus, Shield, ClipboardList, Network, Folder, Plus } from 'lucide-react';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
@@ -56,7 +56,7 @@ const normalizeName = (s) => (s ?? '').trim().toLowerCase();
 // accessibleForms itself (POST /roles/forms) doesn't carry category_id, so the category
 // assignment is looked up from the separate GET /forms data useMenuRank already fetches
 // for sequencing (categoryOf/categoryInfo) — see below.
-const buildNavGroups = (accessibleForms, { isSuperAdmin, canManageBus, canManageEmployees, moduleRank, formRank, categoryOf, categoryInfo }) =>
+const buildNavGroups = (accessibleForms, { isSuperAdmin, canWrite, canManageBus, canManageEmployees, canManageClientProjectPO, moduleRank, formRank, categoryOf, categoryInfo }) =>
   Object.entries(accessibleForms ?? {})
     .filter(
       ([moduleName]) => isSuperAdmin || !RESTRICTED_MODULES.includes(moduleName.trim().toLowerCase())
@@ -72,16 +72,24 @@ const buildNavGroups = (accessibleForms, { isSuperAdmin, canManageBus, canManage
             );
             return null;
           }
-          // The quick-add "+" has to obey whatever permission its destination route does. Two
-          // forms differ by role, both for the BU Admin / BU Head tier: BU Master (they reach
-          // that screen read-only) and Employee Master (granted to them for the Map Roles &
-          // Business Units action, not to create employees). For those, the shortcut would land
-          // them straight on Not Authorized. Normalized compare, same as resolveFormRoute's own
-          // lookup.
+          // The quick-add "+" has to obey whatever permission its destination route does.
+          // Baseline: a role whose own permission is Read-only (e.g. Delivery Operation Team
+          // Members, which only gets Client Master for visibility) must never get a create
+          // shortcut, no matter which form it is — the list page's own "Add" button already
+          // hides itself the same way (useCanWrite), the sidebar just wasn't checking it.
+          // On top of that, three forms differ by role beyond plain read/write: BU Master
+          // (BU Admin/BU Head reach that screen read-only), Employee Master (granted to that
+          // same tier for the Map Roles & Business Units action, not to create employees), and
+          // Client/Project/Service PO Master (backend restricts create/edit/delete to a fixed
+          // role allowlist regardless of the role's own Read & Write flag — see
+          // useCanManageClientProjectPO). For those, the shortcut would land them straight on
+          // Not Authorized. Normalized compare, same as resolveFormRoute's own lookup.
           const name = normalizeName(form.name);
           const quickAddAllowed =
-            (name !== normalizeName(FORM_NAMES.BU_ADMIN_MASTER) || canManageBus)
-            && (name !== normalizeName(FORM_NAMES.EMPLOYEES) || canManageEmployees);
+            canWrite
+            && (name !== normalizeName(FORM_NAMES.BU_ADMIN_MASTER) || canManageBus)
+            && (name !== normalizeName(FORM_NAMES.EMPLOYEES) || canManageEmployees)
+            && (![FORM_NAMES.CLIENTS, FORM_NAMES.PROJECTS, FORM_NAMES.SERVICE_POS].map(normalizeName).includes(name) || canManageClientProjectPO);
           return {
             label: form.name,
             icon: cfg.icon,
@@ -340,18 +348,21 @@ const Sidebar = () => {
   // BU Head is an additive peer of BU Admin with identical form/permission access — extends the
   // same bypass BU Admin already gets, never a standalone concept.
   const isSuperAdmin = hasRole('BU Admin', 'BU Head');
-  // These two only decide whether BU Master / Employee Master get a quick-add "+" — the screens
-  // themselves are still listed for anyone the RBAC mapping grants them to.
+  // canWrite is the baseline gate for every quick-add "+"; the other three only narrow it
+  // further for BU Master / Employee Master / Client & Project & Service PO Master specifically
+  // — the screens themselves are still listed for anyone the RBAC mapping grants them to.
+  const canWrite = useCanWrite();
   const canManageBus = useCanManageBusinessUnits();
   const canManageEmployees = useCanManageEmployeeRecords();
+  const canManageClientProjectPO = useCanManageClientProjectPO();
   const { moduleRank, formRank, categoryOf, categoryInfo } = useMenuRank();
   // isPlatformAdmin is derived from the held roles (§0) — overrides the normal
   // accessible-forms-driven nav entirely. Every other nav item comes strictly from
   // accessibleForms (the Forms API) — no role-name-based injection on top of it.
   const navGroups = useMemo(() => {
     if (isPlatformAdmin) return SUPER_ADMIN_NAV_GROUPS;
-    return buildNavGroups(accessibleForms, { isSuperAdmin, canManageBus, canManageEmployees, moduleRank, formRank, categoryOf, categoryInfo });
-  }, [accessibleForms, isSuperAdmin, canManageBus, canManageEmployees, isPlatformAdmin, moduleRank, formRank, categoryOf, categoryInfo]);
+    return buildNavGroups(accessibleForms, { isSuperAdmin, canWrite, canManageBus, canManageEmployees, canManageClientProjectPO, moduleRank, formRank, categoryOf, categoryInfo });
+  }, [accessibleForms, isSuperAdmin, canWrite, canManageBus, canManageEmployees, canManageClientProjectPO, isPlatformAdmin, moduleRank, formRank, categoryOf, categoryInfo]);
 
   // Guards navigation away from a page with unsaved changes (e.g. Timesheet
   // Import Detail's Modified Hours edits) — any page can opt in via the

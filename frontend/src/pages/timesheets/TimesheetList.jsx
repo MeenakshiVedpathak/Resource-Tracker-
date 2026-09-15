@@ -244,6 +244,18 @@ const TimesheetList = () => {
     return Math.min(320, Math.max(150, (longestName * 7.5) + 40));
   }, [allRecords]);
 
+  // Same "size to the longest value actually on this page" treatment as the Business Unit column
+  // above — Entity names vary just as widely, and a flat 160px clipped longer ones behind an
+  // ellipsis.
+  const entityNameColumnWidth = useMemo(() => {
+    const longestName = allRecords.reduce((max, r) => {
+      const companyId = r.company?.id ?? (buFilter !== 'all' ? buFilter : null);
+      const name = companyId != null ? (entityByBuId.get(String(companyId))?.name ?? '') : '';
+      return Math.max(max, name.length);
+    }, 0);
+    return Math.min(320, Math.max(140, (longestName * 7.5) + 40));
+  }, [allRecords, entityByBuId, buFilter]);
+
   const allSelected = records.length > 0 && records.every((r) => selectedIds.includes(r.id));
   const toggleSelectAll = () => setSelectedIds(allSelected ? [] : records.map((r) => r.id));
   const toggleSelect = (id) =>
@@ -429,6 +441,23 @@ const TimesheetList = () => {
         </div>
       ),
     }),
+    // Rows don't carry entity info directly (see entityByBuId above) — resolved from the row's own
+    // company id when present, falling back to the currently filtered BU for a single-BU response
+    // (hasCompanyColumn false) where `company` is omitted entirely.
+    columnHelper.display({
+      id: 'entity_name',
+      header: 'Entity Name',
+      size: entityNameColumnWidth,
+      cell: ({ row }) => {
+        const companyId = row.original.company?.id ?? (buFilter !== 'all' ? buFilter : null);
+        const name = companyId != null ? entityByBuId.get(String(companyId))?.name : null;
+        return name ? (
+          <span className="text-sm truncate" title={name}>{name}</span>
+        ) : (
+          <span className="text-sm text-muted-foreground">—</span>
+        );
+      },
+    }),
     ...(hasCompanyColumn ? [columnHelper.display({
       id: 'business_unit',
       header: 'Business Unit',
@@ -555,7 +584,7 @@ const TimesheetList = () => {
             {/* Hidden on mobile — the sticky full-width button below the list (mobile list mock)
                 covers this same action there. */}
             {canWrite && (
-              <Button variant="outline" size="sm" className="hidden md:inline-flex" onClick={() => setIsSyncDialogOpen(true)}>
+              <Button size="sm" className="hidden animate-glow-pulse md:inline-flex" onClick={() => setIsSyncDialogOpen(true)}>
                 <RefreshCw className="mr-1.5 h-4 w-4" />
                 Sync Employee Work Logs
               </Button>
@@ -650,7 +679,7 @@ const TimesheetList = () => {
           button below the list, matching the mobile list mock. Hidden on desktop, where the
           header button above already covers it. */}
       {canWrite && (
-      <Button className="h-11 w-full shrink-0 md:hidden" onClick={() => setIsSyncDialogOpen(true)}>
+      <Button className="h-11 w-full shrink-0 animate-glow-pulse md:hidden" onClick={() => setIsSyncDialogOpen(true)}>
         <RefreshCw className="mr-1.5 h-4 w-4" />
         Sync Employee Work Logs
       </Button>

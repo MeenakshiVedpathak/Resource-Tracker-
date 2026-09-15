@@ -1,9 +1,10 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import { useNavigate, Outlet } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
 import { Plus, Pencil, Download, Upload, CheckCircle2, AlertCircle, MoreVertical, ChevronLeft, ChevronRight } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useClients, useToggleClientStatus, useImportClients } from '@/hooks/useClients';
+import { useCompanies } from '@/hooks/useCompanies';
 import { clientsApi } from '@/api/clients.api';
 import { useCanManageClientProjectPO } from '@/hooks/usePermissions';
 import { useNotification } from '@/hooks/useNotification';
@@ -125,6 +126,30 @@ const ClientList = () => {
   const importMutation = useImportClients();
   const fileInputRef = useRef(null);
 
+  // Clients only carry `company_id` (see ClientForm), not a nested `company`/entity relation, so
+  // Business Unit / Entity Name are resolved against the company master here — same fallback
+  // ServicePOList uses for its own BU Name column. Safe for any login this 403s for (BU-scoped
+  // roles without company-listing standing): it just comes back empty and both columns show '—'.
+  const { data: companiesForLookup } = useCompanies(
+    { status: 'active', limit: 200 },
+    { staleTime: 1000 * 60 * 10 }
+  );
+  const companyById = useMemo(() => {
+    const map = new Map();
+    (companiesForLookup?.data ?? []).forEach((c) => {
+      map.set(String(c.id), {
+        name: c.company_name ?? c.company_code ?? null,
+        entityName: c.entity?.entity_name ?? null,
+      });
+    });
+    return map;
+  }, [companiesForLookup]);
+
+  const getBuName = (client) =>
+    client.company?.company_name ?? companyById.get(String(client.company_id))?.name ?? null;
+  const getEntityName = (client) =>
+    client.company?.entity?.entity_name ?? companyById.get(String(client.company_id))?.entityName ?? null;
+
   const [previewData, setPreviewData] = useState(null);
   const [previewFile, setPreviewFile] = useState(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
@@ -134,6 +159,15 @@ const ClientList = () => {
 
   const clients = data?.data ?? [];
   const meta = data?.meta ?? {};
+
+  const entityNameColumnWidth = useMemo(() => {
+    const longest = clients.reduce((max, c) => Math.max(max, (getEntityName(c) ?? '').length), 0);
+    return Math.min(320, Math.max(140, (longest * 7.5) + 40));
+  }, [clients, companyById]);
+  const businessUnitColumnWidth = useMemo(() => {
+    const longest = clients.reduce((max, c) => Math.max(max, (getBuName(c) ?? '').length), 0);
+    return Math.min(320, Math.max(150, (longest * 7.5) + 40));
+  }, [clients, companyById]);
 
   const activeFilterCount = (statusFilter !== 'all' ? 1 : 0) + (isEntityFiltered ? 1 : 0) + (isBuFiltered ? 1 : 0);
 
@@ -185,6 +219,21 @@ const ClientList = () => {
       header: 'Industry',
       size: 160,
       cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="140px" />,
+    }),
+    // Sized to the longest name actually on this page rather than a flat guess — both Entity and
+    // BU names vary widely across tenants and a fixed width either clips long ones or wastes space
+    // on short ones (same treatment as the equivalent columns on Timesheet Imports).
+    columnHelper.display({
+      id: 'entity_name',
+      header: 'Entity Name',
+      size: entityNameColumnWidth,
+      cell: ({ row }) => <TruncatedCell value={getEntityName(row.original)} maxWidth={`${entityNameColumnWidth - 20}px`} />,
+    }),
+    columnHelper.display({
+      id: 'business_unit',
+      header: 'Business Unit',
+      size: businessUnitColumnWidth,
+      cell: ({ row }) => <TruncatedCell value={getBuName(row.original)} maxWidth={`${businessUnitColumnWidth - 20}px`} />,
     }),
     columnHelper.accessor('status', {
       header: 'Status',

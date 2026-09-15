@@ -12,8 +12,10 @@ import ConfirmDialog from '@/components/common/ConfirmDialog';
 import WorkLogEntryModal from '@/components/employee/WorkLogEntryModal';
 import { Button } from '@/components/ui/button';
 import { DatePicker } from '@/components/ui/date-picker';
+import { WeekPicker } from '@/components/ui/week-picker';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SearchableSelect } from '@/components/ui/searchable-select';
+import { isCalendarWeek } from '@/utils/weekUtils';
 
 const LIMIT = 10;
 
@@ -128,6 +130,22 @@ const EmployeeRejectedEntries = () => {
             ariaLabel="To date"
             clearable
             className="min-w-0 flex-1 sm:w-auto sm:min-w-[9.5rem] sm:flex-none"
+          />
+        </div>
+        {/* Quick alternative to hand-picking From/To — sets both at once to a Mon-Sat business
+            week. Its own full-width row rather than squeezed into the compact From/To pair above:
+            the stepper + This/Last/Next Week pills need real width to read well, more than the
+            single-line DatePickers' ~9.5rem slot ever offered. Only reflects the From/To fields
+            back as a selected week when they already form an exact calendar week; otherwise shows
+            the placeholder rather than a misleading value. */}
+        <div className="w-full sm:w-72">
+          <WeekPicker
+            value={isCalendarWeek(filters.startDate, filters.endDate)
+              ? { startDate: filters.startDate, endDate: filters.endDate }
+              : null}
+            onChange={(range) => updateFilter({ startDate: range?.startDate ?? '', endDate: range?.endDate ?? '' })}
+            placeholder="Quick: pick a week"
+            className="w-full"
           />
         </div>
         {hasActiveFilters && (

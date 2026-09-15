@@ -99,6 +99,11 @@ const poSchema = (isEdit, requiresBuField) => z
     invoice_frequency: z.string().min(1, 'Invoice frequency is required'),
     status: z.enum(['in-progress', 'completed', 'on-hold', 'pending', 'cancelled', 'closed']).default('in-progress'),
     is_centralised: z.boolean().default(false),
+    // UI-only flag — never sent to the backend (stripped in onSubmit). Set when the actor picks
+    // "My Clients" in the BU Name dropdown: the PO stays a normal (non-Centralised) Project PO,
+    // but the client attached to it has no BU of its own, so company_id has nothing valid to hold
+    // and the superRefine below must not demand one just because this is otherwise a Project PO.
+    is_my_clients: z.boolean().default(false),
   })
   .refine(
     (data) => {
@@ -115,7 +120,7 @@ const poSchema = (isEdit, requiresBuField) => z
   // and make the form unsaveable; a single-BU actor's BU is filled in from the header/global
   // switcher in onSubmit instead.
   .superRefine((data, ctx) => {
-    if (requiresBuField && !data.is_centralised && data.company_id == null) {
+    if (requiresBuField && !data.is_centralised && !data.is_my_clients && data.company_id == null) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'Business Unit is required',
@@ -130,6 +135,11 @@ const poSchema = (isEdit, requiresBuField) => z
       });
     }
   });
+
+// Sentinel row added to the BU Name dropdown (company-less actors only — see buFieldOptions) so
+// picking "My Clients" there is intercepted before it's ever treated as a real BU id; it clears
+// company_id instead and switches the Client field below to that actor's BU-less clients.
+const MY_CLIENTS_BU_VALUE = '__my_clients__';
 
 const FormSkeleton = () => (
   <div className="space-y-4 p-4">
@@ -165,9 +175,14 @@ const ServicePOForm = () => {
   const { data: companiesData, isPending: isLoadingCompanies } = useCompanies({ limit: 200 });
   const activeCompanies = companiesData?.data ?? [];
   // A cross-BU actor picks from the full BU master above; a multi-BU BU-scoped actor picks from
-  // only their OWN mapped BUs.
+  // only their OWN mapped BUs. The "My Clients" row is prepended only for the company-less actor
+  // — a BU-scoped actor's clients always belong to one of their own BUs (see ClientForm.jsx), so
+  // there's no BU-less case for them to surface here.
   const buFieldOptions = isCompanyLessActor
-    ? activeCompanies.map((c) => ({ value: String(c.id), label: c.company_name }))
+    ? [
+        { value: MY_CLIENTS_BU_VALUE, label: 'My Clients (No Business Unit)' },
+        ...activeCompanies.map((c) => ({ value: String(c.id), label: c.company_name })),
+      ]
     : mappedBusinessUnits.map((bu) => ({ value: String(bu.id), label: bu.name }));
   const { data: activeClients = [], isPending: isLoadingClients } = useActiveClients();
   const { data: serviceTypes = [], isPending: isLoadingTypes } = useActiveServiceTypes();
@@ -191,6 +206,7 @@ const ServicePOForm = () => {
       end_date: '',
       service_description: '',
       invoice_frequency: '',
+      is_my_clients: false,
       status: 'in-progress',
       is_centralised: false,
     },
@@ -199,6 +215,14 @@ const ServicePOForm = () => {
   // Drives the Business Unit field's required/disabled state — a Centralised Service PO has no
   // BU (see company_id's superRefine in poSchema above).
   const isCentralised = form.watch('is_centralised');
+  // "My Clients" — Admin/Entity Admin/Platform Admin only (§ isCompanyLessActor below covers the
+  // exact same role set). Set via the "My Clients (No Business Unit)" row prepended to the BU
+  // Name dropdown (see buFieldOptions/MY_CLIENTS_BU_VALUE below), it surfaces clients THEY
+  // created directly with no Business Unit at all — ClientForm never even shows a BU picker to
+  // these roles, so their clients are always saved BU-less by design (see ClientForm.jsx). A real
+  // form field (not local component state) so poSchema's superRefine can see it and skip
+  // requiring company_id for this specific case — same pattern as is_centralised above.
+  const myClientsOnly = form.watch('is_my_clients');
 
   // The Client list must be scoped to the chosen BU whenever the BU field is shown (company-less
   // actor or a multi-BU BU-scoped one) — same rule Project create enforces. The backend resolves
@@ -220,11 +244,22 @@ const ServicePOForm = () => {
     { buId: selectedBuId, status: 'active', limit: 200 },
     { enabled: showBuField && !!selectedBuId }
   );
+  // Same GET /clients endpoint as scopedClients above, just with no buId — clients.api.js's own
+  // comment documents that as "all clients (their own BU-less + every BU)" for this actor. Only
+  // fetched once the toggle is actually on, and only for the roles the button renders for.
+  const { data: allClientsForMyClients, isPending: isLoadingMyClients } = useClients(
+    { status: 'active', limit: 200 },
+    { enabled: isCompanyLessActor && myClientsOnly }
+  );
+  const myClients = (allClientsForMyClients?.data ?? []).filter((c) => !c.company_id);
 
-  const clientOptions = (showBuField ? (scopedClients?.data ?? []) : activeClients)
-    .map((c) => ({ value: String(c.id), label: c.client_name }));
-  const clientsLoading = showBuField ? isLoadingScopedClients : isLoadingClients;
-  const clientDisabled = showBuField ? (!selectedBuId || clientsLoading) : clientsLoading;
+  const clientSourceList = myClientsOnly ? myClients : (showBuField ? (scopedClients?.data ?? []) : activeClients);
+  const clientOptions = clientSourceList.map((c) => ({ value: String(c.id), label: c.client_name }));
+  const clientsLoading = myClientsOnly ? isLoadingMyClients : (showBuField ? isLoadingScopedClients : isLoadingClients);
+  // Client is never gated on a BU pick while myClientsOnly is on — these clients have no BU to
+  // wait for (see the BU Name field below, where picking "My Clients" clears company_id
+  // entirely rather than setting a real BU id).
+  const clientDisabled = myClientsOnly ? clientsLoading : (showBuField ? (!selectedBuId || clientsLoading) : clientsLoading);
 
   // Project dropdown is scoped to whichever Client is currently selected — refetches whenever
   // it changes, and is disabled until a Client is picked (see Project field below).
@@ -261,6 +296,11 @@ const ServicePOForm = () => {
         invoice_frequency: po.invoice_frequency ?? '',
         status: po.status ?? 'in-progress',
         is_centralised: po.is_centralised ?? false,
+        // Not inferred from the loaded PO (there's no server-side signal for "this client has no
+        // BU" to key off of) — editing a PO that already has a BU-less client just shows a blank
+        // BU Name field rather than pre-selecting "My Clients"; picking it again re-derives the
+        // right Client list if the actor wants to change it.
+        is_my_clients: false,
       });
     }
   }, [po, isEdit, form, serviceTypes]);
@@ -278,6 +318,10 @@ const ServicePOForm = () => {
       Object.entries(values).filter(([, v]) => v !== '' && v != null)
     );
     clean.is_billable = is_billable;
+    // UI-only — see its declaration in poSchema above. The backend has no concept of "My
+    // Clients"; it only ever needs to see the resulting client_id (and the absence of
+    // company_id), never this flag.
+    delete clean.is_my_clients;
 
     // A multi-BU BU-scoped actor already sent their picked company_id via the field above (see
     // showBuScopedPicker) — `values.company_id` wins below as-is. A single-BU actor never saw a
@@ -373,6 +417,8 @@ const ServicePOForm = () => {
                             field.onChange(checked);
                             // Centralised has no BU and no fixed end date — clear whatever was
                             // picked so a stale value never lingers behind the now-hidden fields.
+                            // "My Clients" (myClientsOnly) is intentionally untouched here — it
+                            // now works the same way in either PO Scope, see handleMyClientsToggle.
                             if (checked) {
                               form.setValue('company_id', '', { shouldValidate: true });
                               form.setValue('end_date', '', { shouldValidate: true });
@@ -442,11 +488,17 @@ const ServicePOForm = () => {
                       </FormLabel>
                       <SearchableSelect
                         options={buFieldOptions}
-                        value={field.value}
+                        // field.value stays a real BU id or '' — "My Clients" is represented here,
+                        // not stored on company_id itself, so the schema/submission always see a
+                        // real number or nothing.
+                        value={myClientsOnly ? MY_CLIENTS_BU_VALUE : field.value}
                         onValueChange={(val) => {
-                          field.onChange(val ? parseInt(val, 10) : undefined);
-                          // Changing BU invalidates whatever Client/Project were picked under
-                          // the previous one — never carry them over.
+                          const pickedMyClients = val === MY_CLIENTS_BU_VALUE;
+                          form.setValue('is_my_clients', pickedMyClients, { shouldValidate: true });
+                          field.onChange(pickedMyClients || !val ? undefined : parseInt(val, 10));
+                          // Changing BU (or switching to/from "My Clients") invalidates whatever
+                          // Client/Project were picked under the previous one — never carry them
+                          // over.
                           form.setValue('client_id', '');
                           form.setValue('project_id', '');
                         }}
@@ -479,8 +531,9 @@ const ServicePOForm = () => {
                         form.setValue('project_id', '');
                       }}
                       disabled={clientDisabled}
-                      placeholder={showBuField && !selectedBuId ? 'Select a business unit first' : 'Select client'}
+                      placeholder={myClientsOnly ? 'Select client' : (showBuField && !selectedBuId ? 'Select a business unit first' : 'Select client')}
                       searchPlaceholder="Search client..."
+                      emptyMessage={myClientsOnly ? 'No clients without a Business Unit found.' : undefined}
                       className="h-8 text-sm"
                     />
                     <FormMessage />

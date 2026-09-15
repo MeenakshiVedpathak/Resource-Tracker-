@@ -24,6 +24,7 @@ import { Label } from '@/components/ui/label';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
+import { WeekPicker } from '@/components/ui/week-picker';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { cn } from '@/utils/cn';
@@ -33,8 +34,13 @@ const columnHelper = createColumnHelper();
 const now = new Date();
 const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
 
+// 'weekly' shares the same `dateRange` state as 'range' below — it's just a different picker
+// (WeekPicker snaps to a Mon-Sat business week instead of two free clicks) writing the exact same
+// {startDate, endDate} shape, so every "not month" branch downstream (periodReady, params,
+// picker label) needs no separate weekly case.
 const PERIOD_MODE_OPTIONS = [
   { value: 'month', label: 'Month' },
+  { value: 'weekly', label: 'Weekly' },
   { value: 'range', label: 'Date Range' },
 ];
 
@@ -300,7 +306,7 @@ const BudgetVsBilled = () => {
   ] : [];
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="flex flex-col">
       <PageHeader
         title={
           <span className="inline-flex items-center gap-2">
@@ -350,13 +356,23 @@ const BudgetVsBilled = () => {
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">{periodMode === 'month' ? 'Month & Year' : 'Date Range'} <span className="text-destructive">*</span></Label>
+          <Label className="text-xs">
+            {periodMode === 'month' ? 'Month & Year' : periodMode === 'weekly' ? 'Week' : 'Date Range'}{' '}
+            <span className="text-destructive">*</span>
+          </Label>
           {periodMode === 'month' ? (
             <MonthYearPicker
               value={monthYear}
               onChange={(val) => { setMonthYear(val); setPage(1); }}
               placeholder="Select month"
               clearable={false}
+              className="w-full"
+            />
+          ) : periodMode === 'weekly' ? (
+            <WeekPicker
+              value={dateRange}
+              onChange={(val) => { setDateRange(val); setPage(1); }}
+              placeholder="Select week"
               className="w-full"
             />
           ) : (
@@ -418,6 +434,13 @@ const BudgetVsBilled = () => {
         </div>
       </FilterPanel>
 
+      {/* This page has too much above the "By Service PO" table (filters, summary cards,
+          over/under buttons, Monthly Trend) to reliably fit one viewport alongside it, unlike the
+          single-table reports that opt into MainLayout's "root fills `<main>`, only the table
+          scrolls" pattern (see MainLayout.jsx) — forcing that pattern here just squeezed the table
+          to zero height whenever the Filters panel was open. So this page renders at its natural
+          content height instead, and falls back to `<main>`'s own page-level scrollbar. */}
+      <div className="flex flex-col">
       {errorMessage && (
         <div className="mb-4 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
           <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
@@ -481,7 +504,7 @@ const BudgetVsBilled = () => {
         <h2 className="text-[15px] font-semibold text-foreground">Monthly Trend</h2>
       </div>
       <div className="mb-4 hidden rounded-xl border bg-card shadow-sm overflow-hidden md:block">
-        <Table containerClassName="max-h-[220px] overflow-auto">
+        <Table>
           <TableHeader className="sticky top-0 z-10 bg-slate-50 shadow-[0_1px_3px_0_rgb(0,0,0,0.1)]">
             <TableRow className="hover:bg-transparent border-b bg-slate-50">
               <TableHead>Month</TableHead>
@@ -588,6 +611,7 @@ const BudgetVsBilled = () => {
         onPageChange={setPage}
         onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
       />
+      </div>
 
       <Sheet open={!!sheetKind} onOpenChange={(open) => !open && setSheetKind(null)}>
         <SheetContent side="right" className="w-full sm:max-w-lg p-0 flex flex-col bg-white overflow-hidden">

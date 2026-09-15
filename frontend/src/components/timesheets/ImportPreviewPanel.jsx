@@ -1,14 +1,33 @@
+import { useMemo, useState } from 'react';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
 import { formatDate } from '@/utils/formatters';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import SearchInput from '@/components/common/SearchInput';
 
 // Shared between the Excel-upload flow (TimesheetUpload.jsx) and the "Sync Employee Work
 // Logs" flow (SyncWorkLogsDialog.jsx) — both produce the exact same preview response shape
 // from the backend, so this is the one place that renders it.
-const ImportPreviewPanel = ({ preview, onConfirm, onCancel, isConfirming }) => (
+const ImportPreviewPanel = ({ preview, onConfirm, onCancel, isConfirming }) => {
+  // Client-side only — the whole preview is already in memory, so there's no need to round-trip
+  // to the backend just to narrow which rows are visible before Confirm Import.
+  const [search, setSearch] = useState('');
+
+  const filteredValidRows = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return preview.valid_rows;
+    return preview.valid_rows.filter((row) => [
+      row.resourceName,
+      row.employeeId,
+      row.servicePOName,
+      row.poId,
+      row.subProjectName,
+    ].some((field) => field != null && String(field).toLowerCase().includes(term)));
+  }, [preview.valid_rows, search]);
+
+  return (
   <div className="space-y-5">
     {/* Summary and Actions */}
     <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
@@ -57,11 +76,17 @@ const ImportPreviewPanel = ({ preview, onConfirm, onCancel, isConfirming }) => (
     {/* Valid rows */}
     {preview.valid_rows.length > 0 && (
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle className="flex items-center gap-2 text-sm">
             <CheckCircle2 className="h-4 w-4 text-green-500" />
             Valid Rows ({preview.validCount})
           </CardTitle>
+          <SearchInput
+            placeholder="Search employee, service PO, sub-project…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full sm:w-72"
+          />
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-auto max-h-[400px]">
@@ -77,7 +102,14 @@ const ImportPreviewPanel = ({ preview, onConfirm, onCancel, isConfirming }) => (
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {preview.valid_rows.map((row, idx) => (
+                {filteredValidRows.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={6} className="py-6 text-center text-sm text-muted-foreground">
+                      No rows match your search.
+                    </TableCell>
+                  </TableRow>
+                )}
+                {filteredValidRows.map((row, idx) => (
                   <TableRow key={idx}>
                     <TableCell className="font-mono text-xs text-muted-foreground">
                       {row.rowNumber ?? idx + 1}
@@ -147,6 +179,7 @@ const ImportPreviewPanel = ({ preview, onConfirm, onCancel, isConfirming }) => (
       </Card>
     )}
   </div>
-);
+  );
+};
 
 export default ImportPreviewPanel;

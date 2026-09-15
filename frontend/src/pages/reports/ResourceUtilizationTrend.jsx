@@ -22,6 +22,7 @@ import { Label } from '@/components/ui/label';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
+import { WeekPicker } from '@/components/ui/week-picker';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/utils/cn';
 
@@ -34,8 +35,12 @@ const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
 // the panel and the table below it look like one surface (same treatment as ClientWiseAnalytics).
 const FILTER_LABEL = 'text-[11px] font-semibold uppercase tracking-wider text-muted-foreground';
 
+// 'weekly' shares the same `dateRange` state as 'range' below — WeekPicker just snaps selection
+// to a Mon-Sat business week instead of two free clicks, emitting the identical
+// {startDate, endDate} shape, so periodReady/params need no separate weekly case.
 const PERIOD_MODES = [
   { value: 'month', label: 'Month' },
+  { value: 'weekly', label: 'Weekly' },
   { value: 'range', label: 'Date Range' },
 ];
 
@@ -334,7 +339,7 @@ const ResourceUtilizationTrend = () => {
         <div className="flex flex-col gap-1.5">
           <Label className={FILTER_LABEL}>Period</Label>
           <Tabs value={periodMode} onValueChange={handlePeriodModeChange}>
-            <TabsList className="grid w-full grid-cols-2 border border-input bg-slate-100">
+            <TabsList className="grid w-full grid-cols-3 border border-input bg-slate-100">
               {PERIOD_MODES.map(({ value, label }) => (
                 <TabsTrigger
                   key={value}
@@ -349,10 +354,11 @@ const ResourceUtilizationTrend = () => {
         </div>
 
         {/* The required marker belongs on the value, not the mode toggle above — the toggle
-            always holds one of its two values, so it is the picker that can be left unset. */}
+            always holds one of its three values, so it is the picker that can be left unset. */}
         <div className="flex flex-col gap-1.5">
           <Label className={FILTER_LABEL}>
-            {periodMode === 'month' ? 'Month & Year' : 'Date Range'} <span className="text-destructive">*</span>
+            {periodMode === 'month' ? 'Month & Year' : periodMode === 'weekly' ? 'Week' : 'Date Range'}{' '}
+            <span className="text-destructive">*</span>
           </Label>
           {periodMode === 'month' ? (
             <MonthYearPicker
@@ -360,6 +366,13 @@ const ResourceUtilizationTrend = () => {
               onChange={(val) => { setMonthYear(val); setPage(1); }}
               placeholder="Select month"
               clearable={false}
+              className="w-full"
+            />
+          ) : periodMode === 'weekly' ? (
+            <WeekPicker
+              value={dateRange}
+              onChange={(val) => { setDateRange(val); setPage(1); }}
+              placeholder="Select week"
               className="w-full"
             />
           ) : (
