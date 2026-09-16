@@ -1,4 +1,5 @@
 import { useWeather } from '@/hooks/useWeather';
+import { cn } from '@/utils/cn';
 import WeatherBannerScene from './WeatherBannerScene';
 
 // Same rotation convention as the old GreetingIllustration tip: pick by day-of-month so it's
@@ -42,10 +43,22 @@ const WeatherHeroBanner = ({ greeting, firstName, datePicker, actions }) => {
             banner, so it wraps onto its own line above the controls rather than pushing them
             off/under the edge. */}
         <div className="min-w-0 sm:max-w-md">
-          <h1 className="text-lg font-black tracking-tight text-slate-900 [text-shadow:0_1px_3px_rgba(255,255,255,0.75)] sm:text-xl lg:text-2xl">
+          <h1 className={cn(
+            'text-lg font-black tracking-tight sm:text-xl lg:text-2xl',
+            isRainy
+              ? 'text-white [text-shadow:0_2px_6px_rgba(0,0,0,0.65)]'
+              : 'text-slate-900 [text-shadow:0_1px_3px_rgba(255,255,255,0.75)]',
+          )}
+          >
             {greeting}, {firstName} 👋
           </h1>
-          <p className="mt-1 text-xs font-semibold text-slate-800 [text-shadow:0_1px_2px_rgba(255,255,255,0.6)] sm:text-sm">
+          <p className={cn(
+            'mt-1 text-xs font-semibold sm:text-sm',
+            isRainy
+              ? 'text-white/90 [text-shadow:0_1px_4px_rgba(0,0,0,0.55)]'
+              : 'text-slate-800 [text-shadow:0_1px_2px_rgba(255,255,255,0.6)]',
+          )}
+          >
             Let&apos;s keep your work log up to date.
           </p>
         </div>

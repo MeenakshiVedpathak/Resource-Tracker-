@@ -3,13 +3,40 @@
 // network round-trip of its own — only the `isRainy` flag (from useWeather) picks which palette
 // and which of the sun/clouds/rain layers render.
 
-// Deterministic layout (no Math.random in render — that would reshuffle every re-render)
-const RAIN_DROPS = Array.from({ length: 50 }, (_, i) => ({
-  x: (i * 173) % 1600,
-  duration: 0.9 + ((i * 37) % 100) / 100,
-  delay: ((i * 53) % 190) / 100,
-  len: 24 + (i % 5) * 6,
-}));
+// Rain-on-glass droplets (rainy mode only) — modelled on droplets clinging to an actual pane of
+// glass with the scene behind it, per the reference photo, rather than a wall of falling streaks:
+// a bead + a faint tapered trail above it, that slides all the way down to the bottom edge of the
+// card (not just a short local drift) before fading and looping — reads as an actively wet pane
+// rather than a handful of static droplets. Deterministic (no Math.random — that would reshuffle
+// every re-render); scattered via prime-ish multipliers instead so the layout still reads as
+// organic rather than a grid. Each drop's fall distance is its own (viewBox height - spawn y), so
+// a drop spawned near the top genuinely travels the full card height, not a fixed generic amount.
+const VIEWBOX_HEIGHT = 204.8;
+const GLASS_DROPS = Array.from({ length: 26 }, (_, i) => {
+  const sizeClass = i % 3;
+  const y = 8 + ((i * 41) % 60);
+  const fall = VIEWBOX_HEIGHT - y + 14;
+  return {
+    x: 30 + ((i * 127) % 1540),
+    y,
+    r: sizeClass === 0 ? 2.1 : sizeClass === 1 ? 3.2 : 4.4,
+    trail: sizeClass === 0 ? 14 : sizeClass === 1 ? 26 : 42,
+    fall,
+    // Scaled to the distance travelled (~110px/s) so a drop spawned lower doesn't visibly outrun
+    // one spawned near the top, plus a little per-drop variety so they don't all move in lockstep.
+    duration: fall / 110 + ((i * 17) % 10) / 20,
+    delay: ((i * 29) % 40) / 10,
+  };
+});
+
+// Warm lit windows along the far shore — the reference's defining "cozy town across the lake"
+// detail — each a bright core + soft glow halo + a faint reflection streak bleeding into the water.
+const SHORE_LIGHTS = [
+  { x: 655, y: 157.4, r: 1.8 }, { x: 678, y: 159.2, r: 1.4 }, { x: 702, y: 156.6, r: 1.6 },
+  { x: 726, y: 158.8, r: 1.3 }, { x: 750, y: 157.1, r: 1.7 }, { x: 774, y: 159.6, r: 1.4 },
+  { x: 798, y: 156.9, r: 1.5 }, { x: 900, y: 158.4, r: 1.4 }, { x: 924, y: 156.8, r: 1.6 },
+  { x: 948, y: 159.1, r: 1.3 },
+];
 
 // Two depth rows per side: a smaller/duller back row and a bigger/closer front row, mirrored
 // left<->right around the 1600-wide viewBox so the tree line reads as one continuous forest
@@ -103,6 +130,22 @@ const WeatherBannerScene = ({ isRainy }) => (
       <linearGradient id="whb-mtn4-rainy" x1="0" y1="0" x2="0" y2="1">
         <stop offset="0%" stopColor="#3a4658" /><stop offset="100%" stopColor="#2e3a4a" />
       </linearGradient>
+      {/* Rain-on-glass droplet trail — fades in from nothing at the top down to a soft bead. */}
+      <linearGradient id="whb-trail-fade" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stopColor="#dce8f5" stopOpacity="0" />
+        <stop offset="100%" stopColor="#dce8f5" stopOpacity="0.5" />
+      </linearGradient>
+      {/* Warm shore-light reflection bleeding down into the lake. */}
+      <linearGradient id="whb-lightreflect" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stopColor="#ffcf7a" stopOpacity="0.55" />
+        <stop offset="100%" stopColor="#ffcf7a" stopOpacity="0" />
+      </linearGradient>
+      {/* Corner-darkening vignette so the scene reads like it's viewed through a framed pane
+          rather than a flat, evenly-lit illustration — matches the reference's darker edges. */}
+      <radialGradient id="whb-vignette" cx="50%" cy="32%" r="75%">
+        <stop offset="55%" stopColor="#000000" stopOpacity="0" />
+        <stop offset="100%" stopColor="#060a12" stopOpacity="0.55" />
+      </radialGradient>
       <style>{`
         @keyframes whb-fall {
           0%   { transform: translateY(-40px); opacity: 0; }
@@ -114,8 +157,15 @@ const WeatherBannerScene = ({ isRainy }) => (
           0%, 100% { transform: translateX(0); }
           50%      { transform: translateX(18px); }
         }
-        .whb-drop  { animation: whb-fall linear infinite; }
-        .whb-cloud { animation: whb-drift 16s ease-in-out infinite; }
+        @keyframes whb-drip {
+          0%   { transform: translateY(0); opacity: 0.95; }
+          10%  { transform: translateY(calc(var(--whb-fall) * 0.04)); opacity: 0.95; }
+          60%  { transform: translateY(calc(var(--whb-fall) * 0.55)); opacity: 0.78; }
+          100% { transform: translateY(var(--whb-fall)); opacity: 0; }
+        }
+        .whb-drop     { animation: whb-fall linear infinite; }
+        .whb-cloud    { animation: whb-drift 16s ease-in-out infinite; }
+        .whb-glassdrop { animation: whb-drip cubic-bezier(.55,0,.85,.4) infinite; }
       `}</style>
     </defs>
 
@@ -168,12 +218,27 @@ const WeatherBannerScene = ({ isRainy }) => (
     <SnowCap peak={[560, 76.8]} left={[430, 110.91]} right={[670, 108.8]} color={isRainy ? '#c7d0dc' : '#ffffff'} opacity={isRainy ? 0.75 : 0.85} />
     <SnowCap peak={[1020, 78.91]} left={[900, 106.69]} right={[1140, 106.69]} color={isRainy ? '#c7d0dc' : '#ffffff'} opacity={isRainy ? 0.75 : 0.85} />
 
+    {/* Low fog nestled between the ridgelines — the reference's misty, atmospheric depth rather
+        than crisp painted layers stacked on top of each other. */}
+    {isRainy && (
+      <g fill="#aeb9c8" opacity="0.22">
+        <ellipse cx="480" cy="102" rx="260" ry="10" />
+        <ellipse cx="1080" cy="98" rx="300" ry="11" />
+      </g>
+    )}
+
     <path
       d="M0,138.69 L130,108.8 L250,130.11 L380,100.29 L510,128 L640,96 L770,125.89 L900,102.4 L1030,128 L1160,104.51 L1290,128 L1420,106.69 L1600,123.71 L1600,153.6 L0,153.6 Z"
       fill={isRainy ? 'url(#whb-mtn3-rainy)' : 'url(#whb-mtn3)'}
     />
     <SnowCap peak={[640, 96]} left={[510, 128]} right={[770, 125.89]} color={isRainy ? '#dbe3ee' : '#ffffff'} opacity={isRainy ? 0.8 : 0.9} />
     <SnowCap peak={[380, 100.29]} left={[250, 130.11]} right={[510, 128]} color={isRainy ? '#dbe3ee' : '#ffffff'} opacity={isRainy ? 0.8 : 0.9} />
+
+    {isRainy && (
+      <g fill="#c3ccd9" opacity="0.2">
+        <ellipse cx="760" cy="122" rx="340" ry="9" />
+      </g>
+    )}
 
     <path
       d="M0,153.6 L160,119.49 L300,145.09 L440,113.09 L580,142.91 L720,108.8 L860,140.8 L1000,115.2 L1140,142.91 L1280,117.31 L1420,140.8 L1600,121.6 L1600,170.69 L0,170.69 Z"
@@ -198,6 +263,16 @@ const WeatherBannerScene = ({ isRainy }) => (
       <ellipse cx="1230" cy="170.3" rx="110" ry="6.4" fill={isRainy ? '#465264' : '#75a9cc'} />
       <ellipse cx="1500" cy="167.81" rx="80" ry="5.12" fill={isRainy ? '#2e3a4a' : '#4c81a8'} />
     </g>
+    {/* Warm lit shoreline town — small glowing windows with a soft halo + a faint reflection
+        bleeding down into the water, the reference's signature "cozy lights across the lake". */}
+    {isRainy && SHORE_LIGHTS.map((l, i) => (
+      <g key={`light${i}`}>
+        <circle cx={l.x} cy={l.y} r={l.r * 3.4} fill="#ffcf7a" opacity="0.16" />
+        <circle cx={l.x} cy={l.y} r={l.r} fill="#ffe3a3" opacity="0.95" />
+        <rect x={l.x - l.r * 0.4} y={l.y} width={l.r * 0.8} height="24" fill="url(#whb-lightreflect)" opacity="0.5" />
+      </g>
+    ))}
+
     <g stroke="#ffffff" strokeOpacity={isRainy ? 0.15 : 0.45} strokeWidth="2" strokeLinecap="round">
       <line x1="60" y1="175.04" x2="260" y2="175.04" />
       <line x1="330" y1="183.55" x2="490" y2="183.55" />
@@ -232,19 +307,31 @@ const WeatherBannerScene = ({ isRainy }) => (
     {PINES_LEFT_FRONT.map(([x, y, s], i) => <Pine key={`lf${i}`} x={x} y={y} scale={s} color={isRainy ? '#16281f' : '#1f5c3d'} />)}
     {PINES_RIGHT_FRONT.map(([x, y, s], i) => <Pine key={`rf${i}`} x={x} y={y} scale={s} color={isRainy ? '#16281f' : '#1f5c3d'} />)}
 
-    {/* rain */}
+    {/* rain — droplets clinging to glass (bead + fading trail above it), not falling streaks;
+        see GLASS_DROPS for why. */}
     {isRainy && (
-      <g stroke="#dce8f5" strokeWidth="2" strokeLinecap="round" opacity="0.6">
-        {RAIN_DROPS.map((d, i) => (
-          <line
+      <g>
+        {GLASS_DROPS.map((d, i) => (
+          <g
             key={i}
-            className="whb-drop"
-            x1={d.x} y1="0" x2={d.x - 12} y2={d.len}
-            style={{ animationDuration: `${d.duration}s`, animationDelay: `${d.delay}s` }}
-          />
+            className="whb-glassdrop"
+            style={{
+              animationDuration: `${d.duration}s`,
+              animationDelay: `${d.delay}s`,
+              '--whb-fall': `${d.fall}px`,
+            }}
+          >
+            <rect x={d.x - d.r * 0.22} y={d.y - d.trail} width={d.r * 0.44} height={d.trail} fill="url(#whb-trail-fade)" />
+            <ellipse cx={d.x} cy={d.y} rx={d.r} ry={d.r * 1.25} fill="rgba(210,225,240,0.55)" stroke="rgba(255,255,255,0.5)" strokeWidth="0.4" />
+            <ellipse cx={d.x - d.r * 0.32} cy={d.y - d.r * 0.35} rx={d.r * 0.28} ry={d.r * 0.2} fill="rgba(255,255,255,0.85)" />
+          </g>
         ))}
       </g>
     )}
+
+    {/* Vignette — darkens the corners so the scene reads as viewed through a pane rather than a
+        flat, evenly-lit illustration, matching the reference's framed-photo mood. */}
+    {isRainy && <rect x="0" y="0" width="1600" height="204.8" fill="url(#whb-vignette)" />}
   </svg>
 );
 
