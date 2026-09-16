@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import EmptyState from '@/components/common/EmptyState';
 import { Activity, CheckCircle2, Clock3, XCircle } from 'lucide-react';
-import { formatDateTime, formatHourMinuteValue } from '@/utils/formatters';
+import { formatDate, formatDateTime, formatHourMinuteValue } from '@/utils/formatters';
 import { cn } from '@/utils/cn';
 
 const STATUS_META = {
@@ -28,7 +28,14 @@ const RecentActivityCard = ({ entries = [], isLoading }) => {
       const text = isRejected
         ? `Entry rejected · ${poName}`
         : `Logged ${formatHourMinuteValue(e.hours)}h on ${poName}`;
-      return { id: e.id, timestamp, text, status: e.status };
+      // The date the hours were LOGGED FOR, not when the row was created/edited — shown
+      // alongside the "when" timestamp below since the two commonly differ (a backdated entry
+      // filled today for last week) and this card previously gave no way to tell which calendar
+      // date a given activity row actually belongs to.
+      const workDate = e.timesheet_date ?? e.work_date ?? null;
+      return {
+        id: e.id, timestamp, text, status: e.status, workDate,
+      };
     })
     .filter((a) => !!a.timestamp)
     .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
@@ -78,7 +85,10 @@ const RecentActivityCard = ({ entries = [], isLoading }) => {
                   <span className={cn('mt-1.5 h-2 w-2 shrink-0 rounded-full', meta.dot)} />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{a.text}</p>
-                    <p className="text-xs text-muted-foreground">{formatDateTime(a.timestamp)}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatDateTime(a.timestamp)}
+                      {a.workDate && <span> · for {formatDate(a.workDate)}</span>}
+                    </p>
                   </div>
                 </div>
               );

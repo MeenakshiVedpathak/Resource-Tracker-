@@ -7,7 +7,19 @@ import { formatDate, formatHours, formatPercentage, getStatusColor, capitalize }
 import DataTable from '@/components/common/DataTable';
 import SearchInput from '@/components/common/SearchInput';
 import { Badge } from '@/components/ui/badge';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { cn } from '@/utils/cn';
+
+const ALL_STATUS = 'all';
+// One wide, status-unfiltered probe (limit=100) purely to learn which `project_status` values
+// actually exist for this PM's portfolio this month — there's no confirmed enum for this field
+// anywhere in the app (unlike Service PO status, which has a documented fixed list), so guessing
+// options up front risks offering a value the backend rejects, or omitting one that's real. This
+// necessarily only surfaces values present in the first 100 records; a PM managing more distinct
+// statuses than that across more than 100 projects would see an incomplete option list — call out
+// to the backend for a real status enum (or a dedicated distinct-values endpoint) if that turns
+// out to matter in practice.
+const STATUS_PROBE_LIMIT = 100;
 
 const columnHelper = createColumnHelper();
 
@@ -52,17 +64,19 @@ const columns = [
   }),
   columnHelper.accessor('team_size', {
     header: 'Team Size',
-    size: 100,
+    // 130, not 100 — "Team Size" plus its sort-direction icon didn't fit in 100px and was
+    // silently ellipsis-truncated to "Team …", same fix as Nearest Deadline below.
+    size: 130,
     cell: (info) => <span className="tabular-nums">{info.getValue() ?? 0}</span>,
   }),
   columnHelper.accessor('actual_hours', {
-    header: 'Logged Hours (MTD)',
-    size: 150,
+    header: 'Logged Hours',
+    size: 140,
     cell: (info) => <span className="tabular-nums">{formatHours(info.getValue())}</span>,
   }),
   columnHelper.accessor('planned_hours', {
-    header: 'Planned Hours (MTD)',
-    size: 150,
+    header: 'Planned Hours',
+    size: 140,
     cell: (info) => <span className="tabular-nums">{formatHours(info.getValue())}</span>,
   }),
   columnHelper.accessor('variance_pct', {
@@ -89,7 +103,8 @@ const columns = [
   }),
   columnHelper.accessor('nearest_end_date', {
     header: 'Nearest Deadline',
-    size: 140,
+    // 160, not 140 — same sort-icon-doesn't-fit truncation as Team Size above.
+    size: 160,
     cell: (info) => <span className="whitespace-nowrap">{formatDate(info.getValue())}</span>,
   }),
 ];
@@ -100,6 +115,7 @@ const columns = [
 const ProjectOverviewTable = ({ monthYear, buId }) => {
   const [sectionRef, inView] = useInViewOnce();
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState(ALL_STATUS);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   // Default sort: nearest deadline first (the backend has no direct "risk first" sortBy field —
@@ -115,12 +131,29 @@ const ProjectOverviewTable = ({ monthYear, buId }) => {
     page,
     limit,
     ...(debouncedSearch && { search: debouncedSearch }),
+    ...(statusFilter !== ALL_STATUS && { status: statusFilter }),
     ...(sorting[0] && { sortBy: sorting[0].id, sortOrder: sorting[0].desc ? 'desc' : 'asc' }),
   };
 
   const { data, isPending } = usePmDashboardProjects(params, inView);
   const records = data?.records ?? [];
   const meta = data?.meta ?? {};
+
+  // See STATUS_PROBE_LIMIT above — a second, status-unfiltered fetch purely to populate the
+  // dropdown's option list from whatever `project_status` values are actually present.
+  const { data: statusProbeData } = usePmDashboardProjects(
+    { buId, month: monthYear.month, year: monthYear.year, page: 1, limit: STATUS_PROBE_LIMIT },
+    inView
+  );
+  const statusOptions = useMemo(() => {
+    const distinct = new Set(
+      (statusProbeData?.records ?? []).map((r) => r.project_status).filter(Boolean)
+    );
+    return [
+      { label: 'All Status', value: ALL_STATUS },
+      ...Array.from(distinct).sort().map((s) => ({ label: capitalize(s), value: s })),
+    ];
+  }, [statusProbeData]);
 
   // Risk-first is only ever applied on top of the untouched default sort (nearest deadline,
   // ascending) — the moment a user clicks a different column header, their explicit choice is
@@ -136,18 +169,34 @@ const ProjectOverviewTable = ({ monthYear, buId }) => {
 
   return (
     <div ref={sectionRef} className="flex flex-col gap-3">
-      <SearchInput
-        value={search}
-        onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-        placeholder="Search project or client…"
-        className="w-full sm:w-72"
-      />
+      {/* `flex-1 min-w-[160px]` on the search box (rather than a fixed w-72) + a fixed-but-
+          compact w-36 on the select is what actually keeps these on one line in this card's
+          narrower column — the old w-72 + w-44 pair (472px) didn't fit the dashboard's two-column
+          layout's left card at ordinary desktop widths and wrapped onto two lines. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <SearchInput
+          value={search}
+          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+          placeholder="Search project or client…"
+          className="min-w-[160px] flex-1"
+        />
+        <SearchableSelect
+          options={statusOptions}
+          value={statusFilter}
+          onValueChange={(v) => { setStatusFilter(v ?? ALL_STATUS); setPage(1); }}
+          placeholder="All Status"
+          className="h-9 w-36 shrink-0 text-sm"
+        />
+      </div>
       <DataTable
         columns={columns}
         data={displayRecords}
         mobileCards
         isLoading={!inView || isPending}
-        pagination={meta.total != null ? { page: meta.page ?? page, limit: meta.limit ?? limit, total: meta.total } : undefined}
+        // Always an object, never `undefined` — see WorkLogComplianceTable's identical fallback:
+        // falls back to `records.length` for `total` when the backend's own `meta` doesn't carry
+        // one, so the pagination/page-size footer stays visible instead of silently disappearing.
+        pagination={{ page: meta.page ?? page, limit: meta.limit ?? limit, total: meta.total ?? displayRecords.length }}
         sorting={sorting}
         onSortingChange={(s) => { setSorting(s); setPage(1); }}
         onPageChange={setPage}

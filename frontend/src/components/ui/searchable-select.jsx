@@ -47,7 +47,16 @@ export function SearchableSelect({
     // `relative` wrapper so the clear button can sit visually inside the trigger without being a
     // second <button> nested inside the trigger's own <button> (invalid HTML / broken click
     // handling) — it's a sibling, absolutely positioned over the trigger's right edge instead.
-    <div className="relative w-full">
+    //
+    // `className` also lands here, not just on the Button below: THIS div, not the Button, is the
+    // element that actually participates in a caller's flex/grid layout, so a layout utility like
+    // `flex-1`, `shrink-0`, or `w-36` has to reach it to have any effect — passing those to the
+    // Button alone (a plain block child of this always-`w-full` wrapper) silently did nothing,
+    // which is why a compact SearchableSelect placed next to a SearchInput in a flex row used to
+    // still claim the wrapper's full 100% width and force the row to wrap. Visual-only classes
+    // (h-9, bg-white, text-sm, …) landing here too is harmless — this div paints nothing of its
+    // own — and they're kept on the Button as well since that's what's actually visible.
+    <div className={cn('relative w-full', className)}>
       <Popover open={open} onOpenChange={setOpen} modal={true}>
         <PopoverTrigger asChild>
           <Button

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { createColumnHelper } from '@tanstack/react-table';
 import { usePmDashboardTeam } from '@/hooks/usePmDashboard';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -6,9 +6,20 @@ import { formatHours, formatPercentage } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
 import SearchInput from '@/components/common/SearchInput';
 import SegmentedToggle from '@/components/common/SegmentedToggle';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { cn } from '@/utils/cn';
+
+const ALL_DESIGNATIONS = 'all';
+// `designation` is free text (no enum anywhere — confirmed against the employee schema), and
+// GET /pm-dashboard/team has no designation query param at all, unlike status. So this is filtered
+// client-side, same mechanism the existing Overallocated/Bench toggle already uses, and its option
+// list comes from one wide, otherwise-unfiltered probe fetch (same limitation as
+// ProjectOverviewTable's status probe: only designations present in the first DESIGNATION_PROBE_LIMIT
+// records show up as options).
+const DESIGNATION_PROBE_LIMIT = 200;
 
 const columnHelper = createColumnHelper();
 
@@ -21,10 +32,17 @@ const capacityTone = (row) => {
   return 'success';
 };
 
+// Deliberately a compact 4-column set (Employee / Designation / Capacity Used / Status) rather
+// than every hour breakdown this endpoint returns — this table sits in the dashboard's narrower
+// right-hand column (see PmDashboard.jsx's two-column layout), and the full 8-column detail table
+// (Monthly Capacity, Planned/Actual/Leave/No-Work Hours as separate columns) made every row
+// force a wide horizontal scroll just to see the Status badge. The dropped hour figures aren't
+// lost — they're one hover away on the Capacity Used bar's tooltip below. This component is only
+// ever used from PmDashboard.jsx, so trimming its columns doesn't affect any other screen.
 const columns = [
   columnHelper.accessor('full_name', {
     header: 'Employee',
-    size: 200,
+    size: 180,
     meta: { sticky: true },
     cell: (info) => (
       <div className="min-w-0">
@@ -35,67 +53,49 @@ const columns = [
   }),
   columnHelper.accessor('designation', {
     header: 'Designation',
-    size: 160,
+    size: 150,
     enableSorting: false,
-    cell: (info) => <div className="truncate max-w-[140px]">{info.getValue() || '—'}</div>,
-  }),
-  columnHelper.accessor('monthly_capacity_hours', {
-    header: 'Monthly Capacity',
-    size: 130,
-    enableSorting: false,
-    cell: (info) => <span className="tabular-nums">{formatHours(info.getValue())}</span>,
-  }),
-  columnHelper.accessor('planned_hours', {
-    header: 'Planned Hours',
-    size: 120,
-    cell: (info) => <span className="tabular-nums">{formatHours(info.getValue())}</span>,
-  }),
-  columnHelper.accessor('actual_hours', {
-    header: 'Actual Hours',
-    size: 120,
-    cell: (info) => <span className="tabular-nums">{formatHours(info.getValue())}</span>,
-  }),
-  // Heuristic, not HR-verified leave data — see api/pmDashboard.api.js/the backend spec: hours
-  // logged against a Service Type literally named "Leaves" (or a Service PO named "Idle"/"On
-  // Bench" for no_work_hours below). Labelled accordingly rather than as authoritative leave.
-  columnHelper.accessor('leave_hours', {
-    header: 'Leave (logged)',
-    size: 120,
-    cell: (info) => <span className="tabular-nums">{formatHours(info.getValue())}</span>,
-  }),
-  columnHelper.accessor('no_work_hours', {
-    header: 'No-Work Hours',
-    size: 120,
-    cell: (info) => <span className="tabular-nums">{formatHours(info.getValue())}</span>,
+    cell: (info) => <div className="truncate max-w-[130px]">{info.getValue() || '—'}</div>,
   }),
   columnHelper.accessor('capacity_used_pct', {
     header: 'Capacity Used',
-    size: 170,
+    size: 160,
     cell: (info) => {
+      const row = info.row.original;
       const pct = info.getValue();
-      const tone = capacityTone(info.row.original);
+      const tone = capacityTone(row);
       return (
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center justify-between gap-2 text-xs">
-            <span className={cn('font-semibold tabular-nums', tone === 'destructive' && 'text-destructive')}>
-              {formatPercentage(pct)}
-            </span>
-          </div>
-          <Progress
-            value={Math.min(100, Math.max(0, pct ?? 0))}
-            className="h-1.5"
-            indicatorClassName={
-              tone === 'destructive' ? 'bg-destructive' : tone === 'warning' ? 'bg-warning' : 'bg-success'
-            }
-          />
-        </div>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="flex flex-col gap-1 cursor-default">
+              <span className={cn('text-xs font-semibold tabular-nums', tone === 'destructive' && 'text-destructive')}>
+                {formatPercentage(pct)}
+              </span>
+              <Progress
+                value={Math.min(100, Math.max(0, pct ?? 0))}
+                className="h-1.5"
+                indicatorClassName={
+                  tone === 'destructive' ? 'bg-destructive' : tone === 'warning' ? 'bg-warning' : 'bg-success'
+                }
+              />
+            </div>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="text-xs space-y-0.5">
+            <p>Monthly Capacity: {formatHours(row.monthly_capacity_hours)}</p>
+            <p>Planned: {formatHours(row.planned_hours)} · Actual: {formatHours(row.actual_hours)}</p>
+            {/* Heuristic, not HR-verified leave data — see api/pmDashboard.api.js: hours logged
+                against a Service Type literally named "Leaves" (or a Service PO named "Idle"/
+                "On Bench" for no_work_hours). Labelled accordingly, not as authoritative leave. */}
+            <p>Leave (logged): {formatHours(row.leave_hours)} · No-Work: {formatHours(row.no_work_hours)}</p>
+          </TooltipContent>
+        </Tooltip>
       );
     },
   }),
   columnHelper.display({
     id: 'status',
     header: 'Status',
-    size: 130,
+    size: 110,
     enableSorting: false,
     cell: (info) => {
       const row = info.row.original;
@@ -112,28 +112,31 @@ const STATUS_FILTERS = [
   { value: 'bench', label: 'Bench' },
 ];
 
-// Section 3 — Team & Capacity: GET /pm-dashboard/team. `statusFilter` narrows client-side (the
-// backend has no overallocated/bench query param — only a `benchThresholdHours` that shapes the
-// flag itself), same page of results, since a PM's own team size makes a second server round-trip
-// pointless. `initialStatusFilter` lets the Overallocated Employees KPI land here pre-filtered.
+// Section 3 — Team & Capacity: GET /pm-dashboard/team. `statusFilter`/`designationFilter` both
+// narrow client-side (the backend has no overallocated/bench/designation query param — only a
+// `benchThresholdHours` that shapes the flag itself), same page of results, since a PM's own team
+// size makes a second server round-trip pointless. `initialStatusFilter` lets the Overallocated
+// Employees KPI land here pre-filtered.
 const TeamCapacityTable = ({ monthYear, buId, initialStatusFilter = 'all' }) => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState(initialStatusFilter);
+  const [designationFilter, setDesignationFilter] = useState(ALL_DESIGNATIONS);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [sorting, setSorting] = useState([]);
 
   const debouncedSearch = useDebounce(search, 400);
+  const hasClientFilter = statusFilter !== 'all' || designationFilter !== ALL_DESIGNATIONS;
 
   const params = {
     buId,
     month: monthYear.month,
     year: monthYear.year,
-    // Fetch a wide page when a status filter is active, since that filter only narrows what's
-    // ALREADY on this page (client-side) — a small server page could otherwise show "0 results"
+    // Fetch a wide page when either client-side filter is active, since neither narrows anything
+    // beyond what's ALREADY on this page — a small server page could otherwise show "0 results"
     // for a filter that has matches further down the full list.
-    page: statusFilter === 'all' ? page : 1,
-    limit: statusFilter === 'all' ? limit : 200,
+    page: hasClientFilter ? 1 : page,
+    limit: hasClientFilter ? 200 : limit,
     ...(debouncedSearch && { search: debouncedSearch }),
     ...(sorting[0] && { sortBy: sorting[0].id, sortOrder: sorting[0].desc ? 'desc' : 'asc' }),
   };
@@ -142,32 +145,68 @@ const TeamCapacityTable = ({ monthYear, buId, initialStatusFilter = 'all' }) => 
   const records = data?.records ?? [];
   const meta = data?.meta ?? {};
 
-  const filteredRecords = statusFilter === 'all'
-    ? records
-    : records.filter((r) => (statusFilter === 'overallocated' ? r.overallocation_flag : r.bench_flag));
+  // See DESIGNATION_PROBE_LIMIT above — a second, otherwise-unfiltered fetch purely to populate
+  // the dropdown's option list from whatever `designation` values are actually present.
+  const { data: designationProbeData } = usePmDashboardTeam({
+    buId, month: monthYear.month, year: monthYear.year, page: 1, limit: DESIGNATION_PROBE_LIMIT,
+  });
+  const designationOptions = useMemo(() => {
+    const distinct = new Set(
+      (designationProbeData?.records ?? []).map((r) => r.designation).filter(Boolean)
+    );
+    return [
+      { label: 'All Designations', value: ALL_DESIGNATIONS },
+      ...Array.from(distinct).sort().map((d) => ({ label: d, value: d })),
+    ];
+  }, [designationProbeData]);
 
-  const pagedRecords = statusFilter === 'all'
-    ? filteredRecords
-    : filteredRecords.slice((page - 1) * limit, page * limit);
+  const filteredRecords = records.filter((r) => {
+    if (statusFilter === 'overallocated' && !r.overallocation_flag) return false;
+    if (statusFilter === 'bench' && !r.bench_flag) return false;
+    if (designationFilter !== ALL_DESIGNATIONS && r.designation !== designationFilter) return false;
+    return true;
+  });
 
-  const pagination = statusFilter === 'all'
-    ? (meta.total != null ? { page: meta.page ?? page, limit: meta.limit ?? limit, total: meta.total } : undefined)
-    : { page, limit, total: filteredRecords.length };
+  const pagedRecords = hasClientFilter
+    ? filteredRecords.slice((page - 1) * limit, page * limit)
+    : filteredRecords;
+
+  // Always an object, never `undefined` — same fallback as WorkLogComplianceTable/
+  // ProjectOverviewTable: `records.length` covers a backend `meta` that doesn't carry a `total`,
+  // so the pagination/page-size footer stays visible instead of silently disappearing.
+  const pagination = hasClientFilter
+    ? { page, limit, total: filteredRecords.length }
+    : { page: meta.page ?? page, limit: meta.limit ?? limit, total: meta.total ?? records.length };
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <SearchInput
-          value={search}
-          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-          placeholder="Search employee…"
-          className="w-full sm:w-72"
-        />
+      {/* `flex-1 min-w-[140px]` on the search box (rather than a fixed w-72) keeps it and the
+          Designation select on one line in this card's narrower right-hand column. The
+          All/Overallocated/Bench toggle gets its OWN full-width row below rather than squeezing
+          in beside them — three-way pill with "Overallocated" as one word needs real width to
+          read on one line (see SegmentedToggle's own min-w-0/break-words fix), more than a third
+          row-mate would ever leave it. */}
+      <div className="flex flex-col gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <SearchInput
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            placeholder="Search employee…"
+            className="min-w-[140px] flex-1"
+          />
+          <SearchableSelect
+            options={designationOptions}
+            value={designationFilter}
+            onValueChange={(v) => { setDesignationFilter(v ?? ALL_DESIGNATIONS); setPage(1); }}
+            placeholder="All Designations"
+            className="h-9 w-40 shrink-0 text-sm"
+          />
+        </div>
         <SegmentedToggle
           options={STATUS_FILTERS}
           value={statusFilter}
           onChange={(v) => { setStatusFilter(v); setPage(1); }}
-          className="w-full sm:w-auto"
+          className="w-full"
         />
       </div>
       <DataTable

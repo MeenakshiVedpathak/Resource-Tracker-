@@ -99,7 +99,11 @@ const WorkLogComplianceTable = ({ monthYear, buId }) => {
         data={records}
         mobileCards
         isLoading={isPending}
-        pagination={meta.total != null ? { page: meta.page ?? page, limit: meta.limit ?? limit, total: meta.total } : undefined}
+        // Always an object, never `undefined` — falling back to `records.length` for `total`
+        // when the backend's own `meta` doesn't carry one keeps the pagination/page-size footer
+        // visible even then, rather than silently disappearing (confirmed live: GET
+        // /pm-dashboard/worklog doesn't always return a `total`).
+        pagination={{ page: meta.page ?? page, limit: meta.limit ?? limit, total: meta.total ?? records.length }}
         onPageChange={setPage}
         onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
         emptyState={

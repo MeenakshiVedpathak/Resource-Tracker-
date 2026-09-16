@@ -21,6 +21,9 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
+import ListPagination from '@/components/pmDashboard/ListPagination';
+
+const DEFAULT_PAGE_SIZE = 10;
 
 const MyTeamList = () => {
   const navigate = useNavigate();
@@ -31,12 +34,18 @@ const MyTeamList = () => {
 
   const [addOpen, setAddOpen] = useState(false);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(DEFAULT_PAGE_SIZE);
 
   const { data: myEmployees = [], isPending } = useMyTeamEmployees();
   const { data: activeEmployees = [], isPending: isLoadingEmployees } = useActiveEmployees();
   const mapMutation = useMapMyTeamEmployee();
 
   const onMyTeamIds = useMemo(() => new Set(myEmployees.map((e) => e.id)), [myEmployees]);
+
+  const totalPages = Math.max(1, Math.ceil(myEmployees.length / limit));
+  const safePage = Math.min(page, totalPages);
+  const pageEmployees = myEmployees.slice((safePage - 1) * limit, safePage * limit);
 
   const employeeOptions = useMemo(
     () =>
@@ -107,7 +116,7 @@ const MyTeamList = () => {
                 </TableCell>
               </TableRow>
             ) : (
-              myEmployees.map((employee) => (
+              pageEmployees.map((employee) => (
                 <TableRow key={employee.id}>
                   <TableCell className="text-sm font-medium">{employee.full_name}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{employee.designation ?? '—'}</TableCell>
@@ -117,6 +126,17 @@ const MyTeamList = () => {
             )}
           </TableBody>
         </Table>
+        {!isPending && myEmployees.length > 0 && (
+          <div className="px-3">
+            <ListPagination
+              page={safePage}
+              limit={limit}
+              total={myEmployees.length}
+              onPageChange={(p) => setPage(Math.max(1, Math.min(totalPages, p)))}
+              onPageSizeChange={(l) => { setLimit(l); setPage(1); }}
+            />
+          </div>
+        )}
       </div>
 
       <Dialog open={addOpen} onOpenChange={(open) => { setAddOpen(open); if (!open) setSelectedEmployeeId(''); }}>

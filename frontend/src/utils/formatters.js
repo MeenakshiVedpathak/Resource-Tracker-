@@ -1,18 +1,55 @@
 import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import localizedFormat from 'dayjs/plugin/localizedFormat';
 
+dayjs.extend(utc);
+dayjs.extend(timezone);
 dayjs.extend(relativeTime);
 dayjs.extend(localizedFormat);
+
+// This app is India-only throughout (INR currency, the Mon-Sat IST work week hard-coded in
+// weekUtils.js) — timestamps are always shown in IST, not "whatever timezone the viewer's machine
+// happens to be set to". Relying on the browser's own local timezone (dayjs's default) breaks the
+// moment the viewing machine isn't itself set to IST (a UTC-configured VM/dev box, someone
+// travelling) — the conversion becomes a silent no-op and raw UTC clock digits get shown as if
+// already local.
+const APP_TIMEZONE = 'Asia/Kolkata';
+
+// The API's timestamp columns (created_at/updated_at/rejected_at etc.) serialize as UTC but
+// without a 'Z' or +offset suffix, in a space-separated (non-ISO) form, e.g. "2026-09-16 04:47:23".
+// Calling `dayjs.utc(...)` on a string like that is NOT enough to force UTC interpretation:
+// dayjs's non-strict parser falls back to the native `Date` constructor to get the underlying
+// instant first, and per the JS spec a marker-less, space-separated (or even 'T'-separated)
+// date-time string is parsed as *local* wall-clock time — `.utc()` only changes how that
+// already-wrong instant is later labelled/displayed, it can't undo the initial local-time
+// misinterpretation. So the naive string is first normalized into an unambiguous ISO-8601 UTC
+// string ("...T...Z") — a form every engine is spec-required to parse as a real UTC instant —
+// before dayjs ever sees it. A proper ISO string (already carries 'Z'/offset, e.g. auth.api.js's
+// `toISOString()`) is left as-is and parsed normally. Either way, display always converts to IST
+// explicitly rather than the browser's local zone.
+const HAS_TZ_MARKER = /(Z|[+-]\d{2}:?\d{2})$/i;
+const parseServerDateTime = (date) => {
+  if (!date) return null;
+  const isTzAware = date instanceof Date || (typeof date === 'string' && HAS_TZ_MARKER.test(date.trim()));
+  if (isTzAware) return dayjs(date).tz(APP_TIMEZONE);
+  const isoUtc = typeof date === 'string' ? `${date.trim().replace(' ', 'T')}Z` : date;
+  return dayjs.utc(isoUtc).tz(APP_TIMEZONE);
+};
 
 export const formatDate = (date, format = 'DD MMM YYYY') =>
   date ? dayjs(date).format(format) : '—';
 
-export const formatDateTime = (date) =>
-  date ? dayjs(date).format('DD MMM YYYY, hh:mm A') : '—';
+export const formatDateTime = (date) => {
+  const d = parseServerDateTime(date);
+  return d ? d.format('DD MMM YYYY, hh:mm A') : '—';
+};
 
-export const formatRelativeTime = (date) =>
-  date ? dayjs(date).fromNow() : '—';
+export const formatRelativeTime = (date) => {
+  const d = parseServerDateTime(date);
+  return d ? d.fromNow() : '—';
+};
 
 export const formatCurrency = (value, currency = 'INR', decimals = 2) => {
   if (value == null) return '—';
