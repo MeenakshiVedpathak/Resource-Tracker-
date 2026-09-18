@@ -64,6 +64,13 @@ export const FORM_NAMES = {
   REPORT_EMPLOYEE_UTILIZATION_SUMMARY: 'Employee Utilization Summary',
   REPORT_RESOURCE_ALLOCATION: 'Resource Allocation',
   REPORT_RESOURCE_PROJECT_UTILIZATION: 'Resource Project Utilization',
+  // Confirmed via the real GET /roles/forms response (id 105) — note the backend's Form Master
+  // row uses the British spelling "Utilisation", not "Utilization" like the sibling reports
+  // above/below. Distinct from REPORT_MONTHLY_UTILIZATION above (that one is the dynamic
+  // service-category "Excel-style" report) and REPORT_RESOURCE_PROJECT_UTILIZATION (per-project
+  // hours breakdown) — this is a flat billable/non-billable/overall utilization % per employee
+  // per month.
+  REPORT_RESOURCE_MONTHLY_UTILIZATION: 'Resource Monthly Utilisation',
   // Matches the backend's actual Form Master row name (confirmed via GET /roles/forms), not
   // the report's own page title.
   REPORT_CLIENT_SERVICE_PO_HOURS: 'Client × Service PO',
@@ -158,6 +165,12 @@ export const FORM_NAMES = {
   // Same caveat as the block above — guessed names pending real Form Master rows.
   REPORT_RESOURCE_UTILIZATION_TREND: 'Resource Utilization Trend',
   REPORT_SERVICE_PO_HOURS_BUDGET: 'PO Hours & Budget',
+  // Confirmed against the real GET /roles/forms response (ids 104-107, 2026-09-18) — exact
+  // strings, not guesses.
+  REPORT_PM_WISE_UTILIZATION: 'Project Manager-wise Report',
+  REPORT_PROJECT_WISE_UTILIZATION: 'Project-wise Report',
+  REPORT_MONTH_WISE_BENCH: 'Month-wise Bench Report',
+  REPORT_RESOURCE_WISE_BENCH: 'Resource-wise Bench % by Month',
   // Project Manager Dashboard (net-new, backend spec 2026-09-11) — not formName-gated (see
   // ProtectedRoute's allowedRoles in routes/index.jsx, same as Team Mapping), so this entry
   // exists purely so the sidebar picks it up automatically the moment a real Form Master row
@@ -197,6 +210,7 @@ export const FORM_ROUTE_CONFIG = {
   [FORM_NAMES.REPORT_EMPLOYEE_UTILIZATION_SUMMARY]: { to: ROUTES.REPORT_EMPLOYEE_UTILIZATION_SUMMARY, icon: Users2, description: "Each employee's total logged hours for the month, billable/non-billable breakdown" },
   [FORM_NAMES.REPORT_RESOURCE_ALLOCATION]: { to: ROUTES.REPORT_RESOURCE_ALLOCATION, icon: PieChart, description: 'View employee-to-PO assignments and hours logged.' },
   [FORM_NAMES.REPORT_RESOURCE_PROJECT_UTILIZATION]: { to: ROUTES.REPORT_RESOURCE_PROJECT_UTILIZATION, icon: UserCheck, description: 'Per-employee hours breakdown across projects, for a given month.' },
+  [FORM_NAMES.REPORT_RESOURCE_MONTHLY_UTILIZATION]: { to: ROUTES.REPORT_RESOURCE_MONTHLY_UTILIZATION, icon: CalendarClock, description: "Each employee's billable, non-billable, and overall utilization % for a given month." },
   [FORM_NAMES.REPORT_CLIENT_SERVICE_PO_HOURS]: { to: ROUTES.REPORT_CLIENT_SERVICE_PO_HOURS, icon: Receipt, description: 'Hours delivered per Service PO, grouped by Client' },
   [FORM_NAMES.EMPLOYEE_DASHBOARD]: { to: ROUTES.EMPLOYEE_DASHBOARD, icon: LayoutDashboard, exact: true },
   [FORM_NAMES.EMPLOYEE_WORK_LOG]: { to: ROUTES.EMPLOYEE_TIMESHEET, icon: Clock },
@@ -237,7 +251,14 @@ export const FORM_ROUTE_CONFIG = {
   [FORM_NAMES.REPORT_EMPLOYEE_WORK_LOG_COMPLIANCE]: { to: ROUTES.REPORT_EMPLOYEE_WORK_LOG_COMPLIANCE, icon: ClipboardList, description: 'Employees whose total logged hours fall below the required threshold for the selected period.' },
   [FORM_NAMES.REPORT_RESOURCE_UTILIZATION_TREND]: { to: ROUTES.REPORT_RESOURCE_UTILIZATION_TREND, icon: LineChart, description: 'Monthly utilization per resource — billable hours as a share of total hours.' },
   [FORM_NAMES.REPORT_SERVICE_PO_HOURS_BUDGET]: { to: ROUTES.REPORT_SERVICE_PO_HOURS_BUDGET, icon: Wallet, description: "Hours delivered against each Service PO's month-specific cost budget." },
-  [FORM_NAMES.PM_DASHBOARD]: { to: ROUTES.PM_DASHBOARD, icon: Briefcase, exact: true },
+  [FORM_NAMES.REPORT_PM_WISE_UTILIZATION]: { to: ROUTES.REPORT_PM_WISE_UTILIZATION, icon: UserCog, description: 'Resources, projects, and utilization rolled up per Project Manager across a month range.' },
+  [FORM_NAMES.REPORT_PROJECT_WISE_UTILIZATION]: { to: ROUTES.REPORT_PROJECT_WISE_UTILIZATION, icon: FolderKanban, description: 'Resources and utilization per project across a month range.' },
+  [FORM_NAMES.REPORT_MONTH_WISE_BENCH]: { to: ROUTES.REPORT_MONTH_WISE_BENCH, icon: Hourglass, description: 'Org-wide bench trend by month — resources on bench, bench hours, and bench % across a range.' },
+  [FORM_NAMES.REPORT_RESOURCE_WISE_BENCH]: { to: ROUTES.REPORT_RESOURCE_WISE_BENCH, icon: Users2, description: "Each resource's bench % by month across a range, sorted by average bench % by default." },
+  // RBAC form name stays "Project Manager Dashboard" (must match the backend Form Master
+  // record); `label` only shortens what the sidebar displays, same short "Dashboard" every
+  // other role's landing page uses.
+  [FORM_NAMES.PM_DASHBOARD]: { to: ROUTES.PM_DASHBOARD, icon: Briefcase, exact: true, label: 'Dashboard' },
 };
 
 const NORMALIZED_CONFIG = Object.fromEntries(

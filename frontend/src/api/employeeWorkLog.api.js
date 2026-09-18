@@ -78,8 +78,10 @@ export const employeeWorkLogApi = {
   deleteMonthly: ({ month, year }) =>
     apiClient.delete('/employee-timesheets/monthly', { params: { month, year } }).then((r) => r.data),
   // POST /employee-timesheets/remind-approval
-  // No request body — the backend resolves the employee and their primary Team Lead from the
-  // Bearer token alone. Returns { success, message, data: { managerName, pendingCount, period } }.
+  // No request body — the backend resolves the employee and their approver(s) from the Bearer
+  // token alone. Returns { success, message, data: { recipients: [{ name }], pendingCount,
+  // period, message } } — a reminder can go to several Project Managers now (PM approval is
+  // Service-PO-scoped, not a single Primary Manager), not just one recipient.
   // 400 / 429 / 502 are user-facing errors; callers should surface err.response.data.message
   // verbatim rather than a generic fallback.
   remindApproval: () =>

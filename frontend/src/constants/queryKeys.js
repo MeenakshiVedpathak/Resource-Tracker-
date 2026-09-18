@@ -157,6 +157,7 @@ export const QUERY_KEYS = {
   REPORT_EMPLOYEE_UTILIZATION_SUMMARY: (params) => ['reports', 'employee-utilization-summary', params],
   REPORT_EMPLOYEE_UTILIZATION_SUMMARY_TOTALS: (params) => ['reports', 'employee-utilization-summary-totals', params],
   REPORT_RESOURCE_PROJECT_UTILIZATION: (params) => ['reports', 'resource-project-utilization', params],
+  REPORT_RESOURCE_MONTHLY_UTILIZATION: (params) => ['reports', 'resource-monthly-utilization', params],
   REPORT_CLIENT_SERVICE_PO_HOURS: (params) => ['reports', 'client-service-po-hours', params],
   REPORT_SERVICE_PO_PROFITABILITY: (params) => ['reports', 'service-po-profitability', params],
   REPORT_BUDGETED_MARGIN_FORECAST: (params) => ['reports', 'budgeted-margin-forecast', params],
@@ -177,6 +178,10 @@ export const QUERY_KEYS = {
   REPORT_SERVICE_PO_HOURS_BUDGET: (params) => ['reports', 'service-po-hours-budget', params],
   REPORT_EMPLOYEE_WORK_LOG_HOURS_SUMMARY: (params) => ['reports', 'employee-work-log-hours-summary', params],
   REPORT_EMPLOYEE_WORK_LOG_HOURS_SUMMARY_DETAILS: (employeeId, params) => ['reports', 'employee-work-log-hours-summary', employeeId, 'details', params],
+  REPORT_PM_WISE_UTILIZATION: (params) => ['reports', 'pm-wise-utilization', params],
+  REPORT_PROJECT_WISE_UTILIZATION: (params) => ['reports', 'project-wise-utilization', params],
+  REPORT_MONTH_WISE_BENCH: (params) => ['reports', 'month-wise-bench', params],
+  REPORT_RESOURCE_WISE_BENCH: (params) => ['reports', 'resource-wise-bench', params],
 
   // Notifications
   NOTIFICATIONS: (params) => ['notifications', params],

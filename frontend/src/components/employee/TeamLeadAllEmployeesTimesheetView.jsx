@@ -3,7 +3,7 @@ import { useQueries, useQueryClient } from '@tanstack/react-query';
 import { createColumnHelper } from '@tanstack/react-table';
 import { Check, X, ChevronRight, Loader2, CheckCircle2 } from 'lucide-react';
 import {
-  useMyTeamAllEmployeesApprovalSummary, useApproveMyTeamTimesheets,
+  useApproveMyTeamTimesheets,
   useRejectMyTeamTimesheetEntry, useApproveMyTeamTimesheetEntry,
 } from '@/hooks/useMyTeam';
 import { useAuth } from '@/hooks/useAuth';
@@ -20,10 +20,31 @@ import RejectEntryDialog from '@/components/employee/RejectEntryDialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter,
 } from '@/components/ui/sheet';
 import { ScrollArea } from '@/components/ui/scroll-area';
+
+// A small "Are you sure?" confirm anchored right next to whichever button triggered it (a
+// Popover, not ConfirmDialog's full-page overlay) — approving a single date/month is a low-
+// stakes, easily-repeated action, so a heavier centered modal that ignores where on the page (or
+// inside an already-open Sheet) the button actually was reads as more disruptive than it needs
+// to be. `open`/`onOpenChange` are controlled by the caller (see isApproveConfirmOpen/
+// closeApproveConfirm below) since only one of several approve buttons on screen is ever
+// confirming at once, sharing one piece of state instead of one flag per button.
+const ApproveConfirmPopover = ({ open, onOpenChange, description, onConfirm, trigger, align = 'end' }) => (
+  <Popover open={open} onOpenChange={onOpenChange}>
+    <PopoverTrigger asChild>{trigger}</PopoverTrigger>
+    <PopoverContent className="w-64 p-3" align={align} onClick={(e) => e.stopPropagation()}>
+      <p className="text-sm font-medium text-foreground">{description}</p>
+      <div className="mt-3 flex justify-end gap-2">
+        <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>Cancel</Button>
+        <Button size="sm" onClick={() => { onConfirm(); onOpenChange(false); }}>OK</Button>
+      </div>
+    </PopoverContent>
+  </Popover>
+);
 
 const columnHelper = createColumnHelper();
 
@@ -39,6 +60,23 @@ const rowKeyOf = (logType, row) => `${row.employeeId}:${logType === 'daily' ? ro
 const selectionValueOf = (logType, row, index) => (logType === 'daily'
   ? { employeeId: row.employeeId, date: row.date, index }
   : { employeeId: row.employeeId, month: row.month, year: row.year, index });
+
+// A bucket (one date or one month) is per-Employee, not per-Service-PO — its own entries can span
+// more than one Service PO. Now that a Project Manager's queue is scoped by which Service PO they
+// manage rather than "my direct reports," two different PMs can see the same Employee's bucket
+// for two different POs, so surfacing which PO(s) a bucket actually belongs to (without opening
+// the drill-down) matters more than it used to. Derived from the bucket's own already-embedded
+// `entries` — there's no separate bucket-level service_po_id/servicePO field to read instead, and
+// no new endpoint is being added just to fetch one.
+const distinctServicePOs = (row) => {
+  const seen = new Map();
+  (row.entries ?? []).forEach((e) => {
+    const id = e.service_po_id ?? e.servicePO?.id;
+    const name = e.servicePO?.service_po_name ?? e.servicePO?.service_po_code;
+    if (id != null && name && !seen.has(id)) seen.set(id, name);
+  });
+  return Array.from(seen.values());
+};
 
 const isApprovable = (row) => row.approval_status === 'pending' && row.approval_required !== false;
 const isEntryPending = (entry) => entry.status === 'pending';
@@ -62,14 +100,35 @@ const groupByEmployee = (targets) => {
   return map;
 };
 
+// A bucket's own set of distinct Service PO ids, from its already-embedded `entries` — see
+// distinctServicePOs below for why there's no separate bucket-level field to read instead.
+const rowServicePoIds = (row) => new Set(
+  (row.entries ?? [])
+    .map((e) => e.service_po_id ?? e.servicePO?.id)
+    .filter((id) => id != null)
+    .map(String)
+);
+
 // Team Lead Timesheet Approval's default table — every mapped Employee's pending/approved buckets
 // in one view, tagged with the Employee's name, so the Team Lead sees everything at a glance
-// instead of clicking into one Employee at a time. `employees`/`logType`/`dateRange`/`statusFilter`
-// are all narrowed by the page's own FilterPanel before ever reaching here — `dateRange` is always
-// a plain {startDate, endDate}, computed by the page from either the Daily date-range picker or the
-// Monthly Month&Year picker — so this component owns no filter UI of its own, only the resulting
-// table, selection, and drill-down/approve/reject flow.
-const TeamLeadAllEmployeesTimesheetView = ({ employees, logType, dateRange, statusFilter }) => {
+// instead of clicking into one Employee at a time. `rows` (already flattened/tagged with
+// employeeId/employeeName/employeeCode — see useMyTeamAllEmployeesApprovalSummary) and
+// `logType`/`dateRange`/`statusFilter` are all owned by the page (dateRange only for this file's
+// own selection-reset effect below — it no longer drives a fetch here) — this component owns no
+// filter UI of its own, only the resulting table, selection, and drill-down/approve/reject flow.
+//
+// `servicePoId`/`search` are filtered CLIENT-SIDE, same as `statusFilter` — GET
+// /my-team/timesheets/approval-summary has no confirmed service_po_id or cross-field search query
+// param of its own, and the whole matching set is already in memory (the page's own
+// useMyTeamAllEmployeesApprovalSummary call fans out one request per mapped Employee up front), so
+// there's nothing to gain from a server round trip even if the params existed. See this file's own
+// backend-request note for the case where a PM's Employee list is large enough that this stops
+// being true. `search` matches employee name, employee code, OR any Service PO name on the row —
+// it used to only narrow which Employees got fetched (by name/code) one level up in the page, but
+// matching Service PO names needs the row's own already-fetched entries, so all of it moved here.
+const TeamLeadAllEmployeesTimesheetView = ({
+  rows, isLoading, isError, error, logType, dateRange, statusFilter, servicePoId = 'all', search = '',
+}) => {
   const { success, error: showError, info } = useNotification();
   const { employee: currentEmployee } = useAuth();
   const queryClient = useQueryClient();
@@ -93,12 +152,6 @@ const TeamLeadAllEmployeesTimesheetView = ({ employees, logType, dateRange, stat
 
   const resetSelection = () => setSelected(new Map());
 
-  const filterParams = useMemo(() => ({
-    log_type: logType,
-    ...(dateRange?.startDate ? { startDate: dateRange.startDate, endDate: dateRange.endDate } : {}),
-  }), [logType, dateRange]);
-
-  const { rows, isLoading, isError, error } = useMyTeamAllEmployeesApprovalSummary(employees, filterParams);
   const approveMutation = useApproveMyTeamTimesheets();
   const rejectEntryMutation = useRejectMyTeamTimesheetEntry();
   const approveEntryMutation = useApproveMyTeamTimesheetEntry();
@@ -124,7 +177,16 @@ const TeamLeadAllEmployeesTimesheetView = ({ employees, logType, dateRange, stat
   // explicitly picked yet, falls back to most-recent-period-first across every Employee, ties
   // broken by name so a given period's rows stay grouped together instead of shuffling on refetch.
   const sortedRows = useMemo(() => {
-    const filtered = statusFilter === 'all' ? rows : rows.filter((r) => r.approval_status === statusFilter);
+    const filtered = rows
+      .filter((r) => statusFilter === 'all' || r.approval_status === statusFilter)
+      .filter((r) => servicePoId === 'all' || rowServicePoIds(r).has(String(servicePoId)))
+      .filter((r) => {
+        const q = search.trim().toLowerCase();
+        if (!q) return true;
+        if ((r.employeeName || '').toLowerCase().includes(q)) return true;
+        if ((r.employeeCode || '').toLowerCase().includes(q)) return true;
+        return distinctServicePOs(r).some((name) => name.toLowerCase().includes(q));
+      });
     const sortSpec = sorting[0];
     if (!sortSpec) {
       return [...filtered].sort((a, b) => {
@@ -140,7 +202,7 @@ const TeamLeadAllEmployeesTimesheetView = ({ employees, logType, dateRange, stat
       return desc ? -cmp : cmp;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, logType, statusFilter, sorting]);
+  }, [rows, logType, statusFilter, servicePoId, search, sorting]);
 
   const total = sortedRows.length;
   const pageRows = sortedRows.slice((page - 1) * limit, page * limit);
@@ -154,14 +216,17 @@ const TeamLeadAllEmployeesTimesheetView = ({ employees, logType, dateRange, stat
   const offPageSelectedCount = selected.size - pageSelectedCount;
   const selectedPageCount = new Set(Array.from(selected.values(), (v) => Math.floor(v.index / limit) + 1)).size;
 
-  // Resets whenever the in-scope Employee set or period filter changes (all owned by the page's
-  // FilterPanel) — a stale selection/page referencing a now out-of-scope Employee or a different
-  // filter's rows can otherwise linger invisibly.
+  // Resets whenever the in-scope Employee set or any filter changes (all owned by the page's
+  // FilterPanel/search box) — a stale selection/page referencing a now out-of-scope Employee or a
+  // different filter's rows can otherwise linger invisibly. Keyed on the actual row ids present
+  // (not `rows` itself, a new array identity every render) so a same-filter refetch (e.g. after an
+  // approve) doesn't spuriously reset an in-progress selection.
+  const rowIdsKey = rows.map((r) => `${r.employeeId}:${r.id ?? periodKey(r)}`).join(',');
   useEffect(() => {
     resetSelection();
     setPage(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [employees.map((e) => e.id).join(','), logType, dateRange?.startDate, dateRange?.endDate, statusFilter]);
+  }, [rowIdsKey, logType, dateRange?.startDate, dateRange?.endDate, statusFilter, servicePoId, search]);
 
   const handlePageChange = (p) => setPage(p);
 
@@ -207,12 +272,34 @@ const TeamLeadAllEmployeesTimesheetView = ({ employees, logType, dateRange, stat
   const runApprove = async (targets, successMessage, { isBulk = false } = {}) => {
     setIsApproving(true);
     try {
-      await Promise.all(Array.from(groupByEmployee(targets).entries()).map(([employeeId, ts]) =>
+      // Rows implied by this selection, not bucket count — a PM caller's approve now silently
+      // skips any entry whose Service PO isn't one they manage (backend-enforced, never an
+      // error), so a selection of 2 dates/months can still mean approving fewer than 2 rows even
+      // when nothing failed. The backend's own `total_rows_approved` counts entries, not buckets,
+      // so "expected" has to be entry counts too or every multi-entry bucket would read as a
+      // false mismatch.
+      const expectedRows = targets.reduce((sum, t) => {
+        const row = sortedRows.find((r) => rowKeyOf(logType, r) === rowKeyOf(logType, t));
+        return sum + (row?.entry_count ?? 1);
+      }, 0);
+
+      const results = await Promise.all(Array.from(groupByEmployee(targets).entries()).map(([employeeId, ts]) =>
         approveMutation.mutateAsync(logType === 'daily'
           ? { employeeId, dates: ts.map((t) => t.date) }
           : { employeeId, months: ts.map((t) => ({ month: t.month, year: t.year })) })));
+
+      // Never gated by role — Team Lead/Admin/BU Admin bulk-approve scope is unchanged (they
+      // always approve everything selected), so this comparison naturally never fires for them;
+      // only a PM whose selection spans a Service PO they don't manage sees approvedRows drop
+      // below expectedRows.
+      const approvedRows = results.reduce((sum, r) => sum + (r?.data?.total_rows_approved ?? r?.total_rows_approved ?? 0), 0);
+
       if (isBulk && isMobile) {
-        setBulkResult({ approved: targets.length, rejected: 0, total: targets.length });
+        setBulkResult({ approved: approvedRows, rejected: 0, total: expectedRows });
+      } else if (approvedRows < expectedRows) {
+        info(approvedRows === 0
+          ? "None of the selected entries could be approved — they belong to a Service PO you don't manage."
+          : `${approvedRows} of ${expectedRows} selected entries were approved — the rest belong to a Service PO you don't manage.`);
       } else {
         success(successMessage);
       }
@@ -281,6 +368,44 @@ const TeamLeadAllEmployeesTimesheetView = ({ employees, logType, dateRange, stat
         }
       },
     });
+  };
+
+  // A single "Are you sure?" confirmation gate in front of every approve action (single row, the
+  // Sheet footer's approve, per-entry, and the bulk bar) — approving is a one-way action from the
+  // Employee's perspective (nothing here un-approves), so a stray tap on the always-visible inline
+  // checkmark shouldn't silently commit it. Anchored right next to whichever button triggered it
+  // (a small Popover, not a full-page Dialog) — a plain yes/no on a low-stakes, easily-repeated
+  // action reads as heavier than it needs to when it takes over the whole screen and centers on
+  // the viewport regardless of where on a long page (or inside an already-open Sheet) the button
+  // actually was. `key` identifies which of the several approve buttons on screen (one row's
+  // inline action, the bulk bar, the Sheet footer, or one entry inside the drawer) currently has
+  // its popover open — only one is ever open at a time, so one shared state object covers all of
+  // them instead of one open-flag per button.
+  const [approveConfirm, setApproveConfirm] = useState(null); // { key, description, run: () => void } | null
+  const closeApproveConfirm = () => setApproveConfirm(null);
+  const isApproveConfirmOpen = (key) => approveConfirm?.key === key;
+
+  const confirmApproveRow = (row) => {
+    setApproveConfirm({
+      key: `row:${rowKeyOf(logType, row)}`,
+      description: `Approve ${periodLabel(row)} for ${row.employeeName}?`,
+      run: () => handleApproveRow(row),
+    });
+  };
+
+  const confirmApproveSelected = (key) => {
+    const targets = Array.from(selected.values());
+    if (targets.length === 0) return;
+    const unit = logType === 'daily' ? 'date' : 'month';
+    setApproveConfirm({
+      key,
+      description: `Approve ${targets.length} selected ${unit}${targets.length === 1 ? '' : 's'}?`,
+      run: handleApproveSelected,
+    });
+  };
+
+  const confirmApproveEntry = (entry) => {
+    setApproveConfirm({ key: `entry:${entry.id}`, description: 'Approve this entry?', run: () => handleApproveEntry(entry) });
   };
 
   const handleRejectSubmit = async (remark) => {
@@ -416,15 +541,22 @@ const TeamLeadAllEmployeesTimesheetView = ({ employees, logType, dateRange, stat
             >
               <X className="h-3.5 w-3.5" />
             </Button>
-            <Button
-              size="sm"
-              title="Approve"
-              className="h-6 w-6 p-0 bg-green-600 hover:bg-green-700 text-white rounded transition-colors"
-              onClick={() => handleApproveRow(row.original)}
-              disabled={isApproving || isRejecting}
-            >
-              <Check className="h-3.5 w-3.5" />
-            </Button>
+            <ApproveConfirmPopover
+              open={isApproveConfirmOpen(`row:${rowKeyOf(logType, row.original)}`)}
+              onOpenChange={(o) => (o ? confirmApproveRow(row.original) : closeApproveConfirm())}
+              description={`Approve ${periodLabel(row.original)} for ${row.original.employeeName}?`}
+              onConfirm={() => handleApproveRow(row.original)}
+              trigger={(
+                <Button
+                  size="sm"
+                  title="Approve"
+                  className="h-6 w-6 p-0 bg-green-600 hover:bg-green-700 text-white rounded transition-colors"
+                  disabled={isApproving || isRejecting}
+                >
+                  <Check className="h-3.5 w-3.5" />
+                </Button>
+              )}
+            />
           </div>
         ) : (
           <span className="text-sm text-muted-foreground">—</span>
@@ -435,6 +567,25 @@ const TeamLeadAllEmployeesTimesheetView = ({ employees, logType, dateRange, stat
       header: 'Employee Name',
       size: 260,
       cell: ({ row }) => <span className="text-sm font-medium">{row.original.employeeName}</span>,
+    }),
+    columnHelper.display({
+      id: 'servicePO',
+      header: 'Service PO',
+      size: 200,
+      // Not sortable/accessor-based on purpose — a bucket can list more than one PO, so there's
+      // no single scalar value to sort by the way the other columns have.
+      cell: ({ row }) => {
+        const pos = distinctServicePOs(row.original);
+        if (pos.length === 0) return <span className="text-sm text-muted-foreground">—</span>;
+        if (pos.length === 1) {
+          return <span className="block truncate text-sm" title={pos[0]}>{pos[0]}</span>;
+        }
+        return (
+          <span className="block truncate text-sm" title={pos.join(', ')}>
+            {pos[0]} <span className="text-muted-foreground">+{pos.length - 1} more</span>
+          </span>
+        );
+      },
     }),
     columnHelper.accessor((row) => sortValueOf('period', row), {
       id: 'period',
@@ -474,34 +625,42 @@ const TeamLeadAllEmployeesTimesheetView = ({ employees, logType, dateRange, stat
   // Approve/Reject icons here (unlike the desktop `actions` column): those actions live in the
   // row-detail bottom sheet and the bulk-action bar instead, matching the mobile mockup's list
   // view, which shows only a checkbox, identity, status, and a chevron per row.
-  const renderMobileCard = (rowData, row) => (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={() => setDrillDownRow(rowData)}
-      onKeyDown={(e) => { if (e.key === 'Enter') setDrillDownRow(rowData); }}
-      className="flex w-full items-center gap-3 rounded-lg border bg-white p-3 text-left active:bg-muted/40"
-    >
-      <Checkbox
-        checked={selected.has(rowKeyOf(logType, rowData))}
-        onCheckedChange={() => toggleOne(rowData, row.index)}
-        disabled={!isApprovable(rowData)}
-        onClick={(e) => e.stopPropagation()}
-        aria-label="Select row"
-      />
-      <Avatar className="h-9 w-9 shrink-0">
-        <AvatarFallback className="text-xs">{getInitials(rowData.employeeName)}</AvatarFallback>
-      </Avatar>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold">{rowData.employeeName}</p>
-        <p className="truncate text-xs text-muted-foreground">
-          {periodLabel(rowData)} · {formatHoursMinutes(rowData.total_hours)} · {rowData.entry_count} {rowData.entry_count === 1 ? 'entry' : 'entries'}
-        </p>
+  const renderMobileCard = (rowData, row) => {
+    const servicePOs = distinctServicePOs(rowData);
+    return (
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => setDrillDownRow(rowData)}
+        onKeyDown={(e) => { if (e.key === 'Enter') setDrillDownRow(rowData); }}
+        className="flex w-full items-center gap-3 rounded-lg border bg-white p-3 text-left active:bg-muted/40"
+      >
+        <Checkbox
+          checked={selected.has(rowKeyOf(logType, rowData))}
+          onCheckedChange={() => toggleOne(rowData, row.index)}
+          disabled={!isApprovable(rowData)}
+          onClick={(e) => e.stopPropagation()}
+          aria-label="Select row"
+        />
+        <Avatar className="h-9 w-9 shrink-0">
+          <AvatarFallback className="text-xs">{getInitials(rowData.employeeName)}</AvatarFallback>
+        </Avatar>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold">{rowData.employeeName}</p>
+          {servicePOs.length > 0 && (
+            <p className="truncate text-[11px] text-muted-foreground/80" title={servicePOs.join(', ')}>
+              {servicePOs.join(', ')}
+            </p>
+          )}
+          <p className="truncate text-xs text-muted-foreground">
+            {periodLabel(rowData)} · {formatHoursMinutes(rowData.total_hours)} · {rowData.entry_count} {rowData.entry_count === 1 ? 'entry' : 'entries'}
+          </p>
+        </div>
+        <StatusBadge status={rowData.approval_status} />
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
       </div>
-      <StatusBadge status={rowData.approval_status} />
-      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-    </div>
-  );
+    );
+  };
 
   if (isError) {
     return (
@@ -518,6 +677,11 @@ const TeamLeadAllEmployeesTimesheetView = ({ employees, logType, dateRange, stat
   if (bulkResult) {
     const { approved, rejected, total } = bulkResult;
     const verb = approved > 0 && rejected > 0 ? 'updated' : approved > 0 ? 'approved' : 'rejected';
+    // Approve path only (reject's `rejected`/`total` are always equal) — `approved` can now be
+    // less than `total` when some selected entries belonged to a Service PO this PM doesn't
+    // manage; the backend silently skips those rather than erroring, so this isn't a failure to
+    // report as one, just a count worth explaining rather than glossing over with "successfully".
+    const isPartialApprove = rejected === 0 && approved < total;
     return (
       <div className="flex md:hidden h-full min-h-0 flex-col items-center justify-center gap-4 p-6 text-center">
         <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
@@ -526,7 +690,9 @@ const TeamLeadAllEmployeesTimesheetView = ({ employees, logType, dateRange, stat
         <div>
           <h2 className="text-lg font-bold">Timesheets Updated!</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            {total} timesheet{total === 1 ? '' : 's'} {total === 1 ? 'has' : 'have'} been {verb} successfully.
+            {isPartialApprove
+              ? `${approved} of ${total} selected entries were approved — the rest belong to a Service PO you don't manage.`
+              : `${total} timesheet${total === 1 ? '' : 's'} ${total === 1 ? 'has' : 'have'} been ${verb} successfully.`}
           </p>
         </div>
         <div className="w-full max-w-xs space-y-2 rounded-lg border bg-muted/30 p-4 text-sm">
@@ -563,19 +729,27 @@ const TeamLeadAllEmployeesTimesheetView = ({ employees, logType, dateRange, stat
             <Button variant="outline" size="sm" onClick={resetSelection} disabled={isApproving}>
               Clear
             </Button>
-            <Button size="sm" className="gap-1.5" onClick={handleApproveSelected} disabled={isApproving}>
-              {isApproving ? (
-                <>
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Approving…
-                </>
-              ) : (
-                <>
-                  <Check className="h-3.5 w-3.5" />
-                  Approve Selected
-                </>
+            <ApproveConfirmPopover
+              open={isApproveConfirmOpen('bulk-desktop')}
+              onOpenChange={(o) => (o ? confirmApproveSelected('bulk-desktop') : closeApproveConfirm())}
+              description={approveConfirm?.description}
+              onConfirm={() => approveConfirm?.run?.()}
+              trigger={(
+                <Button size="sm" className="gap-1.5" disabled={isApproving}>
+                  {isApproving ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      Approving…
+                    </>
+                  ) : (
+                    <>
+                      <Check className="h-3.5 w-3.5" />
+                      Approve Selected
+                    </>
+                  )}
+                </Button>
               )}
-            </Button>
+            />
           </div>
         </div>
       )}
@@ -610,14 +784,22 @@ const TeamLeadAllEmployeesTimesheetView = ({ employees, logType, dateRange, stat
             <X className="h-4 w-4" />
             Reject ({selected.size})
           </Button>
-          <Button
-            className="flex-1 gap-1.5"
-            onClick={handleApproveSelected}
-            disabled={isApproving || isRejecting}
-          >
-            {isApproving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-            Approve ({selected.size})
-          </Button>
+          <ApproveConfirmPopover
+            open={isApproveConfirmOpen('bulk-mobile')}
+            onOpenChange={(o) => (o ? confirmApproveSelected('bulk-mobile') : closeApproveConfirm())}
+            description={approveConfirm?.description}
+            onConfirm={() => approveConfirm?.run?.()}
+            align="center"
+            trigger={(
+              <Button
+                className="flex-1 gap-1.5"
+                disabled={isApproving || isRejecting}
+              >
+                {isApproving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                Approve ({selected.size})
+              </Button>
+            )}
+          />
         </div>
       )}
 
@@ -696,19 +878,26 @@ const TeamLeadAllEmployeesTimesheetView = ({ employees, logType, dateRange, stat
                               <X className="h-3.5 w-3.5" />
                               Reject
                             </Button>
-                            <Button
-                              size="sm"
-                              className="h-7 gap-1"
-                              onClick={() => handleApproveEntry(r)}
-                              disabled={isRejecting || approveEntryMutation.isPending}
-                            >
-                              {approveEntryMutation.isPending ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              ) : (
-                                <Check className="h-3.5 w-3.5" />
+                            <ApproveConfirmPopover
+                              open={isApproveConfirmOpen(`entry:${r.id}`)}
+                              onOpenChange={(o) => (o ? confirmApproveEntry(r) : closeApproveConfirm())}
+                              description={approveConfirm?.description}
+                              onConfirm={() => approveConfirm?.run?.()}
+                              trigger={(
+                                <Button
+                                  size="sm"
+                                  className="h-7 gap-1"
+                                  disabled={isRejecting || approveEntryMutation.isPending}
+                                >
+                                  {approveEntryMutation.isPending ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  ) : (
+                                    <Check className="h-3.5 w-3.5" />
+                                  )}
+                                  {approveEntryMutation.isPending ? 'Approving…' : 'Approve'}
+                                </Button>
                               )}
-                              {approveEntryMutation.isPending ? 'Approving…' : 'Approve'}
-                            </Button>
+                            />
                           </div>
                         )}
                       </div>
@@ -719,19 +908,35 @@ const TeamLeadAllEmployeesTimesheetView = ({ employees, logType, dateRange, stat
 
               <SheetFooter>
                 {isApprovable(resolvedDrillDownRow) ? (
-                  <Button onClick={() => handleApproveRow(resolvedDrillDownRow)} disabled={isApproving} className="gap-1.5">
-                    {isApproving ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Approving…
-                      </>
-                    ) : (
-                      <>
-                        <Check className="h-4 w-4" />
-                        Approve {periodLabel(resolvedDrillDownRow)}
-                      </>
+                  <ApproveConfirmPopover
+                    open={isApproveConfirmOpen(`sheet-footer:${rowKeyOf(logType, resolvedDrillDownRow)}`)}
+                    onOpenChange={(o) => {
+                      if (!o) { closeApproveConfirm(); return; }
+                      setApproveConfirm({
+                        key: `sheet-footer:${rowKeyOf(logType, resolvedDrillDownRow)}`,
+                        description: `Approve ${periodLabel(resolvedDrillDownRow)} for ${resolvedDrillDownRow.employeeName}?`,
+                        run: () => handleApproveRow(resolvedDrillDownRow),
+                      });
+                    }}
+                    description={approveConfirm?.description}
+                    onConfirm={() => approveConfirm?.run?.()}
+                    align="center"
+                    trigger={(
+                      <Button disabled={isApproving} className="gap-1.5">
+                        {isApproving ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Approving…
+                          </>
+                        ) : (
+                          <>
+                            <Check className="h-4 w-4" />
+                            Approve {periodLabel(resolvedDrillDownRow)}
+                          </>
+                        )}
+                      </Button>
                     )}
-                  </Button>
+                  />
                 ) : (
                   <StatusBadge status={resolvedDrillDownRow.approval_status} />
                 )}

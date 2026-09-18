@@ -8,6 +8,7 @@ import {
   useMyTeamEmployeesMonthlyWorkLogTotals,
 } from '@/hooks/useMyTeam';
 import { useSelectableBusinessUnits } from '@/hooks/useSelectableBusinessUnits';
+import { useSelectableEntities } from '@/hooks/useSelectableEntities';
 import { useCanWrite } from '@/hooks/usePermissions';
 import PageHeader from '@/components/common/PageHeader';
 import SearchInput from '@/components/common/SearchInput';
@@ -110,6 +111,23 @@ const TeamLeadFillWorkLog = () => {
     [myBusinessUnits],
   );
 
+  // Entity column — an Employee carries no entity_id of its own, only `business_unit_ids`, so the
+  // Entity has to be derived one hop through the BU: each entry in `myBusinessUnits` already
+  // carries its own `entityId` (see useSelectableBusinessUnits), and `useSelectableEntities` gives
+  // the id->name lookup for it. Subject to the same limitation the Business Unit column above
+  // already has: `myBusinessUnits` is narrowed by whichever Entity filter is currently selected,
+  // so a BU belonging to a DIFFERENT Entity than the one picked won't resolve a name here either —
+  // consistent, not a new gap.
+  const { entities: myEntities } = useSelectableEntities();
+  const entityNameById = useMemo(
+    () => new Map(myEntities.map((e) => [String(e.id), e.name])),
+    [myEntities],
+  );
+  const entityNameByBuId = useMemo(
+    () => new Map(myBusinessUnits.map((bu) => [String(bu.id), entityNameById.get(String(bu.entityId)) ?? null])),
+    [myBusinessUnits, entityNameById],
+  );
+
   const myTeamParams = useMemo(
     () => (selectedBuId != null ? { buId: selectedBuId } : {}),
     [selectedBuId],
@@ -174,6 +192,14 @@ const TeamLeadFillWorkLog = () => {
     ),
     [pagedEmployees, buNameById],
   );
+  const entityColumnWidth = useMemo(
+    () => measureColumnWidth(
+      pagedEmployees,
+      (e) => [...new Set((e.business_unit_ids ?? []).map((id) => entityNameByBuId.get(String(id))).filter(Boolean))].join(', '),
+      { min: 120, max: 260 },
+    ),
+    [pagedEmployees, entityNameByBuId],
+  );
 
   const handleMonthYearChange = (v) => setMonthYear(v ?? defaultMonthYear());
 
@@ -224,6 +250,18 @@ const TeamLeadFillWorkLog = () => {
       cell: (info) => {
         const value = info.getValue() ?? '—';
         return <span className="block truncate text-sm text-muted-foreground" title={value}>{value}</span>;
+      },
+    }),
+    columnHelper.display({
+      id: 'entity',
+      header: 'Entity',
+      size: entityColumnWidth,
+      cell: ({ row }) => {
+        const names = [...new Set(
+          (row.original.business_unit_ids ?? []).map((id) => entityNameByBuId.get(String(id))).filter(Boolean)
+        )];
+        const joined = names.length ? names.join(', ') : '—';
+        return <span className="block truncate text-sm text-muted-foreground" title={joined}>{joined}</span>;
       },
     }),
     columnHelper.display({

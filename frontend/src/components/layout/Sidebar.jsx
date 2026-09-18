@@ -39,6 +39,16 @@ const RESTRICTED_MODULES = ['administration'];
 // list) — their group label becomes a link into that hub instead of plain text.
 const MODULE_OVERVIEW_ROUTES = { reports: ROUTES.REPORTS };
 
+// The "Core" module (Dashboard, and whatever else a given role's Form Master row places there —
+// e.g. AI Insights) is shown flat, directly in the nav, with no "CORE" collapsible header/toggle
+// above it — for every login, not just one role, since every role's own accessibleForms can carry
+// a "Core" module. It's normally the very first thing anyone needs, so hiding it behind a
+// collapse-to-expand step (like every other, genuinely multi-form module) added a click for no
+// reason. Matches by module name (case/whitespace-insensitive, same as every other module-name
+// compare in this file), not a hardcoded role check — whichever roles the backend's Form Master
+// happens to grant a "Core" module to all get the same flat treatment automatically.
+const FLAT_MODULES = ['core'];
+
 const normalizeName = (s) => (s ?? '').trim().toLowerCase();
 
 // Builds one nav group per module, one item per form — driven entirely by the RBAC
@@ -91,7 +101,7 @@ const buildNavGroups = (accessibleForms, { isSuperAdmin, canWrite, canManageBus,
             && (name !== normalizeName(FORM_NAMES.EMPLOYEES) || canManageEmployees)
             && (![FORM_NAMES.CLIENTS, FORM_NAMES.PROJECTS, FORM_NAMES.SERVICE_POS].map(normalizeName).includes(name) || canManageClientProjectPO);
           return {
-            label: form.name,
+            label: cfg.label ?? form.name,
             icon: cfg.icon,
             to: cfg.to,
             exact: cfg.exact,
@@ -515,6 +525,25 @@ const Sidebar = () => {
           // actually a Category/Form list under this module to hide (onlyModuleLink modules
           // already show nothing below their label).
           const moduleCollapsed = !onlyModuleLink && !expandedModules.has(group.label);
+          const isFlatModule = FLAT_MODULES.includes(normalizeName(group.label));
+          if (isFlatModule) {
+            // No "CORE" header/toggle at all — its items (Dashboard, and whatever else a role's
+            // Form Master places in this module) render as plain top-level links, always visible,
+            // in both the expanded and icon-only collapsed sidebar.
+            return (
+              <div key={group.label} className="space-y-px">
+                {flattenNavItems(group.items).map((item) => (
+                  <NavItem
+                    key={item.to}
+                    item={item}
+                    collapsed={collapsed}
+                    onNavAttempt={handleNavAttempt}
+                    onQuickAdd={handleQuickAdd}
+                  />
+                ))}
+              </div>
+            );
+          }
           return (
           <div key={group.label} className="space-y-px">
             <AnimatePresence initial={false}>

@@ -10,7 +10,12 @@ const DialogClose = DialogPrimitive.Close;
 const DialogOverlay = ({ className, ...props }) => (
   <DialogPrimitive.Overlay
     className={cn(
-      'fixed inset-0 z-50 bg-black/50 backdrop-blur-sm',
+      // z-[60], not z-50 — Sheet (ui/sheet.jsx) also uses z-50 for its own overlay/content, so a
+      // Dialog opened from inside an already-open Sheet (e.g. an approve confirmation triggered
+      // from a drill-down drawer) would otherwise have its stacking order against the Sheet
+      // decided only by DOM/portal-mount order — implicit and easy to invert by accident — rather
+      // than guaranteed. A confirmation dialog should always render on top of whatever opened it.
+      'fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm',
       'data-[state=open]:animate-in data-[state=closed]:animate-out',
       'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
       className
@@ -24,7 +29,7 @@ const DialogContent = ({ className, children, ...props }) => (
     <DialogOverlay />
     <DialogPrimitive.Content
       className={cn(
-        'fixed left-[50%] top-[50%] z-50 translate-x-[-50%] translate-y-[-50%]',
+        'fixed left-[50%] top-[50%] z-[60] translate-x-[-50%] translate-y-[-50%]',
         'w-[calc(100%-2rem)] max-w-lg bg-background rounded-xl shadow-dialog border p-6',
         'max-h-[calc(100dvh-2rem)] overflow-y-auto',
         'data-[state=open]:animate-in data-[state=closed]:animate-out',

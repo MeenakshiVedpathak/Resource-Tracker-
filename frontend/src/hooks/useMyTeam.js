@@ -114,6 +114,11 @@ export const useMyTeamAllEmployeesApprovalSummary = (employees, filterParams) =>
       ...row,
       employeeId: emp.id,
       employeeName: emp.full_name || emp.name || `Employee #${emp.id}`,
+      // Needed so a row-level search (name OR code OR Service PO) can match on code too — the
+      // parent page used to pre-filter by employee code before this hook ever ran, but a search
+      // that should also match Service PO names has to filter rows here instead, after they carry
+      // entries/servicePO data.
+      employeeCode: emp.employee_code,
     }));
   });
 

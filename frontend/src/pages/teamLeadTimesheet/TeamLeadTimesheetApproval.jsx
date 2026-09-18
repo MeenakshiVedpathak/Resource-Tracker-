@@ -2,7 +2,7 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { BellRing } from 'lucide-react';
-import { useMyTeamEmployees, useMyTeamEmployeesAcrossBus } from '@/hooks/useMyTeam';
+import { useMyTeamEmployees, useMyTeamEmployeesAcrossBus, useMyTeamAllEmployeesApprovalSummary } from '@/hooks/useMyTeam';
 import { useSelectableBusinessUnits } from '@/hooks/useSelectableBusinessUnits';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { useCanWrite } from '@/hooks/usePermissions';
@@ -178,6 +178,20 @@ const TeamLeadTimesheetApproval = () => {
     return month && year ? { month, year } : currentMonthYear();
   });
   const [statusFilter, setStatusFilter] = useState('all');
+  // Now that PM approval is scoped by Service PO mapping rather than "my direct reports," two
+  // different PMs can see overlapping Employee lists (same Employee, different POs) — this lets
+  // either narrow the combined table down to just the buckets touching one of their own managed
+  // POs. Filtered CLIENT-SIDE in TeamLeadAllEmployeesTimesheetView (see its own comment) — GET
+  // /my-team/timesheets/approval-summary has no confirmed service_po_id query param of its own.
+  //
+  // GET /my-team/service-pos (useMyTeamServicePos) looked like the natural source for this
+  // dropdown's OPTIONS, but it predates this redesign and returned nothing for a PM whose access
+  // now comes from employee_servicepo_mapping rather than the old manager_service_po_grants table
+  // it was presumably still reading from — see the backend-request note further down. Deriving
+  // the option list from `rows` below instead (every Service PO actually appearing across the
+  // buckets already being fetched) is self-consistent by construction: it can never offer a PO
+  // that then filters the table to zero rows, and needs no separate endpoint at all.
+  const [servicePoId, setServicePoId] = useState('all');
 
   // The table always takes a single {startDate, endDate} range regardless of Daily/Weekly/Monthly
   // — for Monthly that range is just always exactly one calendar month wide, never cleared to "no
@@ -185,14 +199,40 @@ const TeamLeadTimesheetApproval = () => {
   // week instead of two free clicks), so only Monthly needs a distinct branch here.
   const effectiveDateRange = logType === 'monthly' ? monthYearToRange(monthYear) : dateRange;
 
-  const employeesInScope = useMemo(() => {
-    const base = selectedEmployee ? [selectedEmployee] : employeeList;
-    const q = search.trim().toLowerCase();
-    if (!q) return base;
-    return base.filter((e) =>
-      (e.full_name || e.name || '').toLowerCase().includes(q)
-      || (e.employee_code || '').toLowerCase().includes(q));
-  }, [selectedEmployee, employeeList, search]);
+  // Deep-link narrowing to one specific Employee only — free-text `search` below is NOT applied
+  // here any more (unlike before this Service-PO-search change): it now has to match against
+  // Service PO names too, which only exist on the fetched buckets/entries, not on the Employee
+  // list itself, so narrowing which Employees get fetched by employee-name text alone would just
+  // as easily hide a match on the Service PO side. All mapped Employees are always fetched;
+  // `search` instead filters the resulting ROWS inside TeamLeadAllEmployeesTimesheetView.
+  const employeesInScope = useMemo(
+    () => (selectedEmployee ? [selectedEmployee] : employeeList),
+    [selectedEmployee, employeeList],
+  );
+
+  const summaryFilterParams = useMemo(() => ({
+    log_type: logType,
+    ...(effectiveDateRange?.startDate ? { startDate: effectiveDateRange.startDate, endDate: effectiveDateRange.endDate } : {}),
+  }), [logType, effectiveDateRange]);
+
+  const {
+    rows, isLoading: isRowsLoading, isError: isRowsError, error: rowsError,
+  } = useMyTeamAllEmployeesApprovalSummary(employeesInScope, summaryFilterParams);
+
+  const servicePoOptions = useMemo(() => {
+    const seen = new Map();
+    rows.forEach((r) => (r.entries ?? []).forEach((e) => {
+      const id = e.service_po_id ?? e.servicePO?.id;
+      const name = e.servicePO?.service_po_name ?? e.servicePO?.service_po_code;
+      if (id != null && name && !seen.has(String(id))) seen.set(String(id), name);
+    }));
+    return [
+      { label: 'All Service POs', value: 'all' },
+      ...Array.from(seen.entries())
+        .sort(([, a], [, b]) => a.localeCompare(b))
+        .map(([id, name]) => ({ label: name, value: id })),
+    ];
+  }, [rows]);
 
   const activeFilterCount =
     (entityId !== ALL_ENTITIES ? 1 : 0)
@@ -200,7 +240,8 @@ const TeamLeadTimesheetApproval = () => {
     + (selectedEmployeeId ? 1 : 0)
     + (logType !== 'daily' ? 1 : 0)
     + (logType !== 'monthly' && dateRange?.startDate ? 1 : 0)
-    + (statusFilter !== 'all' ? 1 : 0);
+    + (statusFilter !== 'all' ? 1 : 0)
+    + (servicePoId !== 'all' ? 1 : 0);
 
   const clearFilters = () => {
     setEntityId(ALL_ENTITIES);
@@ -209,6 +250,7 @@ const TeamLeadTimesheetApproval = () => {
     setDateRange(null);
     setMonthYear(currentMonthYear());
     setStatusFilter('all');
+    setServicePoId('all');
   };
 
   // Shared between the desktop inline FilterPanel and the mobile bottom sheet below — same
@@ -275,6 +317,18 @@ const TeamLeadTimesheetApproval = () => {
           className="h-9 w-full text-sm bg-white"
         />
       </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label className="text-xs">Service PO</Label>
+        <SearchableSelect
+          options={servicePoOptions}
+          value={servicePoId}
+          onValueChange={(v) => setServicePoId(v ?? 'all')}
+          placeholder="All Service POs"
+          searchPlaceholder="Search Service PO..."
+          className="h-9 w-full text-sm bg-white"
+        />
+      </div>
     </>
   );
 
@@ -292,7 +346,7 @@ const TeamLeadTimesheetApproval = () => {
             <SearchInput
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by employee name..."
+              placeholder="Search employee name or Service PO..."
               className="w-[220px]"
             />
             <FilterToggleButton
@@ -333,7 +387,7 @@ const TeamLeadTimesheetApproval = () => {
         <SearchInput
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by employee name..."
+          placeholder="Search employee name or Service PO..."
           className="w-full"
           inputClassName="bg-white"
         />
@@ -398,14 +452,17 @@ const TeamLeadTimesheetApproval = () => {
         </div>
       ) : employeeList.length === 0 ? (
         <EmptyState title="No Employees reporting to you yet." />
-      ) : employeesInScope.length === 0 ? (
-        <EmptyState title="No employees match your search." />
       ) : (
         <TeamLeadAllEmployeesTimesheetView
-          employees={employeesInScope}
+          rows={rows}
+          isLoading={isRowsLoading}
+          isError={isRowsError}
+          error={rowsError}
           logType={logType}
           dateRange={effectiveDateRange}
           statusFilter={statusFilter}
+          servicePoId={servicePoId}
+          search={search}
         />
       )}
     </div>

@@ -137,6 +137,17 @@ export const useMonthlyResourceUtilization = (params) =>
     placeholderData: (prev) => prev,
   });
 
+// "Resource Monthly Utilization" (§ new report) — a separate screen/endpoint from
+// useMonthlyResourceUtilization above; see that api function's own comment for the distinction.
+export const useResourceMonthlyUtilization = (params) =>
+  useQuery({
+    queryKey: QUERY_KEYS.REPORT_RESOURCE_MONTHLY_UTILIZATION(params),
+    queryFn: () => reportsApi.getResourceMonthlyUtilization(params),
+    enabled: !!(params?.month && params?.year),
+    staleTime: 0,
+    placeholderData: (prev) => prev,
+  });
+
 export const useEmployeeUtilizationSummary = (params) =>
   useQuery({
     queryKey: QUERY_KEYS.REPORT_EMPLOYEE_UTILIZATION_SUMMARY(params),
@@ -385,6 +396,64 @@ export const useServicePOHoursBudget = (params) => {
     staleTime: 0,
     placeholderData: (prev) => prev,
     retry: false,
+  });
+};
+
+// Accepts either the single-month shorthand {month, year} or a range {startMonth, startYear,
+// endMonth, endYear} — same "OR" contract as useInvoiceRealizationTrend, matching this
+// endpoint's own 422 ("Provide either (month & year) or (startMonth, startYear, endMonth,
+// endYear).") — the request is held until one full mode is present, so the page's own default
+// (current month on both ends of the range picker) never actually reaches that error. Server-
+// paginated and server-sorted: page/limit/sortBy/sortOrder go straight through.
+export const usePmWiseUtilization = (params) => {
+  const hasMonthYear = !!(params?.month && params?.year);
+  const hasRange = !!(params?.startMonth && params?.startYear && params?.endMonth && params?.endYear);
+  return useQuery({
+    queryKey: QUERY_KEYS.REPORT_PM_WISE_UTILIZATION(params),
+    queryFn: () => reportsApi.getPmWiseUtilization(params),
+    enabled: hasMonthYear || hasRange,
+    staleTime: 0,
+    placeholderData: (prev) => prev,
+  });
+};
+
+// Same contract as usePmWiseUtilization above.
+export const useProjectWiseUtilization = (params) => {
+  const hasMonthYear = !!(params?.month && params?.year);
+  const hasRange = !!(params?.startMonth && params?.startYear && params?.endMonth && params?.endYear);
+  return useQuery({
+    queryKey: QUERY_KEYS.REPORT_PROJECT_WISE_UTILIZATION(params),
+    queryFn: () => reportsApi.getProjectWiseUtilization(params),
+    enabled: hasMonthYear || hasRange,
+    staleTime: 0,
+    placeholderData: (prev) => prev,
+  });
+};
+
+// Same month/range "OR" contract as above. Not paginated (one row per calendar month in range).
+export const useMonthWiseBench = (params) => {
+  const hasMonthYear = !!(params?.month && params?.year);
+  const hasRange = !!(params?.startMonth && params?.startYear && params?.endMonth && params?.endYear);
+  return useQuery({
+    queryKey: QUERY_KEYS.REPORT_MONTH_WISE_BENCH(params),
+    queryFn: () => reportsApi.getMonthWiseBench(params),
+    enabled: hasMonthYear || hasRange,
+    staleTime: 0,
+    placeholderData: (prev) => prev,
+  });
+};
+
+// Its own report page (ResourceWiseBenchReport.jsx) — server-paginated and server-sorted
+// (sortBy: full_name|avg_bench_pct), same month/range "OR" gate as its sibling above.
+export const useResourceWiseBench = (params) => {
+  const hasMonthYear = !!(params?.month && params?.year);
+  const hasRange = !!(params?.startMonth && params?.startYear && params?.endMonth && params?.endYear);
+  return useQuery({
+    queryKey: QUERY_KEYS.REPORT_RESOURCE_WISE_BENCH(params),
+    queryFn: () => reportsApi.getResourceWiseBench(params),
+    enabled: hasMonthYear || hasRange,
+    staleTime: 0,
+    placeholderData: (prev) => prev,
   });
 };
 

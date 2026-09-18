@@ -306,7 +306,7 @@ const TimesheetApprovalStatusReport = () => {
                     <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-white" />
                   </span>
                 )}
-                {isReminding ? 'Sending…' : 'Remind Team Lead'}
+                {isReminding ? 'Sending…' : 'Remind Project Manager'}
               </Button>
             )}
             <FilterToggleButton

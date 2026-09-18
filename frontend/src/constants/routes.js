@@ -141,6 +141,7 @@ export const ROUTES = {
   REPORT_MONTHLY_RESOURCE_UTILIZATION: '/reports/monthly-resource-utilization',
   REPORT_EMPLOYEE_UTILIZATION_SUMMARY: '/reports/employee-utilization-summary',
   REPORT_RESOURCE_PROJECT_UTILIZATION: '/reports/resource-project-utilization',
+  REPORT_RESOURCE_MONTHLY_UTILIZATION: '/reports/resource-monthly-utilization',
   REPORT_CLIENT_SERVICE_PO_HOURS: '/reports/client-service-po-hours',
   REPORT_SERVICE_PO_PROFITABILITY: '/reports/service-po-profitability',
   REPORT_BUDGETED_MARGIN_FORECAST: '/reports/budgeted-margin-forecast',
@@ -161,6 +162,10 @@ export const ROUTES = {
   REPORT_SERVICE_PO_HOURS_BUDGET: '/reports/service-po-hours-budget',
   REPORT_EMPLOYEE_WORK_LOG_HOURS_SUMMARY: '/reports/employee-work-log-hours-summary',
   REPORT_EMPLOYEE_WORK_LOG_COMPLIANCE: '/reports/employee-work-log-compliance',
+  REPORT_PM_WISE_UTILIZATION: '/reports/pm-wise-utilization',
+  REPORT_PROJECT_WISE_UTILIZATION: '/reports/project-wise-utilization',
+  REPORT_MONTH_WISE_BENCH: '/reports/month-wise-bench',
+  REPORT_RESOURCE_WISE_BENCH: '/reports/resource-wise-bench',
 
   // Team Mapping — Service PO Admin self-service (§7)
   TEAM_MAPPINGS: '/team-mappings',

@@ -41,6 +41,12 @@ export const reportsApi = {
   getEmployeeUtilizationSummary: (params) => getReport('/reports/employee-utilization-summary', params),
   getResourceProjectUtilization: (params) => getReport('/reports/resource-project-utilization-report', params),
   getClientServicePOHours: (params) => getReport('/reports/client-service-po-hours', params),
+  // "Resource Monthly Utilization" (§ new report, 2026-09) — NOT the same screen as
+  // getMonthlyResourceUtilization above (that one is the dynamic-service-category "Excel-style"
+  // report) or getResourceProjectUtilization (per-project hours breakdown). This one is a flat,
+  // fixed-column billable/non-billable/overall utilization % per employee per month. Its own
+  // endpoint, own page, own hook — none of the other two are touched by this addition.
+  getResourceMonthlyUtilization: (params) => getReport('/reports/resource-monthly-utilization', params),
 
   // Analytics — margin/profitability/risk reports (§ new report suite)
   getServicePOProfitability: (params) => getReport('/reports/service-po-profitability', params),
@@ -121,4 +127,15 @@ export const reportsApi = {
   // • employeeIds: [...] + period              → remind a specific selection
   sendWorkLogComplianceBulkReminder: (body) =>
     apiClient.post('/reports/employee-work-log-compliance/remind-bulk', body).then((r) => r.data),
+
+  // Management Reports — PM-wise / Project-wise Utilization + Month/Resource-wise Bench (§ new
+  // report suite 4). All server-paginated and server-sorted like getResourceUtilizationTrend
+  // above — page/limit/sortBy/sortOrder go straight through as query params, no special handling
+  // needed here.
+  getPmWiseUtilization: (params) => getReport('/reports/pm-wise-utilization', params),
+  getProjectWiseUtilization: (params) => getReport('/reports/project-wise-utilization', params),
+  // Small, fixed-size result (one row per calendar month in the selected range) — not paginated.
+  getMonthWiseBench: (params) => getReport('/reports/month-wise-bench', params),
+  // Its own report page (ResourceWiseBenchReport.jsx) — server-paginated and server-sorted.
+  getResourceWiseBench: (params) => getReport('/reports/resource-wise-bench', params),
 };

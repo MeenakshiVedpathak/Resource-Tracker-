@@ -85,7 +85,7 @@ const buildNavGroups = (accessibleForms, { moduleRank, formRank, categoryOf }) =
             return null;
           }
           return {
-            label: form.name,
+            label: cfg.label ?? form.name,
             icon: cfg.icon,
             to: cfg.to,
             exact: cfg.exact,

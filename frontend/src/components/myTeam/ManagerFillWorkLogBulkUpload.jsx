@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import * as XLSX from 'xlsx';
-import { UploadCloud, FileSpreadsheet, X, CheckCircle2, AlertCircle, XCircle, BadgeCheck } from 'lucide-react';
+import { UploadCloud, FileSpreadsheet, X, CheckCircle2, AlertCircle, AlertTriangle, XCircle, BadgeCheck } from 'lucide-react';
 import { useImportMyTeamMonthlyWorkLog } from '@/hooks/useMyTeam';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
@@ -195,54 +195,116 @@ const ManagerFillWorkLogBulkUpload = ({ monthYear, monthLabel }) => {
         </div>
       )}
 
-      {result?.type === 'success' && (
-        <>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-wrap items-center gap-3">
-              <Badge className="gap-1.5 bg-green-100 text-green-700 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400">
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                {result.data?.employees_processed ?? 0} employees updated, {result.data?.total_rows ?? 0} entries saved and approved
-              </Badge>
+      {result?.type === 'success' && (() => {
+        // employees_failed/failures are always present on a success response (0/[] when nothing
+        // failed) — the backend now processes every employee independently instead of rejecting
+        // the whole file on one write-time conflict (e.g. an employee's month already synced to
+        // the official Timesheet). This is still success: true/200, never routed through the
+        // error-toast path above — only a per-employee detail to surface inline.
+        const employeesFailed = result.data?.employees_failed ?? 0;
+        const employeesProcessed = result.data?.employees_processed ?? 0;
+        const failures = Array.isArray(result.data?.failures) ? result.data.failures : [];
+        const hasFailures = employeesFailed > 0;
+
+        return (
+          <>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-wrap items-center gap-3">
+                {hasFailures ? (
+                  <Badge variant="warning" className="gap-1.5">
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    {employeesProcessed} of {employeesProcessed + employeesFailed} employees imported successfully, {employeesFailed} failed
+                  </Badge>
+                ) : (
+                  <Badge className="gap-1.5 bg-green-100 text-green-700 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    {employeesProcessed} employees updated, {result.data?.total_rows ?? 0} entries saved and approved
+                  </Badge>
+                )}
+              </div>
+              <Button variant="outline" size="sm" onClick={handleReset}>
+                Upload Another File
+              </Button>
             </div>
-            <Button variant="outline" size="sm" onClick={handleReset}>
-              Upload Another File
-            </Button>
-          </div>
 
-          <div className="flex items-center gap-2 rounded-md border border-success/30 bg-success/10 px-3 py-2 text-xs font-medium text-success">
-            <BadgeCheck className="h-3.5 w-3.5 shrink-0" />
-            Every entry from this file is approved immediately — no employee approval needed.
-          </div>
+            <div className="flex items-center gap-2 rounded-md border border-success/30 bg-success/10 px-3 py-2 text-xs font-medium text-success">
+              <BadgeCheck className="h-3.5 w-3.5 shrink-0" />
+              Every entry from this file is approved immediately — no employee approval needed.
+            </div>
 
-          {Array.isArray(result.data?.results) && result.data.results.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm">Results</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="overflow-auto max-h-[400px]">
-                  <Table>
-                    <TableHeader className="sticky top-0 z-10 bg-slate-50 dark:bg-slate-900 shadow-sm">
-                      <TableRow>
-                        <TableHead>Employee Code</TableHead>
-                        <TableHead>Entries Saved</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {result.data.results.map((row, idx) => (
-                        <TableRow key={row.employee_id ?? idx}>
-                          <TableCell className="text-sm font-medium">{row.employee_code ?? '—'}</TableCell>
-                          <TableCell className="text-sm text-muted-foreground">{row.entry_count ?? 0}</TableCell>
+            {hasFailures && (
+              <Card className="border-warning/40">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-sm text-warning">
+                    <AlertTriangle className="h-4 w-4" />
+                    {employeesFailed} employee{employeesFailed !== 1 ? 's' : ''} failed — everyone else above was saved
+                  </CardTitle>
+                  <CardDescription>
+                    These employees weren&apos;t updated. Fix the issue below (e.g. re-upload after
+                    the month is reopened) and submit just their rows separately — the rest of this
+                    file is already saved and approved.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="overflow-auto max-h-[400px]">
+                    <Table>
+                      <TableHeader className="sticky top-0 z-10 bg-slate-50 dark:bg-slate-900 shadow-sm">
+                        <TableRow className="bg-warning/5">
+                          <TableHead>Employee Code</TableHead>
+                          <TableHead>Employee Name</TableHead>
+                          <TableHead>Error</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </>
-      )}
+                      </TableHeader>
+                      <TableBody>
+                        {failures.map((row, idx) => (
+                          <TableRow key={row.employee_id ?? idx} className="hover:bg-warning/5 align-top">
+                            <TableCell className="text-sm font-medium">{row.employee_code ?? '—'}</TableCell>
+                            <TableCell className="text-sm">{row.employee_name ?? '—'}</TableCell>
+                            <TableCell className="text-sm text-warning">
+                              <span className="flex items-start gap-1.5">
+                                <XCircle className="mt-0.5 h-3 w-3 shrink-0" />
+                                <span>{row.error ?? 'Unknown error'}</span>
+                              </span>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {Array.isArray(result.data?.results) && result.data.results.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm">Results</CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="overflow-auto max-h-[400px]">
+                    <Table>
+                      <TableHeader className="sticky top-0 z-10 bg-slate-50 dark:bg-slate-900 shadow-sm">
+                        <TableRow>
+                          <TableHead>Employee Code</TableHead>
+                          <TableHead>Entries Saved</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {result.data.results.map((row, idx) => (
+                          <TableRow key={row.employee_id ?? idx}>
+                            <TableCell className="text-sm font-medium">{row.employee_code ?? '—'}</TableCell>
+                            <TableCell className="text-sm text-muted-foreground">{row.entry_count ?? 0}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </>
+        );
+      })()}
 
       {result?.type === 'validation' && (
         <Card className="border-destructive/40">

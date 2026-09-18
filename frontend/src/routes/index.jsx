@@ -115,6 +115,7 @@ const InvoicePOSummary = lazy(() => import('@/pages/reports/InvoicePOSummary'));
 const MonthlyResourceUtilization = lazy(() => import('@/pages/reports/MonthlyResourceUtilization'));
 const EmployeeUtilizationSummary = lazy(() => import('@/pages/reports/EmployeeUtilizationSummary'));
 const ResourceProjectUtilization = lazy(() => import('@/pages/reports/ResourceProjectUtilization'));
+const ResourceMonthlyUtilization = lazy(() => import('@/pages/reports/ResourceMonthlyUtilization'));
 const ClientServicePOHoursReport = lazy(() => import('@/pages/reports/ClientServicePOHoursReport'));
 const ServicePOProfitability = lazy(() => import('@/pages/reports/ServicePOProfitability'));
 const BudgetedMarginForecast = lazy(() => import('@/pages/reports/BudgetedMarginForecast'));
@@ -135,6 +136,10 @@ const ResourceUtilizationTrend = lazy(() => import('@/pages/reports/ResourceUtil
 const ServicePOHoursBudget = lazy(() => import('@/pages/reports/ServicePOHoursBudget'));
 const EmployeeWorkLogHoursSummaryReport = lazy(() => import('@/pages/reports/EmployeeWorkLogHoursSummaryReport'));
 const EmployeeWorkLogComplianceReport = lazy(() => import('@/pages/reports/EmployeeWorkLogComplianceReport'));
+const PmWiseUtilizationReport = lazy(() => import('@/pages/reports/PmWiseUtilizationReport'));
+const ProjectWiseUtilizationReport = lazy(() => import('@/pages/reports/ProjectWiseUtilizationReport'));
+const MonthWiseBenchReport = lazy(() => import('@/pages/reports/MonthWiseBenchReport'));
+const ResourceWiseBenchReport = lazy(() => import('@/pages/reports/ResourceWiseBenchReport'));
 
 // ── AI Copilot (new pages, launched from the floating AI Copilot widget) ──
 const RootCauseView = lazy(() => import('@/pages/ai/RootCauseView'));
@@ -421,6 +426,7 @@ const AppRoutes = () => {
           <Route path={ROUTES.REPORT_MONTHLY_RESOURCE_UTILIZATION} element={<ProtectedRoute formName={FORM_NAMES.REPORT_MONTHLY_UTILIZATION}><MonthlyResourceUtilization /></ProtectedRoute>} />
           <Route path={ROUTES.REPORT_EMPLOYEE_UTILIZATION_SUMMARY} element={<ProtectedRoute formName={FORM_NAMES.REPORT_EMPLOYEE_UTILIZATION_SUMMARY}><EmployeeUtilizationSummary /></ProtectedRoute>} />
           <Route path={ROUTES.REPORT_RESOURCE_PROJECT_UTILIZATION} element={<ProtectedRoute formName={FORM_NAMES.REPORT_RESOURCE_PROJECT_UTILIZATION}><ResourceProjectUtilization /></ProtectedRoute>} />
+          <Route path={ROUTES.REPORT_RESOURCE_MONTHLY_UTILIZATION} element={<ProtectedRoute formName={FORM_NAMES.REPORT_RESOURCE_MONTHLY_UTILIZATION}><ResourceMonthlyUtilization /></ProtectedRoute>} />
           <Route path={ROUTES.REPORT_CLIENT_SERVICE_PO_HOURS} element={<ProtectedRoute formName={FORM_NAMES.REPORT_CLIENT_SERVICE_PO_HOURS}><ClientServicePOHoursReport /></ProtectedRoute>} />
           <Route path={ROUTES.REPORT_SERVICE_PO_PROFITABILITY} element={<ProtectedRoute formName={FORM_NAMES.REPORT_SERVICE_PO_PROFITABILITY}><ServicePOProfitability /></ProtectedRoute>} />
           <Route path={ROUTES.REPORT_BUDGETED_MARGIN_FORECAST} element={<ProtectedRoute formName={FORM_NAMES.REPORT_BUDGETED_MARGIN_FORECAST}><BudgetedMarginForecast /></ProtectedRoute>} />
@@ -439,6 +445,10 @@ const AppRoutes = () => {
           <Route path={ROUTES.REPORT_EMPLOYEE_BENCH_PERCENTAGE} element={<ProtectedRoute formName={FORM_NAMES.REPORT_EMPLOYEE_BENCH_PERCENTAGE}><EmployeeBenchPercentage /></ProtectedRoute>} />
           <Route path={ROUTES.REPORT_RESOURCE_UTILIZATION_TREND} element={<ProtectedRoute formName={FORM_NAMES.REPORT_RESOURCE_UTILIZATION_TREND}><ResourceUtilizationTrend /></ProtectedRoute>} />
           <Route path={ROUTES.REPORT_SERVICE_PO_HOURS_BUDGET} element={<ProtectedRoute formName={FORM_NAMES.REPORT_SERVICE_PO_HOURS_BUDGET}><ServicePOHoursBudget /></ProtectedRoute>} />
+          <Route path={ROUTES.REPORT_PM_WISE_UTILIZATION} element={<ProtectedRoute formName={FORM_NAMES.REPORT_PM_WISE_UTILIZATION}><PmWiseUtilizationReport /></ProtectedRoute>} />
+          <Route path={ROUTES.REPORT_PROJECT_WISE_UTILIZATION} element={<ProtectedRoute formName={FORM_NAMES.REPORT_PROJECT_WISE_UTILIZATION}><ProjectWiseUtilizationReport /></ProtectedRoute>} />
+          <Route path={ROUTES.REPORT_MONTH_WISE_BENCH} element={<ProtectedRoute formName={FORM_NAMES.REPORT_MONTH_WISE_BENCH}><MonthWiseBenchReport /></ProtectedRoute>} />
+          <Route path={ROUTES.REPORT_RESOURCE_WISE_BENCH} element={<ProtectedRoute formName={FORM_NAMES.REPORT_RESOURCE_WISE_BENCH}><ResourceWiseBenchReport /></ProtectedRoute>} />
           <Route path={ROUTES.REPORT_EMPLOYEE_WORK_LOG_HOURS_SUMMARY} element={<ProtectedRoute formName={FORM_NAMES.REPORT_EMPLOYEE_WORK_LOG_HOURS_SUMMARY} allowIfNoFormsMapped><EmployeeWorkLogHoursSummaryReport /></ProtectedRoute>} />
           {/* No formName gate — reachable by any authenticated login regardless of Role-Form
               Mapping, since Team Lead Timesheet Approval's "Check Pending & Remind" button links

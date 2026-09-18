@@ -67,8 +67,8 @@ const exportToExcel = (records, columns, month, year) => {
     cat.service_types.forEach(st => headerRow2.push(st.name));
   });
 
-  headerRow1.push('Summary', '', '');
-  headerRow2.push('Billable Total (hrs)', 'Non-Billable Total (hrs)', 'Total Utilization (hrs)');
+  headerRow1.push('Summary', '', '', '');
+  headerRow2.push('Billable Total (hrs)', 'Non-Billable Total (hrs)', 'Total Utilization (hrs)', 'Utilization %');
 
   const dataRows = records.map((r, i) => {
     const row = [
@@ -89,7 +89,12 @@ const exportToExcel = (records, columns, month, year) => {
       });
     });
 
-    row.push(r.billable_total ?? 0, r.non_billable_total ?? 0, r.total_utilization ?? 0);
+    row.push(
+      r.billable_total ?? 0,
+      r.non_billable_total ?? 0,
+      r.total_utilization ?? 0,
+      r.utilization_percentage != null ? `${r.utilization_percentage}%` : ''
+    );
     return row;
   });
 
@@ -105,7 +110,7 @@ const exportToExcel = (records, columns, month, year) => {
     }
     colIndex += len;
   });
-  merges.push({ s: { r: 0, c: colIndex }, e: { r: 0, c: colIndex + 2 } });
+  merges.push({ s: { r: 0, c: colIndex }, e: { r: 0, c: colIndex + 3 } });
   ws['!merges'] = merges;
 
   const wb = XLSX.utils.book_new();
