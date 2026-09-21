@@ -228,4 +228,8 @@ export const QUERY_KEYS = {
   PM_DASHBOARD_TEAM: (params) => ['pm-dashboard', 'team', params],
   PM_DASHBOARD_WORKLOG: (params) => ['pm-dashboard', 'worklog', params],
   PM_DASHBOARD_ACTION_REQUIRED: (params) => ['pm-dashboard', 'action-required', params],
+
+  // Off-Day Approval Gate
+  OFF_DAY_REQUESTS_MINE: (params) => ['employee-timesheets', 'off-day-requests', params],
+  OFF_DAY_REQUESTS_QUEUE: (params) => ['my-team', 'off-day-requests', params],
 };

@@ -1,6 +1,9 @@
 import { useState } from 'react';
+import * as XLSX from 'xlsx';
 import { createColumnHelper } from '@tanstack/react-table';
+import { Download } from 'lucide-react';
 import { useResourceMonthlyUtilization } from '@/hooks/useReports';
+import { reportsApi } from '@/api/reports.api';
 import { extractReportRows } from '@/utils/reportEnvelope';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useActiveEmployees } from '@/hooks/useEmployees';
@@ -14,6 +17,7 @@ import FilterPanel from '@/components/common/FilterPanel';
 import BusinessUnitFilter, { ALL_BUS } from '@/components/common/BusinessUnitFilter';
 import EntityFilter, { ALL_ENTITIES } from '@/components/common/EntityFilter';
 import SearchInput from '@/components/common/SearchInput';
+import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
@@ -104,6 +108,32 @@ const SummaryItem = ({ label, value }) => (
   </div>
 );
 
+// Every sibling report on this page (Employee Utilization Summary, PM-wise/Project-wise
+// Utilization, …) has an Export Excel action — this one didn't. Follows
+// EmployeeUtilizationSummary's "export every matching record, not just the current page" pattern
+// (one extra request with a wide `limit`) since this endpoint is server-paginated the same way.
+const exportToExcel = (rows) => {
+  const header = [
+    'Employee', 'Employee Code', 'Month', 'Billable (hrs)', 'Non-Billable (hrs)', 'Total Hours',
+    'Billable Utilisation %', 'Non-Billable Utilisation %', 'Overall Utilisation %',
+  ];
+  const dataRows = rows.map((r) => [
+    r.employeeName ?? '',
+    r.employeeCode ?? '',
+    shortMonthLabel(r.month, r.year),
+    r.billableHours != null ? Number(r.billableHours) : '',
+    r.nonBillableHours != null ? Number(r.nonBillableHours) : '',
+    r.totalHours != null ? Number(r.totalHours) : '',
+    r.billableUtilizationPercentage != null ? Number(r.billableUtilizationPercentage) : '',
+    r.nonBillableUtilizationPercentage != null ? Number(r.nonBillableUtilizationPercentage) : '',
+    r.overallUtilizationPercentage != null ? Number(r.overallUtilizationPercentage) : '',
+  ]);
+  const ws = XLSX.utils.aoa_to_sheet([header, ...dataRows]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Resource Monthly Utilisation');
+  XLSX.writeFile(wb, 'Resource_Monthly_Utilisation_Report.xlsx');
+};
+
 // Employee/resource-wise monthly utilization, split into Billable / Non-Billable / Overall — a
 // NEW, separate screen from MonthlyResourceUtilization.jsx (dynamic service-category "Excel-
 // style" report) and ResourceProjectUtilization.jsx (per-project hours breakdown); neither of
@@ -128,6 +158,7 @@ const ResourceMonthlyUtilization = () => {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
+  const [exporting, setExporting] = useState(false);
 
   const debouncedSearch = useDebounce(search, 400);
 
@@ -156,6 +187,19 @@ const ResourceMonthlyUtilization = () => {
   const meta = data?.meta ?? {};
   const summary = data?.data?.summary ?? null;
   const showLoading = periodReady && isPending;
+
+  // Export pulls every matching record (not just the current page) with one extra request —
+  // same tradeoff EmployeeUtilizationSummary documents for its own export.
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const total = meta.total > 0 ? meta.total : 1000;
+      const res = await reportsApi.getResourceMonthlyUtilization({ ...params, page: 1, limit: total });
+      exportToExcel(extractReportRows(res));
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const activeFilterCount = (entityId !== ALL_ENTITIES ? 1 : 0)
     + (buId !== ALL_BUS ? 1 : 0)
@@ -199,6 +243,11 @@ const ResourceMonthlyUtilization = () => {
               activeCount={activeFilterCount}
               className="h-9"
             />
+            {records.length > 0 && (
+              <Button variant="outline" size="toolbar" onClick={handleExport} disabled={exporting}>
+                <Download className="h-4 w-4" />{exporting ? 'Exporting…' : 'Export Excel'}
+              </Button>
+            )}
           </div>
         }
       />

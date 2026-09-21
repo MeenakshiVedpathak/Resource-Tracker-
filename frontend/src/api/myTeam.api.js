@@ -1,7 +1,7 @@
 import apiClient, { explicitBuScope } from '@/services/apiClient';
 import { RBAC_MOCK_ENABLED } from '@/mocks/rbacMockConfig';
 import {
-  delay, getDb, persist, nextId, findEmployeeById, getCurrentMockEmployee, mockError,
+  delay, getDb, persist, nextId, findEmployeeById, findBusinessUnitById, getCurrentMockEmployee, mockError,
 } from '@/mocks/rbacMockDb';
 
 const requireActor = () => {
@@ -17,6 +17,7 @@ const serializeEmployee = (e) => ({
   designation: e.designation,
   status: e.status,
   business_unit_ids: e.business_unit_ids ?? [],
+  business_units: (e.business_unit_ids ?? []).map(findBusinessUnitById).filter(Boolean),
   mapping_type: e.primary_manager_employee_id === e.__actorId ? 'PRIMARY' : 'SECONDARY',
 });
 

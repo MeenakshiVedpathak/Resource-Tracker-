@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Eye, EyeOff, IdCard, Lock, Users, Briefcase, ClipboardList, Building2 } from 'lucide-react';
+import { Eye, EyeOff, IdCard, Lock, Users, Briefcase, ClipboardList, Building2, Info } from 'lucide-react';
 import { useEmployee, useCreateEmployee, useUpdateEmployee, useAssignableTeamLeads } from '@/hooks/useEmployees';
 import { useRoles } from '@/hooks/useRoles';
 import { useNotification } from '@/hooks/useNotification';
@@ -23,6 +23,7 @@ import { SearchableSelect } from '@/components/ui/searchable-select';
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter,
 } from '@/components/ui/sheet';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { cn } from '@/utils/cn';
 
 const baseFields = employeeBaseFields;
@@ -343,9 +344,17 @@ const EmployeeForm = () => {
                       name="location"
                       render={({ field }) => (
                         <FormItem className="space-y-1">
-                          <FormLabel className="text-[11px] text-muted-foreground font-medium"><span className="text-destructive mr-0.5">*</span> Location</FormLabel>
+                          <FormLabel className="flex items-center gap-1 text-[11px] text-muted-foreground font-medium">
+                            <span className="text-destructive mr-0.5">*</span> Location
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Info className="h-3 w-3 cursor-default text-muted-foreground" />
+                              </TooltipTrigger>
+                              <TooltipContent side="top">Enter state</TooltipContent>
+                            </Tooltip>
+                          </FormLabel>
                           <FormControl>
-                            <Input placeholder="e.g. Pune" maxLength={256} {...field} className="h-8 text-sm border-gray-200" />
+                            <Input placeholder="e.g. Maharashtra" maxLength={256} {...field} className="h-8 text-sm border-gray-200" />
                           </FormControl>
                           <FormMessage className="text-[10px]" />
                         </FormItem>

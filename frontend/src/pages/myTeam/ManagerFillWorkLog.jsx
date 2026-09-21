@@ -6,6 +6,7 @@ import {
   useMyTeamEmployees,
   useMyTeamEmployeesAcrossBus,
   useMyTeamEmployeesMonthlyWorkLogTotals,
+  MAX_FANOUT_BUS,
 } from '@/hooks/useMyTeam';
 import { useSelectableBusinessUnits } from '@/hooks/useSelectableBusinessUnits';
 import { useCanWrite } from '@/hooks/usePermissions';
@@ -100,7 +101,8 @@ const ManagerFillWorkLog = () => {
   // call per BU whenever more than one is selectable, narrowed by the Entity filter (this
   // endpoint has no entity_id concept of its own).
   const { units: myBusinessUnits } = useSelectableBusinessUnits(entityId);
-  const needsBuFanOut = selectedBuId == null && myBusinessUnits.length > 1;
+  // Capped at MAX_FANOUT_BUS — see its own doc comment in useMyTeam.js.
+  const needsBuFanOut = selectedBuId == null && myBusinessUnits.length > 1 && myBusinessUnits.length <= MAX_FANOUT_BUS;
 
   // GET /my-team/employees only carries `business_unit_ids` (raw ids, no name) — resolved against
   // the same BU list the Business Unit filter itself offers, so the table's column and the filter

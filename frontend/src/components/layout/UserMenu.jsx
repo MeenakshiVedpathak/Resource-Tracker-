@@ -164,12 +164,18 @@ const UserMenu = () => {
               {getInitials(displayName || 'U')}
             </AvatarFallback>
           </Avatar>
-          <div className="hidden sm:block text-left">
-            <p className="text-xs font-semibold leading-none text-foreground">{displayName}</p>
+          {/* min-w-0 + max-w-[160px] + truncate on each line: without a bounded width, `truncate`
+              alone does nothing (the box just grows to fit its content instead of clipping it),
+              so a long employee name or long BU name had nowhere to go but wrap onto an extra
+              line — one more line than Topbar.jsx's header row budgeted for, which is what pushed
+              this card below the navbar's border on those accounts. Capped here the same way the
+              dropdown-content copy of this same data already is below (see DropdownMenuLabel). */}
+          <div className="hidden sm:block text-left min-w-0 max-w-[160px]">
+            <p className="text-xs font-semibold leading-none text-foreground truncate">{displayName}</p>
             {!showBuSwitcher && activeBuName && (
-              <p className="text-[10px] text-muted-foreground mt-0.5 font-medium">{activeBuName}</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5 font-medium truncate">{activeBuName}</p>
             )}
-            {roleName && <p className="text-[10px] text-muted-foreground mt-0.5 font-medium">{roleName}</p>}
+            {roleName && <p className="text-[10px] text-muted-foreground mt-0.5 font-medium truncate">{roleName}</p>}
           </div>
           <ChevronDown className="h-3 w-3 text-muted-foreground hidden sm:block ml-0.5" />
         </button>

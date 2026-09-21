@@ -292,20 +292,23 @@
   .summary-col-pinned.summary-table-foot {
     @apply z-30;
   }
+}
 
-  /* ── Collapsed FilterPanel: sit flush with its neighbors ──
-     Tailwind's `space-y-*` margin rules use `:where()` (zero specificity), so a plain class
-     selector here always wins regardless of the caller's own space-y-N value — no need to know
-     which one a given page uses. Cancels the gap above the collapsed panel (its own margin-top)
-     and the gap below it (margin-top that space-y put on the very next element), so a closed
-     filter panel takes truly zero space instead of leaving two stacked dead gaps around it. */
-  .filter-panel-collapsed {
-    margin-top: 0;
-  }
+/* ── Collapsed FilterPanel: sit flush with its neighbors ──
+   Tailwind's `space-y-*` utilities compile to `> :not([hidden]) ~ :not([hidden])` — specificity
+   0-3-0, and Tailwind v3 flattens `@layer` hooks out of its output anyway, so neither layer
+   order nor a plain `:where()`-free selector can reliably beat it. `!important` is the honest
+   override here, and the rule is *deliberately* cheap: both sides of the gap on a collapsed
+   panel — its own margin-top from the parent's `space-y`, and the margin-top that same `space-y`
+   has put on the element right after it. Without this, a closed filter panel still takes the
+   caller's two stacked `space-y` gaps even though it renders at zero height, leaving an empty
+   strip between the heading/toolbar and the table before the filter is even opened. */
+.filter-panel-collapsed {
+  margin-top: 0 !important;
+}
 
-  .filter-panel-collapsed + * {
-    margin-top: 0;
-  }
+.filter-panel-collapsed + * {
+  margin-top: 0 !important;
 }
 
 @layer utilities {

@@ -13,7 +13,13 @@ const Topbar = ({ title }) => {
 
   return (
     <header className="shrink-0 sticky top-0 z-30 border-b bg-background/80 backdrop-blur-md">
-      <div className="flex h-12 items-center gap-2 sm:gap-3 px-3 sm:px-4">
+      {/* min-h-12 (not a hard h-12): the user-menu trigger below (UserMenu.jsx) stacks up to 3
+          text lines — name, Business Unit, role — which already run taller than 48px in the
+          ordinary case (a single-BU employee shows both the BU line and the role line). A fixed
+          h-12 just centered that overflow instead of containing it, so the card visibly spilled
+          past this header's own border-b on affected accounts. min-h lets the row grow to fit its
+          tallest child while still being exactly 48px everywhere nothing taller is present. */}
+      <div className="flex min-h-12 items-center gap-2 sm:gap-3 px-3 sm:px-4">
 
         {/* Sidebar toggle */}
         <button

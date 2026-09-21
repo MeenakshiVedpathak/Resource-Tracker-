@@ -37,18 +37,46 @@ const leaveColumnHelper = createColumnHelper();
 const now = new Date();
 const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
 
-const exportToExcel = (rows) => {
-  const header = ['Month', 'Billable', 'Non-Billable', 'Customer Non-Billable', 'Other'];
-  const dataRows = rows.map((r) => [
+// The page renders four separate tables (Hours by Category, Cost by Category, Utilization,
+// Leave/No-Work Hours) — the export used to only ever cover the first one. Every table now gets
+// its own sheet in the same workbook, so nothing visible on screen is missing from the export.
+const exportToExcel = ({ hoursByCategory, costRows, costCategoryNames, utilization, leaveNoWorkRows }) => {
+  const wb = XLSX.utils.book_new();
+
+  const hoursHeader = ['Month', 'Billable', 'Non-Billable', 'Customer Non-Billable', 'Other'];
+  const hoursDataRows = hoursByCategory.map((r) => [
     r.month ?? '',
     r.Billable != null ? Number(r.Billable) : '',
     r['Non-Billable'] != null ? Number(r['Non-Billable']) : '',
     r['Customer Non-Billable'] != null ? Number(r['Customer Non-Billable']) : '',
     r.Other != null ? Number(r.Other) : '',
   ]);
-  const ws = XLSX.utils.aoa_to_sheet([header, ...dataRows]);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Monthly Hours Trend');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([hoursHeader, ...hoursDataRows]), 'Hours by Category');
+
+  const costHeader = ['Month', ...costCategoryNames];
+  const costDataRows = costRows.map((r) => [
+    r.month ?? '',
+    ...costCategoryNames.map((name) => (r[name] != null ? Number(r[name]) : '')),
+  ]);
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([costHeader, ...costDataRows]), 'Cost by Category');
+
+  const utilizationHeader = ['Month', 'Total Hours', 'Billable Hours', 'Utilization %'];
+  const utilizationDataRows = utilization.map((r) => [
+    r.month ?? '',
+    r.total_hours != null ? Number(r.total_hours) : '',
+    r.billable_hours != null ? Number(r.billable_hours) : '',
+    r.utilization_percentage != null ? Number(r.utilization_percentage) : '',
+  ]);
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([utilizationHeader, ...utilizationDataRows]), 'Utilization');
+
+  const leaveHeader = ['Month', 'Leave Hours', 'No-Work Hours'];
+  const leaveDataRows = leaveNoWorkRows.map((r) => [
+    r.month ?? '',
+    r.leave_hours != null ? Number(r.leave_hours) : '',
+    r.no_work_hours != null ? Number(r.no_work_hours) : '',
+  ]);
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([leaveHeader, ...leaveDataRows]), 'Leave-No-Work Hours');
+
   XLSX.writeFile(wb, 'Monthly_Hours_Trend.xlsx');
 };
 
@@ -267,7 +295,8 @@ const MonthlyHoursTrend = () => {
     setServiceTypeId('all');
   };
 
-  const handleExport = () => exportToExcel(hoursByCategory);
+  const hasAnyData = hoursByCategory.length > 0 || costRows.length > 0 || utilization.length > 0 || leaveNoWorkRows.length > 0;
+  const handleExport = () => exportToExcel({ hoursByCategory, costRows, costCategoryNames, utilization, leaveNoWorkRows });
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -301,7 +330,7 @@ const MonthlyHoursTrend = () => {
               activeCount={activeFilterCount}
               className="h-9"
             />
-            {hoursByCategory.length > 0 && (
+            {hasAnyData && (
               <Button variant="outline" size="toolbar" onClick={handleExport}>
                 <Download className="h-4 w-4" />Export Excel
               </Button>

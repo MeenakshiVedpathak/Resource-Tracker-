@@ -6,6 +6,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { cn } from '@/utils/cn';
 import { formatHourMinuteValue } from '@/utils/formatters';
+import { isOffDay } from '@/utils/weekOffPolicy';
 import { EXPECTED_DAILY_HOURS } from './WorkLogEntryModal';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -55,7 +56,7 @@ const buildMonthGrid = (monthDate) => {
 // A date is disabled if either the client's own "after today" check or the backend's
 // `futureDisabled` flag says so — belt-and-suspenders, since the real enforcement is
 // server-side on the entries endpoints regardless.
-const TimesheetCalendar = ({ month, year, onMonthChange, calendarByDate, selectedDate, onSelectDate, isLoading }) => {
+const TimesheetCalendar = ({ month, year, onMonthChange, calendarByDate, selectedDate, onSelectDate, isLoading, saturdayOffRule = 'ALL' }) => {
   const monthDate = dayjs(`${year}-${String(month).padStart(2, '0')}-01`);
   const today = dayjs().startOf('day');
 
@@ -89,7 +90,7 @@ const TimesheetCalendar = ({ month, year, onMonthChange, calendarByDate, selecte
     const dateKey = selectedDate.format('YYYY-MM-DD');
     const dayInfo = calendarByDate?.[dateKey];
     const isFuture = selectedDate.isAfter(today, 'day') || !!dayInfo?.futureDisabled;
-    const isWeekend = selectedDate.day() === 0 || selectedDate.day() === 6;
+    const isWeekend = isOffDay(selectedDate, saturdayOffRule);
     const status = dayStatus({ dayInfo, isWeekend, isFuture });
     const dot = LEGEND.find((l) => l.key === status)?.dot ?? LEGEND[2].dot;
 
@@ -135,7 +136,7 @@ const TimesheetCalendar = ({ month, year, onMonthChange, calendarByDate, selecte
           const isFuture = day.isAfter(today, 'day') || !!dayInfo?.futureDisabled;
           const isToday = day.isSame(today, 'day');
           const isSelected = selectedDate && day.isSame(selectedDate, 'day');
-          const isWeekend = day.day() === 0 || day.day() === 6;
+          const isWeekend = isOffDay(day, saturdayOffRule);
           const status = dayStatus({ dayInfo, isWeekend, isFuture });
 
           return (

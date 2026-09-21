@@ -6,6 +6,8 @@ import { Save, Download, Trash2 } from 'lucide-react';
 import {
   useEmployeeMonthlySummary, useSaveWorkLogDay, useEmployeeMonthlyWorkLog, useSaveWorkLogMonth, useDeleteWorkLogMonth,
 } from '@/hooks/useEmployeeWorkLog';
+import { useMyOffDayRequests } from '@/hooks/useOffDayRequests';
+import { useSaturdayOffRule } from '@/hooks/useSaturdayOffRule';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import {
@@ -120,6 +122,24 @@ const MonthlySummaryPage = () => {
   const {
     data: summary, isLoading, isError,
   } = useEmployeeMonthlySummary(month, year);
+
+  // Day View grid is the same per-day granularity as My Work Log's Daily tab, so it needs the
+  // same off-day approval gate (EmployeeTimesheet.jsx) — without it an employee could type hours
+  // straight into a Sunday/off-Saturday column here, bypassing the request-then-fill flow
+  // entirely. `useMyOffDayRequests` with no `work_date` filter returns every request this
+  // employee has ever filed (small, bounded list — see offDayRequests.api.js's `listMine`);
+  // narrowed to `approved` + this month below since SummaryTable only needs "is THIS date in the
+  // visible month unlocked", not the full history.
+  const saturdayOffRule = useSaturdayOffRule();
+  const { data: myOffDayRequests = [] } = useMyOffDayRequests({}, { enabled: viewMode === 'day' });
+  const approvedOffDayDates = useMemo(
+    () => new Set(
+      myOffDayRequests
+        .filter((r) => r.status === 'approved')
+        .map((r) => String(r.work_date).slice(0, 10))
+    ),
+    [myOffDayRequests]
+  );
 
   const {
     data: monthlyData, isLoading: isMonthlyLoading, isError: isMonthlyError,
@@ -326,6 +346,8 @@ const MonthlySummaryPage = () => {
           isLoading={isLoading}
           edits={edits}
           onCellChange={handleCellChange}
+          saturdayOffRule={saturdayOffRule}
+          approvedOffDayDates={approvedOffDayDates}
         />
       ) : (
         <div className="space-y-3">

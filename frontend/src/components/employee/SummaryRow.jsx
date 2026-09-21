@@ -66,7 +66,7 @@ const DayCellInput = ({ value, onCommit, disabled, cap, isDirty }) => {
 // its own editable hours. `subtreeCount` only feeds the explanatory tooltip.
 const SummaryRow = ({
   label, depth = 0, hasChildren, isExpanded, onToggleExpand,
-  days, hoursByDay, total, editable, isRolledUp, subtreeCount, cellEdits, editableDays, onCellChange,
+  days, hoursByDay, total, editable, isRolledUp, subtreeCount, cellEdits, editableDays, offDayBlockedDays, onCellChange,
 }) => (
   // A table row can't literally become a Card, but shading nested rows and accenting an
   // expandable header's left edge gives the same "card accordion" grouping cue My Work Log
@@ -102,16 +102,24 @@ const SummaryRow = ({
       const value = isDirty ? cellEdits[day] : (hoursByDay?.[day] ?? '');
 
       if (!editable || !editableDays?.has(day)) {
+        const isOffDayBlocked = editable && offDayBlockedDays?.has(day);
         return (
           <TableCell
             key={day}
             className={cn(
               'px-1 text-center text-xs tabular-nums',
               // Muted so an aggregate never reads as a value you could have typed there.
-              isRolledUp && 'italic text-muted-foreground'
+              isRolledUp && 'italic text-muted-foreground',
+              isOffDayBlocked && 'text-muted-foreground/60'
             )}
             style={{ width: DAY_COL_WIDTH, minWidth: DAY_COL_WIDTH, maxWidth: DAY_COL_WIDTH }}
-            title={isRolledUp ? `Total of ${subtreeCount} sub-item${subtreeCount === 1 ? '' : 's'} — expand to edit` : undefined}
+            title={
+              isRolledUp
+                ? `Total of ${subtreeCount} sub-item${subtreeCount === 1 ? '' : 's'} — expand to edit`
+                : isOffDayBlocked
+                  ? 'Off day — request approval from My Work Log before logging hours here'
+                  : undefined
+            }
           >
             {formatHourMinuteValue(hoursByDay?.[day])}
           </TableCell>

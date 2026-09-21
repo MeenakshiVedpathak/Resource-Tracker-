@@ -3,7 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Save } from 'lucide-react';
+import { Building2, Calendar, Save } from 'lucide-react';
 import { useCompany, useCreateCompany, useUpdateCompany } from '@/hooks/useCompanies';
 import { useActiveEntities } from '@/hooks/useEntities';
 import { useAuth } from '@/hooks/useAuth';
@@ -16,14 +16,27 @@ import {
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { SearchableSelect } from '@/components/ui/searchable-select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/utils/cn';
 import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
+  SheetDescription,
   SheetFooter,
 } from '@/components/ui/sheet';
+
+import { WEEK_OFF_POLICY_OPTIONS } from '@/utils/weekOffPolicy';
+
+// Per-option accent used only for the little dot icon in the Week Off Policy dropdown — purely
+// decorative, keeps the four options visually distinguishable at a glance.
+const WEEK_OFF_POLICY_COLORS = {
+  ALL: 'text-blue-600',
+  ALT_1_3: 'text-green-600',
+  ALT_2_4: 'text-orange-500',
+  NONE: 'text-slate-400',
+};
 
 // Creating a BU only ever collects the BU shell itself — Entity, BU Code, BU Name. No admin or
 // Employee data is collected here.
@@ -31,16 +44,18 @@ const createSchema = z.object({
   entity_id: z.coerce.number({ required_error: 'Entity is required' }).positive('Entity is required'),
   company_code: z.string().min(1, 'BU code is required').max(50),
   company_name: z.string().min(1, 'BU name is required').max(100),
+  saturday_off_rule: z.enum(['ALL', 'ALT_1_3', 'ALT_2_4', 'NONE']).default('ALL'),
 });
 
 const editSchema = z.object({
   company_name: z.string().min(1, 'BU name is required').max(100),
   status: z.enum(['active', 'inactive']).default('active'),
+  saturday_off_rule: z.enum(['ALL', 'ALT_1_3', 'ALT_2_4', 'NONE']).default('ALL'),
 });
 
 // Known create-mode field names — used to route a backend field-validation error (duplicate BU
 // code, invalid entity, etc.) to the right input instead of a generic toast.
-const CREATE_FIELD_NAMES = ['entity_id', 'company_code', 'company_name'];
+const CREATE_FIELD_NAMES = ['entity_id', 'company_code', 'company_name', 'saturday_off_rule'];
 
 const FormSkeleton = () => (
   <div className="space-y-4 p-4">
@@ -72,8 +87,8 @@ const CompanyForm = () => {
   const form = useForm({
     resolver: zodResolver(isEdit ? editSchema : createSchema),
     defaultValues: isEdit
-      ? { company_name: '', status: 'active' }
-      : { entity_id: entityIdParam ?? '', company_code: '', company_name: '' },
+      ? { company_name: '', status: 'active', saturday_off_rule: 'ALL' }
+      : { entity_id: entityIdParam ?? '', company_code: '', company_name: '', saturday_off_rule: 'ALL' },
   });
 
   useEffect(() => {
@@ -81,6 +96,7 @@ const CompanyForm = () => {
       form.reset({
         company_name: company.company_name ?? '',
         status: company.status ?? 'active',
+        saturday_off_rule: company.saturday_off_rule ?? 'ALL',
       });
     }
   }, [company, isEdit, form]);
@@ -145,10 +161,16 @@ const CompanyForm = () => {
   return (
     <Sheet open={true} onOpenChange={(open) => !open && handleClose()}>
       <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col bg-white overflow-hidden">
-        <SheetHeader className="px-5 py-4 border-b">
-          <SheetTitle className="text-base font-medium text-left">
-            {isEdit ? 'Edit BU' : 'Create BU'}
-          </SheetTitle>
+        <SheetHeader className="flex-row items-start gap-3 space-y-0 px-6 py-2 border-b">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50">
+            <Building2 className="h-5 w-5 text-blue-600" />
+          </div>
+          <div className="space-y-0.5">
+            <SheetTitle className="text-lg">{isEdit ? 'Edit Business Unit' : 'Create Business Unit'}</SheetTitle>
+            <SheetDescription>
+              {isEdit ? 'Update the details for this business unit.' : 'Set up a new organizational unit for your company.'}
+            </SheetDescription>
+          </div>
         </SheetHeader>
 
         <div className="flex-1 overflow-y-auto bg-slate-50/50">
@@ -156,14 +178,13 @@ const CompanyForm = () => {
             <FormSkeleton />
           ) : (
             <Form {...form}>
-              <form id="company-form" onSubmit={form.handleSubmit(onSubmit)} className="p-5 flex flex-col gap-6">
-                <div className="space-y-2">
-                  <h3 className="text-xs font-semibold text-foreground border-b pb-1">BU Details</h3>
+              <form id="company-form" onSubmit={form.handleSubmit(onSubmit)} className="px-6 py-0 flex flex-col gap-6">
+                <div className="space-y-4">
                   <div className="grid grid-cols-1 gap-4">
                     {isEdit && (
                       <div className="space-y-1">
-                        <span className="text-[11px] text-muted-foreground font-medium">BU Code</span>
-                        <Input value={company?.company_code ?? ''} disabled className="h-8 text-sm border-gray-200 bg-muted/40" />
+                        <span className="text-xs text-foreground font-medium"># BU Code</span>
+                        <Input value={company?.company_code ?? ''} disabled className="h-9 text-sm border-gray-200 bg-muted/40" />
                       </div>
                     )}
 
@@ -173,8 +194,8 @@ const CompanyForm = () => {
                         name="entity_id"
                         render={({ field }) => (
                           <FormItem className="space-y-1">
-                            <FormLabel className="text-[11px] text-muted-foreground font-medium">
-                              <span className="text-destructive mr-0.5">*</span> Entity
+                            <FormLabel className="text-xs text-foreground font-medium">
+                              Entity <span className="text-destructive ml-0.5">*</span>
                             </FormLabel>
                             <SearchableSelect
                               options={activeEntities.map((e) => ({
@@ -187,14 +208,15 @@ const CompanyForm = () => {
                               placeholder="Select entity"
                               searchPlaceholder="Search entity..."
                               emptyMessage={isEntitiesError ? 'Failed to load entities.' : 'No active entities found.'}
-                              className="h-8 text-sm"
+                              className="h-9 text-sm"
                             />
+                            <p className="text-[11px] text-muted-foreground">Choose the parent entity for this business unit.</p>
                             {isEntitiesError && (
-                              <p className="text-[10px] text-destructive">
+                              <p className="text-[11px] text-destructive">
                                 Couldn't load entities: {extractApiError(entitiesError)}
                               </p>
                             )}
-                            <FormMessage className="text-[10px]" />
+                            <FormMessage className="text-[11px]" />
                           </FormItem>
                         )}
                       />
@@ -206,13 +228,14 @@ const CompanyForm = () => {
                         name="company_code"
                         render={({ field }) => (
                           <FormItem className="space-y-1">
-                            <FormLabel className="text-[11px] text-muted-foreground font-medium">
-                              <span className="text-destructive mr-0.5">*</span> BU Code
+                            <FormLabel className="text-xs text-foreground font-medium">
+                              BU Code <span className="text-destructive ml-0.5">*</span>
                             </FormLabel>
                             <FormControl>
-                              <Input placeholder="e.g. ACME" className="h-8 text-sm border-gray-200" {...field} />
+                              <Input placeholder="e.g. ACME" maxLength={20} className="h-9 text-sm border-gray-200" {...field} />
                             </FormControl>
-                            <FormMessage className="text-[10px]" />
+                            <p className="text-[11px] text-muted-foreground">Unique code for the business unit (max 20 characters).</p>
+                            <FormMessage className="text-[11px]" />
                           </FormItem>
                         )}
                       />
@@ -223,13 +246,14 @@ const CompanyForm = () => {
                       name="company_name"
                       render={({ field }) => (
                         <FormItem className="space-y-1">
-                          <FormLabel className="text-[11px] text-muted-foreground font-medium">
-                            <span className="text-destructive mr-0.5">*</span> BU Name
+                          <FormLabel className="text-xs text-foreground font-medium">
+                            BU Name <span className="text-destructive ml-0.5">*</span>
                           </FormLabel>
                           <FormControl>
-                            <Input placeholder="e.g. Acme Corporation" className="h-8 text-sm border-gray-200" {...field} />
+                            <Input placeholder="e.g. Acme Corporation" className="h-9 text-sm border-gray-200" {...field} />
                           </FormControl>
-                          <FormMessage className="text-[10px]" />
+                          <p className="text-[11px] text-muted-foreground">Enter a descriptive name for the business unit.</p>
+                          <FormMessage className="text-[11px]" />
                         </FormItem>
                       )}
                     />
@@ -240,7 +264,7 @@ const CompanyForm = () => {
                         name="status"
                         render={({ field }) => (
                           <FormItem className="space-y-1">
-                            <FormLabel className="text-[11px] text-muted-foreground font-medium mb-1">Status</FormLabel>
+                            <FormLabel className="text-xs text-foreground font-medium mb-1">Status</FormLabel>
                             <FormControl>
                               <button
                                 type="button"
@@ -256,23 +280,61 @@ const CompanyForm = () => {
                                 <div className="h-3 w-3 shrink-0 rounded-full bg-white shadow-sm" />
                               </button>
                             </FormControl>
-                            <FormMessage className="text-[10px]" />
+                            <FormMessage className="text-[11px]" />
                           </FormItem>
                         )}
                       />
                     )}
                   </div>
                 </div>
+
+                <div className="space-y-3 pt-1 border-t">
+                  <div className="flex items-start gap-2.5 pt-4">
+                    {/* <Calendar className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" /> */}
+                    <div className="space-y-0.5">
+                      <h3 class="peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-xs text-foreground font-medium">Week Off Policy</h3>
+                      {/* <p className="text-xs text-muted-foreground">Select the regular Saturday off schedule for this business unit.</p> */}
+                    </div>
+                  </div>
+
+                  <FormField
+                    control={form.control}
+                    name="saturday_off_rule"
+                    render={({ field }) => (
+                      <FormItem className="space-y-1.5">
+                        <FormControl>
+                          <Select value={field.value} onValueChange={field.onChange}>
+                            <SelectTrigger className="h-11 text-sm border-gray-200">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {WEEK_OFF_POLICY_OPTIONS.map((opt) => (
+                                <SelectItem key={opt.value} value={opt.value} className="py-2 pl-3 pr-3 [&>span:first-child]:hidden">
+                                  <div className="flex items-center gap-2.5">
+                                    <Calendar className={cn('h-4 w-4 shrink-0', WEEK_OFF_POLICY_COLORS[opt.value])} />
+                                    <div className="text-sm font-medium leading-tight">{opt.label}</div>
+                                  </div>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </FormControl>
+                        <FormMessage className="text-[11px]" />
+                      </FormItem>
+                    )}
+                  />
+
+                </div>
               </form>
             </Form>
           )}
         </div>
 
-        <SheetFooter className="px-5 py-4 border-t bg-gray-50/80 mt-auto flex justify-end gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={handleClose} className="h-8 text-xs">
+        <SheetFooter className="px-6 py-4 border-t bg-gray-50/80 mt-auto flex justify-end gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={handleClose} className="h-9 text-xs">
             Cancel
           </Button>
-          <Button type="submit" form="company-form" disabled={isSubmitting} size="sm" className="h-8 text-xs bg-blue-600 hover:bg-blue-700 text-white">
+          <Button type="submit" form="company-form" disabled={isSubmitting} size="sm" className="h-9 text-xs bg-blue-600 hover:bg-blue-700 text-white">
             <Save className="mr-2 h-3.5 w-3.5" />
             {isSubmitting ? 'Saving...' : isEdit ? 'Save Changes' : 'Create BU'}
           </Button>

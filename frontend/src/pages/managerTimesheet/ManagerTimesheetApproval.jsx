@@ -2,7 +2,7 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { BellRing } from 'lucide-react';
-import { useMyTeamEmployees, useMyTeamEmployeesAcrossBus } from '@/hooks/useMyTeam';
+import { useMyTeamEmployees, useMyTeamEmployeesAcrossBus, MAX_FANOUT_BUS } from '@/hooks/useMyTeam';
 import { useSelectableBusinessUnits } from '@/hooks/useSelectableBusinessUnits';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { useCanWrite } from '@/hooks/usePermissions';
@@ -23,6 +23,8 @@ import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { WeekPicker } from '@/components/ui/week-picker';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import WeekendRequestsTable from '@/components/employee/WeekendRequestsTable';
+import { useMyTeamOffDayRequests } from '@/hooks/useOffDayRequests';
 
 const STATUS_OPTIONS = [
   { label: 'All Statuses', value: 'all' },
@@ -72,6 +74,45 @@ const ManagerTimesheetApproval = () => {
 
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [activeTab, setActiveTab] = useState('timesheets'); // 'timesheets' | 'weekend-requests'
+
+  // Weekend Requests gets its own Search/Entity/Business Unit/Date Range/Status state — same
+  // header/FilterPanel slot as the Timesheets tab (see PageHeader `actions` and the filter panel
+  // below), just not sharing that tab's own state (different dataset, different meaning for
+  // "status", and a weekend request has no Daily/Weekly/Monthly Log Type concept to filter by).
+  const [weekendSearch, setWeekendSearch] = useState('');
+  const [weekendStatusFilter, setWeekendStatusFilter] = useState('all');
+  const [weekendEntityId, setWeekendEntityId] = useState(ALL_ENTITIES);
+  const [weekendBuFilterValue, setWeekendBuFilterValue] = useState(ALL_BUS);
+  const [weekendDateRange, setWeekendDateRange] = useState(null);
+  const weekendBuId = toBuId(weekendBuFilterValue);
+
+  // Picking an Entity here (BU left on "All Business Units") has to fall back to fanning out one
+  // call per BU under that Entity and merging client-side — same fix as `needsBuFanOut` below for
+  // /my-team/employees, since /my-team/off-day-requests has no single X-Company-Id that means
+  // "every BU under this Entity" either (see useMyTeamOffDayRequestsAcrossBus).
+  //
+  // When the narrowed Entity has exactly ONE Business Unit, fan-out is unnecessary but a header-
+  // less call is still wrong: it silently falls back to the caller's WHOLE role reach (every
+  // Entity), not just this one Entity's one BU — confirmed live, picking any single-BU Entity
+  // fired no new request and showed identical data across every Entity. `weekendEffectiveBuId`
+  // fills that gap by scoping explicitly to that one BU whenever the Entity narrowing already
+  // determines it, even though the BU dropdown itself is still on "All Business Units".
+  const { units: weekendBusinessUnits } = useSelectableBusinessUnits(weekendEntityId);
+  const weekendEffectiveBuId = weekendBuId ??
+    (weekendEntityId !== ALL_ENTITIES && weekendBusinessUnits.length === 1 ? weekendBusinessUnits[0].id : null);
+  const needsWeekendBuFanOut = weekendEffectiveBuId == null && weekendBusinessUnits.length > 1;
+
+  const handleWeekendEntityChange = (v) => {
+    setWeekendEntityId(v);
+    setWeekendBuFilterValue(ALL_BUS);
+  };
+
+  // status: 'pending' — without it this returns every weekend request regardless of status, so
+  // the tab badge kept showing already-approved requests instead of clearing once the pending
+  // queue was actually empty.
+  const { data: weekendReqResponse } = useMyTeamOffDayRequests({ page: 1, limit: 1, status: 'pending' });
+  const pendingWeekendCount = weekendReqResponse?.meta?.total ?? (Array.isArray(weekendReqResponse?.data) ? weekendReqResponse.data.length : 0);
 
   // BusinessUnitFilter drives a string ('all' | '<id>'); the page works with a numeric buId
   // internally (null = all, Number = specific BU) to match every API call's expectations.
@@ -121,12 +162,20 @@ const ManagerTimesheetApproval = () => {
   // login can reach regardless of the Entity filter (this endpoint has no entity_id concept of its
   // own — same fan-out workaround as TimesheetList.jsx uses for the equivalent gap there).
   const { units: myBusinessUnits } = useSelectableBusinessUnits(entityId);
-  const needsBuFanOut = selectedBuId == null && myBusinessUnits.length > 1;
+  // Same gap as Weekend Requests' `weekendEffectiveBuId` above — an Entity narrowed to exactly one
+  // BU must still be explicitly scoped to that BU, not fall through to a header-less "whole role
+  // reach" call that ignores the Entity filter entirely.
+  const effectiveBuId = selectedBuId ??
+    (entityId !== ALL_ENTITIES && myBusinessUnits.length === 1 ? myBusinessUnits[0].id : null);
+  // Capped at MAX_FANOUT_BUS — see its own doc comment in useMyTeam.js. Beyond that many
+  // selectable BUs (a cross-BU login on a system with dozens/hundreds of Business Units),
+  // `singleBuQuery` below fires once, header-less, instead of fanning out one request per BU.
+  const needsBuFanOut = effectiveBuId == null && myBusinessUnits.length > 1 && myBusinessUnits.length <= MAX_FANOUT_BUS;
 
   const myTeamParams = useMemo(
-    () => (selectedBuId != null ? { buId: selectedBuId } : {}),
+    () => (effectiveBuId != null ? { buId: effectiveBuId } : {}),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [selectedBuId, generation],
+    [effectiveBuId, generation],
   );
 
   const singleBuQuery = useMyTeamEmployees(myTeamParams, { enabled: !needsBuFanOut });
@@ -186,15 +235,21 @@ const ManagerTimesheetApproval = () => {
       || (e.employee_code || '').toLowerCase().includes(q));
   }, [selectedEmployee, employeeList, search]);
 
-  const activeFilterCount =
+  const timesheetActiveFilterCount =
     (entityId !== ALL_ENTITIES ? 1 : 0)
     + (selectedBuId != null ? 1 : 0)
     + (selectedEmployeeId ? 1 : 0)
     + (logType !== 'daily' ? 1 : 0)
     + (logType !== 'monthly' && dateRange?.startDate ? 1 : 0)
     + (statusFilter !== 'all' ? 1 : 0);
+  const weekendActiveFilterCount =
+    (weekendEntityId !== ALL_ENTITIES ? 1 : 0)
+    + (weekendBuId != null ? 1 : 0)
+    + (weekendDateRange?.startDate ? 1 : 0)
+    + (weekendStatusFilter !== 'all' ? 1 : 0);
+  const activeFilterCount = activeTab === 'weekend-requests' ? weekendActiveFilterCount : timesheetActiveFilterCount;
 
-  const clearFilters = () => {
+  const clearTimesheetFilters = () => {
     setEntityId(ALL_ENTITIES);
     handleBuChange(ALL_BUS);
     setLogType('daily');
@@ -202,6 +257,13 @@ const ManagerTimesheetApproval = () => {
     setMonthYear(currentMonthYear());
     setStatusFilter('all');
   };
+  const clearWeekendFilters = () => {
+    setWeekendEntityId(ALL_ENTITIES);
+    setWeekendBuFilterValue(ALL_BUS);
+    setWeekendDateRange(null);
+    setWeekendStatusFilter('all');
+  };
+  const clearFilters = activeTab === 'weekend-requests' ? clearWeekendFilters : clearTimesheetFilters;
 
   // Shared between the desktop inline FilterPanel and the mobile bottom sheet below — same
   // fields, same instant-apply state wiring either way, only the surrounding container differs.
@@ -270,21 +332,62 @@ const ManagerTimesheetApproval = () => {
     </>
   );
 
+  // Weekend Requests' own filter panel content — same collapsible panel, same field set as the
+  // Timesheets tab above minus Log Type/Employee (a weekend request has no daily/weekly/monthly
+  // concept, and the header Search box already covers narrowing by employee). STATUS_OPTIONS is
+  // shared since the value set is identical: all/pending/approved/rejected.
+  const weekendFilterFields = (
+    <>
+      <EntityFilter value={weekendEntityId} onChange={handleWeekendEntityChange} />
+
+      <BusinessUnitFilter value={weekendBuFilterValue} entityId={weekendEntityId} onChange={setWeekendBuFilterValue} />
+
+      <div className="flex flex-col gap-1.5">
+        <Label className="text-xs">Work Date Range</Label>
+        <DateRangePicker
+          value={weekendDateRange}
+          onChange={setWeekendDateRange}
+          placeholder="Select a date range"
+          className="h-9 w-full text-sm bg-white"
+        />
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label className="text-xs">Status</Label>
+        <SearchableSelect
+          options={STATUS_OPTIONS}
+          value={weekendStatusFilter}
+          onValueChange={setWeekendStatusFilter}
+          placeholder="All Statuses"
+          className="h-9 w-full text-sm bg-white"
+        />
+      </div>
+    </>
+  );
+
+  const isWeekendTab = activeTab === 'weekend-requests';
+  const activeSearch = isWeekendTab ? weekendSearch : search;
+  const setActiveSearch = isWeekendTab ? setWeekendSearch : setSearch;
+  const activeFilterFields = isWeekendTab ? weekendFilterFields : filterFields;
+  const searchPlaceholder = isWeekendTab
+    ? 'Search employee, Service PO or reason...'
+    : 'Search by employee name...';
+
   return (
     <div className="flex h-full min-h-0 flex-col space-y-3">
       <PageHeader
-        title="Timesheet Approval"
-        description="Review and approve your team's timesheets."
+        title={isWeekendTab ? 'Weekend Requests' : 'Timesheet Approval'}
+        description={
+          isWeekendTab
+            ? 'Review and approve weekend and off-day requests submitted by your team.'
+            : "Review and approve your team's timesheets."
+        }
         actions={
-          // Desktop only — on mobile this whole row would overflow the viewport (a fixed-width
-          // search box plus two more buttons never fits), so it moves into the dedicated
-          // `md:hidden` toolbar row below instead, the same split every other Master/Report
-          // toolbar in the app already uses (see e.g. ClientList.jsx).
           <div className="hidden md:flex items-center gap-2">
             <SearchInput
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by employee name..."
+              value={activeSearch}
+              onChange={(e) => setActiveSearch(e.target.value)}
+              placeholder={searchPlaceholder}
               className="w-[220px]"
             />
             <FilterToggleButton
@@ -296,8 +399,10 @@ const ManagerTimesheetApproval = () => {
                 already logged — handing it off to the Work Log Compliance report (which already
                 owns per-employee/bulk "Remind" sending) instead of duplicating that flow here.
                 Styled as the same warm, solid CTA as that report's own "Remind All" button so the
-                two read as one connected action rather than another outline button among many. */}
-            {canWrite && (
+                two read as one connected action rather than another outline button among many.
+                Timesheets-only — a weekend/off-day request has its own Approve/Reject actions
+                right in the table, nothing to "remind" here. */}
+            {canWrite && !isWeekendTab && (
             <Button
               size="toolbar"
               className="relative bg-amber-500 text-white shadow-md shadow-amber-500/30 hover:bg-amber-600"
@@ -315,17 +420,35 @@ const ManagerTimesheetApproval = () => {
         }
       />
 
+      <div className="flex items-center justify-between border-b pb-2">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-auto">
+          <TabsList className="bg-slate-100/90 p-1">
+            <TabsTrigger value="timesheets" className="text-xs font-medium">
+              Timesheet Approvals
+            </TabsTrigger>
+            <TabsTrigger value="weekend-requests" className="text-xs font-medium flex items-center gap-1.5">
+              Weekend Requests
+              {pendingWeekendCount > 0 && (
+                <span className="inline-flex items-center justify-center px-1.5 py-0.2 text-[10px] font-bold rounded-full bg-amber-500 text-white min-w-[18px]">
+                  {pendingWeekendCount}
+                </span>
+              )}
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
+
       {/* Mobile toolbar — full-width search, then Filters alongside the same amber "Check
           Pending & Remind" CTA the desktop actions above use (was tucked inside a "More" menu;
           moved front-and-center since it was the menu's only item). `flex-wrap` keeps it from
           ever overflowing the viewport — the CTA drops to its own full-width row on the
           narrowest phones instead of clipping. Reuses the exact same state/handlers as desktop;
-          only the layout differs. */}
+          only the layout differs. Shared by both tabs — same as desktop's actions above. */}
       <div className="flex flex-col gap-2 md:hidden">
         <SearchInput
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by employee name..."
+          value={activeSearch}
+          onChange={(e) => setActiveSearch(e.target.value)}
+          placeholder={searchPlaceholder}
           className="w-full"
           inputClassName="bg-white"
         />
@@ -335,7 +458,7 @@ const ManagerTimesheetApproval = () => {
             onToggle={() => setFiltersOpen((prev) => !prev)}
             activeCount={activeFilterCount}
           />
-          {canWrite && (
+          {canWrite && !isWeekendTab && (
           <Button
             size="toolbar"
             className="relative flex-1 bg-amber-500 text-white shadow-md shadow-amber-500/30 hover:bg-amber-600"
@@ -359,7 +482,7 @@ const ManagerTimesheetApproval = () => {
               <SheetTitle>Filters</SheetTitle>
             </SheetHeader>
             <div className="flex-1 space-y-4 overflow-y-auto py-2">
-              {filterFields}
+              {activeFilterFields}
             </div>
             <div className="flex gap-2 border-t pt-3">
               <Button variant="outline" className="flex-1" onClick={clearFilters} disabled={activeFilterCount === 0}>
@@ -378,11 +501,19 @@ const ManagerTimesheetApproval = () => {
           onClear={clearFilters}
           showClear={activeFilterCount > 0}
         >
-          {filterFields}
+          {activeFilterFields}
         </FilterPanel>
       )}
 
-      {hasError ? (
+      {isWeekendTab ? (
+        <WeekendRequestsTable
+          search={weekendSearch}
+          statusFilter={weekendStatusFilter}
+          buId={weekendEffectiveBuId}
+          buIds={needsWeekendBuFanOut ? weekendBusinessUnits.map((u) => u.id) : null}
+          dateRange={weekendDateRange}
+        />
+      ) : hasError ? (
         <EmptyState title="Failed to load employees. Please refresh the page." />
       ) : isLoading ? (
         <div className="rounded-xl border bg-card p-10 text-center text-sm text-muted-foreground">

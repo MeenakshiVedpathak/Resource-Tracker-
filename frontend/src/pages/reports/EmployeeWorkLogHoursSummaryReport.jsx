@@ -6,6 +6,7 @@ import {
   User, ChevronLeft, ChevronRight, Download,
 } from 'lucide-react';
 import { useEmployeeWorkLogHoursSummary, useEmployeeWorkLogHoursSummaryDetails } from '@/hooks/useReports';
+import { reportsApi } from '@/api/reports.api';
 import { useEmployees } from '@/hooks/useEmployees';
 import { useDebounce } from '@/hooks/useDebounce';
 import { formatDate, formatHoursMinutes, formatHourMinuteValue, getStatusColor } from '@/utils/formatters';
@@ -334,6 +335,7 @@ const EmployeeWorkLogHoursSummaryReport = () => {
   const [sorting, setSorting] = useState([{ id: 'employee_name', desc: false }]);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
+  const [exporting, setExporting] = useState(false);
 
   // Selected row for detail modal
   const [modalState, setModalState] = useState({
@@ -423,6 +425,20 @@ const EmployeeWorkLogHoursSummaryReport = () => {
     }
     return formatDate(`${monthYear.year}-${String(monthYear.month).padStart(2, '0')}-01`, 'MMMM YYYY');
   }, [periodMode, selectedDate, monthYear]);
+
+  // Export pulls every matching record (not just the current page) with one extra request —
+  // same tradeoff EmployeeUtilizationSummary documents for its own export.
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const total = meta.total > 0 ? meta.total : 1000;
+      const res = await reportsApi.getEmployeeWorkLogHoursSummary({ ...queryParams, page: 1, limit: total });
+      const allRecords = res?.data?.records ?? [];
+      exportToExcel(allRecords, periodLabel);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const activeFilterCount = [
     periodMode !== 'date',
@@ -529,9 +545,10 @@ const EmployeeWorkLogHoursSummaryReport = () => {
               <Button
                 variant="outline"
                 size="toolbar"
-                onClick={() => exportToExcel(records, periodLabel)}
+                onClick={handleExport}
+                disabled={exporting}
               >
-                <Download className="h-4 w-4" /> Export Excel
+                <Download className="h-4 w-4" /> {exporting ? 'Exporting…' : 'Export Excel'}
               </Button>
             )}
           </div>

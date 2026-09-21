@@ -1,5 +1,6 @@
 import { useQuery, useQueries, useMutation, useQueryClient } from '@tanstack/react-query';
 import { myTeamApi } from '@/api/myTeam.api';
+import { canScopeAcrossBus } from '@/services/apiClient';
 import { QUERY_KEYS } from '@/constants/queryKeys';
 
 export const useMyTeamEmployees = (params = {}, { enabled = true } = {}) =>
@@ -8,6 +9,19 @@ export const useMyTeamEmployees = (params = {}, { enabled = true } = {}) =>
     queryFn: () => myTeamApi.getEmployees(params),
     enabled,
   });
+
+// Ceiling on how many BUs a screen will fan out `/my-team/*` calls across (see
+// useMyTeamEmployeesAcrossBus below, and the equivalent off-day-requests fan-out). A real Team
+// Lead/BU Head/multi-BU BU Admin has a small, human-sized number of mapped BUs, so fanning out
+// one request per BU costs nothing there — but a genuinely cross-BU login (Admin/Entity
+// Admin/Platform Admin) can be selectable across EVERY Business Unit in the whole system (their
+// options come from the BU master, unbounded up to its own 200-row page size — see
+// useSelectableBusinessUnits), and firing that many parallel requests just to render a Team-Lead
+// screen they usually have zero mappings on anyway was confirmed live to make Timesheet
+// Approval/Log Work for My Team take many seconds to load. Past this ceiling, callers fall back
+// to a single header-less call instead — a small, deliberate accuracy trade-off (see the
+// header-less-call caveat elsewhere in this file) in exchange for the page actually loading.
+export const MAX_FANOUT_BUS = 15;
 
 // "All Business Units" has no single X-Company-Id header confirmed to mean "every BU this login
 // can see" — see apiClient's explicitBuScope — so a plain useMyTeamEmployees({}) call there can
@@ -42,10 +56,18 @@ export const useMyTeamEmployeesAcrossBus = (units, { enabled = true } = {}) => {
   };
 };
 
+// GET /my-team/service-pos reads the caller's company_id straight off their own login (unlike
+// /my-team/employees, it has no fallback for a cross-BU role) — a cross-BU login (Admin, Entity
+// Admin, Platform Admin; canScopeAcrossBus) has no company_id at all, so the backend errors with
+// "WHERE parameter company_id has invalid undefined value" every time. Those roles have no
+// manager_service_po_grants of their own anyway (this is a Team-Lead/Manager self-service list),
+// so there's nothing useful this call could return for them — disabled rather than firing a call
+// that's guaranteed to fail.
 export const useMyTeamServicePos = () =>
   useQuery({
     queryKey: QUERY_KEYS.MY_TEAM_SERVICE_POS,
     queryFn: myTeamApi.getServicePos,
+    enabled: !canScopeAcrossBus(),
   });
 
 export const useEmployeeServicePos = (employeeId) =>

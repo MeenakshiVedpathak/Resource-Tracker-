@@ -44,9 +44,23 @@ const PERIOD_MODE_OPTIONS = [
   { value: 'range', label: 'Date Range' },
 ];
 
-const exportToExcel = (rows) => {
-  const header = ['PO Code', 'PO Name', 'Client', 'Budget Cost', 'Billed Amount', 'Variance', 'Variance %'];
-  const dataRows = rows.map((r) => [
+// The page also renders a "Monthly Trend" table above "By Service PO" — the export used to only
+// ever cover the latter. Both tables now get their own sheet in the same workbook.
+const exportToExcel = (byServicePORows, monthlyRows) => {
+  const wb = XLSX.utils.book_new();
+
+  const monthlyHeader = ['Month', 'Budget Cost', 'Billed Amount', 'Variance', 'Variance %'];
+  const monthlyDataRows = monthlyRows.map((m) => [
+    m.month ?? '',
+    m.budget_cost != null ? Number(m.budget_cost) : '',
+    m.billed_amount != null ? Number(m.billed_amount) : '',
+    m.variance != null ? Number(m.variance) : '',
+    m.variance_pct != null ? Number(m.variance_pct) : '',
+  ]);
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([monthlyHeader, ...monthlyDataRows]), 'Monthly Trend');
+
+  const poHeader = ['PO Code', 'PO Name', 'Client', 'Budget Cost', 'Billed Amount', 'Variance', 'Variance %'];
+  const poDataRows = byServicePORows.map((r) => [
     r.service_po_code ?? '',
     r.service_po_name ?? '',
     r.client_name ?? '',
@@ -55,9 +69,8 @@ const exportToExcel = (rows) => {
     r.variance != null ? Number(r.variance) : '',
     r.variance_pct != null ? Number(r.variance_pct) : '',
   ]);
-  const ws = XLSX.utils.aoa_to_sheet([header, ...dataRows]);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Budget vs Billed');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([poHeader, ...poDataRows]), 'By Service PO');
+
   XLSX.writeFile(wb, 'Budget_vs_Billed.xlsx');
 };
 
@@ -262,7 +275,9 @@ const BudgetVsBilled = () => {
       const total = meta.total > 0 ? meta.total : 1000;
       const res = await reportsApi.getBudgetVsBilled({ ...params, page: 1, limit: total });
       const allRows = res?.data?.by_service_po?.data ?? [];
-      exportToExcel(allRows);
+      // `monthly` is unpaginated already (same regardless of the `page`/`limit` above) — reuse
+      // what's already in state rather than re-deriving it from this export-only fetch.
+      exportToExcel(allRows, monthly);
     } finally {
       setExporting(false);
     }
@@ -323,7 +338,7 @@ const BudgetVsBilled = () => {
               activeCount={activeFilterCount}
               className="h-9"
             />
-            {byServicePO.length > 0 && (
+            {(byServicePO.length > 0 || monthly.length > 0) && (
               <Button variant="outline" size="toolbar" onClick={handleExport} disabled={exporting}>
                 <Download className="h-4 w-4" />{exporting ? 'Exporting…' : 'Export Excel'}
               </Button>

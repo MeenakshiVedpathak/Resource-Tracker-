@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import dayjs from 'dayjs';
 import { createColumnHelper } from '@tanstack/react-table';
 import { ArrowLeft, ChevronRight, Download, Upload } from 'lucide-react';
@@ -6,6 +6,7 @@ import {
   useMyTeamEmployees,
   useMyTeamEmployeesAcrossBus,
   useMyTeamEmployeesMonthlyWorkLogTotals,
+  MAX_FANOUT_BUS,
 } from '@/hooks/useMyTeam';
 import { useSelectableBusinessUnits } from '@/hooks/useSelectableBusinessUnits';
 import { useSelectableEntities } from '@/hooks/useSelectableEntities';
@@ -101,32 +102,8 @@ const TeamLeadFillWorkLog = () => {
   // call per BU whenever more than one is selectable, narrowed by the Entity filter (this
   // endpoint has no entity_id concept of its own).
   const { units: myBusinessUnits } = useSelectableBusinessUnits(entityId);
-  const needsBuFanOut = selectedBuId == null && myBusinessUnits.length > 1;
-
-  // GET /my-team/employees only carries `business_unit_ids` (raw ids, no name) — resolved against
-  // the same BU list the Business Unit filter itself offers, so the table's column and the filter
-  // dropdown can never disagree on a name for the same id.
-  const buNameById = useMemo(
-    () => new Map(myBusinessUnits.map((bu) => [String(bu.id), bu.name])),
-    [myBusinessUnits],
-  );
-
-  // Entity column — an Employee carries no entity_id of its own, only `business_unit_ids`, so the
-  // Entity has to be derived one hop through the BU: each entry in `myBusinessUnits` already
-  // carries its own `entityId` (see useSelectableBusinessUnits), and `useSelectableEntities` gives
-  // the id->name lookup for it. Subject to the same limitation the Business Unit column above
-  // already has: `myBusinessUnits` is narrowed by whichever Entity filter is currently selected,
-  // so a BU belonging to a DIFFERENT Entity than the one picked won't resolve a name here either —
-  // consistent, not a new gap.
-  const { entities: myEntities } = useSelectableEntities();
-  const entityNameById = useMemo(
-    () => new Map(myEntities.map((e) => [String(e.id), e.name])),
-    [myEntities],
-  );
-  const entityNameByBuId = useMemo(
-    () => new Map(myBusinessUnits.map((bu) => [String(bu.id), entityNameById.get(String(bu.entityId)) ?? null])),
-    [myBusinessUnits, entityNameById],
-  );
+  // Capped at MAX_FANOUT_BUS — see its own doc comment in useMyTeam.js.
+  const needsBuFanOut = selectedBuId == null && myBusinessUnits.length > 1 && myBusinessUnits.length <= MAX_FANOUT_BUS;
 
   const myTeamParams = useMemo(
     () => (selectedBuId != null ? { buId: selectedBuId } : {}),
@@ -138,6 +115,102 @@ const TeamLeadFillWorkLog = () => {
 
   const myEmployees = needsBuFanOut ? (fannedOutQuery.data ?? []) : (singleBuQuery.data ?? []);
   const isLoadingEmployees = needsBuFanOut ? fannedOutQuery.isLoading : singleBuQuery.isLoading;
+
+  const { entities: myEntities } = useSelectableEntities();
+  const entityNameById = useMemo(
+    () => new Map(myEntities.map((e) => [String(e.id), e.name])),
+    [myEntities],
+  );
+
+  // BU name lookup: seeds from myBusinessUnits (BU filter options) and enriches with any
+  // embedded business_units returned directly on employee objects from GET /my-team/employees
+  const buNameById = useMemo(() => {
+    const map = new Map(myBusinessUnits.map((bu) => [String(bu.id), bu.name]));
+    myEmployees.forEach((emp) => {
+      (emp.business_units ?? []).forEach((bu) => {
+        const name = bu.name || bu.company_name;
+        if (bu.id && name && !map.has(String(bu.id))) {
+          map.set(String(bu.id), name);
+        }
+      });
+    });
+    return map;
+  }, [myBusinessUnits, myEmployees]);
+
+  // Entity name lookup per BU: seeds from myBusinessUnits + useSelectableEntities, and enriches
+  // with any embedded business_units (carrying entity_name / entity_id) returned directly on employee
+  // objects from GET /my-team/employees
+  const entityNameByBuId = useMemo(() => {
+    const map = new Map(
+      myBusinessUnits.map((bu) => [String(bu.id), entityNameById.get(String(bu.entityId)) ?? null])
+    );
+    myEmployees.forEach((emp) => {
+      (emp.business_units ?? []).forEach((bu) => {
+        const entityName =
+          bu.entity_name ??
+          bu.entity?.entity_name ??
+          (bu.entity_id ? entityNameById.get(String(bu.entity_id)) : null);
+        if (bu.id && entityName) {
+          map.set(String(bu.id), entityName);
+        }
+      });
+    });
+    return map;
+  }, [myBusinessUnits, entityNameById, myEmployees]);
+
+  // Entity and BU name resolvers: prefer employee.business_units sent by GET /my-team/employees,
+  // falling back to bu-map lookups if not directly embedded.
+  const getEmployeeEntityNames = useCallback(
+    (employee) => {
+      if (employee.entity_name) return [employee.entity_name];
+      if (Array.isArray(employee.entity_names) && employee.entity_names.length > 0) {
+        return [...new Set(employee.entity_names.filter(Boolean))];
+      }
+      if (Array.isArray(employee.business_units) && employee.business_units.length > 0) {
+        const names = [
+          ...new Set(
+            employee.business_units
+              .map(
+                (bu) =>
+                  bu.entity_name ??
+                  bu.entity?.entity_name ??
+                  (bu.entity_id ? entityNameById.get(String(bu.entity_id)) : null) ??
+                  entityNameByBuId.get(String(bu.id))
+              )
+              .filter(Boolean)
+          ),
+        ];
+        if (names.length > 0) return names;
+      }
+      return [
+        ...new Set(
+          (employee.business_unit_ids ?? [])
+            .map((id) => entityNameByBuId.get(String(id)))
+            .filter(Boolean)
+        ),
+      ];
+    },
+    [entityNameByBuId, entityNameById],
+  );
+
+  const getEmployeeBuNames = useCallback(
+    (employee) => {
+      if (Array.isArray(employee.business_units) && employee.business_units.length > 0) {
+        const names = [
+          ...new Set(
+            employee.business_units
+              .map((bu) => bu.name ?? bu.company_name ?? buNameById.get(String(bu.id)))
+              .filter(Boolean)
+          ),
+        ];
+        if (names.length > 0) return names;
+      }
+      return (employee.business_unit_ids ?? [])
+        .map((id) => buNameById.get(String(id)))
+        .filter(Boolean);
+    },
+    [buNameById],
+  );
 
   const ended = monthHasEnded(monthYear);
 
@@ -153,9 +226,11 @@ const TeamLeadFillWorkLog = () => {
     return myEmployees.filter((e) =>
       e.employee_code?.toLowerCase().includes(term) ||
       e.full_name?.toLowerCase().includes(term) ||
-      e.designation?.toLowerCase().includes(term)
+      e.designation?.toLowerCase().includes(term) ||
+      getEmployeeEntityNames(e).some((name) => name.toLowerCase().includes(term)) ||
+      getEmployeeBuNames(e).some((name) => name.toLowerCase().includes(term))
     );
-  }, [myEmployees, search]);
+  }, [myEmployees, search, getEmployeeEntityNames, getEmployeeBuNames]);
 
   // Client-side pagination — the roster is already fully loaded (My Team has no server-side
   // paging of its own), so DataTable is just handed the current page's slice plus a `{page,
@@ -167,7 +242,7 @@ const TeamLeadFillWorkLog = () => {
 
   // Employee/Employee Code/Designation all had flat sizes (200/140/240) tuned for a "typical"
   // value — real rosters routinely have a full legal name or a compound designation ("Sr.
-  // Director Sales &amp; Marketing(D&B and AI/ML/Atlassian Sales)") that runs well past that,
+  // Director Sales & Marketing(D&B and AI/ML/Atlassian Sales)") that runs well past that,
   // which clipped without ellipsizing and visually bled into the next column. Size each to what's
   // actually on the current page instead.
   const employeeNameColumnWidth = useMemo(
@@ -185,20 +260,22 @@ const TeamLeadFillWorkLog = () => {
   // An Employee mapped to several BUs renders them comma-joined in one cell, which routinely runs
   // longer than any single BU name would.
   const businessUnitColumnWidth = useMemo(
-    () => measureColumnWidth(
-      pagedEmployees,
-      (e) => (e.business_unit_ids ?? []).map((id) => buNameById.get(String(id))).filter(Boolean).join(', '),
-      { min: 150, max: 320 },
-    ),
-    [pagedEmployees, buNameById],
+    () =>
+      measureColumnWidth(
+        pagedEmployees,
+        (e) => getEmployeeBuNames(e).join(', '),
+        { min: 150, max: 320 },
+      ),
+    [pagedEmployees, getEmployeeBuNames],
   );
   const entityColumnWidth = useMemo(
-    () => measureColumnWidth(
-      pagedEmployees,
-      (e) => [...new Set((e.business_unit_ids ?? []).map((id) => entityNameByBuId.get(String(id))).filter(Boolean))].join(', '),
-      { min: 120, max: 260 },
-    ),
-    [pagedEmployees, entityNameByBuId],
+    () =>
+      measureColumnWidth(
+        pagedEmployees,
+        (e) => getEmployeeEntityNames(e).join(', '),
+        { min: 120, max: 260 },
+      ),
+    [pagedEmployees, getEmployeeEntityNames],
   );
 
   const handleMonthYearChange = (v) => setMonthYear(v ?? defaultMonthYear());
@@ -257,9 +334,7 @@ const TeamLeadFillWorkLog = () => {
       header: 'Entity',
       size: entityColumnWidth,
       cell: ({ row }) => {
-        const names = [...new Set(
-          (row.original.business_unit_ids ?? []).map((id) => entityNameByBuId.get(String(id))).filter(Boolean)
-        )];
+        const names = getEmployeeEntityNames(row.original);
         const joined = names.length ? names.join(', ') : '—';
         return <span className="block truncate text-sm text-muted-foreground" title={joined}>{joined}</span>;
       },
@@ -269,9 +344,7 @@ const TeamLeadFillWorkLog = () => {
       header: 'Business Unit',
       size: businessUnitColumnWidth,
       cell: ({ row }) => {
-        const names = (row.original.business_unit_ids ?? [])
-          .map((id) => buNameById.get(String(id)))
-          .filter(Boolean);
+        const names = getEmployeeBuNames(row.original);
         const joined = names.length ? names.join(', ') : '—';
         // `truncate` (not `whitespace-nowrap` alone) so a name list that still outgrows the
         // clamped column width ellipsizes in place instead of visually overflowing into the next

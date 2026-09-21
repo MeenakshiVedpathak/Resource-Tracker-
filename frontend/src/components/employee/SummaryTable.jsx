@@ -6,6 +6,7 @@ import {
 } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
 import EmptyState from '@/components/common/EmptyState';
+import { isOffDay } from '@/utils/weekOffPolicy';
 import SummaryRow from './SummaryRow';
 import SummaryFooter from './SummaryFooter';
 import { FIRST_COL_WIDTH, DAY_COL_WIDTH, TOTAL_COL_WIDTH } from './summaryTableLayout';
@@ -20,7 +21,9 @@ import { FIRST_COL_WIDTH, DAY_COL_WIDTH, TOTAL_COL_WIDTH } from './summaryTableL
 // id, since a hierarchy node and a Service PO don't share an id space. Totals are computed from
 // these overlaid on the server values, never taken as separate fields, so a total updates live
 // as you type and always matches what's on screen.
-const SummaryTable = ({ month, year, rows, isLoading, edits, onCellChange }) => {
+const SummaryTable = ({
+  month, year, rows, isLoading, edits, onCellChange, saturdayOffRule = 'ALL', approvedOffDayDates = null,
+}) => {
   // Collapsed by default — a Service PO's hierarchy breakdown only shows once its row (or an
   // ancestor Parent node) is expanded, so the table opens as a flat list and drills down on click.
   const [expandedKeys, setExpandedKeys] = useState(() => new Set());
@@ -38,15 +41,31 @@ const SummaryTable = ({ month, year, rows, isLoading, edits, onCellChange }) => 
 
   const today = dayjs().startOf('day');
   const monthStart = dayjs(`${year}-${String(month).padStart(2, '0')}-01`);
+  // A Sunday/off-Saturday column is only editable once this employee has an APPROVED off-day
+  // request for that exact date — same gate My Work Log's Daily tab enforces
+  // (EmployeeTimesheet.jsx), applied per-column here since this grid shows a whole month at
+  // once instead of one selected day. `approvedOffDayDates` (null when the parent hasn't wired
+  // it up yet) is a Set of 'YYYY-MM-DD' strings; omitting it here would silently let every
+  // off-day stay editable, so it defaults to an always-empty Set rather than skipping the check.
+  const offDayBlockedDays = useMemo(() => {
+    const approved = approvedOffDayDates ?? new Set();
+    const blocked = new Set();
+    days.forEach((d) => {
+      const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      if (isOffDay(dateStr, saturdayOffRule) && !approved.has(dateStr)) blocked.add(d);
+    });
+    return blocked;
+  }, [days, month, year, saturdayOffRule, approvedOffDayDates]);
+
   // A cell is only editable up through today — matches My Work Log's date picker, which
   // caps at today too. A cell already synced into the official Timesheet is still shown as
   // editable here (the summary endpoint doesn't yet expose per-cell sync status); the
   // backend rejects the save and the error surfaces as a toast, same as everywhere else.
   const editableDays = useMemo(() => {
     const maxDay = monthStart.isSame(today, 'month') ? today.date() : (monthStart.isBefore(today, 'month') ? daysInMonth : 0);
-    return new Set(days.filter((d) => d <= maxDay));
+    return new Set(days.filter((d) => d <= maxDay && !offDayBlockedDays.has(d)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [days, daysInMonth, month, year]);
+  }, [days, daysInMonth, month, year, offDayBlockedDays]);
 
   const weekdayShort = (day) =>
     dayjs(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`).format('ddd');
@@ -222,6 +241,7 @@ const SummaryTable = ({ month, year, rows, isLoading, edits, onCellChange }) => 
               isRolledUp={row.isRolledUp}
               subtreeCount={row.subtreeCount}
               editableDays={editableDays}
+              offDayBlockedDays={offDayBlockedDays}
               cellEdits={edits?.[row.rowKey]}
               onCellChange={(day, value) => onCellChange(row.rowKey, day, value)}
             />

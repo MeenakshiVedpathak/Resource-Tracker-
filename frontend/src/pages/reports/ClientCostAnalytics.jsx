@@ -19,19 +19,40 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
 const columnHelper = createColumnHelper();
 
-// All-time, unpaginated dataset (`data.clients`) is exported — it's the only one of the three
-// tabs' datasets with no pagination gap, so it's the complete picture regardless of the Top
-// Clients tab's current page/limit.
-const exportToExcel = (clients) => {
-  const header = ['Client', 'Total Hours', 'Total Cost'];
-  const dataRows = clients.map((c) => [
+// The page has three tabs (Top Clients, All Clients, Category Breakdown) — the export used to
+// only ever cover "All Clients" regardless of which tab was active, so Category Breakdown's
+// dynamic per-category columns were never exportable at all. Every tab now gets its own sheet.
+// Top Clients is server-paginated — its sheet covers only the currently-loaded page, same
+// current-page tradeoff other reports document for their own exports; All Clients and Category
+// Breakdown are both already all-time/unpaginated datasets.
+const exportToExcel = ({ topClients, clients, categoryMatrix, categoryNames }) => {
+  const wb = XLSX.utils.book_new();
+
+  const topHeader = ['Rank', 'Client', 'Total Hours', 'Total Cost'];
+  const topRows = topClients.map((c) => [
+    c.rank ?? '',
     c.client_name ?? '',
     c.total_hours != null ? Number(c.total_hours) : '',
     c.total_cost != null ? Number(c.total_cost) : '',
   ]);
-  const ws = XLSX.utils.aoa_to_sheet([header, ...dataRows]);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Client Cost Analytics');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([topHeader, ...topRows]), 'Top Clients');
+
+  const allHeader = ['Client', 'Total Hours', 'Total Cost'];
+  const allRows = clients.map((c) => [
+    c.client_name ?? '',
+    c.total_hours != null ? Number(c.total_hours) : '',
+    c.total_cost != null ? Number(c.total_cost) : '',
+  ]);
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([allHeader, ...allRows]), 'All Clients');
+
+  const categoryHeader = ['Client', ...categoryNames, 'Total Cost'];
+  const categoryRows = categoryMatrix.map((row) => [
+    row.client_name ?? '',
+    ...categoryNames.map((name) => (row.categories?.[name] != null ? Number(row.categories[name]) : '')),
+    row.total_cost != null ? Number(row.total_cost) : '',
+  ]);
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([categoryHeader, ...categoryRows]), 'Category Breakdown');
+
   XLSX.writeFile(wb, 'Client_Cost_Analytics.xlsx');
 };
 
@@ -182,8 +203,12 @@ const ClientCostAnalytics = () => {
               activeCount={(entityId !== ALL_ENTITIES ? 1 : 0) + (buId !== ALL_BUS ? 1 : 0)}
               className="h-9"
             />
-            {clients.length > 0 && (
-              <Button variant="outline" size="toolbar" onClick={() => exportToExcel(clients)}>
+            {(clients.length > 0 || topClients.length > 0 || categoryMatrix.length > 0) && (
+              <Button
+                variant="outline"
+                size="toolbar"
+                onClick={() => exportToExcel({ topClients, clients, categoryMatrix, categoryNames })}
+              >
                 <Download className="h-4 w-4" />Export Excel
               </Button>
             )}

@@ -1,8 +1,11 @@
 import { useMemo, useState } from 'react';
 import dayjs from 'dayjs';
 import { useQueryClient } from '@tanstack/react-query';
-import { Save, Trash2, Calendar as CalendarIcon, ChevronDown } from 'lucide-react';
+import { Save, Trash2, Calendar as CalendarIcon, ChevronDown, CheckCircle2 } from 'lucide-react';
 import { useIsMobile } from '@/hooks/useMediaQuery';
+import { useSaturdayOffRule } from '@/hooks/useSaturdayOffRule';
+import { useMyOffDayRequests } from '@/hooks/useOffDayRequests';
+import { isOffDay } from '@/utils/weekOffPolicy';
 import {
   useEmployeeCalendar,
   useEmployeeDailyWorkLog,
@@ -13,18 +16,19 @@ import {
 } from '@/hooks/useEmployeeWorkLog';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
-import { formatHoursMinutes } from '@/utils/formatters';
+import { formatDate, formatHoursMinutes } from '@/utils/formatters';
 import { buildMonthlySummaryRows, buildDayEntries, validateDayEntries } from '@/utils/employeeMonthlySummary';
 import TimesheetCalendar from '@/components/employee/TimesheetCalendar';
 import MonthlyHoursCard from '@/components/employee/MonthlyHoursCard';
 import MonthSelector from '@/components/employee/MonthSelector';
 import WorkLogDaySummary from '@/components/employee/WorkLogDaySummary';
 import WorkLogEntryTable from '@/components/employee/WorkLogEntryTable';
+import OffDayRequestPanel from '@/components/employee/OffDayRequestPanel';
 import { DAILY_HOURS_CAP, MONTHLY_HOURS_CAP } from '@/components/employee/WorkLogEntryModal';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { SearchableSelect } from '@/components/ui/searchable-select';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 
 // buildMonthlySummaryRows/buildDayEntries key rows by a "day" number pulled from a date
@@ -92,6 +96,22 @@ const EmployeeTimesheet = () => {
     () => (dailyData ? buildMonthlySummaryRows([{ date: dailyData.date ?? selectedKey, service_pos: dailyData.service_pos }]) : []),
     [dailyData, selectedKey]
   );
+
+  const saturdayOffRule = useSaturdayOffRule();
+
+  const isDateOff = mode === 'daily' ? isOffDay(selectedDate, saturdayOffRule) : false;
+
+  const {
+    data: offDayRequests = [],
+    isLoading: isOffDayRequestsLoading,
+  } = useMyOffDayRequests(
+    { work_date: selectedKey },
+    { enabled: mode === 'daily' && isDateOff }
+  );
+
+  const activeOffDayRequest = offDayRequests?.[0] || null;
+  const isOffDayApproved = activeOffDayRequest?.status === 'approved';
+  const isGated = isDateOff && !isOffDayApproved;
 
   const cellValue = (row) => {
     const edited = edits?.[row.rowKey]?.[day];
@@ -378,6 +398,7 @@ const EmployeeTimesheet = () => {
                 selectedDate={selectedDate}
                 onSelectDate={handleSelectDate}
                 isLoading={isCalendarLoading}
+                saturdayOffRule={saturdayOffRule}
               />
               <MonthlyHoursCard month={month} year={year} calendarDays={calendarDays} />
             </div>
@@ -394,22 +415,44 @@ const EmployeeTimesheet = () => {
                 <h3 className="text-base font-semibold">{selectedDate.format('dddd, DD MMMM YYYY')}</h3>
               </div>
 
-              <WorkLogDaySummary totalHours={totalHoursToday} projectsCount={mappedProjectsCount} />
+              {isGated ? (
+                <OffDayRequestPanel
+                  selectedDate={selectedDate}
+                  request={activeOffDayRequest}
+                  isLoading={isOffDayRequestsLoading}
+                />
+              ) : (
+                <>
+                  {isDateOff && isOffDayApproved && activeOffDayRequest && (
+                    <Alert className="border-emerald-200 bg-emerald-50 text-emerald-900">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                      <AlertTitle className="font-semibold text-emerald-900">Off-day Work Approved</AlertTitle>
+                      <AlertDescription className="text-emerald-800 text-xs mt-0.5">
+                        ✓ Off-day work approved by {activeOffDayRequest.approver_name || 'Project Manager'}
+                        {activeOffDayRequest.decided_at ? ` on ${formatDate(activeOffDayRequest.decided_at)}` : ''}
+                        {activeOffDayRequest.reason ? ` (${activeOffDayRequest.reason})` : ''}. You can now log your hours.
+                      </AlertDescription>
+                    </Alert>
+                  )}
 
-              <WorkLogEntryTable
-                rows={rows}
-                day={day}
-                isLoading={isDailyLoading}
-                isPastOrToday={isSelectedPastOrToday}
-                edits={edits}
-                onCellChange={handleCellChange}
-                descriptions={descriptions}
-                onDescriptionChange={handleDescriptionChange}
-              />
+                  <WorkLogDaySummary totalHours={totalHoursToday} projectsCount={mappedProjectsCount} />
+
+                  <WorkLogEntryTable
+                    rows={rows}
+                    day={day}
+                    isLoading={isDailyLoading}
+                    isPastOrToday={isSelectedPastOrToday}
+                    edits={edits}
+                    onCellChange={handleCellChange}
+                    descriptions={descriptions}
+                    onDescriptionChange={handleDescriptionChange}
+                  />
+                </>
+              )}
             </div>
           </div>
 
-          {isSelectedPastOrToday && rows.length > 0 && (
+          {isSelectedPastOrToday && rows.length > 0 && !isGated && (
             <div className="sticky bottom-0 z-10 flex items-center justify-end gap-3 rounded-xl border bg-card px-4 py-3 shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
               <span className="mr-auto text-xs text-muted-foreground">
                 {editedCount > 0 ? `${editedCount} unsaved change${editedCount === 1 ? '' : 's'}` : 'No changes to save'}

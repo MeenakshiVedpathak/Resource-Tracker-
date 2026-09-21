@@ -124,10 +124,15 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
     setBuEntityFilter(ALL_MAPPING_ENTITIES);
   }, [employee?.id]);
 
-  // Entity options for that filter, derived straight from the BU rows already fetched for this
-  // dialog (GET /companies — see EmployeeList's own useCompanies call) rather than a second fetch:
-  // every company row carries its own entity_id/entity.entity_name, same fields
-  // useSelectableEntities reads off the identical endpoint for the page-level Entity filter.
+  // Entity options for that filter, derived straight from the full BU list already fetched for
+  // this dialog's own Business Units table (GET /companies — see EmployeeList's own useCompanies
+  // call), NOT useSelectableEntities: that hook scopes to what the ACTOR (the HR/Admin viewing
+  // this dialog) can filter by, which is wrong here — this dialog assigns BUs to the TARGET
+  // employee across every Entity in the system, not just the ones the actor's own account happens
+  // to be mapped to (confirmed empty for an HR actor with few/no BU mappings of their own, even
+  // though the full BU list below renders fine). Relies on GET /companies now populating each
+  // row's `entity: { id, entity_name }` relation — see BACKEND prompt from the earlier "entities
+  // not coming" fix; before that fix this same derivation came back empty for a different reason.
   const buEntities = useMemo(() => {
     const byId = new Map();
     businessUnits.forEach((bu) => {

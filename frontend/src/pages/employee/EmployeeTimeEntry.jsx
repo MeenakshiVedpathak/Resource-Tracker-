@@ -6,7 +6,7 @@ import { z } from 'zod';
 import dayjs from 'dayjs';
 import { useQueryClient } from '@tanstack/react-query';
 import {
-  Save, CalendarDays, AlertCircle, BarChart3, Loader2, Lock, Trash2,
+  Save, CalendarDays, AlertCircle, BarChart3, Loader2, Lock, Trash2, CheckCircle2,
 } from 'lucide-react';
 import {
   Form, FormField, FormItem, FormLabel, FormControl, FormMessage,
@@ -18,18 +18,22 @@ import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import ProjectSelect from '@/components/employee/ProjectSelect';
+import OffDayRequestPanel from '@/components/employee/OffDayRequestPanel';
 import TimeSegmentsInput, { BLANK_SEGMENT, AddTimeBlockButton } from '@/components/employee/TimeSegmentsInput';
 import { employeeWorkLogApi } from '@/api/employeeWorkLog.api';
 import { useEmployeeMappedProjects } from '@/hooks/useEmployeeProjects';
 import { useEmployeeEntries, useSaveWorkLogDay, useDeleteWorkLogEntry } from '@/hooks/useEmployeeWorkLog';
+import { useMyOffDayRequests } from '@/hooks/useOffDayRequests';
+import { useSaturdayOffRule } from '@/hooks/useSaturdayOffRule';
+import { isOffDay } from '@/utils/weekOffPolicy';
 import { useNotification } from '@/hooks/useNotification';
 import { ROUTES } from '@/constants/routes';
 import { extractApiError, extractFieldErrors } from '@/services/apiClient';
 import { buildOtherDayEntries, validateSegments, sumSegmentHours } from '@/utils/employeeTimeEntry';
-import { formatHoursMinutes } from '@/utils/formatters';
+import { formatDate, formatHoursMinutes } from '@/utils/formatters';
 import { DAILY_HOURS_CAP } from '@/components/employee/WorkLogEntryModal';
 
 const taskSchema = z.object({
@@ -129,6 +133,25 @@ const EmployeeTimeEntry = () => {
   const selectedDate = form.watch('timesheet_date');
   const selectedProject = projects.find((p) => String(p.id) === String(selectedServicePOId));
 
+  // Off-day approval gate — same requirement as My Work Log's Daily tab (EmployeeTimesheet.jsx):
+  // an employee can't log time against a Sunday/off-Saturday until their Project Manager has
+  // approved a request for that specific date. This form has no calendar of its own (just a date
+  // picker), so the check re-runs against whichever date is currently selected rather than a
+  // fixed calendar-cell selection.
+  const saturdayOffRule = useSaturdayOffRule();
+  const selectedDateDayjs = useMemo(() => dayjs(selectedDate), [selectedDate]);
+  const isDateOff = !!selectedDate && isOffDay(selectedDateDayjs, saturdayOffRule);
+  const {
+    data: offDayRequests = [],
+    isLoading: isOffDayRequestsLoading,
+  } = useMyOffDayRequests(
+    { work_date: selectedDate },
+    { enabled: isDateOff }
+  );
+  const activeOffDayRequest = offDayRequests?.[0] || null;
+  const isOffDayApproved = activeOffDayRequest?.status === 'approved';
+  const isGated = isDateOff && !isOffDayApproved;
+
   // Two-level tree (parents = Modules, children = Tasks), so the Task list is simply the selected
   // Module's children. The deepest pick wins as the node the entry is filed against.
   const moduleNodes = selectedProject?.hierarchy ?? [];
@@ -144,9 +167,11 @@ const EmployeeTimeEntry = () => {
   // Deepest pick wins; '' means "the Service PO itself" (a null hierarchy_node_id server-side).
   const selectedHierarchyNodeId = selectedTaskId || selectedModuleId || '';
   // Everything below the Project field is inert until one is chosen: a time block only means
-  // something in the context of the project it's logged against.
+  // something in the context of the project it's logged against. Gated off-days are the other
+  // reason: no point picking Module/Task/blocks for a date this employee still needs approval to
+  // log at all.
   const hasProject = !!selectedServicePOId;
-  const blocksDisabled = isSaving || !hasProject;
+  const blocksDisabled = isSaving || !hasProject || isGated;
 
   // The last block must be complete before another can be added: same rule submit() enforces
   // (both times), just applied up front so half-filled rows can't pile up. Description is
@@ -525,112 +550,137 @@ const EmployeeTimeEntry = () => {
                     />
                   </div>
 
-                  {hasHierarchy && (
+                  {isGated ? (
                     <>
                     <Separator className="shrink-0" />
+                    <OffDayRequestPanel
+                      selectedDate={selectedDateDayjs}
+                      request={activeOffDayRequest}
+                      isLoading={isOffDayRequestsLoading}
+                    />
+                    </>
+                  ) : (
+                    <>
+                    {isDateOff && isOffDayApproved && activeOffDayRequest && (
+                      <Alert className="shrink-0 border-emerald-200 bg-emerald-50 text-emerald-900">
+                        <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                        <AlertTitle className="font-semibold text-emerald-900">Off-day Work Approved</AlertTitle>
+                        <AlertDescription className="text-emerald-800 text-xs mt-0.5">
+                          ✓ Off-day work approved by {activeOffDayRequest.approver_name || 'Project Manager'}
+                          {activeOffDayRequest.decided_at ? ` on ${formatDate(activeOffDayRequest.decided_at)}` : ''}
+                          {activeOffDayRequest.reason ? ` (${activeOffDayRequest.reason})` : ''}. You can now log your hours.
+                        </AlertDescription>
+                      </Alert>
+                    )}
 
-                    <section className="shrink-0 space-y-3">
-                    <StepHeading step={1} title="Select Module / Task" />
+                    {hasHierarchy && (
+                      <>
+                      <Separator className="shrink-0" />
 
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <FormField
-                        control={form.control}
-                        name="module_node_id"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormControl>
-                              <SearchableSelect
-                                options={moduleNodes.map((n) => ({
-                                  value: String(n.id),
-                                  label: n.node_name ?? n.name ?? '',
-                                }))}
-                                value={field.value || ''}
-                                onValueChange={(v) => {
-                                  // Task list is scoped to the Module, so a Module change can't
-                                  // leave a task from the previous one selected.
-                                  if (v !== field.value) form.setValue('task_node_id', '');
-                                  field.onChange(v);
-                                }}
-                                disabled={isSaving}
-                                placeholder="Select module"
-                                searchPlaceholder="Search module…"
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                      <section className="shrink-0 space-y-3">
+                      <StepHeading step={1} title="Select Module / Task" />
 
-                      {hasTasks && (
+                      <div className="grid gap-4 sm:grid-cols-2">
                         <FormField
                           control={form.control}
-                          name="task_node_id"
+                          name="module_node_id"
                           render={({ field }) => (
                             <FormItem>
                               <FormControl>
                                 <SearchableSelect
-                                  options={taskNodes.map((n) => ({
+                                  options={moduleNodes.map((n) => ({
                                     value: String(n.id),
                                     label: n.node_name ?? n.name ?? '',
                                   }))}
                                   value={field.value || ''}
-                                  onValueChange={(v) => field.onChange(v)}
+                                  onValueChange={(v) => {
+                                    // Task list is scoped to the Module, so a Module change can't
+                                    // leave a task from the previous one selected.
+                                    if (v !== field.value) form.setValue('task_node_id', '');
+                                    field.onChange(v);
+                                  }}
                                   disabled={isSaving}
-                                  placeholder="Select task"
-                                  searchPlaceholder="Search task…"
+                                  placeholder="Select module"
+                                  searchPlaceholder="Search module…"
                                 />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
                           )}
                         />
+
+                        {hasTasks && (
+                          <FormField
+                            control={form.control}
+                            name="task_node_id"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormControl>
+                                  <SearchableSelect
+                                    options={taskNodes.map((n) => ({
+                                      value: String(n.id),
+                                      label: n.node_name ?? n.name ?? '',
+                                    }))}
+                                    value={field.value || ''}
+                                    onValueChange={(v) => field.onChange(v)}
+                                    disabled={isSaving}
+                                    placeholder="Select task"
+                                    searchPlaceholder="Search task…"
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        )}
+                      </div>
+                      </section>
+                      </>
+                    )}
+
+                    <Separator className="shrink-0" />
+
+                    <section className="flex min-h-0 flex-col gap-3">
+                      <StepHeading
+                        step={timeBlocksStep}
+                        title="Add Time Blocks"
+                        after={
+                          <AddTimeBlockButton
+                            onClick={() => handleSegmentsChange([...segments, BLANK_SEGMENT])}
+                            disabled={blocksDisabled || !lastBlockComplete}
+                            title={
+                              !hasProject
+                                ? 'Select a project first'
+                                : !lastBlockComplete
+                                  ? 'Fill in the start and end time of the current block first'
+                                  : undefined
+                            }
+                            className="px-3 py-1.5 text-xs"
+                          />
+                        }
+                        aside={
+                          <Badge variant={tone.badge} className="tabular-nums">
+                            Total: {formatHoursMinutes(totalHours)}
+                          </Badge>
+                        }
+                      />
+                      {!hasProject && (
+                        <p className="text-xs text-muted-foreground">
+                          Select a project above to start logging time.
+                        </p>
                       )}
-                    </div>
+                      <TimeSegmentsInput
+                        segments={segments}
+                        onChange={handleSegmentsChange}
+                        disabled={blocksDisabled}
+                        showDescription
+                        showAddButton={false}
+                        scrollRows
+                        minTime={WORKDAY_START_TIME}
+                      />
                     </section>
                     </>
                   )}
-
-                  <Separator className="shrink-0" />
-
-                  <section className="flex min-h-0 flex-col gap-3">
-                    <StepHeading
-                      step={timeBlocksStep}
-                      title="Add Time Blocks"
-                      after={
-                        <AddTimeBlockButton
-                          onClick={() => handleSegmentsChange([...segments, BLANK_SEGMENT])}
-                          disabled={blocksDisabled || !lastBlockComplete}
-                          title={
-                            !hasProject
-                              ? 'Select a project first'
-                              : !lastBlockComplete
-                                ? 'Fill in the start and end time of the current block first'
-                                : undefined
-                          }
-                          className="px-3 py-1.5 text-xs"
-                        />
-                      }
-                      aside={
-                        <Badge variant={tone.badge} className="tabular-nums">
-                          Total: {formatHoursMinutes(totalHours)}
-                        </Badge>
-                      }
-                    />
-                    {!hasProject && (
-                      <p className="text-xs text-muted-foreground">
-                        Select a project above to start logging time.
-                      </p>
-                    )}
-                    <TimeSegmentsInput
-                      segments={segments}
-                      onChange={handleSegmentsChange}
-                      disabled={blocksDisabled}
-                      showDescription
-                      showAddButton={false}
-                      scrollRows
-                      minTime={WORKDAY_START_TIME}
-                    />
-                  </section>
                 </CardContent>
 
                 <CardFooter className="shrink-0 justify-end gap-2 border-t bg-muted/20 px-6 py-3">
