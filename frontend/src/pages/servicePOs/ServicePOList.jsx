@@ -359,8 +359,8 @@ const ServicePOList = () => {
     }),
     columnHelper.accessor('service_po_name', {
       header: 'Service PO Name',
-      size: 200,
-      cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="180px" className="font-medium" wrap />,
+      size: 260,
+      cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="260px" className="font-medium" />,
     }),
     columnHelper.display({
       id: 'hierarchy',

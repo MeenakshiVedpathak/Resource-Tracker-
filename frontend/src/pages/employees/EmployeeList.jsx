@@ -5,7 +5,7 @@ import { useIsMutating } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus, Pencil, UserCog, Search, Download, Upload, CheckCircle2, AlertCircle, FileDown, FileText, Printer, FileSpreadsheet, ChevronDown, MoreVertical, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Pencil, UserCog, Search, Download, Upload, CheckCircle2, AlertCircle, FileDown, FileText, Printer, FileSpreadsheet, ChevronDown, ChevronUp, ChevronsUpDown, MoreVertical, ChevronLeft, ChevronRight } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -106,6 +106,26 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
   const [selectedBuIds, setSelectedBuIds] = useState([]);
   const [selectedPoIds, setSelectedPoIds] = useState([]);
   const [poSearch, setPoSearch] = useState('');
+  // Toggled by clicking the "N selected" pill — pulls already-checked rows to the top of the
+  // (still search-filtered) list so a reviewer can see everything they've picked without having
+  // to scroll or re-search for each one.
+  const [sortSelectedFirst, setSortSelectedFirst] = useState(false);
+  // Column sort for the Service PO table — 'name' | 'client' | null, applied within each
+  // selected/unselected partition when sortSelectedFirst is also on.
+  const [poSortKey, setPoSortKey] = useState(null);
+  const [poSortDir, setPoSortDir] = useState('asc');
+
+  const togglePoSort = (key) => {
+    if (poSortKey !== key) {
+      setPoSortKey(key);
+      setPoSortDir('asc');
+    } else if (poSortDir === 'asc') {
+      setPoSortDir('desc');
+    } else {
+      setPoSortKey(null);
+      setPoSortDir('asc');
+    }
+  };
   const [buEntityFilter, setBuEntityFilter] = useState(ALL_MAPPING_ENTITIES);
 
   // GET /employees (list) carries no role/BU data, so the row this dialog opened from can't seed
@@ -178,12 +198,25 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
   const filteredPOs = useMemo(() => {
     const q = poSearch.trim().toLowerCase();
     const list = activePOs ?? [];
-    if (!q) return list;
-    return list.filter((po) =>
+    let matched = !q ? list : list.filter((po) =>
       [po.service_po_name, po.service_po_code, po.client?.client_name]
         .some((v) => (v ?? '').toLowerCase().includes(q))
     );
-  }, [activePOs, poSearch]);
+    if (poSortKey) {
+      matched = [...matched].sort((a, b) => {
+        const av = (poSortKey === 'client' ? a.client?.client_name : a.service_po_name) ?? '';
+        const bv = (poSortKey === 'client' ? b.client?.client_name : b.service_po_name) ?? '';
+        const cmp = av.localeCompare(bv, undefined, { sensitivity: 'base' });
+        return poSortDir === 'asc' ? cmp : -cmp;
+      });
+    }
+    if (!sortSelectedFirst) return matched;
+    // Stable partition, not a re-sort of the whole list, so rows keep their (now sorted) relative
+    // order within each of the two groups.
+    const selected = matched.filter((po) => selectedPoIds.includes(po.id));
+    const rest = matched.filter((po) => !selectedPoIds.includes(po.id));
+    return [...selected, ...rest];
+  }, [activePOs, poSearch, sortSelectedFirst, selectedPoIds, poSortKey, poSortDir]);
 
   // Select-all deliberately acts on the CURRENT filter only: ticking it adds just the visible
   // rows, clearing it removes only those. Selections hidden by the search are never touched,
@@ -343,14 +376,22 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
               <Label className="text-xs">Service POs</Label>
               <Badge variant="secondary" className="text-[10px]">Company-wide access</Badge>
               {selectedPoIds.length > 0 && (
-                <span className="text-[11px] text-muted-foreground">
+                <button
+                  type="button"
+                  onClick={() => setSortSelectedFirst((v) => !v)}
+                  title={sortSelectedFirst ? 'Showing selected first — click to restore original order' : 'Click to bring selected rows to the top'}
+                  className={cn(
+                    'text-[11px] underline decoration-dotted underline-offset-2 transition-colors',
+                    sortSelectedFirst ? 'text-primary font-medium' : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
                   {selectedPoIds.length} selected
                   {/* While filtering, say how many of the VISIBLE rows are picked — otherwise the
                       total alone looks wrong next to a short filtered list. */}
                   {poSearch.trim() && selectedFilteredCount !== selectedPoIds.length
                     ? ` (${selectedFilteredCount} shown)`
                     : ''}
-                </span>
+                </button>
               )}
             </div>
             <div className="relative">
@@ -374,8 +415,30 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
                         title={allFilteredSelected ? 'Clear all' : 'Select all'}
                       />
                     </TableHead>
-                    <TableHead className={STICKY_HEAD}>Service PO</TableHead>
-                    <TableHead className={STICKY_HEAD}>Client</TableHead>
+                    <TableHead className={STICKY_HEAD}>
+                      <button
+                        type="button"
+                        onClick={() => togglePoSort('name')}
+                        className="flex items-center gap-1 hover:text-foreground"
+                      >
+                        Service PO
+                        {poSortKey === 'name'
+                          ? (poSortDir === 'asc' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />)
+                          : <ChevronsUpDown className="h-3 w-3 text-muted-foreground/50" />}
+                      </button>
+                    </TableHead>
+                    <TableHead className={STICKY_HEAD}>
+                      <button
+                        type="button"
+                        onClick={() => togglePoSort('client')}
+                        className="flex items-center gap-1 hover:text-foreground"
+                      >
+                        Client
+                        {poSortKey === 'client'
+                          ? (poSortDir === 'asc' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />)
+                          : <ChevronsUpDown className="h-3 w-3 text-muted-foreground/50" />}
+                      </button>
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>

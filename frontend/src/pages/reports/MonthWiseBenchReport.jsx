@@ -154,7 +154,7 @@ const MonthWiseBenchReport = () => {
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
         title="Month-wise Bench Report"
-        description="Org-wide bench trend by month — resources on bench, bench hours, and bench % across the selected range."
+        description=""
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <SearchInput

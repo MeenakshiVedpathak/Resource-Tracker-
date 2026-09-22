@@ -228,7 +228,7 @@ const ResourceMonthlyUtilization = () => {
     <div className="flex flex-col">
       <PageHeader
         title="Resource Monthly Utilisation"
-        description="Employee-wise monthly utilisation, split into billable, non-billable, and overall."
+        description=""
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <SearchInput

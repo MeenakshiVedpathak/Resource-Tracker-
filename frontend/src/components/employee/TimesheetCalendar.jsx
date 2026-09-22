@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import dayjs from 'dayjs';
-import { ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, CalendarOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { cn } from '@/utils/cn';
 import { formatHourMinuteValue } from '@/utils/formatters';
@@ -15,7 +16,7 @@ const LEGEND = [
   { key: 'completed', dot: 'bg-emerald-500', label: `${EXPECTED_DAILY_HOURS}/${EXPECTED_DAILY_HOURS} hrs`, sub: 'Completed' },
   { key: 'partial', dot: 'bg-amber-500', label: `1-${EXPECTED_DAILY_HOURS - 1} hrs`, sub: 'Partial' },
   { key: 'none', dot: 'bg-rose-500', label: '0 hrs', sub: 'No Entry' },
-  { key: 'weekend', dot: 'bg-muted-foreground/30', label: 'Weekend', sub: 'Off' },
+  { key: 'weekend', dot: 'bg-muted-foreground/30', label: 'Day Off', sub: '' },
   { key: 'today', dot: 'bg-primary', label: 'Today', sub: '' },
 ];
 
@@ -23,9 +24,12 @@ const LEGEND = [
 // workday (EXPECTED_DAILY_HOURS) — the backend has no "target hours" or "completed" concept,
 // this is just a visual aid over the same { date, totalHours, hasEntries } the list view uses.
 const dayStatus = ({ dayInfo, isWeekend, isFuture }) => {
-  if (isFuture) return 'future';
   const hours = Number(dayInfo?.totalHours ?? 0);
-  if (isWeekend && hours === 0) return 'weekend';
+  // Weekend takes priority over "future" so an upcoming off-day (e.g. next month's Sunday, or
+  // an alternate-Saturday per the BU's saturday_off_rule) still reads as a weekend instead of
+  // blending into ordinary future workdays — only a logged weekend falls through as worked time.
+  if (isWeekend && hours === 0) return isFuture ? 'futureWeekend' : 'weekend';
+  if (isFuture) return 'future';
   if (hours >= EXPECTED_DAILY_HOURS) return 'completed';
   if (hours > 0) return 'partial';
   return 'none';
@@ -36,6 +40,7 @@ const STATUS_STYLES = {
   partial: 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400',
   none: 'bg-rose-50 text-rose-600 dark:bg-rose-950/30 dark:text-rose-400',
   weekend: 'bg-muted/40 text-muted-foreground/60',
+  futureWeekend: 'bg-muted/20 text-muted-foreground/35',
   future: 'text-muted-foreground/30',
 };
 
@@ -92,7 +97,7 @@ const TimesheetCalendar = ({ month, year, onMonthChange, calendarByDate, selecte
     const isFuture = selectedDate.isAfter(today, 'day') || !!dayInfo?.futureDisabled;
     const isWeekend = isOffDay(selectedDate, saturdayOffRule);
     const status = dayStatus({ dayInfo, isWeekend, isFuture });
-    const dot = LEGEND.find((l) => l.key === status)?.dot ?? LEGEND[2].dot;
+    const dot = LEGEND.find((l) => l.key === (status === 'futureWeekend' ? 'weekend' : status))?.dot ?? LEGEND[2].dot;
 
     return (
       <button
@@ -105,7 +110,7 @@ const TimesheetCalendar = ({ month, year, onMonthChange, calendarByDate, selecte
           <span className="min-w-0 truncate text-sm font-semibold">{selectedDate.format('ddd, DD MMM YYYY')}</span>
         </span>
         <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
-          {status === 'weekend' ? 'Weekend' : `${formatHourMinuteValue(dayInfo?.totalHours ?? 0)} logged`}
+          {status === 'weekend' || status === 'futureWeekend' ? 'Day Off' : `${formatHourMinuteValue(dayInfo?.totalHours ?? 0)} logged`}
           <ChevronDown className="h-4 w-4" />
         </span>
       </button>
@@ -139,14 +144,16 @@ const TimesheetCalendar = ({ month, year, onMonthChange, calendarByDate, selecte
           const isWeekend = isOffDay(day, saturdayOffRule);
           const status = dayStatus({ dayInfo, isWeekend, isFuture });
 
-          return (
+          const isWeekendStatus = status === 'weekend' || status === 'futureWeekend';
+
+          const dayButton = (
             <button
               key={dateKey}
               type="button"
               disabled={isFuture || !inMonth}
               onClick={() => handleSelectDate(day)}
               className={cn(
-                'relative flex min-h-[56px] flex-col items-center justify-center gap-0.5 rounded-lg text-xs transition-colors',
+                'relative flex min-h-[56px] w-full flex-col items-center justify-center gap-0.5 rounded-lg text-xs transition-colors',
                 !inMonth ? 'cursor-default text-muted-foreground/25' : STATUS_STYLES[status],
                 inMonth && !isFuture && !isSelected && 'hover:brightness-95 cursor-pointer',
                 isFuture && inMonth && 'cursor-not-allowed',
@@ -160,14 +167,28 @@ const TimesheetCalendar = ({ month, year, onMonthChange, calendarByDate, selecte
                 <span className={cn('text-[10px] font-medium', isSelected && 'text-primary-foreground/85')}>
                   {formatHourMinuteValue(dayInfo?.totalHours ?? 0)}
                 </span>
-              ) : inMonth && status === 'weekend' ? (
-                <span className={cn('text-[9px]', isSelected && 'text-primary-foreground/85')}>—</span>
+              ) : inMonth && isWeekendStatus ? (
+                <CalendarOff
+                  className={cn('h-3.5 w-3.5', isSelected ? 'text-primary-foreground/85' : 'text-muted-foreground/60')}
+                />
               ) : null}
               {isToday && (
                 <span className={cn('absolute bottom-1 h-1 w-1 rounded-full', isSelected ? 'bg-primary-foreground' : 'bg-primary')} />
               )}
             </button>
           );
+
+          if (inMonth && isWeekendStatus) {
+            return (
+              <Tooltip key={dateKey}>
+                <TooltipTrigger asChild>{dayButton}</TooltipTrigger>
+                <TooltipContent side="top" className="text-xs">
+                  Week Off
+                </TooltipContent>
+              </Tooltip>
+            );
+          }
+          return dayButton;
         })}
       </div>
 

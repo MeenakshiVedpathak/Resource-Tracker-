@@ -240,7 +240,7 @@ const ResourceWiseBenchReport = () => {
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
         title="Resource-wise Bench % by Month"
-        description="Each resource's bench % for every month in the selected range, sorted by average bench % by default."
+        description=""
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <SearchInput

@@ -68,6 +68,10 @@ const DemoVideoModal = ({ open, onOpenChange }) => {
   };
 
   const handleTabSwitch = (id) => {
+    // Re-clicking the already-active tab is a no-op: the <video> element only remounts (and
+    // re-fires onCanPlay) when `active.id` actually changes, so forcing isLoading(true) here
+    // without a matching remount would strand the loading spinner forever.
+    if (id === activeId) return;
     setActiveId(id);
     setIsLoading(true);
     resetPlaybackState();

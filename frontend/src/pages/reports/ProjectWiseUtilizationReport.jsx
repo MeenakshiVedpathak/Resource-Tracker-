@@ -231,7 +231,7 @@ const ProjectWiseUtilizationReport = () => {
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
         title="Project-wise Report"
-        description="Resources and utilization per Service PO across a month range."
+        description=""
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <SearchInput
@@ -241,7 +241,7 @@ const ProjectWiseUtilizationReport = () => {
               className="w-full sm:w-full md:w-72"
             />
             {records.length > 0 && (
-              <Button variant="outline" size="toolbar" onClick={handleExport}>
+              <Button variant="outline" size="toolbar" onClick={handleExport} className="order-2 md:order-none">
                 <Download className="h-4 w-4" />Export Excel
               </Button>
             )}
@@ -249,7 +249,7 @@ const ProjectWiseUtilizationReport = () => {
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((p) => !p)}
               activeCount={activeFilterCount}
-              className="h-9"
+              className="order-1 h-9 md:order-none"
             />
           </div>
         }
