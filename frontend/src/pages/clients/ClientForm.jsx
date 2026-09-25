@@ -10,6 +10,7 @@ import { useClient, useCreateClient, useUpdateClient } from '@/hooks/useClients'
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import { useSelectableBusinessUnits } from '@/hooks/useSelectableBusinessUnits';
+import { BusinessUnitCascadeSelect, SubBusinessUnitSelect, useBuHierarchy } from '@/components/common/BusinessUnitCascadeSelect';
 import { ROUTES } from '@/constants/routes';
 import {
   Form, FormField, FormItem, FormLabel, FormControl, FormMessage,
@@ -18,7 +19,6 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/utils/cn';
-import { SearchableSelect } from '@/components/ui/searchable-select';
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter,
 } from "@/components/ui/sheet";
@@ -31,8 +31,15 @@ const clientSchema = z.object({
   industry: z.string().max(100).optional().or(z.literal('')),
   status: z.enum(['active', 'inactive']).default('active'),
   // Only relevant for BU-scoped logins mapped to multiple BUs (e.g. BU Head, multi-BU BU Admin).
-  // Admin/Entity Admin/Platform Admin never send this — their clients are always BU-less.
+  // Admin/Entity Admin/Platform Admin never send this — their clients are always BU-less. Always
+  // the ROOT (top-level) BU's id — a Sub-BU pick lives in sub_business_unit_id instead, so Client
+  // list scoping elsewhere that keys off this field never waits on the (possibly still-empty,
+  // separately mandatory) Sub-BU choice.
   company_id: z.string().optional(),
+  // UI-only grouping field, never sent to the backend as-is (see onSubmit) — required only when
+  // the picked root BU actually has Sub-BUs (checked at submit time, since it depends on the
+  // BU master's live hierarchy, not a static rule this schema can encode on its own).
+  sub_business_unit_id: z.string().optional(),
 });
 
 const FormSkeleton = () => (
@@ -63,7 +70,7 @@ const ClientForm = () => {
   // under BU "B".
   const { units, isCrossBu, canFilter } = useSelectableBusinessUnits();
   const showBuSelector = !isCrossBu && canFilter;
-  const buOptions = units.map((bu) => ({ label: bu.name, value: String(bu.id) }));
+  const { childrenOf } = useBuHierarchy(units);
 
   const { data: client, isPending: isLoadingClient } = useClient(id);
   const createMutation = useCreateClient();
@@ -76,24 +83,48 @@ const ClientForm = () => {
       industry: '',
       status: 'active',
       company_id: '',
+      sub_business_unit_id: '',
     },
   });
 
+  // A root's Sub-BUs — recomputed live off whatever BU is currently picked, never off a snapshot,
+  // so switching roots immediately shows (or hides) the right Sub-BU list.
+  const selectedRootId = form.watch('company_id');
+  const subBuOptions = childrenOf(selectedRootId).map((u) => ({ value: String(u.id), label: u.name }));
+  const showSubBuField = subBuOptions.length > 0;
+
   useEffect(() => {
     if (client && isEdit) {
+      // The client's saved company_id can itself be a Sub-BU's id — resolve which root it
+      // belongs to so the form reopens with BOTH dropdowns correctly pre-populated (root BU, and
+      // that Sub-BU already selected under it) instead of just the flat id sitting in company_id
+      // with no root chosen to reveal the Sub-BU dropdown at all.
+      const currentUnit = client.company_id ? units.find((u) => String(u.id) === String(client.company_id)) : null;
+      const isSubBu = currentUnit?.parentId != null;
       form.reset({
         client_name: client.client_name ?? '',
         industry: client.industry ?? '',
         status: client.status ?? 'active',
-        company_id: client.company_id ? String(client.company_id) : '',
+        company_id: client.company_id
+          ? String(isSubBu ? currentUnit.parentId : client.company_id)
+          : '',
+        sub_business_unit_id: isSubBu ? String(client.company_id) : '',
       });
     }
-  }, [client, isEdit, form]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [client, isEdit, form, units]);
 
   const onSubmit = (values) => {
     // Multi-BU BU Admin/BU Head must pick a BU before saving.
     if (showBuSelector && !values.company_id) {
       form.setError('company_id', { message: 'Business Unit is required.' });
+      return;
+    }
+    // The picked root BU has Sub-BUs — picking one of them is mandatory, not optional, once
+    // they exist (the whole point of a Sub-BU is to record which of them a Client actually
+    // belongs to, not just its Parent BU).
+    if (showSubBuField && !values.sub_business_unit_id) {
+      form.setError('sub_business_unit_id', { message: 'Sub Business Unit is required.' });
       return;
     }
 
@@ -102,8 +133,22 @@ const ClientForm = () => {
     );
     // Send company_id as a number; absent for a cross-BU login, which the empty-string filter
     // above already strips — a BU-less client is created by the ABSENCE of the field, not by
-    // sending null.
-    if (clean.company_id) clean.company_id = Number(clean.company_id);
+    // sending null. A chosen Sub-BU overrides the root — the backend only ever sees ONE BU id,
+    // whichever is the most specific one actually picked.
+    if (clean.sub_business_unit_id) clean.company_id = Number(clean.sub_business_unit_id);
+    else if (clean.company_id) clean.company_id = Number(clean.company_id);
+    delete clean.sub_business_unit_id;
+
+    // Edit only: PUT /clients/:id treats company_id as "reassign the BU" — omitting it leaves
+    // the BU unchanged. The field is prefilled from the client's current BU, so it's always
+    // present here even when the user never touched the dropdown; sending it unchanged would
+    // still succeed, but it also re-checks that value against the caller's CURRENT mapped BUs,
+    // which can needlessly 403 if that mapping has drifted since the client was assigned (e.g.
+    // this login lost access to the client's existing BU) even though nothing on the form
+    // actually changed. So it's only sent when it differs from the value the form loaded with.
+    if (isEdit && clean.company_id != null && clean.company_id === Number(client?.company_id)) {
+      delete clean.company_id;
+    }
 
     const mutation = isEdit ? updateMutation : createMutation;
     mutation.mutate(clean, {
@@ -119,7 +164,7 @@ const ClientForm = () => {
         // the sheet scrolls past, and drop the cached list so reopening the form shows the
         // BUs that are actually still mapped.
         if (err?.response?.status === 403 && /business unit/i.test(message)) {
-          form.setError('company_id', { message });
+          form.setError(showSubBuField ? 'sub_business_unit_id' : 'company_id', { message });
           queryClient.invalidateQueries({ queryKey: ['companies'] });
         }
         showError(message);
@@ -166,12 +211,44 @@ const ClientForm = () => {
                               <span className="text-destructive mr-0.5">*</span> Business Unit
                             </FormLabel>
                             <FormControl>
-                              <SearchableSelect
-                                options={buOptions}
+                              <BusinessUnitCascadeSelect
+                                units={units}
                                 value={field.value}
-                                onValueChange={field.onChange}
+                                onValueChange={(val) => {
+                                  field.onChange(val);
+                                  // A different root's own Sub-BUs are a different set — never
+                                  // leave a Sub-BU id from the PREVIOUS root silently selected.
+                                  form.setValue('sub_business_unit_id', '');
+                                  form.clearErrors('sub_business_unit_id');
+                                }}
                                 placeholder="Select business unit"
                                 searchPlaceholder="Search business unit..."
+                                className="h-8 text-sm border-gray-200 w-full"
+                              />
+                            </FormControl>
+                            <FormMessage className="text-[10px]" />
+                          </FormItem>
+                        )}
+                      />
+                    )}
+
+                    {/* Mandatory, not optional, once the picked BU actually has Sub-BUs — its own
+                        sibling field (not nested inside the BU field above) so it renders in its
+                        own slot rather than stretching the BU field's own layout. */}
+                    {showBuSelector && showSubBuField && (
+                      <FormField
+                        control={form.control}
+                        name="sub_business_unit_id"
+                        render={({ field }) => (
+                          <FormItem className="space-y-1">
+                            <FormLabel className="text-[11px] text-muted-foreground font-medium">
+                              <span className="text-destructive mr-0.5">*</span> Sub Business Unit
+                            </FormLabel>
+                            <FormControl>
+                              <SubBusinessUnitSelect
+                                options={subBuOptions}
+                                value={field.value}
+                                onValueChange={field.onChange}
                                 className="h-8 text-sm border-gray-200 w-full"
                               />
                             </FormControl>

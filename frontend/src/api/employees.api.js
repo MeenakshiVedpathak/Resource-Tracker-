@@ -213,12 +213,16 @@ const mockDelete = async (id) => {
 // backend's param validation rejecting the request outright whenever a role AND a BU were both
 // selected, which read as "neither filter works" even though the BU-only path (below, no
 // role_id) was fine.
-const realGetAllFiltered = async ({ roleId, businessUnitId }, employeeParams) => {
+const realGetAllFiltered = async ({ roleId, businessUnitId, entityIds, businessUnitIds }, employeeParams) => {
   const { status, search } = employeeParams;
   const scope = businessUnitId && businessUnitId !== 'all' ? explicitBuScope(businessUnitId) : explicitBuScope(null);
   const batchRes = await apiClient
     .get('/employees', {
-      params: { page: 1, limit: REAL_ROLE_FILTER_SCAN_LIMIT, status, search },
+      params: {
+        page: 1, limit: REAL_ROLE_FILTER_SCAN_LIMIT, status, search,
+        ...(entityIds && { entityIds }),
+        ...(businessUnitIds && { businessUnitIds }),
+      },
       ...scope,
     })
     .then((r) => r.data);
@@ -242,12 +246,16 @@ const realGetAllFiltered = async ({ roleId, businessUnitId }, employeeParams) =>
 // and it becomes dead weight (never triggered) the day GET /employees searches email itself.
 // Same REAL_ROLE_FILTER_SCAN_LIMIT bound — and the same caveat — as the role filter above: past
 // that many employees in scope, a match can fall outside the scanned page.
-const realSearchFallback = async ({ roleId, businessUnitId }, employeeParams) => {
+const realSearchFallback = async ({ roleId, businessUnitId, entityIds, businessUnitIds }, employeeParams) => {
   const { search, status, sortBy, sortOrder } = employeeParams;
   const scope = businessUnitId && businessUnitId !== 'all' ? explicitBuScope(businessUnitId) : explicitBuScope(null);
   const batchRes = await apiClient
     .get('/employees', {
-      params: { page: 1, limit: REAL_ROLE_FILTER_SCAN_LIMIT, status, sortBy, sortOrder },
+      params: {
+        page: 1, limit: REAL_ROLE_FILTER_SCAN_LIMIT, status, sortBy, sortOrder,
+        ...(entityIds && { entityIds }),
+        ...(businessUnitIds && { businessUnitIds }),
+      },
       ...scope,
     })
     .then((r) => r.data);
@@ -265,14 +273,21 @@ const realSearchFallback = async ({ roleId, businessUnitId }, employeeParams) =>
 export const employeesApi = {
   getAll: async (params) => {
     if (RBAC_MOCK_ENABLED) return mockGetAll(params);
+    // entityIds/businessUnitIds are read out for the role-filter/search-fallback scans below
+    // (which only ever pick `status`/`search`/etc. off employeeParams by name, silently dropping
+    // anything not on that list) but also kept in employeeParams itself (note: no `...rest`
+    // shorthand here — they're destructured by name AND left in place) so the plain
+    // non-role-filter path a few lines down still passes them straight through via its
+    // `...employeeParams` spread, same convention every other Master api.js already uses.
     const { role_id, business_unit_id, company_id, ...employeeParams } = params ?? {};
+    const { entityIds, businessUnitIds } = employeeParams;
     const buId = business_unit_id ?? company_id;
     if (role_id) {
-      const filtered = await realGetAllFiltered({ roleId: role_id, businessUnitId: buId }, employeeParams);
+      const filtered = await realGetAllFiltered({ roleId: role_id, businessUnitId: buId, entityIds, businessUnitIds }, employeeParams);
       // Its scan seeds itself from a server-side `search`, so an email search starves it the same
       // way it starves the unfiltered list — fall back to the local match, role predicate intact.
       if (employeeParams.search && !(filtered?.data ?? []).length) {
-        return realSearchFallback({ roleId: role_id, businessUnitId: buId }, employeeParams);
+        return realSearchFallback({ roleId: role_id, businessUnitId: buId, entityIds, businessUnitIds }, employeeParams);
       }
       return filtered;
     }

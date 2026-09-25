@@ -149,8 +149,8 @@ const ServicePOProfitability = () => {
   const [serviceType, setServiceType] = useState('all');
   const [serviceCategory, setServiceCategory] = useState('all');
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [entityId, setEntityId] = useState(ALL_ENTITIES);
-  const [buId, setBuId] = useState(ALL_BUS);
+  const [entityIds, setEntityIds] = useState([]);
+  const [buIds, setBuIds] = useState([]);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
 
@@ -161,8 +161,9 @@ const ServicePOProfitability = () => {
     ...(clientId && clientId !== 'all' && { clientId }),
     page: 1,
     limit: MAX_RECORDS_FETCH,
-    buId,
-    ...(entityId !== ALL_ENTITIES && { entityId }),
+    buId: ALL_BUS,
+    ...(entityIds.length > 0 && { entityIds: entityIds.join(',') }),
+    ...(buIds.length > 0 && { businessUnitIds: buIds.join(',') }),
   };
 
   const { data, isPending } = useServicePOProfitability(params);
@@ -223,16 +224,16 @@ const ServicePOProfitability = () => {
   })() : null;
 
   const activeFilterCount = [
-    entityId !== ALL_ENTITIES,
-    buId !== ALL_BUS,
+    entityIds.length > 0,
+    buIds.length > 0,
     clientId !== 'all',
     serviceType !== 'all',
     serviceCategory !== 'all',
   ].filter(Boolean).length;
 
   const clearFilters = () => {
-    setEntityId(ALL_ENTITIES);
-    setBuId(ALL_BUS);
+    setEntityIds([]);
+    setBuIds([]);
     setClientId('all');
     setServiceType('all');
     setServiceCategory('all');
@@ -287,9 +288,9 @@ const ServicePOProfitability = () => {
         onClear={clearFilters}
         showClear={activeFilterCount > 0}
       >
-        <EntityFilter value={entityId} onChange={(v) => { setEntityId(v); setBuId(ALL_BUS); }} />
+        <EntityFilter multiple value={entityIds} onChange={(v) => { setEntityIds(v); setBuIds([]); }} />
 
-        <BusinessUnitFilter value={buId} entityId={entityId} onChange={setBuId} />
+        <BusinessUnitFilter multiple value={buIds} entityId={entityIds} onChange={setBuIds} />
 
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Month &amp; Year <span className="text-destructive">*</span></Label>

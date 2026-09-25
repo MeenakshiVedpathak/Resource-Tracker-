@@ -152,7 +152,9 @@ const ServicePOImport = () => {
               <p className="mt-2 text-xs text-muted-foreground">
                 <strong>BU Name</strong> is required on every row — it must exactly match one of your own
                 Business Units, and each imported Service PO is created under the Business Unit named on
-                its row. A row with a blank or unrecognized BU Name is rejected.
+                its row. A row with a blank or unrecognized BU Name is rejected. <strong>Sub BU</strong> is
+                optional — fill it in to assign the Service PO directly to a Sub-BU nested under that BU
+                Name instead of the top-level BU itself; leave it blank to target the BU Name row as-is.
               </p>
             ) : (
               <p className="mt-2 text-xs text-muted-foreground">

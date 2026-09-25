@@ -59,7 +59,9 @@ const ServicePODetail = () => {
   const level = getLevel(po);
 
   const { hasRole } = useAuth();
-  const isAdminActor = hasRole(ROLE_NAMES.ADMIN);
+  // hasRole() is an exact match, not hierarchy-aware — Platform Admin has to be listed
+  // explicitly alongside Admin or it fails this check despite outranking it.
+  const isAdminActor = hasRole(ROLE_NAMES.PLATFORM_ADMIN, ROLE_NAMES.ADMIN);
   const canWrite = useCanWrite();
   // Map Employees stays open to any write-capable role on any PO, centralised included — only
   // edit/close (Admin-managed for a centralised PO) narrow further below. See

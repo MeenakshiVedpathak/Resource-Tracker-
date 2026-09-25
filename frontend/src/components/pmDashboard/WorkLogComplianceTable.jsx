@@ -66,7 +66,7 @@ const columns = [
 
 // Section 4 — Work Log / Effort: GET /pm-dashboard/worklog (missing/shortfall list for the
 // selected month).
-const WorkLogComplianceTable = ({ monthYear, buId }) => {
+const WorkLogComplianceTable = ({ monthYear, buScope }) => {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
@@ -74,7 +74,7 @@ const WorkLogComplianceTable = ({ monthYear, buId }) => {
   const debouncedSearch = useDebounce(search, 400);
 
   const params = {
-    buId,
+    ...buScope,
     month: monthYear.month,
     year: monthYear.year,
     page,

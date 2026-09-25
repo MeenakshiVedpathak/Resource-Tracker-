@@ -189,8 +189,8 @@ const ServicePOHoursBudget = () => {
   const [clientId, setClientId] = useState('all');
   const [poId, setPoId] = useState('all');
   const [serviceTypeId, setServiceTypeId] = useState('all');
-  const [buId, setBuId] = useState(ALL_BUS);
-  const [entityId, setEntityId] = useState(ALL_ENTITIES);
+  const [buIds, setBuIds] = useState([]);
+  const [entityIds, setEntityIds] = useState([]);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const [hoursSource, setHoursSource] = useState('M');
@@ -234,8 +234,9 @@ const ServicePOHoursBudget = () => {
     sortOrder,
     page,
     limit,
-    buId,
-    ...(entityId !== ALL_ENTITIES && { entityId }),
+    buId: ALL_BUS,
+    ...(entityIds.length > 0 && { entityIds: entityIds.join(',') }),
+    ...(buIds.length > 0 && { businessUnitIds: buIds.join(',') }),
   };
 
   const { data, isPending } = useServicePOHoursBudget(params);
@@ -245,8 +246,8 @@ const ServicePOHoursBudget = () => {
   const showLoading = periodReady && isPending;
 
   const activeFilterCount = [
-    entityId !== ALL_ENTITIES,
-    buId !== ALL_BUS,
+    entityIds.length > 0,
+    buIds.length > 0,
     employeeId !== 'all',
     clientId !== 'all',
     poId !== 'all',
@@ -254,8 +255,8 @@ const ServicePOHoursBudget = () => {
   ].filter(Boolean).length;
 
   const clearFilters = () => {
-    setEntityId(ALL_ENTITIES);
-    setBuId(ALL_BUS);
+    setEntityIds([]);
+    setBuIds([]);
     setEmployeeId('all');
     setClientId('all');
     setPoId('all');
@@ -335,15 +336,17 @@ const ServicePOHoursBudget = () => {
         showClear={activeFilterCount > 0}
       >
         <EntityFilter
-          value={entityId}
-          onChange={(v) => { setEntityId(v); setBuId(ALL_BUS); setPage(1); }}
+          multiple
+          value={entityIds}
+          onChange={(v) => { setEntityIds(v); setBuIds([]); setPage(1); }}
           labelClassName={FILTER_LABEL}
         />
 
         <BusinessUnitFilter
-          value={buId}
-          entityId={entityId}
-          onChange={(v) => { setBuId(v); setPage(1); }}
+          multiple
+          value={buIds}
+          entityId={entityIds}
+          onChange={(v) => { setBuIds(v); setPage(1); }}
           labelClassName={FILTER_LABEL}
         />
 

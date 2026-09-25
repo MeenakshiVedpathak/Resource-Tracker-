@@ -106,10 +106,12 @@ const ClientList = () => {
   // Query key and refetches on change, and clients.api.js turns it into ?company_id=<id>
   // (omitted for 'all'), which the backend accepts for BU-scoped callers too — narrowing to one
   // of their own mapped BUs.
+  // Multi-select — backend support for entityIds/businessUnitIds has landed on GET /clients (see
+  // BACKEND_MULTI_SELECT_ENTITY_BU_PROMPT.md).
   const {
     entityId, setEntityId, showEntityFilter, isEntityFiltered, resetEntityId,
     buId, setBuId, showBuFilter, isBuFiltered, resetBuId, buParams,
-  } = useMasterBuFilter();
+  } = useMasterBuFilter({ multiple: true });
 
   const params = {
     page,
@@ -140,15 +142,50 @@ const ClientList = () => {
       map.set(String(c.id), {
         name: c.company_name ?? c.company_code ?? null,
         entityName: c.entity?.entity_name ?? null,
+        // Sub BU column support — a Client's company_id can itself be a Sub-BU's id (2-level BU
+        // hierarchy via parent_business_unit_id). Kept here so getSubBuName below only needs
+        // companyById, same as getBuName/getEntityName.
+        parentBuId: c.parent_business_unit_id ?? c.parent?.id ?? null,
       });
     });
     return map;
   }, [companiesForLookup]);
 
+  // A Client's company_id can itself be a Sub-BU's id (2-level BU hierarchy via
+  // parent_business_unit_id) — the "Business Unit" column must always show the top-level Parent BU
+  // regardless (a Sub-BU showing up there reads as a completely different, unrelated BU, since it's
+  // just another row's own name with no indication it's nested under anything). `subBuNameById` is
+  // the Sub-BU's OWN name for the separate "Sub BU" column below, kept apart so neither column loses
+  // information the other one needs. Same pattern as ServicePOList.jsx's buRootNameById/subBuNameById.
+  const buRootNameById = useMemo(() => {
+    const map = new Map();
+    companyById.forEach((c, id) => {
+      // Depth is capped at 2 levels (a Sub-BU can never itself have children — see
+      // CompanyList.jsx), so a single parent lookup is always enough to reach the root.
+      const root = c.parentBuId != null ? companyById.get(String(c.parentBuId)) : null;
+      map.set(id, root ? root.name : c.name);
+    });
+    return map;
+  }, [companyById]);
+  const subBuNameById = useMemo(() => {
+    const map = new Map();
+    companyById.forEach((c, id) => {
+      if (c.parentBuId != null) map.set(id, c.name);
+    });
+    return map;
+  }, [companyById]);
+
+  // Resolved through buRootNameById first — that map always walks up to the top-level Parent BU's
+  // own name regardless of whether company_id points at a root BU or a Sub-BU. The embedded
+  // `client.company` relation (whichever row company_id actually points to) is only a fallback for
+  // while the company master itself is still loading.
   const getBuName = (client) =>
-    client.company?.company_name ?? companyById.get(String(client.company_id))?.name ?? null;
+    buRootNameById.get(String(client.company_id)) ?? client.company?.company_name ?? null;
   const getEntityName = (client) =>
     client.company?.entity?.entity_name ?? companyById.get(String(client.company_id))?.entityName ?? null;
+  // Sub BU is the client's own BU's name, shown ONLY when that BU itself has a parent (i.e. it is a
+  // Sub-BU, not a top-level Parent) — mirrors getBuName's lookup but never walks up to the root.
+  const getSubBuName = (client) => subBuNameById.get(String(client.company_id)) ?? null;
 
   const [previewData, setPreviewData] = useState(null);
   const [previewFile, setPreviewFile] = useState(null);
@@ -234,6 +271,12 @@ const ClientList = () => {
       header: 'Business Unit',
       size: businessUnitColumnWidth,
       cell: ({ row }) => <TruncatedCell value={getBuName(row.original)} maxWidth={`${businessUnitColumnWidth - 20}px`} />,
+    }),
+    columnHelper.display({
+      id: 'sub_bu_name',
+      header: 'Sub BU',
+      size: 150,
+      cell: ({ row }) => <TruncatedCell value={getSubBuName(row.original)} maxWidth="130px" />,
     }),
     columnHelper.accessor('status', {
       header: 'Status',
@@ -553,10 +596,10 @@ const ClientList = () => {
 
       <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[200px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
         {showEntityFilter && (
-          <EntityFilter value={entityId} onChange={(v) => { setEntityId(v); setPage(1); }} />
+          <EntityFilter multiple value={entityId} onChange={(v) => { setEntityId(v); setPage(1); }} />
         )}
         {showBuFilter && (
-          <BusinessUnitFilter value={buId} entityId={entityId} onChange={(v) => { setBuId(v); setPage(1); }} />
+          <BusinessUnitFilter multiple value={buId} entityId={entityId} onChange={(v) => { setBuId(v); setPage(1); }} />
         )}
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Status</Label>

@@ -117,12 +117,16 @@ export const QUERY_KEYS = {
   MONTHLY_COST: (id) => ['monthly-costs', id],
 
   // Service PO Monthly Budget ("Monthly PO Reporting" in the UI, was "Invoice Master")
-  SERVICE_PO_MONTHLY_BUDGET_SERVICE_POS: (buId) => ['service-po-monthly-budget', 'service-pos', buId],
+  // `entityIds`/`businessUnitIds` (multi-select, comma-joined strings) are appended so a change
+  // to either narrowing never serves a stale/differently-scoped cache entry.
+  SERVICE_PO_MONTHLY_BUDGET_SERVICE_POS: (buId, entityIds, businessUnitIds) =>
+    ['service-po-monthly-budget', 'service-pos', buId, entityIds, businessUnitIds],
   // `buId` is the page's own Business Unit filter (undefined for a single-BU login, which keeps
   // following the global header). It MUST stay in the key: the month grid and the 12-month
   // summary strip share these cache entries, so without it a BU switch would serve the previous
   // BU's records to both.
-  SERVICE_PO_MONTHLY_BUDGET_LIST: (month, year, buId) => ['service-po-monthly-budget', 'list', month, year, buId],
+  SERVICE_PO_MONTHLY_BUDGET_LIST: (month, year, buId, entityIds, businessUnitIds) =>
+    ['service-po-monthly-budget', 'list', month, year, buId, entityIds, businessUnitIds],
   // `buId` — see SERVICE_PO_MONTHLY_BUDGET_LIST above: must stay in the key so a BU switch never
   // serves a different BU's cached record for the same PO/month/year.
   SERVICE_PO_MONTHLY_BUDGET_RECORD: (servicePoId, month, year, buId) =>
@@ -182,6 +186,7 @@ export const QUERY_KEYS = {
   REPORT_PROJECT_WISE_UTILIZATION: (params) => ['reports', 'project-wise-utilization', params],
   REPORT_MONTH_WISE_BENCH: (params) => ['reports', 'month-wise-bench', params],
   REPORT_RESOURCE_WISE_BENCH: (params) => ['reports', 'resource-wise-bench', params],
+  REPORT_RESOURCE_COST_UTILIZATION: (params) => ['reports', 'resource-cost-utilization', params],
 
   // Notifications
   NOTIFICATIONS: (params) => ['notifications', params],

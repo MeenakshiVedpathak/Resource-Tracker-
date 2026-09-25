@@ -138,4 +138,23 @@ export const reportsApi = {
   getMonthWiseBench: (params) => getReport('/reports/month-wise-bench', params),
   // Its own report page (ResourceWiseBenchReport.jsx) — server-paginated and server-sorted.
   getResourceWiseBench: (params) => getReport('/reports/resource-wise-bench', params),
+
+  // Resource Cost / Utilization Report (§ new report, 2026-09) — per-employee, per-month
+  // Hours/Logged Hrs/Projection %/Actual %/Contribution across a month range, with dynamic
+  // month-group columns (data.records[]/data.summary[]/data.period). Confirmed contract.
+  getResourceCostUtilization: (params) => getReport('/reports/resource-cost-utilization', params),
+  // Same query params as above (page/limit have no effect — always the full filtered set).
+  // Returns a real .xlsx binary with merged month headers and frozen static columns already
+  // built in server-side, so this is a pure file download, not a client-side sheet build.
+  exportResourceCostUtilization: async (params) => {
+    const { buId, ...query } = params;
+    const res = await apiClient.get('/reports/resource-cost-utilization/export', {
+      params: query,
+      responseType: 'blob',
+      ...explicitBuScope(buId),
+    });
+    const match = /filename="?([^"]+)"?/i.exec(res.headers['content-disposition'] ?? '');
+    const filename = match?.[1] ?? 'Resource_Cost_Utilization_Report.xlsx';
+    return { blob: res.data, filename };
+  },
 };

@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { createColumnHelper } from '@tanstack/react-table';
 import { Download, Search } from 'lucide-react';
 import { useEmployeeWorkLogSynced } from '@/hooks/usePlatformAdminReports';
 import { platformAdminReportsApi } from '@/api/platformAdminReports.api';
+import { useCompanies } from '@/hooks/useCompanies';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
@@ -68,6 +69,22 @@ const EmployeeWorkLogSyncedTab = ({ toolbarSlot }) => {
   const rows = data?.data?.records ?? [];
   const meta = data?.meta ?? {};
 
+  // Client-side-only BU hierarchy join. Unlike the other Organization Overview tabs, this
+  // endpoint's own rows carry no bu_id at all (see the records shape noted above — bu_name only),
+  // so the BU master can't be joined by id here; keyed instead by `entity_name::company_name`
+  // (the same pair this table already shows per row) since company names aren't guaranteed unique
+  // across different Entities.
+  const { data: companiesData } = useCompanies({ status: 'active', limit: 500 }, { staleTime: 1000 * 60 * 10 });
+  const subBuNameByEntityAndBu = useMemo(() => {
+    const map = new Map();
+    (companiesData?.data ?? []).forEach((c) => {
+      if ((c.parent_business_unit_id ?? c.parent?.id) != null) {
+        map.set(`${c.entity?.entity_name ?? ''}::${c.company_name}`, c.company_name);
+      }
+    });
+    return map;
+  }, [companiesData]);
+
   const handleExport = async () => {
     setIsExporting(true);
     try {
@@ -113,6 +130,18 @@ const EmployeeWorkLogSyncedTab = ({ toolbarSlot }) => {
       size: 160,
       enableSorting: false,
       cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="140px" />,
+    }),
+    columnHelper.display({
+      id: 'sub_bu_name',
+      header: 'Sub BU',
+      size: 150,
+      enableSorting: false,
+      cell: ({ row }) => (
+        <TruncatedCell
+          value={subBuNameByEntityAndBu.get(`${row.original.entity_name ?? ''}::${row.original.bu_name}`)}
+          maxWidth="130px"
+        />
+      ),
     }),
     columnHelper.accessor('total_hours', {
       header: 'Total Hours (Synced)',

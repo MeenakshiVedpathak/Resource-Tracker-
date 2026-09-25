@@ -144,8 +144,8 @@ const ServicePOResource = () => {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [entityId, setEntityId] = useState(ALL_ENTITIES);
-  const [buId, setBuId] = useState(ALL_BUS);
+  const [entityIds, setEntityIds] = useState([]);
+  const [buIds, setBuIds] = useState([]);
   const [exporting, setExporting] = useState(false);
 
   const { data: activeEmployees = [] } = useActiveEmployees();
@@ -199,8 +199,9 @@ const ServicePOResource = () => {
     ...(clientId !== 'all' && { clientId }),
     page,
     limit,
-    buId,
-    ...(entityId !== ALL_ENTITIES && { entityId }),
+    buId: ALL_BUS,
+    ...(entityIds.length > 0 && { entityIds: entityIds.join(',') }),
+    ...(buIds.length > 0 && { businessUnitIds: buIds.join(',') }),
   };
 
   const { data, isPending } = useServicePOResourceReport(params);
@@ -259,8 +260,8 @@ const ServicePOResource = () => {
   }, 0);
 
   const activeFilterCount = [
-    entityId !== ALL_ENTITIES ? 1 : 0,
-    buId !== ALL_BUS ? 1 : 0,
+    entityIds.length > 0 ? 1 : 0,
+    buIds.length > 0 ? 1 : 0,
     employeeId !== 'all' ? 1 : 0,
     categoryId !== 'all' ? 1 : 0,
     typeId !== 'all' ? 1 : 0,
@@ -269,8 +270,8 @@ const ServicePOResource = () => {
   ].reduce((a, b) => a + b, 0);
 
   const clearFilters = () => {
-    setEntityId(ALL_ENTITIES);
-    setBuId(ALL_BUS);
+    setEntityIds([]);
+    setBuIds([]);
     setEmployeeId('all');
     setCategoryId('all');
     setTypeId('all');
@@ -334,9 +335,9 @@ const ServicePOResource = () => {
         showClear={activeFilterCount > 0}
         onClose={() => setFiltersOpen(false)}
       >
-          <EntityFilter value={entityId} onChange={(v) => { setEntityId(v); setBuId(ALL_BUS); }} />
+          <EntityFilter multiple value={entityIds} onChange={(v) => { setEntityIds(v); setBuIds([]); setPage(1); }} />
 
-          <BusinessUnitFilter value={buId} entityId={entityId} onChange={setBuId} />
+          <BusinessUnitFilter multiple value={buIds} entityId={entityIds} onChange={(v) => { setBuIds(v); setPage(1); }} />
 
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs font-medium">Month &amp; Year</Label>

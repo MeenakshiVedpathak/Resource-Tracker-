@@ -9,9 +9,17 @@ export const servicePoMonthlyBudgetApi = {
   // getMonthList below — it has to, since this list is what decides which PO cards the grid
   // renders: scoping only the saved records would leave every other BU's POs on screen as
   // permanently-empty cards, which reads as the filter not working at all.
-  getServicePOs: (buId) =>
+  // `entityIds`/`businessUnitIds` (comma-separated strings) are the multi-select narrowing —
+  // additive to `buId`'s single-value header scope, backend support confirmed live on both this
+  // sub-route and getMonthList below (see BACKEND_MULTI_SELECT_ENTITY_BU_PROMPT.md). Both must
+  // stay in sync with the same filter or the PO cards and the saved-budget rows disagree about
+  // which BUs are in scope — see getMonthList's own comment.
+  getServicePOs: (buId, entityIds, businessUnitIds) =>
     apiClient
-      .get('/service-po-monthly-budgets/service-pos', { ...explicitBuScope(buId) })
+      .get('/service-po-monthly-budgets/service-pos', {
+        params: { ...(entityIds && { entityIds }), ...(businessUnitIds && { businessUnitIds }) },
+        ...explicitBuScope(buId),
+      })
       .then((r) => (r.data?.data ?? []).filter((po) => po.invoice_frequency !== 'internal-no-invoice')),
 
   // No service_po_id → every saved budget record for that month, across every PO the caller
@@ -20,9 +28,12 @@ export const servicePoMonthlyBudgetApi = {
   // (X-Company-Id) rather than a query param — same convention as the Masters and the Reports
   // suite. `undefined` (a single-BU login, which has no filter) leaves the interceptor's global
   // BU header untouched, exactly as before this filter existed.
-  getMonthList: (month, year, buId) =>
+  getMonthList: (month, year, buId, entityIds, businessUnitIds) =>
     apiClient
-      .get('/service-po-monthly-budgets', { params: { month, year }, ...explicitBuScope(buId) })
+      .get('/service-po-monthly-budgets', {
+        params: { month, year, ...(entityIds && { entityIds }), ...(businessUnitIds && { businessUnitIds }) },
+        ...explicitBuScope(buId),
+      })
       .then((r) => r.data?.data?.records ?? []),
 
   // 404 means nothing has been saved yet for this PO+month+year (same response as "not yours"/

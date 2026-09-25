@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   ClipboardCheck, AlertTriangle, BatteryCharging, Users, Clock, FolderKanban, IndianRupee,
@@ -13,7 +13,7 @@ import { formatCurrency, formatHours, formatNumber } from '@/utils/formatters';
 import { cn } from '@/utils/cn';
 import PageHeader from '@/components/common/PageHeader';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
-import { SearchableSelect } from '@/components/ui/searchable-select';
+import { HierarchicalBuSelector, dedupeBusinessUnitIds } from '@/components/common/HierarchicalBuSelector';
 import { Skeleton } from '@/components/ui/skeleton';
 import PmKpiCard from '@/components/pmDashboard/PmKpiCard';
 import ActionRequiredFeed from '@/components/pmDashboard/ActionRequiredFeed';
@@ -83,11 +83,37 @@ const now = new Date();
 const PmDashboard = () => {
   const { employee } = useAuth();
   const { units, canFilter: showBuFilter } = useSelectableBusinessUnits();
+  // Same shape HierarchicalBuSelector wants — {id, label, parentId} — so a Parent's own Sub-BUs
+  // (e.g. "DAS"/"Software Solutions" under "DATA + AI") nest/indent under it in one dropdown
+  // instead of showing flat alongside every Parent, same fix already applied to pages/Dashboard.jsx.
+  const buOptions = useMemo(
+    () => units.map((u) => ({ id: String(u.id), label: u.name, parentId: u.parentId })),
+    [units],
+  );
   const [monthYear, setMonthYear] = useState({ month: now.getMonth() + 1, year: now.getFullYear() });
-  // '' means every BU this login belongs to (aggregated) — same convention as Dashboard.jsx's own
+  // [] means every BU this login belongs to (aggregated) — same convention as Dashboard.jsx's own
   // header BU control. Never shown at all for a single-BU login (see showBuFilter above), so it
-  // stays '' for them and the backend aggregates across their one BU same as "all" would.
-  const [buId, setBuId] = useState('');
+  // stays [] for them and the backend aggregates across their one BU same as "all" would.
+  const [buIds, setBuIds] = useState([]);
+  // 'all' + businessUnitIds (comma-joined), same pseudo-param contract pages/Dashboard.jsx's own
+  // analyticsParams uses — 'all' drops pmDashboard.api.js's withBuScope X-Company-Id header
+  // entirely once businessUnitIds is present, so the backend's own role-reach fallback is what
+  // businessUnitIds then narrows, instead of the header silently narrowing to one BU. Every child
+  // section below (KPIs, tables, charts) spreads this same object into its own params, so all of
+  // them narrow together.
+  //
+  // NOTE: unlike /dashboard/analytics, none of the /pm-dashboard/* endpoints are confirmed to
+  // read `businessUnitIds` yet — this passes it through client-side (pmDashboard.api.js forwards
+  // every param it doesn't special-case straight to the query string), but the backend must accept
+  // it on summary/projects/team/worklog/action-required for multi-BU selection to actually narrow
+  // results rather than being silently ignored.
+  // The tree lets a Parent BU and one of its own Sub-BUs be checked together (see
+  // HierarchicalBuSelector's own comment on why it keeps checkbox state purely literal) — deduped
+  // here, at the boundary where the selection actually becomes a request param, since sending both
+  // ids together is redundant server-side and silently blocks the Sub-BU pick from narrowing
+  // anything (same fix already applied to pages/Dashboard.jsx).
+  const dedupedBuIds = useMemo(() => dedupeBusinessUnitIds(buIds, buOptions), [buIds, buOptions]);
+  const buScope = dedupedBuIds.length > 0 ? { buId: 'all', businessUnitIds: dedupedBuIds.join(',') } : { buId: '' };
   // Bumped only when the Overallocated Employees KPI is clicked, forcing TeamCapacityTable to
   // remount with a fresh `initialStatusFilter` (see its own key prop below) — the component only
   // reads that prop once on mount, so a plain re-render wouldn't re-seed it a second time.
@@ -114,7 +140,7 @@ const PmDashboard = () => {
     scrollToTeamCapacity();
   }, [scrollToTeamCapacity]);
 
-  const params = { buId, month: monthYear.month, year: monthYear.year };
+  const params = { ...buScope, month: monthYear.month, year: monthYear.year };
 
   // First-screen behavior: these two fire immediately on load, gated behind nothing but the
   // params object itself (always present) — the KPI row and Action Required feed populate the
@@ -182,14 +208,14 @@ const PmDashboard = () => {
             {showBuFilter && (
               <div className="flex items-center gap-1.5">
                 <FilterIconBadge icon={Landmark} color="primary" />
-                <SearchableSelect
-                  options={units.map((u) => ({ value: String(u.id), label: u.name }))}
-                  value={buId}
-                  onValueChange={setBuId}
+                <HierarchicalBuSelector
+                  options={buOptions}
+                  value={buIds}
+                  onValueChange={setBuIds}
                   placeholder="All Business Units"
                   searchPlaceholder="Search business unit…"
-                  showSearch={units.length > 6}
                   className="w-48 h-9 rounded-xl text-sm"
+                  showChips={false}
                 />
               </div>
             )}
@@ -252,7 +278,7 @@ const PmDashboard = () => {
         <div className="flex min-w-0 flex-col gap-3">
           <SectionLabel icon={BarChart3} title="Logged vs Planned Hours" subtitle="Top projects by logged hours this period" />
           <SectionBox className="flex flex-1 flex-col">
-            <ProjectHoursBarChart monthYear={monthYear} buId={buId} className="flex-1" />
+            <ProjectHoursBarChart monthYear={monthYear} buScope={buScope} className="flex-1" />
           </SectionBox>
         </div>
       </div>
@@ -294,7 +320,7 @@ const PmDashboard = () => {
         <div className="flex min-w-0 flex-col gap-3">
           <SectionLabel icon={CalendarClock} title="Upcoming Deadlines" subtitle="Soonest Service PO / project deadlines" />
           <SectionBox>
-            <UpcomingDeadlinesList monthYear={monthYear} buId={buId} />
+            <UpcomingDeadlinesList monthYear={monthYear} buScope={buScope} />
           </SectionBox>
         </div>
       </div>
@@ -314,7 +340,7 @@ const PmDashboard = () => {
           <div className="flex flex-col gap-3">
             <SectionLabel icon={FolderKanban} title="Project Overview" subtitle="Key project details and current status" />
             <SectionBox>
-              <ProjectOverviewTable monthYear={monthYear} buId={buId} />
+              <ProjectOverviewTable monthYear={monthYear} buScope={buScope} />
             </SectionBox>
           </div>
 
@@ -322,7 +348,7 @@ const PmDashboard = () => {
           <div className="flex flex-col gap-3">
             <SectionLabel icon={Clock} title="Work Log / Effort" subtitle="Employee work log summary" />
             <SectionBox>
-              <WorkLogComplianceTable monthYear={monthYear} buId={buId} />
+              <WorkLogComplianceTable monthYear={monthYear} buScope={buScope} />
             </SectionBox>
           </div>
         </div>
@@ -338,7 +364,7 @@ const PmDashboard = () => {
                 <TeamCapacityTable
                   key={teamFilterNonce}
                   monthYear={monthYear}
-                  buId={buId}
+                  buScope={buScope}
                   initialStatusFilter={teamInitialFilter}
                 />
               </div>
@@ -350,7 +376,7 @@ const PmDashboard = () => {
             <SectionLabel icon={AlertTriangle} title="Project Health" subtitle="Projects needing attention" />
             <SectionBox>
               <div ref={projectHealthRef}>
-                <ProjectHealthList monthYear={monthYear} buId={buId} />
+                <ProjectHealthList monthYear={monthYear} buScope={buScope} />
               </div>
             </SectionBox>
           </div>

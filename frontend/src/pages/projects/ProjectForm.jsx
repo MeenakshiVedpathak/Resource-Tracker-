@@ -10,6 +10,7 @@ import { clientsApi } from '@/api/clients.api';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import { useSelectableBusinessUnits } from '@/hooks/useSelectableBusinessUnits';
+import { BusinessUnitCascadeSelect, SubBusinessUnitSelect, useBuHierarchy } from '@/components/common/BusinessUnitCascadeSelect';
 import { ROUTES } from '@/constants/routes';
 import {
   Form, FormField, FormItem, FormLabel, FormControl, FormMessage,
@@ -36,7 +37,12 @@ const projectSchema = z.object({
   project_description: z.string().max(2000, 'Description cannot exceed 2000 characters').optional().or(z.literal('')),
   status: z.enum(['active', 'inactive']).default('active'),
   // Only asked of a BU-scoped login mapped to more than one BU — see showBuSelector below.
+  // Always the ROOT BU's id — a Sub-BU pick lives in sub_business_unit_id instead, so the Client
+  // list scoping that keys off this field never waits on the separately mandatory Sub-BU choice.
   company_id: z.string().optional(),
+  // UI-only grouping field, never sent to the backend as-is (see onSubmit) — required only when
+  // the picked root BU actually has Sub-BUs (checked at submit time against the live hierarchy).
+  sub_business_unit_id: z.string().optional(),
 });
 
 const FormSkeleton = () => (
@@ -69,7 +75,7 @@ const ProjectForm = () => {
   //       pick is authoritative and the Client lookup below is skipped entirely.
   const { isCrossBu, canFilter, units } = useSelectableBusinessUnits();
   const showBuSelector = !isCrossBu && canFilter;
-  const buOptions = units.map((bu) => ({ label: bu.name, value: String(bu.id) }));
+  const { childrenOf } = useBuHierarchy(units);
 
   const form = useForm({
     resolver: zodResolver(projectSchema),
@@ -79,13 +85,16 @@ const ProjectForm = () => {
       project_description: '',
       status: 'active',
       company_id: '',
+      sub_business_unit_id: '',
     },
   });
 
-  // The Client list must be scoped to the chosen BU whenever the BU is asked for. The backend
-  // resolves the client WITHIN the company_id sent on the request, so offering clients from the
-  // login's other BUs lets the two fields disagree and the create fails with "Client not found."
-  // Held until a BU is picked — there is nothing sensible to list before then.
+  // The Client list must be scoped to the chosen ROOT BU whenever the BU is asked for — never to
+  // the (possibly still-empty, separately mandatory) Sub-BU pick below, so Client loading is never
+  // stuck waiting on it. The backend resolves the client WITHIN the company_id sent on the
+  // request, so offering clients from the login's other BUs lets the two fields disagree and the
+  // create fails with "Client not found." Held until a BU is picked — there is nothing sensible to
+  // list before then.
   const selectedBuId = form.watch('company_id');
   const { data: scopedClients, isPending: isLoadingScopedClients } = useClients(
     { buId: selectedBuId, status: 'active', limit: 200 },
@@ -97,17 +106,30 @@ const ProjectForm = () => {
   const clientsLoading = showBuSelector ? isLoadingScopedClients : isLoadingClients;
   const clientDisabled = showBuSelector ? (!selectedBuId || clientsLoading) : clientsLoading;
 
+  // The selected root BU's own Sub-BUs — recomputed live, never off a snapshot, so switching
+  // roots immediately shows (or hides) the right Sub-BU list.
+  const subBuOptions = childrenOf(selectedBuId).map((u) => ({ value: String(u.id), label: u.name }));
+  const showSubBuField = showBuSelector && subBuOptions.length > 0;
+
   useEffect(() => {
     if (project && isEdit) {
+      // The project's saved company_id can itself be a Sub-BU's id — resolve which root it
+      // belongs to so the form reopens with BOTH dropdowns correctly pre-populated.
+      const currentUnit = project.company_id ? units.find((u) => String(u.id) === String(project.company_id)) : null;
+      const isSubBu = currentUnit?.parentId != null;
       form.reset({
         client_id: project.client_id ?? project.client?.id ?? '',
         project_name: project.project_name ?? '',
         project_description: project.project_description ?? '',
         status: project.status ?? 'active',
-        company_id: project.company_id ? String(project.company_id) : '',
+        company_id: project.company_id
+          ? String(isSubBu ? currentUnit.parentId : project.company_id)
+          : '',
+        sub_business_unit_id: isSubBu ? String(project.company_id) : '',
       });
     }
-  }, [project, isEdit, form]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project, isEdit, form, units]);
 
   // The backend requires company_id (Business Unit) on create but a Project has no BU field of
   // its own. Where it comes from depends on whether the login was asked:
@@ -122,13 +144,20 @@ const ProjectForm = () => {
       form.setError('company_id', { message: 'Business Unit is required.' });
       return;
     }
+    // The picked root BU has Sub-BUs — picking one of them is mandatory once they exist.
+    if (showSubBuField && !values.sub_business_unit_id) {
+      form.setError('sub_business_unit_id', { message: 'Sub Business Unit is required.' });
+      return;
+    }
 
     const clean = Object.fromEntries(
       Object.entries(values).filter(([, v]) => v !== '' && v != null)
     );
 
     if (showBuSelector) {
-      clean.company_id = Number(clean.company_id);
+      // A chosen Sub-BU overrides the root — the backend only ever sees ONE BU id, whichever is
+      // the most specific one actually picked.
+      clean.company_id = Number(clean.sub_business_unit_id || clean.company_id);
     } else if (!isEdit) {
       try {
         setIsResolvingCompany(true);
@@ -144,6 +173,7 @@ const ProjectForm = () => {
       }
       setIsResolvingCompany(false);
     }
+    delete clean.sub_business_unit_id;
 
     const mutation = isEdit ? updateMutation : createMutation;
     mutation.mutate(clean, {
@@ -156,7 +186,7 @@ const ProjectForm = () => {
         // A cached BU list can outlive the mapping behind it ("Business Unit #X is not one of
         // your mapped Business Units."); pin that to the field that caused it, not just a toast.
         if (err?.response?.status === 403 && /business unit/i.test(message)) {
-          form.setError('company_id', { message });
+          form.setError(showSubBuField ? 'sub_business_unit_id' : 'company_id', { message });
         }
         showError(message);
       },
@@ -200,12 +230,44 @@ const ProjectForm = () => {
                               <span className="text-destructive mr-0.5">*</span> Business Unit
                             </FormLabel>
                             <FormControl>
-                              <SearchableSelect
-                                options={buOptions}
+                              <BusinessUnitCascadeSelect
+                                units={units}
                                 value={field.value}
-                                onValueChange={field.onChange}
+                                onValueChange={(val) => {
+                                  field.onChange(val);
+                                  // A different root's own Sub-BUs are a different set — never
+                                  // leave a Sub-BU id from the PREVIOUS root silently selected.
+                                  form.setValue('sub_business_unit_id', '');
+                                  form.clearErrors('sub_business_unit_id');
+                                }}
                                 placeholder="Select business unit"
                                 searchPlaceholder="Search business unit..."
+                                className="h-8 text-sm w-full"
+                              />
+                            </FormControl>
+                            <FormMessage className="text-[10px]" />
+                          </FormItem>
+                        )}
+                      />
+                    )}
+
+                    {/* Mandatory, not optional, once the picked BU actually has Sub-BUs — its own
+                        sibling field so it renders in its own slot rather than stretching the BU
+                        field's own layout. */}
+                    {showSubBuField && (
+                      <FormField
+                        control={form.control}
+                        name="sub_business_unit_id"
+                        render={({ field }) => (
+                          <FormItem className="space-y-1">
+                            <FormLabel className="text-[11px] text-muted-foreground font-medium">
+                              <span className="text-destructive mr-0.5">*</span> Sub Business Unit
+                            </FormLabel>
+                            <FormControl>
+                              <SubBusinessUnitSelect
+                                options={subBuOptions}
+                                value={field.value}
+                                onValueChange={field.onChange}
                                 className="h-8 text-sm w-full"
                               />
                             </FormControl>

@@ -63,9 +63,18 @@ export const employeeServicePOMappingApi = {
   // Admin/Delivery Head), so the frontend just renders what comes back.
   getOptions: (employeeId) =>
     apiClient.get(`/employee-servicepo-mapping/employee/${employeeId}/options`).then((r) => r.data?.data),
-  // Replaces the full mapped set in one call — always send every checked id, not a diff.
+  // Replaces the full mapped set in one call — always send every checked id, not a diff. Each
+  // entry is either a plain Service PO id (not PM) or `{ service_po_id, is_project_manager }`
+  // for a row whose PM status needs to be stated.
   saveMapping: (employeeId, servicePoIds) =>
     apiClient
       .put(`/employee-servicepo-mapping/employee/${employeeId}`, { service_po_ids: servicePoIds })
+      .then((r) => r.data),
+  // Pure PM-flag flip for one already-existing mapping row — never touches the mapping's
+  // active/inactive status. `id` is the mapping row's own id, not employee_id/service_po_id.
+  // 400s if the mapping's employee doesn't currently hold the Project Manager role.
+  setProjectManager: (id, isProjectManager) =>
+    apiClient
+      .put(`/employee-servicepo-mapping/${id}/project-manager`, { is_project_manager: isProjectManager })
       .then((r) => r.data),
 };

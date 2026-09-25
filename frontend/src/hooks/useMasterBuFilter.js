@@ -18,7 +18,18 @@ import { ALL_ENTITIES } from '@/components/common/EntityFilter';
 // can reach, and narrowing to one is an explicit choice made here. That also means these screens
 // no longer follow the navbar switcher — picking a BU here never changes the global selection or
 // any other screen.
-export const useMasterBuFilter = ({ enabled = true } = {}) => {
+// `multiple`: opt-in, backward compatible (default false = exactly today's single-select
+// behavior — every other Master screen calling this hook without the option is untouched).
+// When true, `entityId`/`buId` become arrays and `buParams` sends the new `entityIds`/
+// `businessUnitIds` comma-separated params (backend support landed 2026-09 for /projects only so
+// far — see BACKEND_MULTI_SELECT_ENTITY_BU_PROMPT.md). `buId` is always forced to the 'all'
+// sentinel in this mode (never a bare single id) so explicitBuScope always drops the
+// X-Company-Id header via NO_BU_SCOPE, regardless of how many BUs are selected — the backend's
+// own "no header -> full role reach" fallback is exactly what `businessUnitIds` then narrows, per
+// the backend contract. A single BU selected this way is request-equivalent to picking it in
+// single-select mode (an `IN (x)` clause narrows identically to `= x`), just via the new param
+// instead of the header.
+export const useMasterBuFilter = ({ enabled = true, multiple = false } = {}) => {
   const { canFilter } = useSelectableBusinessUnits();
   const { canFilter: canFilterEntity } = useSelectableEntities();
 
@@ -27,6 +38,8 @@ export const useMasterBuFilter = ({ enabled = true } = {}) => {
 
   const [entityId, setEntityIdState] = useState(ALL_ENTITIES);
   const [buId, setBuId] = useState(ALL_BUS);
+  const [entityIds, setEntityIdsState] = useState([]);
+  const [buIds, setBuIdsState] = useState([]);
 
   // Picking a different Entity resets the BU choice — whatever was selected may not even belong
   // to the new Entity, and BusinessUnitFilter's own options are about to change out from under it.
@@ -34,6 +47,30 @@ export const useMasterBuFilter = ({ enabled = true } = {}) => {
     setEntityIdState(id);
     setBuId(ALL_BUS);
   };
+  const setEntityIds = (ids) => {
+    setEntityIdsState(ids);
+    setBuIdsState([]);
+  };
+
+  if (multiple) {
+    return {
+      entityId: entityIds,
+      setEntityId: setEntityIds,
+      showEntityFilter,
+      isEntityFiltered: showEntityFilter && entityIds.length > 0,
+      resetEntityId: () => setEntityIdsState([]),
+      buId: buIds,
+      setBuId: setBuIdsState,
+      showBuFilter,
+      isBuFiltered: showBuFilter && buIds.length > 0,
+      resetBuId: () => setBuIdsState([]),
+      buParams: {
+        ...(showBuFilter ? { buId: ALL_BUS } : {}),
+        ...(showEntityFilter && entityIds.length > 0 ? { entityIds: entityIds.join(',') } : {}),
+        ...(showBuFilter && buIds.length > 0 ? { businessUnitIds: buIds.join(',') } : {}),
+      },
+    };
+  }
 
   return {
     entityId,

@@ -9,7 +9,9 @@ import {
 import { useAuth } from '@/hooks/useAuth';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
-import { formatDate, formatDateTime, formatMonthYear, formatHoursMinutes } from '@/utils/formatters';
+import {
+  formatDate, formatDateTime, formatMonthYear, formatHoursMinutes, countAlreadySettled, alreadySettledNote,
+} from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
 import StatusBadge from '@/components/common/StatusBadge';
 import EmptyState from '@/components/common/EmptyState';
@@ -171,8 +173,8 @@ const ManagerTeamTimesheetView = ({ employeeId, employeeName }) => {
 
   const runApprove = (targetRows, successMessage) => {
     approveMutation.mutate(approvalPayloadFor(targetRows), {
-      onSuccess: () => {
-        success(successMessage);
+      onSuccess: (data) => {
+        success(`${successMessage}${alreadySettledNote(countAlreadySettled([data]))}`);
         setSelected((prev) => {
           const next = new Set(prev);
           targetRows.forEach((r) => next.delete(rowKeyOf(logType, r)));

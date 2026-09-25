@@ -457,6 +457,20 @@ export const useResourceWiseBench = (params) => {
   });
 };
 
+// Resource Cost / Utilization Report (ResourceCostUtilizationReport.jsx) — dynamic month-group
+// columns across a range, per-employee rows. Same month/range "OR" gate as its siblings above.
+export const useResourceCostUtilization = (params) => {
+  const hasMonthYear = !!(params?.month && params?.year);
+  const hasRange = !!(params?.startMonth && params?.startYear && params?.endMonth && params?.endYear);
+  return useQuery({
+    queryKey: QUERY_KEYS.REPORT_RESOURCE_COST_UTILIZATION(params),
+    queryFn: () => reportsApi.getResourceCostUtilization(params),
+    enabled: hasMonthYear || hasRange,
+    staleTime: 0,
+    placeholderData: (prev) => prev,
+  });
+};
+
 // Backend requires exactly one date mode: {month, year} XOR {startDate, endDate}.
 export const useEmployeeBenchPercentage = (params) => {
   const hasMonthYear = !!(params?.month && params?.year);

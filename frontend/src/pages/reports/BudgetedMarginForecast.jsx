@@ -129,20 +129,23 @@ const SummaryItem = ({ label, value, negative = false }) => (
 const BudgetedMarginForecast = () => {
   const [monthYear, setMonthYear] = useState(defaultMonthYear);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [entityId, setEntityId] = useState(ALL_ENTITIES);
-  const [buId, setBuId] = useState(ALL_BUS);
+  const [entityIds, setEntityIds] = useState([]);
+  const [buIds, setBuIds] = useState([]);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
 
   // page/limit above are for client-side pagination only, never sent to the API — the whole
   // matching month's data is fetched in one shot so totals and pagination both work off it.
+  // `buId` is always the 'all' sentinel so explicitBuScope always drops the X-Company-Id
+  // header, letting `businessUnitIds` below narrow the full role reach instead.
   const params = {
     ...(monthYear && { month: monthYear.month, year: monthYear.year }),
     page: 1,
     limit: MAX_RECORDS_FETCH,
-    buId,
-    ...(entityId !== ALL_ENTITIES && { entityId }),
+    buId: ALL_BUS,
+    ...(entityIds.length > 0 && { entityIds: entityIds.join(',') }),
+    ...(buIds.length > 0 && { businessUnitIds: buIds.join(',') }),
   };
 
   const { data, isPending } = useBudgetedMarginForecast(params);
@@ -176,8 +179,8 @@ const BudgetedMarginForecast = () => {
   })() : null;
 
   const activeFilterCount = [
-    entityId !== ALL_ENTITIES,
-    buId !== ALL_BUS,
+    entityIds.length > 0,
+    buIds.length > 0,
     monthYear?.month !== defaultMonthYear.month || monthYear?.year !== defaultMonthYear.year,
   ].filter(Boolean).length;
 
@@ -214,9 +217,9 @@ const BudgetedMarginForecast = () => {
 
       {/* Collapsible filter panel */}
       <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[300px]">
-        <EntityFilter value={entityId} onChange={(v) => { setEntityId(v); setBuId(ALL_BUS); }} />
+        <EntityFilter multiple value={entityIds} onChange={(v) => { setEntityIds(v); setBuIds([]); }} />
 
-        <BusinessUnitFilter value={buId} entityId={entityId} onChange={setBuId} />
+        <BusinessUnitFilter multiple value={buIds} entityId={entityIds} onChange={setBuIds} />
 
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Month &amp; Year <span className="text-destructive">*</span></Label>

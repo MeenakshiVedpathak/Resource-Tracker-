@@ -127,8 +127,8 @@ const EmployeeCapacityForecast = () => {
   const [benchThresholdHours, setBenchThresholdHours] = useState(String(DEFAULT_BENCH_THRESHOLD_HOURS));
   const [search, setSearch] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [entityId, setEntityId] = useState(ALL_ENTITIES);
-  const [buId, setBuId] = useState(ALL_BUS);
+  const [entityIds, setEntityIds] = useState([]);
+  const [buIds, setBuIds] = useState([]);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
 
@@ -139,8 +139,9 @@ const EmployeeCapacityForecast = () => {
     benchThresholdHours: debouncedBenchThresholdHours !== '' ? Number(debouncedBenchThresholdHours) : DEFAULT_BENCH_THRESHOLD_HOURS,
     page: 1,
     limit: MAX_RECORDS_FETCH,
-    buId,
-    ...(entityId !== ALL_ENTITIES && { entityId }),
+    buId: ALL_BUS,
+    ...(entityIds.length > 0 && { entityIds: entityIds.join(',') }),
+    ...(buIds.length > 0 && { businessUnitIds: buIds.join(',') }),
   };
 
   const { data, isPending } = useEmployeeCapacityForecast(params);
@@ -161,14 +162,14 @@ const EmployeeCapacityForecast = () => {
   const pagedRecords = filteredRecords.slice((page - 1) * limit, page * limit);
 
   const activeFilterCount = [
-    entityId !== ALL_ENTITIES,
-    buId !== ALL_BUS,
+    entityIds.length > 0,
+    buIds.length > 0,
     Number(benchThresholdHours) !== DEFAULT_BENCH_THRESHOLD_HOURS,
   ].filter(Boolean).length;
 
   const clearFilters = () => {
-    setEntityId(ALL_ENTITIES);
-    setBuId(ALL_BUS);
+    setEntityIds([]);
+    setBuIds([]);
     setBenchThresholdHours(String(DEFAULT_BENCH_THRESHOLD_HOURS));
     setPage(1);
   };
@@ -206,9 +207,9 @@ const EmployeeCapacityForecast = () => {
       />
 
       <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[380px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
-        <EntityFilter value={entityId} onChange={(v) => { setEntityId(v); setBuId(ALL_BUS); }} />
+        <EntityFilter multiple value={entityIds} onChange={(v) => { setEntityIds(v); setBuIds([]); }} />
 
-        <BusinessUnitFilter value={buId} entityId={entityId} onChange={setBuId} />
+        <BusinessUnitFilter multiple value={buIds} entityId={entityIds} onChange={setBuIds} />
 
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Month &amp; Year <span className="text-destructive">*</span></Label>

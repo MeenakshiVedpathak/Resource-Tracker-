@@ -165,3 +165,13 @@ export const useSaveEmployeeServicePOMapping = (employeeId) => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['employee-servicepo-mapping'] }),
   });
 };
+
+// Service PO → Map Employees' mapped panel: flips one mapping row's PM flag without touching
+// its active/inactive status or recreating the mapping.
+export const useSetProjectManager = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, isProjectManager }) => employeeServicePOMappingApi.setProjectManager(id, isProjectManager),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['employee-servicepo-mapping'] }),
+  });
+};

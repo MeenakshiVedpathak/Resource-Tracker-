@@ -153,8 +153,11 @@ const ResourceMonthlyUtilization = () => {
   const [clientId, setClientId] = useState(ALL);
   const [poId, setPoId] = useState(ALL);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [entityId, setEntityId] = useState(ALL_ENTITIES);
-  const [buId, setBuId] = useState(ALL_BUS);
+  // Multi-select — backend support for entityIds/businessUnitIds has landed on this report
+  // specifically (see BACKEND_MULTI_SELECT_ENTITY_BU_PROMPT.md); every other report still uses
+  // the single-select EntityFilter/BusinessUnitFilter default.
+  const [entityIds, setEntityIds] = useState([]);
+  const [buIds, setBuIds] = useState([]);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
@@ -168,6 +171,11 @@ const ResourceMonthlyUtilization = () => {
 
   const periodReady = !!(monthYear?.month && monthYear?.year);
 
+  // `buId` is always the 'all' sentinel here (never a bare single id) so explicitBuScope always
+  // drops the X-Company-Id header — the backend's "no header -> full role reach" fallback is
+  // exactly what `businessUnitIds` then narrows, matching the backend contract. A single BU
+  // selected this way is request-equivalent to the old single-select path (IN (x) narrows the
+  // same as = x), just via the new param instead of the header.
   const params = {
     month: monthYear.month,
     year: monthYear.year,
@@ -177,8 +185,9 @@ const ResourceMonthlyUtilization = () => {
     ...(debouncedSearch && { search: debouncedSearch }),
     page,
     limit,
-    buId,
-    ...(entityId !== ALL_ENTITIES && { entityId }),
+    buId: ALL_BUS,
+    ...(entityIds.length > 0 && { entityIds: entityIds.join(',') }),
+    ...(buIds.length > 0 && { businessUnitIds: buIds.join(',') }),
   };
 
   const { data, isPending } = useResourceMonthlyUtilization(params);
@@ -201,15 +210,15 @@ const ResourceMonthlyUtilization = () => {
     }
   };
 
-  const activeFilterCount = (entityId !== ALL_ENTITIES ? 1 : 0)
-    + (buId !== ALL_BUS ? 1 : 0)
+  const activeFilterCount = (entityIds.length > 0 ? 1 : 0)
+    + (buIds.length > 0 ? 1 : 0)
     + (employeeId !== ALL ? 1 : 0)
     + (clientId !== ALL ? 1 : 0)
     + (poId !== ALL ? 1 : 0);
 
   const clearFilters = () => {
-    setEntityId(ALL_ENTITIES);
-    setBuId(ALL_BUS);
+    setEntityIds([]);
+    setBuIds([]);
     setEmployeeId(ALL);
     setClientId(ALL);
     setPoId(ALL);
@@ -258,9 +267,9 @@ const ResourceMonthlyUtilization = () => {
         onClear={clearFilters}
         showClear={activeFilterCount > 0}
       >
-        <EntityFilter value={entityId} onChange={(v) => { setEntityId(v); setBuId(ALL_BUS); setPage(1); }} />
+        <EntityFilter multiple value={entityIds} onChange={(v) => { setEntityIds(v); setBuIds([]); setPage(1); }} />
 
-        <BusinessUnitFilter value={buId} entityId={entityId} onChange={(v) => { setBuId(v); setPage(1); }} />
+        <BusinessUnitFilter multiple value={buIds} entityId={entityIds} onChange={(v) => { setBuIds(v); setPage(1); }} />
 
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Month &amp; Year <span className="text-destructive">*</span></Label>

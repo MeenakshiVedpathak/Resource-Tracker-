@@ -47,8 +47,12 @@ export const useSelectableBusinessUnits = (entityId) => {
   // same as today.
   // Long staleTime because this mounts on every report and master a cross-BU login opens, and the
   // BU master changes rarely.
-  const { data: companiesData } = useCompanies(
-    { status: 'active', limit: 200 },
+  // Bumped from 200 -> 500 (matches the backend's own "load full list" limit cap) — a truncated
+  // fetch here wouldn't just drop a few options, it could silently strand a Sub-BU whose Parent
+  // BU fell outside the first 200 rows, or vice versa, breaking the hierarchy the tree selector
+  // builds client-side from this exact list.
+  const { data: companiesData, isPending: isLoadingBuMaster } = useCompanies(
+    { status: 'active', limit: 500 },
     { staleTime: 1000 * 60 * 10 }
   );
 
@@ -60,25 +64,80 @@ export const useSelectableBusinessUnits = (entityId) => {
     return map;
   }, [companiesData]);
 
-  // Normalized to { id, name, entityId } — the BU master calls it `company_name`, the login's own
-  // mapping calls it `name`.
+  // Same fallback pattern as entityByBuId — the BU-scoped login's own `businessUnits[]` mapping
+  // (GET /employees/:id/business-units) isn't confirmed to carry `parent_business_unit_id` any
+  // more than it carries entity_id (see the file-header comment), so this covers it from the BU
+  // master (GET /companies) the same way.
+  const parentByBuId = useMemo(() => {
+    const map = new Map();
+    (companiesData?.data ?? []).forEach((c) => {
+      map.set(String(c.id), c.parent_business_unit_id ?? null);
+    });
+    return map;
+  }, [companiesData]);
+
+  // Normalized to { id, name, entityId, parentId } — the BU master calls it `company_name`, the
+  // login's own mapping calls it `name`. `parentId` is null for a top-level Parent BU, or the id
+  // of the Parent BU a Sub-BU belongs to — this is what lets a BU selector group Sub-BUs under
+  // their parent instead of showing one flat list.
   const allUnits = useMemo(() => {
     if (isCrossBu) {
-      return (companiesData?.data ?? []).map((c) => ({ id: c.id, name: c.company_name, entityId: c.entity_id ?? c.entity?.id ?? null }));
+      return (companiesData?.data ?? []).map((c) => ({
+        id: c.id,
+        name: c.company_name,
+        entityId: c.entity_id ?? c.entity?.id ?? null,
+        parentId: c.parent_business_unit_id ?? null,
+      }));
     }
-    return (businessUnits ?? []).map((bu) => ({
+    const mapped = (businessUnits ?? []).map((bu) => ({
       id: bu.id,
       name: bu.name,
       entityId: bu.entity_id ?? bu.entityId ?? entityByBuId.get(String(bu.id)) ?? null,
+      parentId: bu.parent_business_unit_id ?? bu.parentId ?? parentByBuId.get(String(bu.id)) ?? null,
     }));
-  }, [isCrossBu, companiesData, businessUnits, entityByBuId]);
+    // A BU-scoped login explicitly mapped to a top-level Parent BU manages that BU as a whole —
+    // every one of its Sub-BUs belongs in `units` too, not just whichever specific Sub-BU(s) this
+    // login also happens to carry an individual mapping row for (confirmed live: a BU Admin mapped
+    // to "DATA + AI" + its own "DAS" mapping saw only DAS as a pickable Sub-BU everywhere — Client/
+    // Project/Service PO creation, every BU filter — with "IBM"/"NON IBM" invisible despite being
+    // siblings under the same Parent this login manages). This only ever expands DOWNWARD from an
+    // explicitly-mapped Parent — being mapped to just one Sub-BU never grants visibility into its
+    // Parent or that Parent's other, unrelated Sub-BUs, which would be a real over-grant.
+    const mappedIds = new Set(mapped.map((u) => String(u.id)));
+    const mappedRootIds = new Set(mapped.filter((u) => u.parentId == null).map((u) => String(u.id)));
+    const unmappedSiblings = (companiesData?.data ?? [])
+      .filter((c) => {
+        const parentId = c.parent_business_unit_id ?? c.parent?.id;
+        return parentId != null && mappedRootIds.has(String(parentId)) && !mappedIds.has(String(c.id));
+      })
+      .map((c) => ({
+        id: c.id,
+        name: c.company_name,
+        entityId: c.entity_id ?? c.entity?.id ?? null,
+        parentId: c.parent_business_unit_id ?? c.parent?.id ?? null,
+      }));
+    return [...mapped, ...unmappedSiblings];
+  }, [isCrossBu, companiesData, businessUnits, entityByBuId, parentByBuId]);
 
+  // `entityId` also accepts an array (the multi-select EntityFilter's value) — an empty array
+  // means "no Entity narrowing" (matches the scalar 'all'/null case), same "no filter" semantics
+  // the new backend entityIds param uses.
   const units = useMemo(() => {
+    if (Array.isArray(entityId)) {
+      if (entityId.length === 0) return allUnits;
+      const wanted = new Set(entityId.map(String));
+      return allUnits.filter((u) => wanted.has(String(u.entityId)));
+    }
     if (entityId == null || entityId === 'all') return allUnits;
     return allUnits.filter((u) => String(u.entityId) === String(entityId));
   }, [allUnits, entityId]);
 
-  return { units, isCrossBu, canFilter: allUnits.length > 1 };
+  // `isLoading` — whether the BU master fetch this hook relies on (for entity/parent enrichment on
+  // a BU-scoped login, or as the primary source for a cross-BU one) is still in flight. A caller
+  // that resolves a saved record's BU against `units.find(...)` on load (e.g. detecting whether it
+  // was actually a Sub-BU) needs this to avoid running that lookup against a still-empty/unenriched
+  // `units` and permanently misreading the result — see ServicePOForm.jsx's `buUnitsReady`.
+  return { units, isCrossBu, canFilter: allUnits.length > 1, isLoading: isLoadingBuMaster };
 };
 
 export default useSelectableBusinessUnits;

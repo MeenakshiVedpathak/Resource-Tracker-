@@ -115,8 +115,8 @@ const InvoiceRealizationTrend = () => {
     year: prevMonth.getFullYear(),
   });
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [entityId, setEntityId] = useState(ALL_ENTITIES);
-  const [buId, setBuId] = useState(ALL_BUS);
+  const [entityIds, setEntityIds] = useState([]);
+  const [buIds, setBuIds] = useState([]);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
@@ -127,8 +127,9 @@ const InvoiceRealizationTrend = () => {
     ...(toMonthYear && { endMonth: toMonthYear.month, endYear: toMonthYear.year }),
     page: 1,
     limit: MAX_RECORDS_FETCH,
-    buId,
-    ...(entityId !== ALL_ENTITIES && { entityId }),
+    buId: ALL_BUS,
+    ...(entityIds.length > 0 && { entityIds: entityIds.join(',') }),
+    ...(buIds.length > 0 && { businessUnitIds: buIds.join(',') }),
   };
 
   const { data, isPending } = useInvoiceRealizationTrend(params);
@@ -175,7 +176,7 @@ const InvoiceRealizationTrend = () => {
             <FilterToggleButton
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((p) => !p)}
-              activeCount={(entityId !== ALL_ENTITIES ? 1 : 0) + (buId !== ALL_BUS ? 1 : 0)}
+              activeCount={(entityIds.length > 0 ? 1 : 0) + (buIds.length > 0 ? 1 : 0)}
               className="h-9"
             />
             {filteredRecords.length > 0 && (
@@ -187,10 +188,10 @@ const InvoiceRealizationTrend = () => {
         }
       />
 
-      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[300px]" onClear={() => { setEntityId(ALL_ENTITIES); setBuId(ALL_BUS); }} showClear={entityId !== ALL_ENTITIES || buId !== ALL_BUS}>
-        <EntityFilter value={entityId} onChange={(v) => { setEntityId(v); setBuId(ALL_BUS); }} />
+      <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[300px]" onClear={() => { setEntityIds([]); setBuIds([]); }} showClear={entityIds.length > 0 || buIds.length > 0}>
+        <EntityFilter multiple value={entityIds} onChange={(v) => { setEntityIds(v); setBuIds([]); setPage(1); }} />
 
-        <BusinessUnitFilter value={buId} entityId={entityId} onChange={setBuId} />
+        <BusinessUnitFilter multiple value={buIds} entityId={entityIds} onChange={(v) => { setBuIds(v); setPage(1); }} />
 
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">From <span className="text-destructive">*</span></Label>

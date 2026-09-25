@@ -3,7 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Building2, Calendar, Save } from 'lucide-react';
+import { Building2, Calendar, Save, Network } from 'lucide-react';
 import { useCompany, useCreateCompany, useUpdateCompany } from '@/hooks/useCompanies';
 import { useActiveEntities } from '@/hooks/useEntities';
 import { useAuth } from '@/hooks/useAuth';
@@ -38,11 +38,16 @@ const WEEK_OFF_POLICY_COLORS = {
   NONE: 'text-slate-400',
 };
 
-// Creating a BU only ever collects the BU shell itself — Entity, BU Code, BU Name. No admin or
-// Employee data is collected here.
-const createSchema = z.object({
-  entity_id: z.coerce.number({ required_error: 'Entity is required' }).positive('Entity is required'),
-  company_code: z.string().min(1, 'BU code is required').max(50),
+// Creating a top-level BU collects the full shell — Entity, BU Code, BU Name, Week Off Policy.
+// A Sub-BU (`isSubBu`) only ever asks for the name: it inherits its parent's Entity, BU Code
+// scheme, and Week Off Policy, so none of those fields are shown or required — `isSubBu` turns
+// entity_id/company_code/saturday_off_rule all optional and the form itself hides those fields
+// (see the JSX below).
+const createSchema = (isSubBu) => z.object({
+  entity_id: isSubBu
+    ? z.coerce.number().optional()
+    : z.coerce.number({ required_error: 'Entity is required' }).positive('Entity is required'),
+  company_code: isSubBu ? z.string().optional() : z.string().min(1, 'BU code is required').max(50),
   company_name: z.string().min(1, 'BU name is required').max(100),
   saturday_off_rule: z.enum(['ALL', 'ALT_1_3', 'ALT_2_4', 'NONE']).default('ALL'),
 });
@@ -55,7 +60,7 @@ const editSchema = z.object({
 
 // Known create-mode field names — used to route a backend field-validation error (duplicate BU
 // code, invalid entity, etc.) to the right input instead of a generic toast.
-const CREATE_FIELD_NAMES = ['entity_id', 'company_code', 'company_name', 'saturday_off_rule'];
+const CREATE_FIELD_NAMES = ['entity_id', 'company_code', 'company_name', 'saturday_off_rule', 'parent_business_unit_id'];
 
 const FormSkeleton = () => (
   <div className="space-y-4 p-4">
@@ -70,11 +75,24 @@ const CompanyForm = () => {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
   const entityIdParam = searchParams.get('entity_id');
+  // Present only when arriving via a "Add Sub-BU" action (see CompanyList.jsx) — the Parent BU
+  // this new BU will belong to. Entity Admin's own default-entity effect below is skipped in this
+  // mode (see its guard), since a Sub-BU's Entity comes from the parent, not the actor's own.
+  const parentIdParam = searchParams.get('parent_business_unit_id');
   const isEdit = !!id;
+  const isSubBu = !isEdit && !!parentIdParam;
   const { success, error: showError } = useNotification();
   const { hasRole } = useAuth();
 
   const { data: company, isPending: isLoadingCompany } = useCompany(id);
+  // A Sub-BU never had its own BU Code or Week Off Policy to begin with — both are inherited from
+  // its Parent at creation (see isSubBu above) and stay that way for its lifetime, so editing an
+  // existing Sub-BU record must hide the same two fields, not just creating one. Without this,
+  // `isSubBu` (which is forced false whenever isEdit is true) let both fields silently reappear
+  // in Edit mode for any BU that happens to already be a Sub-BU — including a read-only "BU Code"
+  // box showing a value the record never really had of its own.
+  const isEditingSubBu = isEdit && (company?.parent_business_unit_id ?? company?.parent?.id) != null;
+  const { data: parentCompany, isPending: isLoadingParent } = useCompany(isSubBu ? parentIdParam : undefined);
   const {
     data: activeEntities = [],
     isPending: isLoadingEntities,
@@ -85,7 +103,7 @@ const CompanyForm = () => {
   const updateMutation = useUpdateCompany(id);
 
   const form = useForm({
-    resolver: zodResolver(isEdit ? editSchema : createSchema),
+    resolver: zodResolver(isEdit ? editSchema : createSchema(isSubBu)),
     defaultValues: isEdit
       ? { company_name: '', status: 'active', saturday_off_rule: 'ALL' }
       : { entity_id: entityIdParam ?? '', company_code: '', company_name: '', saturday_off_rule: 'ALL' },
@@ -113,7 +131,7 @@ const CompanyForm = () => {
   const didDefaultEntityRef = useRef(false);
   useEffect(() => {
     if (
-      !isEdit && !entityIdParam && hasRole('Entity Admin') &&
+      !isEdit && !isSubBu && !entityIdParam && hasRole('Entity Admin') &&
       !isLoadingEntities && activeEntities.length > 0 && !didDefaultEntityRef.current
     ) {
       didDefaultEntityRef.current = true;
@@ -139,7 +157,16 @@ const CompanyForm = () => {
 
   const onSubmit = (values) => {
     const mutation = isEdit ? updateMutation : createMutation;
-    mutation.mutate(values, {
+    // Sub-BU creation only asks for a name — entity_id, company_code and saturday_off_rule all
+    // come from the parent instead, so none of those unrendered fields' stale/empty
+    // react-hook-form values are sent; `parent_business_unit_id` (the actual parent, from the
+    // "Add Sub-BU" action's own URL) is attached in their place.
+    const payload = isSubBu
+      ? { company_name: values.company_name, parent_business_unit_id: Number(parentIdParam) }
+      : isEditingSubBu
+      ? { company_name: values.company_name, status: values.status }
+      : values;
+    mutation.mutate(payload, {
       onSuccess: () => {
         success(isEdit ? 'BU updated successfully.' : 'BU created successfully.');
         handleClose();
@@ -166,9 +193,15 @@ const CompanyForm = () => {
             <Building2 className="h-5 w-5 text-blue-600" />
           </div>
           <div className="space-y-0.5">
-            <SheetTitle className="text-lg">{isEdit ? 'Edit Business Unit' : 'Create Business Unit'}</SheetTitle>
+            <SheetTitle className="text-lg">
+              {isEdit ? 'Edit Business Unit' : isSubBu ? 'Create Sub-BU' : 'Create Business Unit'}
+            </SheetTitle>
             <SheetDescription>
-              {isEdit ? 'Update the details for this business unit.' : 'Set up a new organizational unit for your company.'}
+              {isEdit
+                ? 'Update the details for this business unit.'
+                : isSubBu
+                ? `A Sub-BU nested under ${parentCompany?.company_name ?? 'the selected Parent BU'} — it inherits that Business Unit's Entity automatically.`
+                : 'Set up a new organizational unit for your company.'}
             </SheetDescription>
           </div>
         </SheetHeader>
@@ -180,15 +213,23 @@ const CompanyForm = () => {
             <Form {...form}>
               <form id="company-form" onSubmit={form.handleSubmit(onSubmit)} className="px-6 py-0 flex flex-col gap-6">
                 <div className="space-y-4">
+                  {isSubBu && (
+                    <div className="flex items-start gap-2 rounded-md border border-primary/20 bg-primary/5 px-3 py-2.5">
+                      <Network className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                      <p className="text-xs text-foreground">
+                        Parent BU: <span className="font-medium">{isLoadingParent ? 'Loading…' : (parentCompany?.company_name ?? `#${parentIdParam}`)}</span>
+                      </p>
+                    </div>
+                  )}
                   <div className="grid grid-cols-1 gap-4">
-                    {isEdit && (
+                    {isEdit && !isEditingSubBu && (
                       <div className="space-y-1">
                         <span className="text-xs text-foreground font-medium"># BU Code</span>
                         <Input value={company?.company_code ?? ''} disabled className="h-9 text-sm border-gray-200 bg-muted/40" />
                       </div>
                     )}
 
-                    {!isEdit && (
+                    {!isEdit && !isSubBu && (
                       <FormField
                         control={form.control}
                         name="entity_id"
@@ -222,7 +263,7 @@ const CompanyForm = () => {
                       />
                     )}
 
-                    {!isEdit && (
+                    {!isEdit && !isSubBu && (
                       <FormField
                         control={form.control}
                         name="company_code"
@@ -247,12 +288,14 @@ const CompanyForm = () => {
                       render={({ field }) => (
                         <FormItem className="space-y-1">
                           <FormLabel className="text-xs text-foreground font-medium">
-                            BU Name <span className="text-destructive ml-0.5">*</span>
+                            {isSubBu ? 'Sub BU Name' : 'BU Name'} <span className="text-destructive ml-0.5">*</span>
                           </FormLabel>
                           <FormControl>
                             <Input placeholder="e.g. Acme Corporation" className="h-9 text-sm border-gray-200" {...field} />
                           </FormControl>
-                          <p className="text-[11px] text-muted-foreground">Enter a descriptive name for the business unit.</p>
+                          <p className="text-[11px] text-muted-foreground">
+                            {isSubBu ? 'Enter a descriptive name for the Sub-BU.' : 'Enter a descriptive name for the business unit.'}
+                          </p>
                           <FormMessage className="text-[11px]" />
                         </FormItem>
                       )}
@@ -288,11 +331,15 @@ const CompanyForm = () => {
                   </div>
                 </div>
 
+                {/* A Sub-BU inherits its parent's Week Off Policy — not asked for here at all,
+                    same reasoning as Entity/BU Code above, and equally true once it already
+                    exists (isEditingSubBu), not just while it's being created. */}
+                {!isSubBu && !isEditingSubBu && (
                 <div className="space-y-3 pt-1 border-t">
                   <div className="flex items-start gap-2.5 pt-4">
                     {/* <Calendar className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" /> */}
                     <div className="space-y-0.5">
-                      <h3 class="peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-xs text-foreground font-medium">Week Off Policy</h3>
+                      <h3 className="peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-xs text-foreground font-medium">Week Off Policy</h3>
                       {/* <p className="text-xs text-muted-foreground">Select the regular Saturday off schedule for this business unit.</p> */}
                     </div>
                   </div>
@@ -325,6 +372,7 @@ const CompanyForm = () => {
                   />
 
                 </div>
+                )}
               </form>
             </Form>
           )}
@@ -336,7 +384,7 @@ const CompanyForm = () => {
           </Button>
           <Button type="submit" form="company-form" disabled={isSubmitting} size="sm" className="h-9 text-xs bg-blue-600 hover:bg-blue-700 text-white">
             <Save className="mr-2 h-3.5 w-3.5" />
-            {isSubmitting ? 'Saving...' : isEdit ? 'Save Changes' : 'Create BU'}
+            {isSubmitting ? 'Saving...' : isEdit ? 'Save Changes' : isSubBu ? 'Create Sub-BU' : 'Create BU'}
           </Button>
         </SheetFooter>
       </SheetContent>

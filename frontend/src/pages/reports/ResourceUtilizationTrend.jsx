@@ -16,7 +16,7 @@ import EmptyState from '@/components/common/EmptyState';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
 import BusinessUnitFilter, { ALL_BUS } from '@/components/common/BusinessUnitFilter';
-import EntityFilter, { ALL_ENTITIES } from '@/components/common/EntityFilter';
+import EntityFilter from '@/components/common/EntityFilter';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { SearchableSelect } from '@/components/ui/searchable-select';
@@ -175,8 +175,10 @@ const ResourceUtilizationTrend = () => {
   const [clientId, setClientId] = useState('all');
   const [poId, setPoId] = useState('all');
   const [serviceTypeId, setServiceTypeId] = useState('all');
-  const [buId, setBuId] = useState(ALL_BUS);
-  const [entityId, setEntityId] = useState(ALL_ENTITIES);
+  // Multi-select — backend support for entityIds/businessUnitIds has landed on this report
+  // specifically (see BACKEND_MULTI_SELECT_ENTITY_BU_PROMPT.md).
+  const [entityIds, setEntityIds] = useState([]);
+  const [buIds, setBuIds] = useState([]);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const [hoursSource, setHoursSource] = useState('M');
@@ -220,8 +222,9 @@ const ResourceUtilizationTrend = () => {
     sortOrder,
     page,
     limit,
-    buId,
-    ...(entityId !== ALL_ENTITIES && { entityId }),
+    buId: ALL_BUS,
+    ...(entityIds.length > 0 && { entityIds: entityIds.join(',') }),
+    ...(buIds.length > 0 && { businessUnitIds: buIds.join(',') }),
   };
 
   const { data, isPending } = useResourceUtilizationTrend(params);
@@ -231,8 +234,8 @@ const ResourceUtilizationTrend = () => {
   const showLoading = periodReady && isPending;
 
   const activeFilterCount = [
-    entityId !== ALL_ENTITIES,
-    buId !== ALL_BUS,
+    entityIds.length > 0,
+    buIds.length > 0,
     employeeId !== 'all',
     clientId !== 'all',
     poId !== 'all',
@@ -240,8 +243,8 @@ const ResourceUtilizationTrend = () => {
   ].filter(Boolean).length;
 
   const clearFilters = () => {
-    setEntityId(ALL_ENTITIES);
-    setBuId(ALL_BUS);
+    setEntityIds([]);
+    setBuIds([]);
     setEmployeeId('all');
     setClientId('all');
     setPoId('all');
@@ -321,15 +324,17 @@ const ResourceUtilizationTrend = () => {
         showClear={activeFilterCount > 0}
       >
         <EntityFilter
-          value={entityId}
-          onChange={(v) => { setEntityId(v); setBuId(ALL_BUS); setPage(1); }}
+          multiple
+          value={entityIds}
+          onChange={(v) => { setEntityIds(v); setBuIds([]); setPage(1); }}
           labelClassName={FILTER_LABEL}
         />
 
         <BusinessUnitFilter
-          value={buId}
-          entityId={entityId}
-          onChange={(v) => { setBuId(v); setPage(1); }}
+          multiple
+          value={buIds}
+          entityId={entityIds}
+          onChange={(v) => { setBuIds(v); setPage(1); }}
           labelClassName={FILTER_LABEL}
         />
 

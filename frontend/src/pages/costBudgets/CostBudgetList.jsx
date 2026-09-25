@@ -14,6 +14,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from '@/com
 import { useActiveServicePOs } from '@/hooks/useServicePOs';
 import { useSelectableEntities } from '@/hooks/useSelectableEntities';
 import { useSelectableBusinessUnits } from '@/hooks/useSelectableBusinessUnits';
+import { BusinessUnitCascadeSelect, SubBusinessUnitSelect, useBuHierarchy } from '@/components/common/BusinessUnitCascadeSelect';
 import { useCostBudgetsByServicePo, useCreateCostBudget } from '@/hooks/useCostBudgets';
 import { useCanWrite } from '@/hooks/usePermissions';
 import { useNotification } from '@/hooks/useNotification';
@@ -263,32 +264,55 @@ const CostBudgetList = () => {
   // BU's. A login with a single BU (or none to choose from) skips the step entirely and goes
   // straight to the PO picker, exactly as before — see hooks/useSelectableBusinessUnits.
   const { units: businessUnits, canFilter: showBuStep } = useSelectableBusinessUnits(entityId);
-  const [buId, setBuId] = useState('');
+  // Two-step BU pick, same cascade already used for Client/Project/Service PO creation (see
+  // components/common/BusinessUnitCascadeSelect) — `buRootId` is always a top-level BU, `buSubId`
+  // is the separate Sub BU step that only appears once the chosen root actually has Sub-BUs.
+  // Previously this screen listed every BU flat (Parents and their own Sub-BUs side by side with
+  // no way to tell them apart), which was the reported bug.
+  const [buRootId, setBuRootId] = useState('');
+  const [buSubId, setBuSubId] = useState('');
+  const { childrenOf } = useBuHierarchy(businessUnits);
+  const subBuOptions = useMemo(
+    () => childrenOf(buRootId).map((u) => ({ value: String(u.id), label: u.name })),
+    [childrenOf, buRootId]
+  );
+  const showSubBuStep = subBuOptions.length > 0;
+  // The Sub-BU pick (once offered) always wins over its own Parent — the Parent alone is only
+  // ever the actual scope when it has no Sub-BUs to choose between in the first place.
+  const buId = showSubBuStep ? buSubId : buRootId;
 
-  // Gate: with the BU step on, there is no meaningful PO list until a BU is chosen, so don't
-  // fetch one. Without it, the PO list loads immediately as it always did.
-  const buChosen = !showBuStep || !!buId;
+  // Gate: with the BU step on, there is no meaningful PO list until a BU (and, once offered, its
+  // Sub BU) is actually chosen, so don't fetch one. Without it, the PO list loads immediately as
+  // it always did.
+  const buChosen = !showBuStep || (!!buRootId && (!showSubBuStep || !!buSubId));
 
   const { data: servicePos = [] } = useActiveServicePOs(buChosen, showBuStep ? buId : undefined);
   const selectedPo = servicePos.find((po) => String(po.id) === servicePoId);
-
-  const buOptions = businessUnits.map((bu) => ({ label: bu.name, value: String(bu.id) }));
 
   // Switching Entity invalidates whatever BU/PO was already picked — a BU under the previous
   // Entity may not even be in the new, narrower BU list.
   const handleEntityChange = (v) => {
     if (!v) return;
     setEntityId(v);
-    setBuId('');
+    setBuRootId('');
+    setBuSubId('');
     setServicePoId('');
     setAddingInline(false);
   };
 
   // Switching BU invalidates the current PO selection — that PO belongs to the previous BU and
   // would otherwise keep its budget rows on screen under the new BU's heading.
-  const handleBuChange = (v) => {
+  const handleBuRootChange = (v) => {
     if (!v) return;
-    setBuId(v);
+    setBuRootId(v);
+    setBuSubId('');
+    setServicePoId('');
+    setAddingInline(false);
+  };
+
+  const handleBuSubChange = (v) => {
+    if (!v) return;
+    setBuSubId(v);
     setServicePoId('');
     setAddingInline(false);
   };
@@ -375,15 +399,23 @@ const CostBudgetList = () => {
               />
             )}
             {showBuStep && (
-              <SearchableSelect
-                options={buOptions}
-                value={buId}
-                onValueChange={handleBuChange}
+              <BusinessUnitCascadeSelect
+                units={businessUnits}
+                value={buRootId}
+                onValueChange={handleBuRootChange}
                 placeholder="Select a Business Unit"
                 searchPlaceholder="Search business unit…"
-                emptyMessage="No Business Units available."
-                showSearch={buOptions.length > 6}
-                className="w-64 bg-white"
+                className="w-56 bg-white"
+              />
+            )}
+            {showSubBuStep && (
+              <SubBusinessUnitSelect
+                options={subBuOptions}
+                value={buSubId}
+                onValueChange={handleBuSubChange}
+                placeholder="Select a Sub BU"
+                searchPlaceholder="Search sub BU…"
+                className="w-52 bg-white"
               />
             )}
             <SearchableSelect
@@ -492,14 +524,25 @@ const CostBudgetList = () => {
           {showBuStep && (
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs">Business Unit</Label>
-              <SearchableSelect
-                options={buOptions}
-                value={buId}
-                onValueChange={handleBuChange}
+              <BusinessUnitCascadeSelect
+                units={businessUnits}
+                value={buRootId}
+                onValueChange={handleBuRootChange}
                 placeholder="Select a Business Unit"
                 searchPlaceholder="Search business unit…"
-                emptyMessage="No Business Units available."
-                showSearch={buOptions.length > 6}
+                className="h-11 w-full bg-white"
+              />
+            </div>
+          )}
+          {showSubBuStep && (
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs">Sub BU</Label>
+              <SubBusinessUnitSelect
+                options={subBuOptions}
+                value={buSubId}
+                onValueChange={handleBuSubChange}
+                placeholder="Select a Sub BU"
+                searchPlaceholder="Search sub BU…"
                 className="h-11 w-full bg-white"
               />
             </div>

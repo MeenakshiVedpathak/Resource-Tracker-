@@ -12,7 +12,10 @@ import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import { servicePOHierarchyApi } from '@/api/servicePOHierarchy.api';
 import { QUERY_KEYS } from '@/constants/queryKeys';
-import { formatDate, formatDateTime, formatMonthYear, formatHoursMinutes, getInitials } from '@/utils/formatters';
+import {
+  formatDate, formatDateTime, formatMonthYear, formatHoursMinutes, getInitials,
+  countAlreadySettled, alreadySettledNote,
+} from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
 import StatusBadge from '@/components/common/StatusBadge';
 import EmptyState from '@/components/common/EmptyState';
@@ -293,15 +296,16 @@ const TeamLeadAllEmployeesTimesheetView = ({
       // only a PM whose selection spans a Service PO they don't manage sees approvedRows drop
       // below expectedRows.
       const approvedRows = results.reduce((sum, r) => sum + (r?.data?.total_rows_approved ?? r?.total_rows_approved ?? 0), 0);
+      const settledCount = countAlreadySettled(results);
 
       if (isBulk && isMobile) {
-        setBulkResult({ approved: approvedRows, rejected: 0, total: expectedRows });
+        setBulkResult({ approved: approvedRows, rejected: 0, total: expectedRows, alreadySettled: settledCount });
       } else if (approvedRows < expectedRows) {
-        info(approvedRows === 0
+        info(`${approvedRows === 0
           ? "None of the selected entries could be approved — they belong to a Service PO you don't manage."
-          : `${approvedRows} of ${expectedRows} selected entries were approved — the rest belong to a Service PO you don't manage.`);
+          : `${approvedRows} of ${expectedRows} selected entries were approved — the rest belong to a Service PO you don't manage.`}${alreadySettledNote(settledCount)}`);
       } else {
-        success(successMessage);
+        success(`${successMessage}${alreadySettledNote(settledCount)}`);
       }
       setSelected((prev) => {
         const next = new Map(prev);
@@ -675,7 +679,7 @@ const TeamLeadAllEmployeesTimesheetView = ({
   // that already gates every place `bulkResult` gets set, so this can never show on desktop even
   // if the viewport is resized right after the action fires.
   if (bulkResult) {
-    const { approved, rejected, total } = bulkResult;
+    const { approved, rejected, total, alreadySettled = 0 } = bulkResult;
     const verb = approved > 0 && rejected > 0 ? 'updated' : approved > 0 ? 'approved' : 'rejected';
     // Approve path only (reject's `rejected`/`total` are always equal) — `approved` can now be
     // less than `total` when some selected entries belonged to a Service PO this PM doesn't
@@ -693,6 +697,7 @@ const TeamLeadAllEmployeesTimesheetView = ({
             {isPartialApprove
               ? `${approved} of ${total} selected entries were approved — the rest belong to a Service PO you don't manage.`
               : `${total} timesheet${total === 1 ? '' : 's'} ${total === 1 ? 'has' : 'have'} been ${verb} successfully.`}
+            {alreadySettledNote(alreadySettled)}
           </p>
         </div>
         <div className="w-full max-w-xs space-y-2 rounded-lg border bg-muted/30 p-4 text-sm">

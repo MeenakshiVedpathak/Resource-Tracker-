@@ -12,9 +12,9 @@ const VISIBLE_COUNT = 5;
 // ProjectHealthList already makes (sorted by nearest_end_date ascending), just showing the soonest
 // N deadlines outright instead of filtering to risk_flag=true. A project with no nearest_end_date
 // at all (nothing scheduled) is excluded rather than sorting to either end of the list.
-const UpcomingDeadlinesList = ({ monthYear, buId }) => {
+const UpcomingDeadlinesList = ({ monthYear, buScope }) => {
   const { data, isPending } = usePmDashboardProjects({
-    buId,
+    ...buScope,
     month: monthYear.month,
     year: monthYear.year,
     page: 1,

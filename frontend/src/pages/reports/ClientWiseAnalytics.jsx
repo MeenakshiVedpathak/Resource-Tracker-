@@ -86,8 +86,8 @@ const ClientWiseAnalytics = () => {
   const [poId, setPoId] = useState('all');
 
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [buId, setBuId] = useState(ALL_BUS);
-  const [entityId, setEntityId] = useState(ALL_ENTITIES);
+  const [buIds, setBuIds] = useState([]);
+  const [entityIds, setEntityIds] = useState([]);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [sortBy, setSortBy] = useState(null);
@@ -130,8 +130,9 @@ const ClientWiseAnalytics = () => {
     ...(sortBy && { sortBy, sortOrder }),
     page,
     limit,
-    buId,
-    ...(entityId !== ALL_ENTITIES && { entityId }),
+    buId: ALL_BUS,
+    ...(entityIds.length > 0 && { entityIds: entityIds.join(',') }),
+    ...(buIds.length > 0 && { businessUnitIds: buIds.join(',') }),
   };
 
   const { data, isPending } = useClientWiseAnalytics(params);
@@ -140,8 +141,8 @@ const ClientWiseAnalytics = () => {
   const meta = data?.meta ?? {};
 
   const activeFilterCount = [
-    entityId !== ALL_ENTITIES,
-    buId !== ALL_BUS,
+    entityIds.length > 0,
+    buIds.length > 0,
     employeeId !== 'all',
     clientId !== 'all',
     serviceTypeId !== 'all',
@@ -149,8 +150,8 @@ const ClientWiseAnalytics = () => {
   ].filter(Boolean).length;
 
   const clearFilters = () => {
-    setEntityId(ALL_ENTITIES);
-    setBuId(ALL_BUS);
+    setEntityIds([]);
+    setBuIds([]);
     setEmployeeId('all');
     setClientId('all');
     setServiceTypeId('all');
@@ -267,12 +268,13 @@ const ClientWiseAnalytics = () => {
         showClear={activeFilterCount > 0}
       >
         <EntityFilter
-          value={entityId}
-          onChange={(v) => { setEntityId(v); setBuId(ALL_BUS); }}
+          multiple
+          value={entityIds}
+          onChange={(v) => { setEntityIds(v); setBuIds([]); }}
           labelClassName={FILTER_LABEL}
         />
 
-        <BusinessUnitFilter value={buId} entityId={entityId} onChange={setBuId} labelClassName={FILTER_LABEL} />
+        <BusinessUnitFilter multiple value={buIds} entityId={entityIds} onChange={setBuIds} labelClassName={FILTER_LABEL} />
 
         {/* Period mode and its picker take one grid cell each, rather than sharing a single
             col-span-2 cell: a picker stretched across two columns dwarfed every neighbouring

@@ -171,6 +171,12 @@ export const FORM_NAMES = {
   REPORT_PROJECT_WISE_UTILIZATION: 'Project-wise Report',
   REPORT_MONTH_WISE_BENCH: 'Month-wise Bench Report',
   REPORT_RESOURCE_WISE_BENCH: 'Resource-wise Bench % by Month',
+  // ⚠️ PLACEHOLDER, NOT CONFIRMED — the API endpoint (GET /reports/resource-cost-utilization)
+  // is confirmed, but no Form Master row exists yet for this report's display name. Until this
+  // exact string is confirmed against the real GET /roles/forms response and seeded, this entry
+  // is dropped from the sidebar for everyone (see file-header comment) — the route itself still
+  // works if navigated to directly, but the report won't appear in Reports Center/sidebar.
+  REPORT_RESOURCE_COST_UTILIZATION: 'Consolidated Monthly Report',
   // Project Manager Dashboard (net-new, backend spec 2026-09-11) — not formName-gated (see
   // ProtectedRoute's allowedRoles in routes/index.jsx, same as Team Mapping), so this entry
   // exists purely so the sidebar picks it up automatically the moment a real Form Master row
@@ -255,6 +261,7 @@ export const FORM_ROUTE_CONFIG = {
   [FORM_NAMES.REPORT_PROJECT_WISE_UTILIZATION]: { to: ROUTES.REPORT_PROJECT_WISE_UTILIZATION, icon: FolderKanban, description: 'Resources and utilization per project across a month range.' },
   [FORM_NAMES.REPORT_MONTH_WISE_BENCH]: { to: ROUTES.REPORT_MONTH_WISE_BENCH, icon: Hourglass, description: 'Org-wide bench trend by month — resources on bench, bench hours, and bench % across a range.' },
   [FORM_NAMES.REPORT_RESOURCE_WISE_BENCH]: { to: ROUTES.REPORT_RESOURCE_WISE_BENCH, icon: Users2, description: "Each resource's bench % by month across a range, sorted by average bench % by default." },
+  [FORM_NAMES.REPORT_RESOURCE_COST_UTILIZATION]: { to: ROUTES.REPORT_RESOURCE_COST_UTILIZATION, icon: IndianRupee, description: 'Per-employee monthly cost contribution, projected vs. actual utilization, across a month range.' },
   // RBAC form name stays "Project Manager Dashboard" (must match the backend Form Master
   // record); `label` only shortens what the sidebar displays, same short "Dashboard" every
   // other role's landing page uses.

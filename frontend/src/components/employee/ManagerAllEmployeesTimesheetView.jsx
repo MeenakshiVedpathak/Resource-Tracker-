@@ -12,7 +12,10 @@ import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import { servicePOHierarchyApi } from '@/api/servicePOHierarchy.api';
 import { QUERY_KEYS } from '@/constants/queryKeys';
-import { formatDate, formatDateTime, formatMonthYear, formatHoursMinutes, getInitials } from '@/utils/formatters';
+import {
+  formatDate, formatDateTime, formatMonthYear, formatHoursMinutes, getInitials,
+  countAlreadySettled, alreadySettledNote,
+} from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
 import StatusBadge from '@/components/common/StatusBadge';
 import EmptyState from '@/components/common/EmptyState';
@@ -207,14 +210,15 @@ const ManagerAllEmployeesTimesheetView = ({ employees, logType, dateRange, statu
   const runApprove = async (targets, successMessage, { isBulk = false } = {}) => {
     setIsApproving(true);
     try {
-      await Promise.all(Array.from(groupByEmployee(targets).entries()).map(([employeeId, ts]) =>
+      const results = await Promise.all(Array.from(groupByEmployee(targets).entries()).map(([employeeId, ts]) =>
         approveMutation.mutateAsync(logType === 'daily'
           ? { employeeId, dates: ts.map((t) => t.date) }
           : { employeeId, months: ts.map((t) => ({ month: t.month, year: t.year })) })));
+      const settledCount = countAlreadySettled(results);
       if (isBulk && isMobile) {
-        setBulkResult({ approved: targets.length, rejected: 0, total: targets.length });
+        setBulkResult({ approved: targets.length, rejected: 0, total: targets.length, alreadySettled: settledCount });
       } else {
-        success(successMessage);
+        success(`${successMessage}${alreadySettledNote(settledCount)}`);
       }
       setSelected((prev) => {
         const next = new Map(prev);
@@ -516,7 +520,7 @@ const ManagerAllEmployeesTimesheetView = ({ employees, logType, dateRange, statu
   // that already gates every place `bulkResult` gets set, so this can never show on desktop even
   // if the viewport is resized right after the action fires.
   if (bulkResult) {
-    const { approved, rejected, total } = bulkResult;
+    const { approved, rejected, total, alreadySettled = 0 } = bulkResult;
     const verb = approved > 0 && rejected > 0 ? 'updated' : approved > 0 ? 'approved' : 'rejected';
     return (
       <div className="flex md:hidden h-full min-h-0 flex-col items-center justify-center gap-4 p-6 text-center">
@@ -527,6 +531,7 @@ const ManagerAllEmployeesTimesheetView = ({ employees, logType, dateRange, statu
           <h2 className="text-lg font-bold">Timesheets Updated!</h2>
           <p className="mt-1 text-sm text-muted-foreground">
             {total} timesheet{total === 1 ? '' : 's'} {total === 1 ? 'has' : 'have'} been {verb} successfully.
+            {alreadySettledNote(alreadySettled)}
           </p>
         </div>
         <div className="w-full max-w-xs space-y-2 rounded-lg border bg-muted/30 p-4 text-sm">

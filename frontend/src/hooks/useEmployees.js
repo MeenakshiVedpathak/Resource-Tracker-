@@ -80,10 +80,14 @@ export const useUpdateEmployee = (id) => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (payload) => employeesApi.update(id, payload),
+    // Dropping the Project Manager role clears `is_project_manager` on every one of this
+    // employee's Service PO mappings server-side — invalidate that prefix too so a Service PO's
+    // Map Employees screen doesn't keep showing a stale PM flag for them.
     onSuccess: () => Promise.all([
         qc.invalidateQueries({ queryKey: ['employees'] }),
         qc.invalidateQueries({ queryKey: QUERY_KEYS.EMPLOYEE(id) }),
         qc.invalidateQueries({ queryKey: QUERY_KEYS.EMPLOYEE_MAPPINGS(id) }),
+        qc.invalidateQueries({ queryKey: ['employee-servicepo-mapping'] }),
       ]),
   });
 };

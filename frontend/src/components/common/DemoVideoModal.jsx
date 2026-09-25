@@ -14,6 +14,7 @@ import { cn } from '@/utils/cn';
 const VIDEOS = [
   { id: 1, label: 'Demo 1', src: '/Demo 1.mp4' },
   { id: 2, label: 'Demo 2', src: '/Demo 2.mp4' },
+  { id: 3, label: 'Demo 3', src: '/GTT - Trackio 3V.mp4' },
 ];
 
 const PLAYBACK_SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];

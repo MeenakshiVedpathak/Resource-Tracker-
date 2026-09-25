@@ -34,9 +34,9 @@ const CustomTooltip = ({ active, payload, label }) => {
 // every other section on this page already calls, just its own wide, unfiltered fetch sorted by
 // logged hours descending, so no backend change was needed to add this. Capped at the top 8
 // projects by logged hours — a PM's full portfolio charted at once would be unreadable as bars.
-const ProjectHoursBarChart = ({ monthYear, buId, className }) => {
+const ProjectHoursBarChart = ({ monthYear, buScope, className }) => {
   const { data, isPending } = usePmDashboardProjects({
-    buId,
+    ...buScope,
     month: monthYear.month,
     year: monthYear.year,
     page: 1,

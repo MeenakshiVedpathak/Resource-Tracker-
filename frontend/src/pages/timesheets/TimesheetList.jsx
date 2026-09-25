@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQueryClient, useQueries } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { createColumnHelper } from '@tanstack/react-table';
 import { Upload, Info, Download, Trash2, Loader2, RefreshCw, FileSpreadsheet, MoreVertical } from 'lucide-react';
 import * as XLSX from 'xlsx';
@@ -21,7 +21,6 @@ import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
 import EntityFilter from '@/components/common/EntityFilter';
 import BusinessUnitFilter from '@/components/common/BusinessUnitFilter';
-import { useSelectableBusinessUnits } from '@/hooks/useSelectableBusinessUnits';
 import SyncWorkLogsDialog from '@/components/timesheets/SyncWorkLogsDialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -75,31 +74,127 @@ const TimesheetList = () => {
     () => new Set((companiesForEntityLookup?.data ?? []).map((c) => String(c.id))),
     [companiesForEntityLookup]
   );
-  const rawActiveBusinessUnits = useMemo(
-    () => (canScopeAcrossBus() || activeCompanyIds.size === 0
+  const rawActiveBusinessUnits = useMemo(() => {
+    // A cross-BU login's own BU "mapping" (useAuth().businessUnits) is just an incidental single
+    // row (whichever BU their employee record happens to carry — e.g. one Admin's was just
+    // "SG&A-UVTECH"), not the org-wide reach an Admin/Entity Admin/Platform Admin actually has.
+    // Sourcing Sync/Upload's own BU picker from it left every OTHER BU (e.g. "DevOps + ITSM")
+    // permanently unpickable for them — confirmed live: an Admin who approved a Service PO's
+    // timesheet under a BU other than their own personal one had no way to ever select that BU
+    // here to sync it, since it never appeared as an option. GET /companies is the same
+    // full-reach source useSelectableBusinessUnits.js already uses for this exact role class
+    // everywhere else in the app (Dashboard/Reports/Masters BU filters), so this switches to it
+    // too instead of the personal mapping.
+    if (canScopeAcrossBus()) {
+      return (companiesForEntityLookup?.data ?? []).map((c) => ({
+        id: c.id,
+        name: c.company_name,
+        parent_business_unit_id: c.parent_business_unit_id ?? c.parent?.id ?? null,
+        entity_id: c.entity_id ?? c.entity?.id ?? null,
+        entity_name: c.entity?.entity_name ?? null,
+      }));
+    }
+    const base = activeCompanyIds.size === 0
       ? businessUnits
-      : businessUnits.filter((bu) => activeCompanyIds.has(String(bu.id)))),
-    [businessUnits, activeCompanyIds]
-  );
-  const entityByBuId = useMemo(() => {
+      : businessUnits.filter((bu) => activeCompanyIds.has(String(bu.id)));
+    // A BU-scoped login (BU Admin/BU Head) explicitly mapped to a top-level Parent BU manages
+    // that BU as a whole — every one of its Sub-BUs belongs in the Sync/Upload dialogs' own BU
+    // picker too, not just whichever specific Sub-BU(s) this login also happens to carry an
+    // individual mapping row for (confirmed live: a BU Admin mapped to "DATA + AI" + its own "DAS"
+    // mapping saw only DAS as a pickable Sub-BU — "IBM"/"NON IBM" invisible despite being siblings
+    // under the same Parent this login manages; same root cause and fix as
+    // useSelectableBusinessUnits.js). GET /companies already returns this login's whole reachable
+    // subtree (confirmed live too — it's the same source activeCompanyIds/companyById above use),
+    // so no extra request. Only ever expands DOWNWARD from an explicitly-mapped Parent — being
+    // mapped to just one Sub-BU never grants visibility into its Parent or other, unrelated
+    // Sub-BUs under it.
+    const mappedIds = new Set(base.map((bu) => String(bu.id)));
+    const mappedRootIds = new Set(
+      base.filter((bu) => (bu.parent_business_unit_id ?? bu.parentId) == null).map((bu) => String(bu.id))
+    );
+    const unmappedSiblings = (companiesForEntityLookup?.data ?? [])
+      .filter((c) => {
+        const parentId = c.parent_business_unit_id ?? c.parent?.id;
+        return parentId != null && mappedRootIds.has(String(parentId)) && !mappedIds.has(String(c.id));
+      })
+      .map((c) => ({
+        id: c.id,
+        name: c.company_name,
+        parent_business_unit_id: c.parent_business_unit_id ?? c.parent?.id ?? null,
+      }));
+    return [...base, ...unmappedSiblings];
+  }, [businessUnits, activeCompanyIds, companiesForEntityLookup]);
+  // A minority of rows in GET /companies carry a bare `entity_id` with no nested `entity` object
+  // at all (confirmed live: two Sub-BUs under the same Parent as two other, otherwise-identical
+  // rows that DID have `entity: { id, entity_name }` — same entity_id=3 either way, just missing
+  // the relation on some rows), which left the Entity Name column blank for exactly those rows.
+  // Built first, before entityByBuId below, as a fallback: since some OTHER row in this same
+  // response reliably does carry the full relation for that same entity_id, its name can be
+  // recovered from there instead of failing silently.
+  const entityNameByEntityId = useMemo(() => {
     const map = new Map();
     (companiesForEntityLookup?.data ?? []).forEach((c) => {
       const id = c.entity_id ?? c.entity?.id;
       const name = c.entity?.entity_name;
+      if (id != null && name && !map.has(String(id))) map.set(String(id), name);
+    });
+    return map;
+  }, [companiesForEntityLookup]);
+  const entityByBuId = useMemo(() => {
+    const map = new Map();
+    (companiesForEntityLookup?.data ?? []).forEach((c) => {
+      const id = c.entity_id ?? c.entity?.id;
+      const name = c.entity?.entity_name ?? (id != null ? entityNameByEntityId.get(String(id)) : null);
       if (id != null) map.set(String(c.id), { id, name });
+    });
+    return map;
+  }, [companiesForEntityLookup, entityNameByEntityId]);
+  // A row's own company_id can itself be a Sub-BU's id (2-level BU hierarchy via
+  // parent_business_unit_id) — the "Business Unit" column must always show the top-level Parent
+  // BU regardless (a Sub-BU showing up there reads as a completely different, unrelated BU, since
+  // it's just another row's own name with no indication it's nested under anything). companyById
+  // (id -> full company row) backs buRootNameById below, and subBuNameById captures the Sub-BU's
+  // OWN name for the separate "Sub BU" column, kept apart so neither column loses information the
+  // other one needs. Mirrors the exact pattern in ServicePOList.jsx.
+  const companyById = useMemo(() => {
+    const map = new Map();
+    (companiesForEntityLookup?.data ?? []).forEach((c) => map.set(String(c.id), c));
+    return map;
+  }, [companiesForEntityLookup]);
+  const buRootNameById = useMemo(() => {
+    const map = new Map();
+    (companiesForEntityLookup?.data ?? []).forEach((c) => {
+      const parentId = c.parent_business_unit_id ?? c.parent?.id;
+      // Depth is capped at 2 levels (a Sub-BU can never itself have children), so a single
+      // parent lookup is always enough to reach the root.
+      const root = parentId != null ? companyById.get(String(parentId)) : null;
+      map.set(String(c.id), root ? root.company_name : c.company_name);
+    });
+    return map;
+  }, [companiesForEntityLookup, companyById]);
+  const subBuNameById = useMemo(() => {
+    const map = new Map();
+    (companiesForEntityLookup?.data ?? []).forEach((c) => {
+      if ((c.parent_business_unit_id ?? c.parent?.id) != null) map.set(String(c.id), c.company_name);
     });
     return map;
   }, [companiesForEntityLookup]);
   const activeBusinessUnits = useMemo(
     () => rawActiveBusinessUnits.map((bu) => {
       const looked = entityByBuId.get(String(bu.id));
+      const company = companyById.get(String(bu.id));
       return {
         ...bu,
         entity_id: bu.entity_id ?? bu.entityId ?? looked?.id ?? null,
         entity_name: bu.entity_name ?? bu.entityName ?? looked?.name ?? null,
+        // Sync dialog's own Business Unit -> Sub BU cascade (see SyncWorkLogsDialog.jsx) needs to
+        // tell a Sub-BU apart from a top-level Parent among this login's own mapped BUs — this
+        // login's raw mapping doesn't carry it, so it's filled in from the same BU master fetch
+        // this file already uses for buRootNameById/subBuNameById above.
+        parent_business_unit_id: bu.parent_business_unit_id ?? bu.parentId ?? company?.parent_business_unit_id ?? company?.parent?.id ?? null,
       };
     }),
-    [rawActiveBusinessUnits, entityByBuId]
+    [rawActiveBusinessUnits, entityByBuId, companyById]
   );
 
   // Distinct Entities across this login's own mapped BUs — feeds the Entity step in the Sync/
@@ -133,101 +228,55 @@ const TimesheetList = () => {
   const [selectedIds, setSelectedIds] = useState([]);
   const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
   const [monthYearFilter, setMonthYearFilter] = useState(null);
-  const [entityFilter, setEntityFilter] = useState('all');
-  const [buFilter, setBuFilter] = useState('all');
+  // Multi-select — backend support for entityIds/businessUnitIds has landed on GET
+  // /timesheets/import/history (see BACKEND_MULTI_SELECT_ENTITY_BU_PROMPT.md). This REPLACES the
+  // previous client-side "fan out one request per BU under the selected Entity, merge, re-sort"
+  // workaround entirely — the backend now narrows and sorts the full set itself, so there's
+  // nothing left to fan out or merge here.
+  const [entityIds, setEntityIds] = useState([]);
+  const [buIds, setBuIds] = useState([]);
   const [openingId, setOpeningId] = useState(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const [sorting, setSorting] = useState([]);
 
-  // The Entity filter only ever narrows which BUs BusinessUnitFilter offers — it was never itself
-  // forwarded to the request (this endpoint has no entity_id concept), so picking an Entity while
-  // "All Business Units" stayed selected silently left the query unscoped and mixed in every other
-  // Entity's imports too (confirmed live: BUs from an unrelated Entity kept showing). Fixed by
-  // fanning out one GET /timesheets/import/history call per BU under the selected Entity
-  // (entityBuUnits, from useSelectableBusinessUnits) and merging the results — same pattern as
-  // useMyTeamEmployeesAcrossBus for the equivalent "All Business Units" undercount.
-  const { units: entityBuUnits } = useSelectableBusinessUnits(entityFilter);
-  const shouldFanOutByEntity = entityFilter !== 'all' && buFilter === 'all' && entityBuUnits.length > 1;
-
+  // `buId` is always the 'all' sentinel (never a bare single id) so the request drops the
+  // X-Company-Id header unconditionally — the backend's "no header -> full role reach" fallback
+  // is exactly what `businessUnitIds` then narrows, matching the backend contract. A single BU
+  // selected this way is request-equivalent to the old single-select path.
   const params = {
     page,
     limit,
-    buId: buFilter,
+    buId: 'all',
+    ...(entityIds.length > 0 && { entityIds: entityIds.join(',') }),
+    ...(buIds.length > 0 && { businessUnitIds: buIds.join(',') }),
     ...(monthYearFilter && { month: monthYearFilter.month, year: monthYearFilter.year }),
     ...(sorting[0] && { sortBy: sorting[0].id, sortOrder: sorting[0].desc ? 'desc' : 'asc' }),
   };
 
-  const { data, isPending: isSinglePending, isError: isSingleError } =
-    useTimesheetHistory(params, { enabled: !shouldFanOutByEntity });
-
-  // One request per BU in the selected Entity, merged client-side. Each per-BU response omits
-  // `company` (the backend only attaches it for a genuinely multi-BU request), so it's stamped
-  // back on here from the BU that request was scoped to — keeps the Business Unit column working
-  // for this fanned-out view too.
-  const fanOutQueries = useQueries({
-    queries: shouldFanOutByEntity
-      ? entityBuUnits.map((bu) => {
-          const buParams = { ...params, buId: String(bu.id) };
-          return {
-            queryKey: QUERY_KEYS.TIMESHEET_IMPORT_HISTORY(buParams),
-            queryFn: () => timesheetsApi.getHistory(buParams),
-            placeholderData: (prev) => prev,
-          };
-        })
-      : [],
-  });
-
-  const fanOutRecords = shouldFanOutByEntity
-    ? fanOutQueries.flatMap((q, i) => {
-        const bu = entityBuUnits[i];
-        return (Array.isArray(q.data?.data) ? q.data.data : []).map((r) => ({
-          ...r,
-          company: r.company ?? { id: bu.id, company_name: bu.name },
-        }));
-      })
-    : [];
-
-  const isPending = shouldFanOutByEntity ? fanOutQueries.some((q) => q.isPending) : isSinglePending;
-  const isError = shouldFanOutByEntity ? fanOutQueries.some((q) => q.isError) : isSingleError;
+  const { data, isPending, isError } = useTimesheetHistory(params);
 
   const deleteMutation = useDeleteTimesheetImport();
   const bulkDeleteMutation = useDeleteTimesheetImports();
 
   const activeFilterCount =
-    (monthYearFilter ? 1 : 0) + (entityFilter !== 'all' ? 1 : 0) + (buFilter !== 'all' ? 1 : 0);
+    (monthYearFilter ? 1 : 0) + (entityIds.length > 0 ? 1 : 0) + (buIds.length > 0 ? 1 : 0);
 
   const clearFilters = () => {
     setMonthYearFilter(null);
-    setEntityFilter('all');
-    setBuFilter('all');
+    setEntityIds([]);
+    setBuIds([]);
     setPage(1);
     setSelectedIds([]);
   };
 
-  const rawAllRecords = shouldFanOutByEntity ? fanOutRecords : (Array.isArray(data?.data) ? data.data : []);
-  // Each fanned-out BU response is independently sorted server-side; re-sort the merged set
-  // client-side so a chosen sort column stays correct across BUs. A no-op outside fan-out mode.
-  const allRecords = useMemo(() => {
-    if (!shouldFanOutByEntity || !sorting[0]) return rawAllRecords;
-    const { id, desc } = sorting[0];
-    return [...rawAllRecords].sort((a, b) => {
-      const av = a[id];
-      const bv = b[id];
-      if (av == null && bv == null) return 0;
-      if (av == null) return desc ? 1 : -1;
-      if (bv == null) return desc ? -1 : 1;
-      if (av < bv) return desc ? 1 : -1;
-      if (av > bv) return desc ? -1 : 1;
-      return 0;
-    });
-  }, [rawAllRecords, shouldFanOutByEntity, sorting]);
+  const allRecords = Array.isArray(data?.data) ? data.data : [];
   const records = allRecords.filter((r) => r.status === 'completed');
   const meta    = data?.meta ?? {};
 
   // Backend only attaches `company` per row when the list spans more than one Business
   // Unit (e.g. "All BU"); a single-BU-scoped fetch omits it entirely. Detect that from the
-  // actual response rather than the buFilter value so this stays correct however the
+  // actual response rather than the filter state so this stays correct however the
   // backend ends up deciding "more than one BU".
   const hasCompanyColumn = allRecords.some((r) => r.company != null);
 
@@ -248,13 +297,14 @@ const TimesheetList = () => {
   // above — Entity names vary just as widely, and a flat 160px clipped longer ones behind an
   // ellipsis.
   const entityNameColumnWidth = useMemo(() => {
+    const singleBuId = buIds.length === 1 ? buIds[0] : null;
     const longestName = allRecords.reduce((max, r) => {
-      const companyId = r.company?.id ?? (buFilter !== 'all' ? buFilter : null);
+      const companyId = r.company?.id ?? singleBuId;
       const name = companyId != null ? (entityByBuId.get(String(companyId))?.name ?? '') : '';
       return Math.max(max, name.length);
     }, 0);
     return Math.min(320, Math.max(140, (longestName * 7.5) + 40));
-  }, [allRecords, entityByBuId, buFilter]);
+  }, [allRecords, entityByBuId, buIds]);
 
   const allSelected = records.length > 0 && records.every((r) => selectedIds.includes(r.id));
   const toggleSelectAll = () => setSelectedIds(allSelected ? [] : records.map((r) => r.id));
@@ -308,7 +358,7 @@ const TimesheetList = () => {
     if (openingId) return;
     setOpeningId(row.id);
     // The row's own BU — NOT whatever's globally active in the navbar. See hasCompanyColumn above.
-    const rowBuId = row.company?.id ?? (buFilter !== 'all' ? Number(buFilter) : null);
+    const rowBuId = row.company?.id ?? (buIds.length === 1 ? Number(buIds[0]) : null);
     try {
       await queryClient.prefetchQuery({
         queryKey: [...QUERY_KEYS.TIMESHEET_IMPORT_ROWS(String(row.id)), rowBuId ?? 'active'],
@@ -449,7 +499,7 @@ const TimesheetList = () => {
       header: 'Entity Name',
       size: entityNameColumnWidth,
       cell: ({ row }) => {
-        const companyId = row.original.company?.id ?? (buFilter !== 'all' ? buFilter : null);
+        const companyId = row.original.company?.id ?? (buIds.length === 1 ? buIds[0] : null);
         const name = companyId != null ? entityByBuId.get(String(companyId))?.name : null;
         return name ? (
           <span className="text-sm truncate" title={name}>{name}</span>
@@ -462,9 +512,26 @@ const TimesheetList = () => {
       id: 'business_unit',
       header: 'Business Unit',
       size: businessUnitColumnWidth,
+      // Resolved through buRootNameById first — the row's own company can itself be a Sub-BU's
+      // row, and that map always walks up to the top-level Parent BU's own name regardless. The
+      // embedded `row.original.company` relation is only a fallback for while the company master
+      // itself is still loading.
       cell: ({ row }) => {
         const company = row.original.company;
-        const name = company?.company_name ?? company?.company_code;
+        const name = buRootNameById.get(String(company?.id)) ?? company?.company_name ?? company?.company_code;
+        return name ? (
+          <span className="text-sm truncate" title={name}>{name}</span>
+        ) : (
+          <span className="text-sm text-muted-foreground">—</span>
+        );
+      },
+    })] : []),
+    ...(hasCompanyColumn ? [columnHelper.display({
+      id: 'sub_bu_name',
+      header: 'Sub BU',
+      size: 150,
+      cell: ({ row }) => {
+        const name = subBuNameById.get(String(row.original.company?.id));
         return name ? (
           <span className="text-sm truncate" title={name}>{name}</span>
         ) : (
@@ -607,13 +674,15 @@ const TimesheetList = () => {
         showClear={activeFilterCount > 0}
       >
         <EntityFilter
-          value={entityFilter}
-          onChange={(v) => { setEntityFilter(v); setBuFilter('all'); setPage(1); setSelectedIds([]); }}
+          multiple
+          value={entityIds}
+          onChange={(v) => { setEntityIds(v); setBuIds([]); setPage(1); setSelectedIds([]); }}
         />
         <BusinessUnitFilter
-          value={buFilter}
-          entityId={entityFilter}
-          onChange={(v) => { setBuFilter(v); setPage(1); setSelectedIds([]); }}
+          multiple
+          value={buIds}
+          entityId={entityIds}
+          onChange={(v) => { setBuIds(v); setPage(1); setSelectedIds([]); }}
         />
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Month &amp; Year</Label>

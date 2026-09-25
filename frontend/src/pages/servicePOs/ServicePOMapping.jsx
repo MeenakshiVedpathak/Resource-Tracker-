@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, ChevronRight, Search, Inbox, Loader2, MoreVertical, Link2Off, Info } from 'lucide-react';
 import { useServicePO } from '@/hooks/useServicePOs';
+import { useCompanies } from '@/hooks/useCompanies';
 import { useDebounce } from '@/hooks/useDebounce';
 import {
   useServicePOEmployeeMappings,
@@ -10,10 +11,12 @@ import {
   useCreateEmployeeServicePOMapping,
   useSetEmployeeServicePOMappingStatus,
   useDeleteEmployeeServicePOMapping,
+  useSetProjectManager,
 } from '@/hooks/useEmployeeServicePOMapping';
 import { useCanWrite } from '@/hooks/usePermissions';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
+import { formatProjectManagerAssignmentError } from '@/utils/projectManagerError';
 import { ROUTES, buildPath } from '@/constants/routes';
 import { getInitials } from '@/utils/formatters';
 import { cn } from '@/utils/cn';
@@ -202,8 +205,8 @@ const SelectPanel = ({
 const MAPPED_PANEL_PAGE_SIZE = 10;
 
 // Right-hand panel: employees already mapped, each with an "Is Mapped?" toggle
-// (deactivate) and a remove (delete) action.
-const MappedPanel = ({ rows, search, onSearchChange, renderToggle, selectAll }) => {
+// (deactivate), a "PM" toggle (is_project_manager) and a remove (delete) action.
+const MappedPanel = ({ rows, search, onSearchChange, renderToggle, renderPm, selectAll }) => {
   const filtered = filterRows(rows, search);
   const [visibleCount, setVisibleCount] = useState(MAPPED_PANEL_PAGE_SIZE);
 
@@ -239,6 +242,7 @@ const MappedPanel = ({ rows, search, onSearchChange, renderToggle, selectAll }) 
             <thead className="sticky top-0 bg-background">
               <tr className="border-b">
                 <th className="w-28 px-3 py-2 text-left text-xs font-medium text-muted-foreground">Is Mapped?</th>
+                {renderPm && <th className="w-20 px-2 py-2 text-left text-xs font-medium text-muted-foreground">PM</th>}
                 <th className="px-2 py-2 text-left text-xs font-medium text-muted-foreground">Employee</th>
               </tr>
             </thead>
@@ -248,6 +252,11 @@ const MappedPanel = ({ rows, search, onSearchChange, renderToggle, selectAll }) 
                   <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
                     {renderToggle(row)}
                   </td>
+                  {renderPm && (
+                    <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
+                      {renderPm(row)}
+                    </td>
+                  )}
                   <td className="px-2 py-2">
                     <p className="text-sm font-medium leading-none">{row.name}</p>
                     {row.sub && <p className="mt-0.5 text-xs text-muted-foreground">{row.sub}</p>}
@@ -256,7 +265,7 @@ const MappedPanel = ({ rows, search, onSearchChange, renderToggle, selectAll }) 
               ))}
               {hasMore && (
                 <tr ref={sentinelRef}>
-                  <td colSpan={2} className="px-3 py-3 text-center text-xs text-muted-foreground">
+                  <td colSpan={renderPm ? 3 : 2} className="px-3 py-3 text-center text-xs text-muted-foreground">
                     <span className="inline-flex items-center gap-1.5">
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
                       Loading more…
@@ -272,45 +281,116 @@ const MappedPanel = ({ rows, search, onSearchChange, renderToggle, selectAll }) 
   );
 };
 
-// Left panel's own Entity → BU cascade: picking an Entity narrows the BU dropdown's options
-// (client-side, from that Entity's own BUs); picking one or more BUs is what actually re-queries
-// the left panel's employee list, scoped server-side (see useServicePOEmployeeOptions — the
-// backend only filters by one BU per call, so multiple selected BUs are fetched in turn and
-// merged there). Neither dropdown touches the right panel or the caller's ambient selected BU.
+// Splits the flat `businessUnits` list (each optionally carrying a `parentBuId` — see
+// ServicePOMapping's own `businessUnitOptions` enrichment) into a Business Unit + Sub BU cascade,
+// exactly mirroring components/common/BusinessUnitFilter's own multi-select logic (same reasoning
+// throughout, including the emitted-id de-duplication — a Parent whose own Sub-BU is specifically
+// selected must not also send its own wider id, or the two together silently re-widen right back
+// to the whole Parent server-side). Kept local to this screen rather than reusing that shared
+// component because the data source differs: it reads GET /companies via
+// useSelectableBusinessUnits, while this screen deliberately uses its own
+// employee-servicepo-mapping/filter-options endpoint instead (some roles this screen serves — BU
+// Admin, Service PO Admin, Delivery Head — 403 or get a narrower result from GET /companies; see
+// businessUnitOptions' own comment).
+const computeBuCascade = (businessUnits, buIds, onBuIdsChange) => {
+  const rootIds = new Set(businessUnits.filter((bu) => bu.parentBuId == null).map((bu) => String(bu.id)));
+  const roots = businessUnits.filter((bu) => rootIds.has(String(bu.id)));
+  const selectedParentIds = buIds.filter((id) => rootIds.has(id));
+  const selectedChildIds = buIds.filter((id) => !rootIds.has(id));
+
+  const childParentIds = new Set(
+    selectedChildIds
+      .map((cid) => businessUnits.find((bu) => String(bu.id) === cid)?.parentBuId)
+      .filter((pid) => pid != null)
+      .map(String)
+  );
+  const effectiveParentIds = Array.from(new Set([...selectedParentIds, ...childParentIds]));
+
+  const subBuOptions = effectiveParentIds.flatMap((pid) => businessUnits.filter((bu) => String(bu.parentBuId) === pid));
+  const showSubBu = subBuOptions.length > 0;
+
+  const emit = (parentIds, childIds) => {
+    const parentIdsWithChildSelected = new Set(
+      childIds
+        .map((cid) => businessUnits.find((bu) => String(bu.id) === cid)?.parentBuId)
+        .filter((pid) => pid != null)
+        .map(String)
+    );
+    const scopedParentIds = parentIds.filter((pid) => !parentIdsWithChildSelected.has(pid));
+    onBuIdsChange([...scopedParentIds, ...childIds]);
+  };
+
+  const handleParentChange = (nextParentIds) => {
+    const stillValidChildIds = selectedChildIds.filter((cid) => {
+      const child = businessUnits.find((bu) => String(bu.id) === cid);
+      return child && nextParentIds.includes(String(child.parentBuId));
+    });
+    emit(nextParentIds, stillValidChildIds);
+  };
+
+  const handleChildChange = (nextChildIds) => emit(effectiveParentIds, nextChildIds);
+
+  return { roots, effectiveParentIds, subBuOptions, showSubBu, selectedChildIds, handleParentChange, handleChildChange };
+};
+
+// Left panel's own Entity → BU → Sub BU cascade: picking an Entity narrows the BU dropdown's
+// options (client-side, from that Entity's own BUs); picking one or more BUs (or Sub-BUs) is what
+// actually re-queries the left panel's employee list, scoped server-side (see
+// useServicePOEmployeeOptions — the backend only filters by one BU per call, so multiple selected
+// BUs are fetched in turn and merged there). Neither dropdown touches the right panel or the
+// caller's ambient selected BU.
 const EntityBuFilterBar = ({
   entities, entityId, onEntityChange,
   businessUnits, isLoading, buIds, onBuIdsChange,
-}) => (
-  <div className="mb-3 flex flex-wrap items-end gap-3">
-    <div className="flex w-56 flex-col gap-1.5">
-      <Label className="text-xs">Entity</Label>
-      <SearchableSelect
-        options={entities.map((e) => ({ label: e.entity_name ?? e.name, value: String(e.id) }))}
-        value={entityId}
-        onValueChange={onEntityChange}
-        placeholder={isLoading ? 'Loading…' : 'Select Entity'}
-        searchPlaceholder="Search entity..."
-        className="bg-white"
-        clearable
-        clearValue="all"
-      />
+}) => {
+  const { roots, effectiveParentIds, subBuOptions, showSubBu, selectedChildIds, handleParentChange, handleChildChange } =
+    computeBuCascade(businessUnits, buIds, onBuIdsChange);
+
+  return (
+    <div className="mb-3 flex flex-wrap items-end gap-3">
+      <div className="flex w-56 flex-col gap-1.5">
+        <Label className="text-xs">Entity</Label>
+        <SearchableSelect
+          options={entities.map((e) => ({ label: e.entity_name ?? e.name, value: String(e.id) }))}
+          value={entityId}
+          onValueChange={onEntityChange}
+          placeholder={isLoading ? 'Loading…' : 'Select Entity'}
+          searchPlaceholder="Search entity..."
+          className="bg-white"
+          clearable
+          clearValue="all"
+        />
+      </div>
+      <div className="flex w-56 flex-col gap-1.5">
+        <Label className="text-xs">Business Unit</Label>
+        <MultiSelect
+          options={roots.map((bu) => ({ label: bu.company_name, value: String(bu.id) }))}
+          value={effectiveParentIds}
+          onValueChange={handleParentChange}
+          disabled={entityId === 'all'}
+          placeholder={
+            entityId === 'all' ? 'Select an Entity first' : isLoading ? 'Loading…' : 'Select Business Unit'
+          }
+          searchPlaceholder="Search business unit..."
+          className="bg-white"
+        />
+      </div>
+      {showSubBu && (
+        <div className="flex w-56 flex-col gap-1.5">
+          <Label className="text-xs">Sub BU</Label>
+          <MultiSelect
+            options={subBuOptions.map((bu) => ({ label: bu.company_name, value: String(bu.id) }))}
+            value={selectedChildIds}
+            onValueChange={handleChildChange}
+            placeholder="All Sub BUs"
+            searchPlaceholder="Search sub BU..."
+            className="bg-white"
+          />
+        </div>
+      )}
     </div>
-    <div className="flex w-56 flex-col gap-1.5">
-      <Label className="text-xs">Business Unit</Label>
-      <MultiSelect
-        options={businessUnits.map((bu) => ({ label: bu.company_name, value: String(bu.id) }))}
-        value={buIds}
-        onValueChange={onBuIdsChange}
-        disabled={entityId === 'all'}
-        placeholder={
-          entityId === 'all' ? 'Select an Entity first' : isLoading ? 'Loading…' : 'Select Business Unit'
-        }
-        searchPlaceholder="Search business unit..."
-        className="bg-white"
-      />
-    </div>
-  </div>
-);
+  );
+};
 
 const MoveButton = ({ disabled, onClick, title }) => (
   <div className="flex h-[20rem] items-center justify-center">
@@ -382,9 +462,26 @@ const ServicePOMapping = () => {
   const { data: filterOptions, isLoading: isLoadingFilterOptions } = useEmployeeServicePOMappingFilterOptions(canManageResources);
   const entities = filterOptions?.entities ?? [];
   const selectedEntityId = entityFilter !== 'all' ? Number(entityFilter) : null;
-  const businessUnitOptions = selectedEntityId
+  // The mapping-scoped filter-options endpoint's own `business_units` rows don't carry
+  // parent_business_unit_id, so a Sub-BU can't be told apart from a top-level Parent from that
+  // response alone. Enriched here against GET /companies purely for that one field (id ->
+  // parent_business_unit_id) — never as the source of the BU list itself, which stays
+  // filter-options' own authorized-scope result. This degrades safely: a login this 403s for (a
+  // narrower BU-scoped role) just gets every parentBuId as undefined below, which the cascade
+  // below reads the same as "no Sub-BU exists" — i.e. today's flat single-dropdown behavior,
+  // never a crash or a wrong split.
+  const { data: companiesForParentLookup } = useCompanies({ status: 'active', limit: 500 }, { staleTime: 1000 * 60 * 10 });
+  const parentBuIdByCompanyId = new Map(
+    (companiesForParentLookup?.data ?? []).map((c) => [String(c.id), c.parent_business_unit_id ?? c.parent?.id ?? null])
+  );
+  const businessUnitOptions = (selectedEntityId
     ? (filterOptions?.business_units ?? []).filter((bu) => bu.entity_id === selectedEntityId)
-    : [];
+    : []
+  ).map((bu) => ({ ...bu, parentBuId: parentBuIdByCompanyId.get(String(bu.id)) ?? null }));
+  // Mobile's own inline block (below, in the JSX) can't call the desktop EntityBuFilterBar
+  // component as-is — different layout (stacked, not flex-wrap) — so it computes the same cascade
+  // here and renders it itself instead.
+  const mobileBuCascade = computeBuCascade(businessUnitOptions, buFilters, setBuFilters);
   const selectedBusinessUnitIds = buFilters.map(Number);
 
   const handleEntityFilterChange = (v) => {
@@ -423,6 +520,20 @@ const ServicePOMapping = () => {
   const createMappingMutation = useCreateEmployeeServicePOMapping();
   const mappingStatusMutation = useSetEmployeeServicePOMappingStatus();
   const deleteMappingMutation = useDeleteEmployeeServicePOMapping();
+  const setPmMutation = useSetProjectManager();
+
+  // Pure flag flip, no mapping create/delete/status change. The 400 an employee who doesn't
+  // currently hold the Project Manager role gets back is a server-side backstop (there's no
+  // reliable client-side role signal on this screen — the generic employee list this could
+  // otherwise consult scopes to the caller's own team/BU, not this PO's actual mapped set), so
+  // this just surfaces whatever message comes back rather than pre-disabling the switch.
+  const handleTogglePm = async (mappingId, checked) => {
+    try {
+      await setPmMutation.mutateAsync({ id: mappingId, isProjectManager: checked });
+    } catch (err) {
+      showError(formatProjectManagerAssignmentError(err));
+    }
+  };
 
   // `eligible_employees` includes employees already mapped, so this two-panel transfer list moves
   // those to the right and takes them off the left. Keyed off the PO's mapping records ALONE — the
@@ -601,8 +712,11 @@ const ServicePOMapping = () => {
 
       {canManageResources && !isLoadingPO && (
         <>
-          {/* Desktop. */}
-          <div className="hidden md:block">
+          {/* Desktop — same grid template as the two-panel row below (grid-cols-[1fr_auto_1fr]),
+              so this filter bar's own width lines up with just the Select panel's column instead
+              of spanning both panels; it only ever drives the left panel's own employee list, so
+              stretching across the Mapped panel too read as if it filtered that side as well. */}
+          <div className="hidden md:grid grid-cols-[1fr_auto_1fr] gap-2">
             <EntityBuFilterBar
               entities={entities}
               entityId={entityFilter}
@@ -613,7 +727,7 @@ const ServicePOMapping = () => {
               onBuIdsChange={setBuFilters}
             />
           </div>
-          {/* Mobile — same Entity → BU cascade, stacked full-width instead of an inline row. */}
+          {/* Mobile — same Entity → BU → Sub BU cascade, stacked full-width instead of an inline row. */}
           <div className="mb-3 grid grid-cols-1 gap-3 md:hidden">
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs">Entity</Label>
@@ -631,9 +745,9 @@ const ServicePOMapping = () => {
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs">Business Unit</Label>
               <MultiSelect
-                options={businessUnitOptions.map((bu) => ({ label: bu.company_name, value: String(bu.id) }))}
-                value={buFilters}
-                onValueChange={setBuFilters}
+                options={mobileBuCascade.roots.map((bu) => ({ label: bu.company_name, value: String(bu.id) }))}
+                value={mobileBuCascade.effectiveParentIds}
+                onValueChange={mobileBuCascade.handleParentChange}
                 disabled={entityFilter === 'all'}
                 placeholder={
                   entityFilter === 'all' ? 'Select an Entity first' : isLoadingFilterOptions ? 'Loading…' : 'Select Business Unit'
@@ -642,6 +756,19 @@ const ServicePOMapping = () => {
                 className="h-11 bg-white"
               />
             </div>
+            {mobileBuCascade.showSubBu && (
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs">Sub BU</Label>
+                <MultiSelect
+                  options={mobileBuCascade.subBuOptions.map((bu) => ({ label: bu.company_name, value: String(bu.id) }))}
+                  value={mobileBuCascade.selectedChildIds}
+                  onValueChange={mobileBuCascade.handleChildChange}
+                  placeholder="All Sub BUs"
+                  searchPlaceholder="Search sub BU..."
+                  className="h-11 bg-white"
+                />
+              </div>
+            )}
           </div>
         </>
       )}
@@ -713,6 +840,26 @@ const ServicePOMapping = () => {
                 </div>
               );
             }}
+            // Centralised Service POs don't get a PM at all — every employee auto-mapped to one is
+            // a plain member, never "the PM" for it — so the whole column is omitted rather than
+            // rendered disabled, matching how the create/bulk-map flow already skips PM entirely
+            // for this screen.
+            renderPm={servicePO?.is_centralised ? undefined : (row) => {
+              const isMappingActive = (row.raw.status ?? 'active') === 'active';
+              const isPm = !!row.raw.is_project_manager;
+              return (
+                <div className="flex items-center gap-2" title={!isMappingActive ? 'Reactivate this mapping to change PM status' : undefined}>
+                  <Switch
+                    checked={isPm}
+                    disabled={!isMappingActive || setPmMutation.isPending}
+                    onCheckedChange={(checked) => handleTogglePm(row.key, checked)}
+                  />
+                  <span className={cn('text-[11px] font-medium', isPm ? 'text-blue-600' : 'text-slate-400')}>
+                    {isPm ? 'Yes' : 'No'}
+                  </span>
+                </div>
+              );
+            }}
           />
         </div>
 
@@ -764,6 +911,9 @@ const ServicePOMapping = () => {
                   {row.mapped ? (
                     <div className="flex shrink-0 items-center gap-1">
                       <Badge variant="success" className="font-normal">Mapped</Badge>
+                      {!servicePO?.is_centralised && row.raw?.is_project_manager && (
+                        <Badge variant="secondary" className="font-normal">PM</Badge>
+                      )}
                       {canManageResources && (
                         <Button
                           variant="ghost"

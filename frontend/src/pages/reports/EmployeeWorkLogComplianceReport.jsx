@@ -19,7 +19,7 @@ import SegmentedToggle from '@/components/common/SegmentedToggle';
 import SelectionBar from '@/components/common/SelectionBar';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import BusinessUnitFilter, { ALL_BUS } from '@/components/common/BusinessUnitFilter';
-import EntityFilter, { ALL_ENTITIES } from '@/components/common/EntityFilter';
+import EntityFilter from '@/components/common/EntityFilter';
 import BulkReminderProgressModal from '@/components/common/BulkReminderProgressModal';
 import EmptyState from '@/components/common/EmptyState';
 import MobilePagination from '@/components/common/MobilePagination';
@@ -238,8 +238,8 @@ const EmployeeWorkLogComplianceReport = () => {
   const [monthYear, setMonthYear] = useState({ month: initialMonth, year: initialYear });
   const [search, setSearch] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [buId, setBuId] = useState(ALL_BUS);
-  const [entityId, setEntityId] = useState(ALL_ENTITIES);
+  const [buIds, setBuIds] = useState([]);
+  const [entityIds, setEntityIds] = useState([]);
 
   // ── Pagination state (client-side) ──
   const [page, setPage] = useState(1);
@@ -269,7 +269,7 @@ const EmployeeWorkLogComplianceReport = () => {
   };
 
   const handleBuChange = (val) => {
-    setBuId(val);
+    setBuIds(val);
     setPage(1);
     clearSelection();
   };
@@ -277,8 +277,8 @@ const EmployeeWorkLogComplianceReport = () => {
   // Picking a different Entity can strand a BU selection that no longer belongs to it — reset the
   // BU state then do what handleBuChange does, same as changing BU itself.
   const handleEntityChange = (val) => {
-    setEntityId(val);
-    handleBuChange(ALL_BUS);
+    setEntityIds(val);
+    handleBuChange([]);
   };
 
   const handleDateChange = (d) => {
@@ -296,13 +296,17 @@ const EmployeeWorkLogComplianceReport = () => {
   // ── Query params ──
   const reportParams = useMemo(() => {
     const base = {
-      ...(buId !== ALL_BUS && { buId }),
-      ...(entityId !== ALL_ENTITIES && { entityId }),
+      // `buId` is always the 'all' sentinel so explicitBuScope always drops the X-Company-Id
+      // header, letting `businessUnitIds` below narrow the full role reach instead — same
+      // convention as the canonical multi-select reports (e.g. PmWiseUtilizationReport).
+      buId: ALL_BUS,
+      ...(entityIds.length > 0 && { entityIds: entityIds.join(',') }),
+      ...(buIds.length > 0 && { businessUnitIds: buIds.join(',') }),
     };
     return mode === 'date'
       ? { ...base, date }
       : { ...base, month: monthYear.month, year: monthYear.year };
-  }, [mode, date, monthYear, buId, entityId]);
+  }, [mode, date, monthYear, buIds, entityIds]);
 
   // ── Data query ──
   const { data, isPending, isError, error, refetch } = useQuery({
@@ -413,7 +417,7 @@ const EmployeeWorkLogComplianceReport = () => {
     const body = {
       remindAll: true,
       ...buildPeriodBody(mode, date, monthYear),
-      ...(buId !== ALL_BUS && { company_id: Number(buId) }),
+      ...(buIds.length > 0 && { company_ids: buIds.join(',') }),
     };
     sendBulkReminder(body);
   };
@@ -511,7 +515,7 @@ const EmployeeWorkLogComplianceReport = () => {
             <FilterToggleButton
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((p) => !p)}
-              activeCount={(entityId !== ALL_ENTITIES ? 1 : 0) + (buId !== ALL_BUS ? 1 : 0)}
+              activeCount={(entityIds.length > 0 ? 1 : 0) + (buIds.length > 0 ? 1 : 0)}
             />
 
             {/* Remind Selected */}
@@ -548,7 +552,7 @@ const EmployeeWorkLogComplianceReport = () => {
                     <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-white" />
                   </span>
                 )}
-                Remind All{buId !== ALL_BUS ? ' (This BU)' : ''}
+                Remind All{buIds.length > 0 ? ' (This BU)' : ''}
               </Button>
             )}
 
@@ -565,13 +569,13 @@ const EmployeeWorkLogComplianceReport = () => {
       {/* Collapsible filter panel */}
       <FilterPanel
         isOpen={filtersOpen}
-        onClear={() => { setEntityId(ALL_ENTITIES); setBuId(ALL_BUS); clearSelection(); }}
-        showClear={entityId !== ALL_ENTITIES || buId !== ALL_BUS}
+        onClear={() => { setEntityIds([]); setBuIds([]); clearSelection(); }}
+        showClear={entityIds.length > 0 || buIds.length > 0}
       >
-        <EntityFilter value={entityId} onChange={handleEntityChange} />
+        <EntityFilter multiple value={entityIds} onChange={handleEntityChange} />
 
         {/* BU filter — renders null automatically when only one BU is available */}
-        <BusinessUnitFilter value={buId} entityId={entityId} onChange={handleBuChange} />
+        <BusinessUnitFilter multiple value={buIds} entityId={entityIds} onChange={handleBuChange} />
 
         {/* Mode toggle */}
         <div className="flex flex-col gap-1.5">

@@ -41,6 +41,8 @@ import { Button } from '@/components/ui/button';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import { FiscalYearPicker } from '@/components/ui/fiscal-year-picker';
 import { SearchableSelect } from '@/components/ui/searchable-select';
+import { MultiSelect } from '@/components/ui/multi-select';
+import { HierarchicalBuSelector, dedupeBusinessUnitIds } from '@/components/common/HierarchicalBuSelector';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { formatCurrency, formatHours, formatDate } from '@/utils/formatters';
@@ -288,14 +290,38 @@ const Dashboard = () => {
   const [fiscalYear, setFiscalYear]           = useState(currentFY);
   const [bottomMonthYear, setBottomMonthYear] = useState({ month: prevMonth.getMonth() + 1, year: prevMonth.getFullYear() });
   const [quarter, setQuarter]                 = useState(null);
-  // Entity — pure client-side narrowing of the Business Unit dropdown right next to it (same
-  // convention as components/common/EntityFilter/BusinessUnitFilter elsewhere); it never itself
-  // rides into analyticsParams, only entityId's resulting BU choice does.
-  const [entityId, setEntityId]               = useState('all');
-  // Business Unit filter — '' means every BU this login can reach, matching how the Employee /
-  // Client / Service PO filters below treat their own empty value. It rides into analyticsParams
-  // as a pseudo-param and is turned into the request's BU scope by dashboard.api's withBuScope.
-  const [buId, setBuId]                       = useState('');
+  // Entity — multi-select, narrows the Business Unit dropdown right next to it (same convention
+  // as components/common/EntityFilter/BusinessUnitFilter elsewhere). Never itself rides into
+  // analyticsParams as `entityId` — only its resulting `entityIds` (when non-empty) does.
+  const [entityIds, setEntityIds]             = useState([]);
+  // Business Unit filter — multi-select. Empty means every BU this login can reach. Rides into
+  // analyticsParams as `businessUnitIds` (when non-empty) alongside the forced `buId: 'all'`
+  // pseudo-param, which drops dashboard.api's withBuScope header entirely so the backend's own
+  // role-reach fallback is what `businessUnitIds` then narrows — same contract the multi-select
+  // Reports/Masters already use.
+  const [buIds, setBuIds]                     = useState([]);
+  // Same source and availability rule as every other BU filter in the app (see
+  // hooks/useSelectableBusinessUnits): the BU master for an Admin/Entity Admin, the login's own
+  // mapped BUs for a BU Admin/BU Head, and nothing at all below two BUs. `useSelectableBusinessUnits`
+  // accepts an array `entityId` directly (see its own doc comment). Hoisted up here (rather than
+  // sitting next to the header-row JSX it also feeds) so analyticsParams below — built well before
+  // that JSX — can already read the deduped selection.
+  const { units: businessUnitOptionsSource, canFilter: showBuFilter } = useSelectableBusinessUnits(entityIds);
+  // No room in this header row for BusinessUnitFilter's usual two-control cascade (Business Unit +
+  // a separate Sub BU), so the hierarchy is folded into one dropdown instead via
+  // HierarchicalBuSelector — Sub-BUs (e.g. IBM's own sub-units) render nested/indented under their
+  // Parent rather than flat alongside it. `id`/`parentId` (not `value`/`label`) is that component's
+  // own option shape.
+  const buOptions = useMemo(
+    () => businessUnitOptionsSource.map((bu) => ({ id: String(bu.id), label: bu.name, parentId: bu.parentId })),
+    [businessUnitOptionsSource],
+  );
+  // The tree lets a Parent BU and one of its own Sub-BUs be checked together (see
+  // HierarchicalBuSelector's own comment on why it keeps checkbox state purely literal) — deduped
+  // here, at the boundary where the selection actually becomes a request param, since sending both
+  // ids together is redundant server-side and silently blocks the Sub-BU pick from narrowing
+  // anything (confirmed live).
+  const dedupedBuIds = useMemo(() => dedupeBusinessUnitIds(buIds, buOptions), [buIds, buOptions]);
   const [employeeId, setEmployeeId]           = useState('');
   const [clientId, setClientId]               = useState('');
   const [servicePOId, setServicePOId]         = useState('');
@@ -423,12 +449,13 @@ const Dashboard = () => {
     fiscalYear,
     hoursSource,
     roleId: roleObjects[0]?.id,
-    // '' ("All Business Units") must still ride along as an explicit 'all', not be dropped —
-    // omitting the key entirely leaves dashboard.api's withBuScope with nothing to act on, so it
-    // falls back to whatever BU is globally active instead of truly scoping across every BU this
-    // login can reach (the same stale-header pitfall already fixed for the Client dropdown in
-    // clients.api.js).
-    buId: buId || 'all',
+    // 'all' must still ride along explicitly, not be dropped — omitting the key entirely leaves
+    // dashboard.api's withBuScope with nothing to act on, so it falls back to whatever BU is
+    // globally active instead of truly scoping across every BU this login can reach (the same
+    // stale-header pitfall already fixed for the Client dropdown in clients.api.js).
+    buId: 'all',
+    ...(entityIds.length > 0 && { entityIds: entityIds.join(',') }),
+    ...(dedupedBuIds.length > 0 && { businessUnitIds: dedupedBuIds.join(',') }),
     ...(quarter     && { quarter }),
     ...(employeeId  && { employeeId }),
     ...(clientId    && { clientId }),
@@ -448,7 +475,9 @@ const Dashboard = () => {
     year:  bottomMonthYear.year,
     hoursSource,
     roleId: roleObjects[0]?.id,
-    buId: buId || 'all',
+    buId: 'all',
+    ...(entityIds.length > 0 && { entityIds: entityIds.join(',') }),
+    ...(dedupedBuIds.length > 0 && { businessUnitIds: dedupedBuIds.join(',') }),
     ...(employeeId  && { employeeId }),
     ...(clientId    && { clientId }),
     ...(servicePOId && { poId: servicePOId }),
@@ -467,29 +496,13 @@ const Dashboard = () => {
   // components/common/EntityFilter does for every FilterPanel-based BU filter elsewhere.
   const { entities, canFilter: showEntityFilter } = useSelectableEntities();
   const entityOptions = useMemo(
-    () => [
-      { label: 'All Entities', value: 'all' },
-      ...entities.map((e) => ({ label: e.name, value: String(e.id) })),
-    ],
+    () => entities.map((e) => ({ label: e.name, value: String(e.id) })),
     [entities],
   );
   const handleEntityChange = (v) => {
-    if (!v) return;
-    setEntityId(v);
-    setBuId('');
+    setEntityIds(v);
+    setBuIds([]);
   };
-
-  // Same source and availability rule as every other BU filter in the app (see
-  // hooks/useSelectableBusinessUnits): the BU master for an Admin/Entity Admin, the login's own
-  // mapped BUs for a BU Admin/BU Head, and nothing at all below two BUs.
-  const { units: businessUnitOptionsSource, canFilter: showBuFilter } = useSelectableBusinessUnits(entityId);
-  const buOptions = useMemo(
-    () => [
-      { label: 'All Business Units', value: '' },
-      ...businessUnitOptionsSource.map((bu) => ({ label: bu.name, value: String(bu.id) })),
-    ],
-    [businessUnitOptionsSource],
-  );
 
   const { data: employeesData } = useActiveEmployees();
   const { data: clientsData }   = useActiveClients();
@@ -818,14 +831,13 @@ const Dashboard = () => {
           {showEntityFilter && (
             <div className="flex items-center gap-1.5">
               <FilterIconBadge icon={Building2} color="emerald" />
-              <SearchableSelect
+              <MultiSelect
                 options={entityOptions}
-                value={entityId}
+                value={entityIds}
                 onValueChange={handleEntityChange}
                 placeholder="All Entities"
                 searchPlaceholder="Search entity…"
-                showSearch={entityOptions.length > 6}
-                className="w-44 h-9 rounded-xl text-sm"
+                className="w-44"
               />
             </div>
           )}
@@ -839,14 +851,14 @@ const Dashboard = () => {
           {showBuFilter && (
             <div className="flex items-center gap-1.5">
               <FilterIconBadge icon={Landmark} color="primary" />
-              <SearchableSelect
+              <HierarchicalBuSelector
                 options={buOptions}
-                value={buId}
-                onValueChange={setBuId}
+                value={buIds}
+                onValueChange={setBuIds}
                 placeholder="All Business Units"
                 searchPlaceholder="Search business unit…"
-                showSearch={buOptions.length > 6}
-                className="w-48 h-9 rounded-xl text-sm"
+                className="w-48"
+                showChips={false}
               />
             </div>
           )}

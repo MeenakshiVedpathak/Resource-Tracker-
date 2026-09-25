@@ -5,7 +5,7 @@ import { useIsMutating } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus, Pencil, UserCog, Search, Download, Upload, CheckCircle2, AlertCircle, FileDown, FileText, Printer, FileSpreadsheet, ChevronDown, ChevronUp, ChevronsUpDown, MoreVertical, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Pencil, UserCog, Search, Download, Upload, CheckCircle2, AlertCircle, FileDown, FileText, Printer, FileSpreadsheet, ChevronDown, ChevronUp, ChevronsUpDown, MoreVertical, ChevronLeft, ChevronRight, CornerDownRight } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -15,6 +15,7 @@ import { useActiveServicePOs } from '@/hooks/useServicePOs';
 import { useRoles } from '@/hooks/useRoles';
 import { useCompanies } from '@/hooks/useCompanies';
 import { useMasterBuFilter } from '@/hooks/useMasterBuFilter';
+import { useSelectableBusinessUnits } from '@/hooks/useSelectableBusinessUnits';
 import { employeesApi } from '@/api/employees.api';
 import { useCanWrite, useCanManageEmployeeRecords } from '@/hooks/usePermissions';
 import { useAuth } from '@/hooks/useAuth';
@@ -22,6 +23,7 @@ import { ROLE_NAMES, getAssignableRoleNames, ADDITIONAL_ROLE_NAMES, SENIOR_ROLE_
 import { useNotification } from '@/hooks/useNotification';
 import { useDebounce } from '@/hooks/useDebounce';
 import { extractApiError } from '@/services/apiClient';
+import { formatProjectManagerAssignmentError } from '@/utils/projectManagerError';
 import { buildPath, ROUTES } from '@/constants/routes';
 import { formatDate, getInitials } from '@/utils/formatters';
 import { cn } from '@/utils/cn';
@@ -105,6 +107,10 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
   const [selectedRoleIds, setSelectedRoleIds] = useState([]);
   const [selectedBuIds, setSelectedBuIds] = useState([]);
   const [selectedPoIds, setSelectedPoIds] = useState([]);
+  // Subset of selectedPoIds this employee is explicitly Project Manager for — a mapping row can
+  // be PM'd only while it's also mapped, so unchecking a PO's mapping checkbox drops it from here
+  // too (see togglePo).
+  const [selectedPmPoIds, setSelectedPmPoIds] = useState([]);
   const [poSearch, setPoSearch] = useState('');
   // Toggled by clicking the "N selected" pill — pulls already-checked rows to the top of the
   // (still search-filtered) list so a reviewer can see everything they've picked without having
@@ -114,6 +120,9 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
   // selected/unselected partition when sortSelectedFirst is also on.
   const [poSortKey, setPoSortKey] = useState(null);
   const [poSortDir, setPoSortDir] = useState('asc');
+  // Page-based instead of an internal scrollbar — the list is paged 5 at a time.
+  const [poPage, setPoPage] = useState(1);
+  const PO_PAGE_SIZE = 5;
 
   const togglePoSort = (key) => {
     if (poSortKey !== key) {
@@ -127,6 +136,24 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
     }
   };
   const [buEntityFilter, setBuEntityFilter] = useState(ALL_MAPPING_ENTITIES);
+  // Sub-BUs collapsed under their Parent by default — every Parent starts collapsed regardless of
+  // whether one of its Sub-BUs is already checked, same UX as the BU Master list (CompanyList.jsx).
+  // Expanding is an explicit per-row choice only.
+  //
+  // Keyed by parent id -> the user's explicit override (true = force expanded, false = force
+  // collapsed). A plain Set of "expanded" ids can't represent an explicit collapse the way a Map
+  // does (this dialog used to auto-expand a Parent with a checked Sub-BU, which meant OR-ing a Set
+  // membership check with "does this parent have a selected child" — the child-selected half always
+  // won once true, so clicking the collapse chevron on such a Parent had no visible effect at all —
+  // confirmed live). A Map still lets an explicit toggle win either direction once set.
+  const [buExpandOverrides, setBuExpandOverrides] = useState(() => new Map());
+  const toggleBuExpanded = (id, currentlyExpanded) => {
+    setBuExpandOverrides((prev) => {
+      const next = new Map(prev);
+      next.set(String(id), !currentlyExpanded);
+      return next;
+    });
+  };
 
   // GET /employees (list) carries no role/BU data, so the row this dialog opened from can't seed
   // the checkboxes — fetch the employee's actual mappings fresh instead (see
@@ -142,17 +169,18 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
   // reset the Entity filter per employee so it doesn't carry over a previous row's narrowed view.
   useEffect(() => {
     setBuEntityFilter(ALL_MAPPING_ENTITIES);
+    setBuExpandOverrides(new Map());
   }, [employee?.id]);
 
-  // Entity options for that filter, derived straight from the full BU list already fetched for
-  // this dialog's own Business Units table (GET /companies — see EmployeeList's own useCompanies
-  // call), NOT useSelectableEntities: that hook scopes to what the ACTOR (the HR/Admin viewing
-  // this dialog) can filter by, which is wrong here — this dialog assigns BUs to the TARGET
-  // employee across every Entity in the system, not just the ones the actor's own account happens
-  // to be mapped to (confirmed empty for an HR actor with few/no BU mappings of their own, even
-  // though the full BU list below renders fine). Relies on GET /companies now populating each
-  // row's `entity: { id, entity_name }` relation — see BACKEND prompt from the earlier "entities
-  // not coming" fix; before that fix this same derivation came back empty for a different reason.
+  // Entity options for that filter, derived straight from the `businessUnits` prop this dialog was
+  // given (see EmployeeList's own mappingDialogBusinessUnits). For a cross-BU actor (Admin/Entity
+  // Admin/Platform Admin) that's still the full GET /companies list, each row carrying an
+  // `entity: { id, entity_name }` relation, so this sub-filter renders normally. For a BU-scoped
+  // actor (HR, BU Admin, BU Head, ...) the prop is now that login's OWN mapped BUs instead — by
+  // design: this dialog assigns BUs to the target employee only from the ACTOR's own reach, not
+  // every Entity in the system (an HR mapped to another BU's employees was exactly the reported
+  // bug). Those rows carry no entity_name, so `buEntities` below comes back empty and this
+  // sub-filter simply doesn't render for them — acceptable given how few BUs that login ever has.
   const buEntities = useMemo(() => {
     const byId = new Map();
     businessUnits.forEach((bu) => {
@@ -171,6 +199,83 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
     return businessUnits.filter((bu) => String(bu.entity_id ?? bu.entity?.id) === buEntityFilter);
   }, [businessUnits, buEntityFilter]);
 
+  // Flattened into render order for the checkbox table below — every Parent BU row immediately
+  // followed by its own (collapsible) Sub-BU rows, indented, instead of a separate multi-select
+  // dropdown control. A Sub-BU whose own Parent got filtered out by the Entity picker above (rare
+  // — a Sub-BU inherits its Parent's Entity, so this only happens if the BU master's own entity_id
+  // somehow disagrees between the two) still gets a row, un-indented, rather than silently
+  // vanishing. A Parent's Sub-BU rows are only included once it's explicitly expanded (see
+  // buExpandOverrides) — every Parent starts collapsed, even one already holding a checked Sub-BU.
+  const buRows = useMemo(() => {
+    const childrenByParent = new Map();
+    filteredBusinessUnits.forEach((bu) => {
+      const parentId = bu.parent_business_unit_id ?? null;
+      if (parentId == null) return;
+      const key = String(parentId);
+      if (!childrenByParent.has(key)) childrenByParent.set(key, []);
+      childrenByParent.get(key).push(bu);
+    });
+    const rows = [];
+    const rootIds = new Set();
+    filteredBusinessUnits
+      .filter((bu) => (bu.parent_business_unit_id ?? null) == null)
+      .forEach((root) => {
+        rootIds.add(String(root.id));
+        const children = childrenByParent.get(String(root.id)) ?? [];
+        // Always starts collapsed — even a Parent already holding a checked Sub-BU — an explicit
+        // click on the chevron is the only thing that expands it. An explicit override (either
+        // direction) always wins once set, so collapsing after checking a Sub-BU (see toggleBuExpanded)
+        // still works correctly.
+        const override = buExpandOverrides.get(String(root.id));
+        const expanded = override != null ? override : false;
+        rows.push({ ...root, depth: 0, hasChildren: children.length > 0, expanded });
+        if (expanded) children.forEach((child) => rows.push({ ...child, depth: 1 }));
+      });
+    const includedIds = new Set(rows.map((r) => r.id));
+    filteredBusinessUnits.forEach((bu) => {
+      if (includedIds.has(bu.id)) return;
+      const parentId = bu.parent_business_unit_id ?? null;
+      // Not orphaned — just a Sub-BU still collapsed under its (present) Parent, not to be
+      // re-added here un-indented at the bottom.
+      if (parentId != null && rootIds.has(String(parentId))) return;
+      rows.push({ ...bu, depth: 0 });
+    });
+    return rows;
+  }, [filteredBusinessUnits, buExpandOverrides]);
+
+  // Off the full (unfiltered-by-Entity) `businessUnits` prop, not `filteredBusinessUnits` — a
+  // Parent's cascade behavior below must hold even while the Entity picker has temporarily
+  // narrowed which rows are visible.
+  const childBuIdsByParentId = useMemo(() => {
+    const map = new Map();
+    businessUnits.forEach((bu) => {
+      const parentId = bu.parent_business_unit_id ?? null;
+      if (parentId == null) return;
+      const key = String(parentId);
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(bu.id);
+    });
+    return map;
+  }, [businessUnits]);
+
+  const toggleBu = (buId) => {
+    setSelectedBuIds((prev) => {
+      const childIds = childBuIdsByParentId.get(String(buId)) ?? [];
+      if (prev.includes(buId)) {
+        // Unchecking a Parent BU also unchecks every one of its own Sub-BUs — a Sub-BU mapping
+        // left behind under a Parent the employee is no longer mapped to at all doesn't make
+        // sense to keep.
+        const toRemove = new Set([buId, ...childIds]);
+        return prev.filter((id) => !toRemove.has(id));
+      }
+      const next = [...prev, buId];
+      // Checking a Parent with exactly one Sub-BU auto-selects that Sub-BU too — with only one
+      // possible choice under it, there's nothing for the user to actually pick between.
+      if (childIds.length === 1 && !next.includes(childIds[0])) next.push(childIds[0]);
+      return next;
+    });
+  };
+
   // Every row here IS an employee, so plain Employee is a mandatory baseline role — pinned
   // checked & disabled, same standing bypass EmployeeForm.jsx used to apply for HR (whose
   // ROLE_CREATION_MATRIX entry is deliberately empty).
@@ -178,8 +283,15 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
   const servicePoAdminRoleId = allRoles.find((r) => r.role_name === ROLE_NAMES.SERVICE_PO_ADMIN)?.id;
   const showServicePoSection = servicePoAdminRoleId != null && selectedRoleIds.includes(servicePoAdminRoleId);
   const assignableNames = [...new Set([...getAssignableRoleNames(actorRoleName), ROLE_NAMES.EMPLOYEE])];
+  const isRoleAssignableByActor = (roleName) =>
+    assignableNames.includes(roleName) || ADDITIONAL_ROLE_NAMES.includes(roleName);
+  // Also keeps any role the employee is ALREADY mapped to, even one outside what this actor could
+  // newly assign (e.g. an HR viewing an employee a senior role was granted to) — otherwise that
+  // role has no row to render at all, and the panel showed "N selected" over a completely empty
+  // list while N counted ids this filter alone would never surface. Those extra rows render
+  // disabled below (view-only) rather than hidden.
   const roleRows = allRoles.filter(
-    (r) => assignableNames.includes(r.role_name) || ADDITIONAL_ROLE_NAMES.includes(r.role_name)
+    (r) => isRoleAssignableByActor(r.role_name) || selectedRoleIds.includes(r.id)
   );
 
   // Full active PO list (company-wide) — Service PO Admin needs no BU-eligibility filtering, so
@@ -192,6 +304,7 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
   useEffect(() => {
     if (existingMapping) {
       setSelectedPoIds(existingMapping.mapped_service_po_ids ?? []);
+      setSelectedPmPoIds(existingMapping.project_manager_service_po_ids ?? []);
     }
   }, [existingMapping]);
 
@@ -218,19 +331,20 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
     return [...selected, ...rest];
   }, [activePOs, poSearch, sortSelectedFirst, selectedPoIds, poSortKey, poSortDir]);
 
-  // Select-all deliberately acts on the CURRENT filter only: ticking it adds just the visible
-  // rows, clearing it removes only those. Selections hidden by the search are never touched,
-  // which is what makes "search, tick some, search again, tick more" behave the way users expect.
   const filteredPoIds = useMemo(() => filteredPOs.map((po) => po.id), [filteredPOs]);
   const selectedFilteredCount = filteredPoIds.filter((id) => selectedPoIds.includes(id)).length;
-  const allFilteredSelected = filteredPoIds.length > 0 && selectedFilteredCount === filteredPoIds.length;
-  const someFilteredSelected = selectedFilteredCount > 0 && !allFilteredSelected;
 
-  const toggleAllFilteredPos = (checked) => {
-    setSelectedPoIds((prev) => (checked
-      ? Array.from(new Set([...prev, ...filteredPoIds]))
-      : prev.filter((id) => !filteredPoIds.includes(id))));
-  };
+  // Re-searching/re-sorting changes what page 1 even means, so land back there instead of
+  // stranding the user on a now out-of-range page.
+  useEffect(() => {
+    setPoPage(1);
+  }, [poSearch, poSortKey, poSortDir, sortSelectedFirst]);
+
+  const poTotalPages = Math.max(1, Math.ceil(filteredPOs.length / PO_PAGE_SIZE));
+  const pagedPOs = useMemo(
+    () => filteredPOs.slice((poPage - 1) * PO_PAGE_SIZE, poPage * PO_PAGE_SIZE),
+    [filteredPOs, poPage]
+  );
 
   const toggleRole = (roleId) => {
     if (roleId === employeeRoleId) return;
@@ -246,12 +360,16 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
     });
   };
 
-  const toggleBu = (buId) => {
-    setSelectedBuIds((prev) => (prev.includes(buId) ? prev.filter((id) => id !== buId) : [...prev, buId]));
-  };
 
   const togglePo = (poId) => {
     setSelectedPoIds((prev) => (prev.includes(poId) ? prev.filter((id) => id !== poId) : [...prev, poId]));
+    // Unmapping a PO can't leave it PM'd — drop it from the PM set in the same click rather than
+    // leaving a stale selection the Checkbox below would just hide (disabled) until Save.
+    setSelectedPmPoIds((prev) => (prev.includes(poId) ? prev.filter((id) => id !== poId) : prev));
+  };
+
+  const togglePmPo = (poId) => {
+    setSelectedPmPoIds((prev) => (prev.includes(poId) ? prev.filter((id) => id !== poId) : [...prev, poId]));
   };
 
   const isSaving = updateMutation.isPending || saveServicePoMutation.isPending;
@@ -264,13 +382,28 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
       await updateMutation.mutateAsync({ role_ids: roleIds, business_unit_ids: selectedBuIds });
       if (showServicePoSection) {
         // Backend rejects the whole request wholesale if any id fails re-validation — let that
-        // throw into the catch below so nothing here is treated as saved.
-        await saveServicePoMutation.mutateAsync(selectedPoIds);
+        // throw into the catch below so nothing here is treated as saved. Rows PM'd for this
+        // employee go through as `{ service_po_id, is_project_manager: true }`, everything else
+        // as a plain id (equivalent to is_project_manager: false). A centralised PO never goes
+        // through as PM even if `selectedPmPoIds` somehow still carries it (e.g. seeded from a
+        // pre-existing mapping made before this restriction existed) — the checkbox is disabled,
+        // but this is the belt-and-suspenders backstop for what actually gets sent.
+        // `is_centralised` isn't in this endpoint's response (see the row-render comment above) —
+        // same `company_id == null` proxy applies here.
+        const centralisedPoIds = new Set(
+          (activePOs ?? []).filter((po) => (po.is_centralised ?? po.company_id == null)).map((po) => po.id)
+        );
+        const servicePoIds = selectedPoIds.map((poId) =>
+          selectedPmPoIds.includes(poId) && !centralisedPoIds.has(poId)
+            ? { service_po_id: poId, is_project_manager: true }
+            : poId
+        );
+        await saveServicePoMutation.mutateAsync(servicePoIds);
       }
       success(`Roles, Business Units${showServicePoSection ? ' & Service PO mapping' : ''} updated for ${employee.full_name}.`);
       onOpenChange(false);
     } catch (err) {
-      showError(extractApiError(err));
+      showError(formatProjectManagerAssignmentError(err));
     }
   };
 
@@ -279,7 +412,7 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
       <DialogContent
         className={cn(
           'flex max-h-[90vh] flex-col',
-          showServicePoSection ? 'max-w-2xl md:max-w-5xl' : 'max-w-2xl md:max-w-3xl',
+          showServicePoSection ? 'max-w-2xl md:max-w-[92vw] lg:max-w-7xl' : 'max-w-2xl md:max-w-3xl',
         )}
       >
         <DialogHeader className="shrink-0">
@@ -297,10 +430,19 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
             PO Admin got checked) only while showServicePoSection is true — the Dialog's own
             max-w-5xl above only widens when this does, so three columns actually gets the room a
             plain 3-column split of the original max-w-3xl never would. */}
-        <div className={cn('grid grid-cols-1 gap-4', showServicePoSection ? 'md:grid-cols-3' : 'md:grid-cols-2')}>
-          <div className="space-y-1.5 min-w-0">
-            <Label className="text-xs">Roles</Label>
-            <Table containerClassName="border rounded-md max-h-[240px]">
+        <div className={cn('grid grid-cols-1 gap-4', showServicePoSection ? 'md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.6fr)]' : 'md:grid-cols-2')}>
+          <div className="space-y-1.5 min-w-0 rounded-lg border p-3">
+            <div className="flex items-center gap-2">
+              <h4 className="text-sm font-semibold">Roles</h4>
+              <Badge variant="secondary" className="text-[10px] font-normal">{selectedRoleIds.length} selected</Badge>
+            </div>
+            <p className="text-xs text-muted-foreground">Select the roles to assign</p>
+            {/* Taller than Business Units'/Service POs' own table cap (240px) — this column has
+                no Entity dropdown / search box above its table like they do, so without the extra
+                ~44px that row takes up elsewhere, this card would end up visibly shorter than its
+                siblings once the grid stretches all three to equal height, leaving blank space
+                below the table instead of more of the table itself. */}
+            <Table containerClassName="border rounded-md max-h-[290px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead className={cn('w-10', STICKY_HEAD)}></TableHead>
@@ -313,7 +455,7 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
                       <TableCell>
                         <Checkbox
                           checked={r.id === employeeRoleId ? true : selectedRoleIds.includes(r.id)}
-                          disabled={r.id === employeeRoleId}
+                          disabled={r.id === employeeRoleId || !isRoleAssignableByActor(r.role_name)}
                           onCheckedChange={() => toggleRole(r.id)}
                         />
                       </TableCell>
@@ -325,8 +467,12 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
                 </TableBody>
             </Table>
           </div>
-          <div className="space-y-1.5 min-w-0">
-            <Label className="text-xs">Business Units</Label>
+          <div className="space-y-1.5 min-w-0 rounded-lg border p-3">
+            <div className="flex items-center gap-2">
+              <h4 className="text-sm font-semibold">Business Units</h4>
+              <Badge variant="secondary" className="text-[10px] font-normal">{selectedBuIds.length} selected</Badge>
+            </div>
+            <p className="text-xs text-muted-foreground">Select one or more business units</p>
             {buEntities.length > 0 && (
               <SearchableSelect
                 options={[
@@ -341,49 +487,70 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
                 className="h-8 w-full text-sm bg-white"
               />
             )}
+            {/* Plain, always-expanded checkbox list — same table style as Roles to its left,
+                A Sub-BU renders indented directly beneath its own Parent BU row (see buRows),
+                collapsed by default behind a chevron toggle — same UX as the BU Master list.
+                Checking a Parent BU row selects the Parent BU itself as a valid assignment — it
+                does NOT auto-select its Sub-BUs; each is checked individually to map to it
+                specifically. */}
             <Table containerClassName="border rounded-md max-h-[240px]">
-                <TableHeader>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className={cn('w-10', STICKY_HEAD)}></TableHead>
+                  <TableHead className={STICKY_HEAD}>Business Unit</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {buRows.length === 0 ? (
                   <TableRow>
-                    <TableHead className={cn('w-10', STICKY_HEAD)}></TableHead>
-                    <TableHead className={STICKY_HEAD}>Business Unit</TableHead>
+                    <TableCell colSpan={2} className="text-center text-sm text-muted-foreground py-6">
+                      No Business Units for this Entity.
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredBusinessUnits.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={2} className="text-center text-sm text-muted-foreground py-6">
-                        No Business Units for this Entity.
+                ) : (
+                  buRows.map((bu) => (
+                    <TableRow key={bu.id}>
+                      <TableCell>
+                        <Checkbox checked={selectedBuIds.includes(bu.id)} onCheckedChange={() => toggleBu(bu.id)} />
+                      </TableCell>
+                      <TableCell>
+                        <div className={cn('flex items-center gap-1', bu.depth > 0 && 'pl-3')}>
+                          {bu.depth > 0 && <CornerDownRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
+                          {bu.depth === 0 && bu.hasChildren ? (
+                            <button
+                              type="button"
+                              onClick={() => toggleBuExpanded(bu.id, bu.expanded)}
+                              className="flex h-5 w-5 shrink-0 items-center justify-center rounded hover:bg-muted"
+                              aria-label={bu.expanded ? 'Collapse' : 'Expand'}
+                            >
+                              {bu.expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                            </button>
+                          ) : (
+                            bu.depth === 0 && <div className="w-5 shrink-0" />
+                          )}
+                          <TruncatedCell value={bu.company_name} maxWidth={bu.depth > 0 ? '190px' : '190px'} />
+                        </div>
                       </TableCell>
                     </TableRow>
-                  ) : (
-                    filteredBusinessUnits.map((bu) => (
-                      <TableRow key={bu.id}>
-                        <TableCell>
-                          <Checkbox checked={selectedBuIds.includes(bu.id)} onCheckedChange={() => toggleBu(bu.id)} />
-                        </TableCell>
-                        <TableCell>
-                          <TruncatedCell value={bu.company_name} maxWidth="220px" />
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
+                  ))
+                )}
+              </TableBody>
             </Table>
           </div>
           {showServicePoSection && (
-          <div className="space-y-1.5 min-w-0">
+          <div className="space-y-1.5 min-w-0 rounded-lg border p-3">
             <div className="flex flex-wrap items-center gap-1.5">
-              <Label className="text-xs">Service POs</Label>
-              <Badge variant="secondary" className="text-[10px]">Company-wide access</Badge>
-              {selectedPoIds.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setSortSelectedFirst((v) => !v)}
-                  title={sortSelectedFirst ? 'Showing selected first — click to restore original order' : 'Click to bring selected rows to the top'}
-                  className={cn(
-                    'text-[11px] underline decoration-dotted underline-offset-2 transition-colors',
-                    sortSelectedFirst ? 'text-primary font-medium' : 'text-muted-foreground hover:text-foreground'
-                  )}
+              <h4 className="text-sm font-semibold">Service POs</h4>
+              <button
+                type="button"
+                onClick={() => setSortSelectedFirst((v) => !v)}
+                disabled={selectedPoIds.length === 0}
+                title={sortSelectedFirst ? 'Showing selected first — click to restore original order' : 'Click to bring selected rows to the top'}
+                className="disabled:cursor-default"
+              >
+                <Badge
+                  variant="secondary"
+                  className={cn('text-[10px] font-normal', sortSelectedFirst && 'bg-primary/10 text-primary')}
                 >
                   {selectedPoIds.length} selected
                   {/* While filtering, say how many of the VISIBLE rows are picked — otherwise the
@@ -391,9 +558,10 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
                   {poSearch.trim() && selectedFilteredCount !== selectedPoIds.length
                     ? ` (${selectedFilteredCount} shown)`
                     : ''}
-                </button>
-              )}
+                </Badge>
+              </button>
             </div>
+            <p className="text-xs text-muted-foreground">Choose the Service POs this employee is mapped to, and mark PM where applicable</p>
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
@@ -403,19 +571,11 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
                 onChange={(e) => setPoSearch(e.target.value)}
               />
             </div>
-            <Table containerClassName="border rounded-md max-h-[240px]">
+            <Table containerClassName="border rounded-md" className="table-fixed">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className={cn('w-10', STICKY_HEAD)}>
-                      <Checkbox
-                        checked={allFilteredSelected ? true : (someFilteredSelected ? 'indeterminate' : false)}
-                        onCheckedChange={(v) => toggleAllFilteredPos(v === true)}
-                        disabled={filteredPoIds.length === 0}
-                        aria-label="Select all Service POs"
-                        title={allFilteredSelected ? 'Clear all' : 'Select all'}
-                      />
-                    </TableHead>
-                    <TableHead className={STICKY_HEAD}>
+                    <TableHead className={cn('w-10', STICKY_HEAD)}></TableHead>
+                    <TableHead className={cn('w-[42%]', STICKY_HEAD)}>
                       <button
                         type="button"
                         onClick={() => togglePoSort('name')}
@@ -427,7 +587,7 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
                           : <ChevronsUpDown className="h-3 w-3 text-muted-foreground/50" />}
                       </button>
                     </TableHead>
-                    <TableHead className={STICKY_HEAD}>
+                    <TableHead className={cn('w-[38%]', STICKY_HEAD)}>
                       <button
                         type="button"
                         onClick={() => togglePoSort('client')}
@@ -439,43 +599,104 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
                           : <ChevronsUpDown className="h-3 w-3 text-muted-foreground/50" />}
                       </button>
                     </TableHead>
+                    <TableHead className={cn('w-14 text-center', STICKY_HEAD)} title="Project Manager for this Service PO">
+                      PM
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {activePOsLoading ? (
                     <TableRow>
-                      <TableCell colSpan={3} className="text-center text-sm text-muted-foreground py-6">
+                      <TableCell colSpan={4} className="text-center text-sm text-muted-foreground py-6">
                         Loading…
                       </TableCell>
                     </TableRow>
                   ) : filteredPOs.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={3} className="text-center text-sm text-muted-foreground py-6">
+                      <TableCell colSpan={4} className="text-center text-sm text-muted-foreground py-6">
                         {poSearch.trim()
                           ? 'No Service POs match your search.'
                           : 'No active Service POs found.'}
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredPOs.map((po) => (
+                    pagedPOs.map((po) => {
+                      const isMapped = selectedPoIds.includes(po.id);
+                      // GET /service-pos/active/list (what feeds this dialog) doesn't return
+                      // `is_centralised` at all — only the paginated GET /service-pos does. A
+                      // Centralised PO's `company_id` is reliably null though (ServicePOForm's own
+                      // validation skips requiring Entity/BU specifically "for a Centralised PO"),
+                      // so that's used as the signal here instead of a field this endpoint omits.
+                      const isCentralised = po.is_centralised ?? po.company_id == null;
+                      return (
                       <TableRow key={po.id}>
                         <TableCell>
-                          <Checkbox checked={selectedPoIds.includes(po.id)} onCheckedChange={() => togglePo(po.id)} />
+                          <Checkbox checked={isMapped} onCheckedChange={() => togglePo(po.id)} />
                         </TableCell>
                         <TableCell>
                           <TruncatedCell
                             value={po.service_po_code ? `${po.service_po_name} (${po.service_po_code})` : po.service_po_name}
-                            maxWidth="140px"
+                            maxWidth="100%"
                           />
                         </TableCell>
                         <TableCell>
-                          <TruncatedCell value={po.client?.client_name} maxWidth="100px" className="text-muted-foreground" />
+                          <TruncatedCell value={po.client?.client_name} maxWidth="100%" className="text-muted-foreground" />
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {/* Centralised Service POs never get a PM — hidden rather than a
+                              disabled checkbox, since there's genuinely no such option for them,
+                              not just one this employee/row can't currently use. */}
+                          {!isCentralised && (
+                            <Checkbox
+                              checked={selectedPmPoIds.includes(po.id)}
+                              disabled={!isMapped}
+                              onCheckedChange={() => togglePmPo(po.id)}
+                              title={isMapped ? 'Set as Project Manager for this Service PO' : 'Map this Service PO first'}
+                            />
+                          )}
                         </TableCell>
                       </TableRow>
-                    ))
+                      );
+                    })
                   )}
                 </TableBody>
             </Table>
+            {filteredPOs.length > 0 && (
+              <div className="flex items-center justify-between gap-2 pt-1">
+                <span className="truncate text-[11px] text-muted-foreground">
+                  Showing {pagedPOs.length} of {filteredPOs.length} service POs
+                </span>
+                {poTotalPages > 1 && (
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="h-6 w-6"
+                      disabled={poPage === 1}
+                      onClick={() => setPoPage((p) => Math.max(1, p - 1))}
+                      aria-label="Previous page"
+                    >
+                      <ChevronLeft className="h-3.5 w-3.5" />
+                    </Button>
+                    <span className="min-w-[52px] text-center text-[11px] font-medium tabular-nums">
+                      {poPage} / {poTotalPages}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="h-6 w-6"
+                      disabled={poPage === poTotalPages}
+                      onClick={() => setPoPage((p) => Math.min(poTotalPages, p + 1))}
+                      aria-label="Next page"
+                    >
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           )}
         </div>
@@ -523,22 +744,17 @@ const EmployeeList = () => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [roleFilter, setRoleFilter] = useState('all');
-  // Entity + BU as one coordinated pair, same as every other master: the Entity choice narrows
-  // which BUs the filter below it offers, and useMasterBuFilter's own setEntityId resets the BU
-  // selection whenever the Entity changes (the old BU may not even belong to the new Entity).
-  //
-  // The Entity value is deliberately NOT forwarded to GET /employees, unlike the masters that
-  // spread `buParams` — same call the Timesheet Imports filter makes. This endpoint has no
-  // confirmed `entity_id` filter: its own note in employees.api flags the whole GET /employees
-  // filter contract as an agreed target rather than a live one, and the RBAC mock ignores
-  // entity_id outright. So Entity's job here is narrowing the BU options; the BU pick (forwarded
-  // as `business_unit_id` — see employees.api's getAll) is what actually scopes the list. Forward
-  // entity_id too as a real query-string field (and teach mockGetAll to honour it) once the
-  // backend confirms.
+  // Multi-select — backend support for entityIds/businessUnitIds has landed on GET /employees
+  // (see BACKEND_MULTI_SELECT_ENTITY_BU_PROMPT.md), via a bespoke fix: this endpoint's BU scoping
+  // was never actually driven by the X-Company-Id header (a pre-existing, already-documented
+  // bug — see employees.api.js's own comment), only by an explicit `business_unit_id` query
+  // param, and entityIds now uses that same non-header mechanism rather than the header-based
+  // pattern every other Master screen relies on. Both are sent below as real query-string fields
+  // regardless of scalar/array shape, matching what employees.api.js's getAll expects.
   const {
-    entityId, setEntityId, showEntityFilter, isEntityFiltered, resetEntityId,
-    buId: buFilter, setBuId: setBuFilter, showBuFilter, isBuFiltered, resetBuId,
-  } = useMasterBuFilter();
+    entityId: entityIds, setEntityId: setEntityIds, showEntityFilter, isEntityFiltered, resetEntityId,
+    buId: buIds, setBuId: setBuIds, showBuFilter, isBuFiltered, resetBuId,
+  } = useMasterBuFilter({ multiple: true });
   const [mappingTarget, setMappingTarget] = useState(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
@@ -546,20 +762,51 @@ const EmployeeList = () => {
 
   const [sorting, setSorting] = useState([]);
 
+  // GET /employees ignores the X-Company-Id header entirely (see employees.api.js's own comment)
+  // — a BU-scoped login (HR, BU Admin, BU Head, ...) only actually gets narrowed to its own BUs
+  // when `businessUnitIds` rides along as an explicit query param. The Filters panel's BU picker
+  // above already sends that once the user narrows it themselves (isBuFiltered), but with NO
+  // filter applied this used to send no BU-scoping param at all, so a BU-scoped login saw every
+  // employee across every BU — not just their own. `units` is this login's own mapped BUs for a
+  // BU-scoped actor (no extra request — see useSelectableBusinessUnits), or the full BU master for
+  // a cross-BU one (Admin/Entity Admin/Platform Admin), who are meant to see everyone and so never
+  // get this default applied.
+  const { units: selectableBuUnits, isCrossBu } = useSelectableBusinessUnits();
+  const ownBuIds = useMemo(() => selectableBuUnits.map((u) => u.id), [selectableBuUnits]);
+
   const params = {
     page,
     limit,
     status: statusFilter,
     ...(roleFilter !== 'all' && { role_id: roleFilter }),
-    ...(isBuFiltered && { business_unit_id: buFilter }),
+    ...(isBuFiltered
+      ? { businessUnitIds: buIds.join(',') }
+      : (!isCrossBu && ownBuIds.length > 0 ? { businessUnitIds: ownBuIds.join(',') } : {})),
+    ...(isEntityFiltered && { entityIds: entityIds.join(',') }),
     ...(debouncedSearch && debouncedSearch.length >= 3 && { search: debouncedSearch }),
     ...(sorting[0] && { sortBy: sorting[0].id, sortOrder: sorting[0].desc ? 'desc' : 'asc' }),
   };
 
   const { data, isPending, isFetching } = useEmployees(params);
   const { data: rolesData } = useRoles({ limit: 100 });
-  // Sourced for the "Map Roles & Business Units" dialog's Business Units table.
-  const { data: companiesData } = useCompanies({ status: 'active', limit: 200 });
+  // Sourced for the "Map Roles & Business Units" dialog's Business Units table — same
+  // cross-BU-vs-own-mapping split as the list scoping above, so a BU-scoped actor (HR, BU Admin,
+  // BU Head, ...) can only ever assign an employee to one of THEIR OWN mapped BUs, not every BU in
+  // the system. Cross-BU actors (Admin/Entity Admin/Platform Admin) keep the original GET
+  // /companies source (only fetched for them now) since it's appropriate for their reach and keeps
+  // the richer `entity: { entity_name }` relation the dialog's own Entity sub-filter needs. GET
+  // /companies is Entity-Admin-scoped and returns nothing usable for a login with no Entity of its
+  // own, which is what produced the "No Business Units for this Entity" empty table for HR before
+  // this fix — a BU-scoped actor's own mapped units carry no entity_name, so the Entity sub-filter
+  // simply doesn't render for them (buEntities comes back empty), which is fine given how few BUs
+  // that login is ever mapped to.
+  const { data: companiesData } = useCompanies({ status: 'active', limit: 200 }, { enabled: isCrossBu });
+  const mappingDialogBusinessUnits = useMemo(
+    () => (isCrossBu
+      ? companiesData?.data ?? []
+      : selectableBuUnits.map((u) => ({ id: u.id, company_name: u.name, entity_id: u.entityId, parent_business_unit_id: u.parentId }))),
+    [isCrossBu, companiesData, selectableBuUnits]
+  );
   const importMutation = useImportEmployees();
   const isMutating = useIsMutating();
   const fileInputRef = useRef(null);
@@ -768,7 +1015,10 @@ const EmployeeList = () => {
       'Original Entity': 'GTT Client Entity',
       'Date of Joining': '2023-01-15',
       'Date of Leaving': '',
-      'Business Units': 'Finance BU, Delivery BU'
+      // A plain name targets a top-level Parent BU; "Parent -> Sub" (same convention the Export
+      // Excel button already writes for a Sub-BU — see handleExportExcel above) targets a Sub-BU
+      // nested under that Parent instead.
+      'Business Units': 'Finance BU, Delivery BU -> Delivery Sub BU'
     }]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Employees");
@@ -829,7 +1079,8 @@ const EmployeeList = () => {
   const getExportParams = () => ({
     status: statusFilter,
     ...(roleFilter !== 'all' && { role_id: roleFilter }),
-    ...(isBuFiltered && { business_unit_id: buFilter }),
+    ...(isBuFiltered && { businessUnitIds: buIds.join(',') }),
+    ...(isEntityFiltered && { entityIds: entityIds.join(',') }),
     ...(debouncedSearch && debouncedSearch.length >= 3 && { search: debouncedSearch }),
   });
 
@@ -869,7 +1120,16 @@ const EmployeeList = () => {
         'Location': emp.location,
         'Sub Location': emp.sub_location,
         'Original Entity': emp.original_entity,
-        'Business Units': (emp.businessUnits ?? []).map(bu => bu.name ?? bu.company_name).join(', '),
+        // A Sub-BU entry renders "Parent -> Child" once the API includes parent_business_unit_id/
+        // parent_business_unit_name on it; a top-level Parent BU (or one from an API version that
+        // predates the hierarchy field) still renders as just its own name, unchanged.
+        'Business Units': (emp.businessUnits ?? [])
+          .map((bu) => {
+            const name = bu.name ?? bu.company_name;
+            const parentName = bu.parent_business_unit_name;
+            return parentName ? `${parentName} -> ${name}` : name;
+          })
+          .join(', '),
         'Total Experience (yrs)': emp.total_experience,
         'Company Experience (yrs)': emp.company_experience,
         'Joined Date': formatDate(emp.date_of_joining),
@@ -1248,13 +1508,14 @@ const EmployeeList = () => {
           />
         </div>
         {showEntityFilter && (
-          <EntityFilter value={entityId} onChange={(v) => { setEntityId(v); setPage(1); }} />
+          <EntityFilter multiple value={entityIds} onChange={(v) => { setEntityIds(v); setPage(1); }} />
         )}
         {showBuFilter && (
           <BusinessUnitFilter
-            value={buFilter}
-            entityId={entityId}
-            onChange={(v) => { setBuFilter(v); setPage(1); }}
+            multiple
+            value={buIds}
+            entityId={entityIds}
+            onChange={(v) => { setBuIds(v); setPage(1); }}
           />
         )}
       </FilterPanel>
@@ -1456,7 +1717,7 @@ const EmployeeList = () => {
         employee={mappingTarget}
         actorRoleName={actorRoleName}
         allRoles={rolesData?.data ?? []}
-        businessUnits={companiesData?.data ?? []}
+        businessUnits={mappingDialogBusinessUnits}
         onOpenChange={(open) => !open && setMappingTarget(null)}
       />
 

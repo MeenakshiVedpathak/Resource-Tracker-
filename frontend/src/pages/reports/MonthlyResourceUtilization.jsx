@@ -50,6 +50,14 @@ const UtilizationPercentCell = ({ value }) => {
   return <span className="tabular-nums">{value}%</span>;
 };
 
+// contributed_percentage (billable share of the employee's OWN logged hours, not capacity) is
+// also pre-rounded (2 decimals) server-side; null means total_hours was 0 for that row/summary.
+// Same null convention as UtilizationPercentCell above.
+const ContributedPercentCell = ({ value }) => {
+  if (value == null) return <span className="text-muted-foreground">—</span>;
+  return <span className="tabular-nums">{value}%</span>;
+};
+
 const exportToExcel = (records, columns, month, year) => {
   const monthLabel = MONTH_NAMES[(month - 1)] ?? month;
 
@@ -67,8 +75,8 @@ const exportToExcel = (records, columns, month, year) => {
     cat.service_types.forEach(st => headerRow2.push(st.name));
   });
 
-  headerRow1.push('Summary', '', '', '');
-  headerRow2.push('Billable Total (hrs)', 'Non-Billable Total (hrs)', 'Total Utilization (hrs)', 'Utilization %');
+  headerRow1.push('Summary', '', '', '', '');
+  headerRow2.push('Billable Total (hrs)', 'Non-Billable Total (hrs)', 'Total Utilization (hrs)', 'Utilization %', 'Contributed %');
 
   const dataRows = records.map((r, i) => {
     const row = [
@@ -93,7 +101,8 @@ const exportToExcel = (records, columns, month, year) => {
       r.billable_total ?? 0,
       r.non_billable_total ?? 0,
       r.total_utilization ?? 0,
-      r.utilization_percentage != null ? `${r.utilization_percentage}%` : ''
+      r.utilization_percentage != null ? `${r.utilization_percentage}%` : '',
+      r.contributed_percentage != null ? `${r.contributed_percentage}%` : ''
     );
     return row;
   });
@@ -110,7 +119,7 @@ const exportToExcel = (records, columns, month, year) => {
     }
     colIndex += len;
   });
-  merges.push({ s: { r: 0, c: colIndex }, e: { r: 0, c: colIndex + 3 } });
+  merges.push({ s: { r: 0, c: colIndex }, e: { r: 0, c: colIndex + 4 } });
   ws['!merges'] = merges;
 
   const wb = XLSX.utils.book_new();
@@ -144,8 +153,11 @@ const MonthlyResourceUtilization = () => {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [entityId, setEntityId] = useState(ALL_ENTITIES);
-  const [buId, setBuId] = useState(ALL_BUS);
+  // Multi-select — backend support for entityIds/businessUnitIds has landed on this report
+  // specifically (see BACKEND_MULTI_SELECT_ENTITY_BU_PROMPT.md); every other report still uses
+  // the single-select EntityFilter/BusinessUnitFilter default.
+  const [entityIds, setEntityIds] = useState([]);
+  const [buIds, setBuIds] = useState([]);
   const [exporting, setExporting] = useState(false);
   // Mobile-only: which employee cards are expanded to show their per-category hours breakdown.
   const [expandedEmployeeIds, setExpandedEmployeeIds] = useState(() => new Set());
@@ -165,6 +177,9 @@ const MonthlyResourceUtilization = () => {
   const enabled = !!(monthYear?.year >= 2000 && monthYear?.year <= 2100);
 
   const { roleObjects } = useAuth();
+  // `buId` is always the 'all' sentinel here (never a bare single id) so explicitBuScope always
+  // drops the X-Company-Id header — the backend's "no header -> full role reach" fallback is
+  // exactly what `businessUnitIds` then narrows, matching the backend contract.
   const params = enabled ? {
      roleId: roleObjects[0]?.id,
     month: monthYear.month,
@@ -174,8 +189,9 @@ const MonthlyResourceUtilization = () => {
     page,
     limit,
     ...(search.trim() && { search: search.trim() }),
-    buId,
-    ...(entityId !== ALL_ENTITIES && { entityId }),
+    buId: ALL_BUS,
+    ...(entityIds.length > 0 && { entityIds: entityIds.join(',') }),
+    ...(buIds.length > 0 && { businessUnitIds: buIds.join(',') }),
   } : undefined;
 
   const { data, isPending } = useMonthlyResourceUtilization(params);
@@ -269,6 +285,11 @@ const MonthlyResourceUtilization = () => {
         customer_non_billable_total: records.reduce((sum, r) => sum + sumCustomerNonBillable(r), 0),
       };
 
+  // contributed_percentage is a ratio (billable/total hours), not additive — it must come
+  // straight from the API's own full-dataset summary, never reduced/averaged from per-row
+  // values the way the other summary fields above are.
+  const contributedPercentage = data?.data?.summary?.contributed_percentage;
+
   const monthLabel = monthYear ? formatMonthYear(monthYear.month, monthYear.year) : '';
 
   const handleSearchChange = (e) => { setSearch(e.target.value); setPage(1); };
@@ -308,13 +329,13 @@ const MonthlyResourceUtilization = () => {
     employeeId !== 'all' ? 1 : 0,
     serviceCategoryId !== 'all' ? 1 : 0,
     serviceTypeId !== 'all' ? 1 : 0,
-    entityId !== ALL_ENTITIES ? 1 : 0,
-    buId !== ALL_BUS ? 1 : 0,
+    entityIds.length > 0 ? 1 : 0,
+    buIds.length > 0 ? 1 : 0,
   ].reduce((a, b) => a + b, 0);
 
   const clearFilters = () => {
-    setEntityId(ALL_ENTITIES);
-    setBuId(ALL_BUS);
+    setEntityIds([]);
+    setBuIds([]);
     setEmployeeId('all');
     setServiceCategoryId('all');
     setServiceTypeId('all');
@@ -384,9 +405,9 @@ const MonthlyResourceUtilization = () => {
         showClear={activeFilterCount > 0}
         onClose={() => setFiltersOpen(false)}
       >
-        <EntityFilter value={entityId} onChange={(v) => { setEntityId(v); setBuId(ALL_BUS); }} />
+        <EntityFilter multiple value={entityIds} onChange={(v) => { setEntityIds(v); setBuIds([]); }} />
 
-        <BusinessUnitFilter value={buId} entityId={entityId} onChange={setBuId} />
+        <BusinessUnitFilter multiple value={buIds} entityId={entityIds} onChange={setBuIds} />
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs font-medium">Month &amp; Year <span className="text-destructive">*</span></Label>
             <MonthYearPicker
@@ -487,6 +508,12 @@ const MonthlyResourceUtilization = () => {
                 <span className="font-semibold tabular-nums">{Number(summary.leaves_hours).toFixed(1)} hrs</span>
               </div>
             )}
+            {contributedPercentage != null && (
+              <div className="rounded-md border bg-violet-500/10 px-3 py-1.5 text-xs text-violet-700 dark:text-violet-400">
+                Contributed %&nbsp;
+                <span className="font-semibold tabular-nums">{contributedPercentage}%</span>
+              </div>
+            )}
           </div>
 
           {/* ── Summary chips (mobile): same `summary` values, as a compact 2-column KPI grid ── */}
@@ -521,6 +548,12 @@ const MonthlyResourceUtilization = () => {
                 <p className="text-sm font-semibold tabular-nums">{Number(summary.total_utilization).toFixed(1)} hrs</p>
               </div>
             )}
+            {contributedPercentage != null && (
+              <div className="col-span-2 rounded-lg border bg-violet-500/10 px-3 py-2 text-violet-700 dark:text-violet-400">
+                <p className="text-xs">Contributed %</p>
+                <p className="text-sm font-semibold tabular-nums">{contributedPercentage}%</p>
+              </div>
+            )}
           </div>
 
           {/* ── Table — no `flex-1`: that used to make this always stretch to fill whatever
@@ -544,7 +577,7 @@ const MonthlyResourceUtilization = () => {
                         {cat.category_name}
                       </th>
                     ))}
-                    <th colSpan={4} className="px-3 py-1.5 text-center text-xs font-semibold bg-primary/10 text-primary">
+                    <th colSpan={5} className="px-3 py-1.5 text-center text-xs font-semibold bg-primary/10 text-primary">
                       Summary
                     </th>
                   </tr>
@@ -571,7 +604,8 @@ const MonthlyResourceUtilization = () => {
                     <th className={th('w-[120px] text-right bg-primary/[0.04] font-bold')}>Billable (hrs)</th>
                     <th className={th('w-[120px] text-right bg-primary/[0.04] font-bold')}>Non-Bill. (hrs)</th>
                     <th className={th('w-[150px] text-right bg-primary/[0.04] font-bold')}>Total Utilization</th>
-                    <th className={th('w-[110px] text-right bg-primary/[0.04] font-bold border-r-0')}>Utilization %</th>
+                    <th className={th('w-[110px] text-right bg-primary/[0.04] font-bold')}>Utilization %</th>
+                    <th className={th('w-[130px] text-right bg-primary/[0.04] font-bold border-r-0')}>Contributed %</th>
                   </tr>
                 </thead>
 
@@ -612,8 +646,11 @@ const MonthlyResourceUtilization = () => {
                       <td className={td('text-right font-semibold bg-primary/[0.02]')}>
                         <HoursCell value={row.total_utilization} />
                       </td>
-                      <td className={td('text-right font-semibold bg-primary/[0.02] border-r-0')}>
+                      <td className={td('text-right font-semibold bg-primary/[0.02]')}>
                         <UtilizationPercentCell value={row.utilization_percentage} />
+                      </td>
+                      <td className={td('text-right font-semibold bg-primary/[0.02] border-r-0')}>
+                        <ContributedPercentCell value={row.contributed_percentage} />
                       </td>
                     </tr>
                   ))}
@@ -715,6 +752,10 @@ const MonthlyResourceUtilization = () => {
                         <div className="rounded-md border bg-primary/[0.04] px-2.5 py-1.5">
                           <p className="text-muted-foreground">Utilization %</p>
                           <p className="font-semibold"><UtilizationPercentCell value={row.utilization_percentage} /></p>
+                        </div>
+                        <div className="col-span-2 rounded-md border bg-primary/[0.04] px-2.5 py-1.5">
+                          <p className="text-muted-foreground">Contributed %</p>
+                          <p className="font-semibold"><ContributedPercentCell value={row.contributed_percentage} /></p>
                         </div>
                       </div>
                     </div>

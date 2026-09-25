@@ -17,7 +17,7 @@ import PageHeader from '@/components/common/PageHeader';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
 import BusinessUnitFilter, { ALL_BUS } from '@/components/common/BusinessUnitFilter';
-import EntityFilter, { ALL_ENTITIES } from '@/components/common/EntityFilter';
+import EntityFilter from '@/components/common/EntityFilter';
 import SearchInput from '@/components/common/SearchInput';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -212,8 +212,11 @@ const ResourceAllocation = () => {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [entityId, setEntityId] = useState(ALL_ENTITIES);
-  const [buId, setBuId] = useState(ALL_BUS);
+  // Multi-select — backend support for entityIds/businessUnitIds has landed on this report
+  // specifically (see BACKEND_MULTI_SELECT_ENTITY_BU_PROMPT.md); every other report still uses
+  // the single-select EntityFilter/BusinessUnitFilter default.
+  const [entityIds, setEntityIds] = useState([]);
+  const [buIds, setBuIds] = useState([]);
   const [exporting, setExporting] = useState(false);
 
   const debouncedSearch = useDebounce(search, 400);
@@ -269,8 +272,14 @@ const ResourceAllocation = () => {
     ...(categoryId !== 'all' && { serviceCategoryId: categoryId }),
     ...(serviceTypeId !== 'all' && { serviceTypeId }),
     ...(debouncedSearch && { search: debouncedSearch }),
-    buId,
-    ...(entityId !== ALL_ENTITIES && { entityId }),
+    // `buId` is always the 'all' sentinel here (never a bare single id) so explicitBuScope always
+    // drops the X-Company-Id header — the backend's "no header -> full role reach" fallback is
+    // exactly what `businessUnitIds` then narrows, matching the backend contract. A single BU
+    // selected this way is request-equivalent to the old single-select path (IN (x) narrows the
+    // same as = x), just via the new param instead of the header.
+    buId: ALL_BUS,
+    ...(entityIds.length > 0 && { entityIds: entityIds.join(',') }),
+    ...(buIds.length > 0 && { businessUnitIds: buIds.join(',') }),
   };
 
   const { data, isPending } = useResourceAllocationReport(params);
@@ -324,8 +333,8 @@ const ResourceAllocation = () => {
   };
 
   const activeFilterCount = [
-    entityId !== ALL_ENTITIES ? 1 : 0,
-    buId !== ALL_BUS ? 1 : 0,
+    entityIds.length > 0 ? 1 : 0,
+    buIds.length > 0 ? 1 : 0,
     employeeId !== 'all' ? 1 : 0,
     poId !== 'all' ? 1 : 0,
     clientId !== 'all' ? 1 : 0,
@@ -335,8 +344,8 @@ const ResourceAllocation = () => {
   ].reduce((a, b) => a + b, 0);
 
   const clearFilters = () => {
-    setEntityId(ALL_ENTITIES);
-    setBuId(ALL_BUS);
+    setEntityIds([]);
+    setBuIds([]);
     setEmployeeId('all');
     setPoId('all');
     setClientId('all');
@@ -395,9 +404,9 @@ const ResourceAllocation = () => {
 
       {/* Collapsible filter panel */}
       <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[560px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
-          <EntityFilter value={entityId} onChange={(v) => { setEntityId(v); setBuId(ALL_BUS); }} />
+          <EntityFilter multiple value={entityIds} onChange={(v) => { setEntityIds(v); setBuIds([]); }} />
 
-          <BusinessUnitFilter value={buId} entityId={entityId} onChange={setBuId} />
+          <BusinessUnitFilter multiple value={buIds} entityId={entityIds} onChange={setBuIds} />
 
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs">Month &amp; Year</Label>

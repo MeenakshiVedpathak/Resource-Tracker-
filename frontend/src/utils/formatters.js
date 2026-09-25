@@ -133,6 +133,20 @@ export const formatMonthYear = (month, year) => {
   return dayjs(`${year}-${String(month).padStart(2, '0')}-01`).format('MMMM YYYY');
 };
 
+// POST /my-team/timesheets/approve's `approved[]` buckets distinguish two zero-row cases:
+// `already_settled: true` means someone else (another Manager/PM/Team Lead, or an earlier call)
+// approved/rejected that date/month before this call ran — not a failure, just informational.
+// `already_settled: false` with rows_approved: 0 is the pre-existing normal no-op (nothing was
+// pending that day) and isn't counted here. `responses` is one or more raw approve-endpoint
+// payloads (one per Employee, when a selection spans several).
+export const countAlreadySettled = (responses) =>
+  responses.reduce((sum, r) => sum + (r?.approved ?? []).filter((b) => b.already_settled).length, 0);
+
+// Secondary toast line for the count above — empty string when nothing was already settled, so
+// callers can always append it unconditionally.
+export const alreadySettledNote = (count) =>
+  count > 0 ? ` ${count} ${count === 1 ? 'was' : 'were'} already approved by someone else.` : '';
+
 export const getInitials = (name) => {
   if (!name) return '?';
   return name

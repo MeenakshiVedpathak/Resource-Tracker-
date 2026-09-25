@@ -32,6 +32,7 @@ import ServicePOHierarchyDrawer from './ServicePOHierarchyDrawer';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { SearchableSelect } from '@/components/ui/searchable-select';
+import { MultiSelect } from '@/components/ui/multi-select';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -46,11 +47,16 @@ import { getAncestors, servicePOSearchValue, sortServicePOsHierarchically } from
 
 const columnHelper = createColumnHelper();
 
-const exportToExcel = (rows, categoryByTypeId) => {
+const exportToExcel = (rows, categoryByTypeId, buOpts) => {
+  // buOpts is only populated for company-less actors (Admin/Entity Admin/Platform Admin) — see
+  // the identical `isCompanyLessActor` gate on the on-screen "BU Name"/"Sub BU" columns. A
+  // BU-scoped actor's export skips these columns since the value would be the same on every row.
+  const { isCompanyLessActor, buRootNameById, subBuNameById, buNameById } = buOpts ?? {};
   const header = [
     'Service PO Number', 'Service PO Name', 'Client', 'Project', 'Service Category', 'Service Type', 'Account Manager',
     'Description', 'PO Value', 'Invoice Frequency', 'Invoice Amount',
     'Start Date', 'End Date', 'Status',
+    ...(isCompanyLessActor ? ['BU Name', 'Sub BU'] : []),
   ];
   const dataRows = rows.map((r) => [
     r.service_po_code ?? '',
@@ -67,6 +73,16 @@ const exportToExcel = (rows, categoryByTypeId) => {
     r.start_date ? formatDate(r.start_date) : '',
     r.end_date ? formatDate(r.end_date) : '',
     r.status ?? '',
+    ...(isCompanyLessActor
+      ? [
+          buRootNameById.get(String(r.company_id))
+            ?? r.company?.company_name
+            ?? r.company?.name
+            ?? buNameById.get(String(r.company_id))
+            ?? '',
+          subBuNameById.get(String(r.company_id)) ?? '',
+        ]
+      : []),
   ]);
   const ws = XLSX.utils.aoa_to_sheet([header, ...dataRows]);
   const wb = XLSX.utils.book_new();
@@ -101,7 +117,9 @@ const ServicePOList = () => {
   // servicePOs.api.js's crossBuScopeForAdmin) — they get every BU's POs at once, so they're the
   // only role that needs a BU filter of their own here. Every other role, BU Admin included, is
   // already scoped to one BU by the switcher, which makes the filter redundant for them.
-  const isAdminActor = hasRole(ROLE_NAMES.ADMIN);
+  // hasRole() is an exact match, not hierarchy-aware — Platform Admin has to be listed
+  // explicitly alongside Admin or it fails this check despite outranking it.
+  const isAdminActor = hasRole(ROLE_NAMES.PLATFORM_ADMIN, ROLE_NAMES.ADMIN);
   const { data: companiesData } = useCompanies({ limit: 200 }, { enabled: isCompanyLessActor });
   // List rows aren't guaranteed to embed the company relation, so resolve company_id against the
   // BU list as a fallback.
@@ -110,18 +128,47 @@ const ServicePOList = () => {
     (companiesData?.data ?? []).forEach((c) => map.set(String(c.id), c.company_name));
     return map;
   }, [companiesData]);
+  // A Service PO's company_id can itself be a Sub-BU's id (see the Sub BU cascade added to
+  // ServicePOForm) — the "BU Name" column must always show the top-level Parent BU regardless
+  // (a Sub-BU showing up there reads as a completely different, unrelated BU, since it's just
+  // another row's own name with no indication it's nested under anything). `subBuNameById` is the
+  // Sub-BU's OWN name for the separate "Sub BU" column below, kept apart so neither column loses
+  // information the other one needs.
+  const companyById = useMemo(() => {
+    const map = new Map();
+    (companiesData?.data ?? []).forEach((c) => map.set(String(c.id), c));
+    return map;
+  }, [companiesData]);
+  const buRootNameById = useMemo(() => {
+    const map = new Map();
+    (companiesData?.data ?? []).forEach((c) => {
+      const parentId = c.parent_business_unit_id ?? c.parent?.id;
+      // Depth is capped at 2 levels (a Sub-BU can never itself have children — see
+      // CompanyList.jsx), so a single parent lookup is always enough to reach the root.
+      const root = parentId != null ? companyById.get(String(parentId)) : null;
+      map.set(String(c.id), root ? root.company_name : c.company_name);
+    });
+    return map;
+  }, [companiesData, companyById]);
+  const subBuNameById = useMemo(() => {
+    const map = new Map();
+    (companiesData?.data ?? []).forEach((c) => {
+      if ((c.parent_business_unit_id ?? c.parent?.id) != null) map.set(String(c.id), c.company_name);
+    });
+    return map;
+  }, [companiesData]);
   // Admin's own Entity step, paired with the Admin-only "Business Unit" select below — narrows
-  // which BUs that dropdown offers. companiesData already carries entity_id/entity per BU (same
-  // company master every other Entity+BU filter pair derives entity info from), so no extra fetch.
-  const [adminEntityFilter, setAdminEntityFilter] = useState('all');
+  // which BUs that dropdown offers, AND (unlike the old company_id-only mechanism) rides into the
+  // query directly as `entityIds` on its own, so picking just an Entity actually filters the list
+  // across every BU under it instead of requiring a BU pick too. companiesData already carries
+  // entity_id/entity per BU (same company master every other Entity+BU filter pair derives entity
+  // info from), so no extra fetch.
+  const [adminEntityFilters, setAdminEntityFilters] = useState([]);
   // Deactivated Entities must not be offered here. The company master carries `entity.entity_name`
   // but NOT the Entity's own status, so the names derived below can't be status-checked on their
   // own — GET /entities?status=active is the only source of that, and an Admin can read it.
-  // Intersected rather than used directly as the option source: an Entity with no BUs at all would
-  // otherwise be selectable and then narrow nothing (companiesForAdminEntity comes back empty, so
-  // neither needsAdminBuChoice nor the auto-pick effect below fires and the list silently keeps
-  // showing every BU). Guarded — while this is still loading it returns nothing, and blanking the
-  // filter mid-load would strand a selection the user already made.
+  // Guarded — while this is still loading it returns nothing, and blanking the filter mid-load
+  // would strand a selection the user already made.
   const { data: activeEntities } = useActiveEntities({ enabled: isAdminActor });
   const activeEntityIds = useMemo(
     () => new Set((activeEntities ?? []).map((e) => String(e.id))),
@@ -139,16 +186,13 @@ const ServicePOList = () => {
     return Array.from(byId.values());
   }, [companiesData, activeEntityIds]);
   const companiesForAdminEntity = useMemo(
-    () => (adminEntityFilter === 'all'
+    () => (adminEntityFilters.length === 0
       ? (companiesData?.data ?? [])
-      : (companiesData?.data ?? []).filter((c) => String(c.entity_id ?? c.entity?.id) === String(adminEntityFilter))),
-    [companiesData, adminEntityFilter]
+      : (companiesData?.data ?? []).filter((c) => adminEntityFilters.includes(String(c.entity_id ?? c.entity?.id)))),
+    [companiesData, adminEntityFilters]
   );
   const buOptions = useMemo(
-    () => [
-      { label: 'All BUs', value: 'all' },
-      ...companiesForAdminEntity.map((c) => ({ label: c.company_name, value: String(c.id) })),
-    ],
+    () => companiesForAdminEntity.map((c) => ({ label: c.company_name, value: String(c.id) })),
     [companiesForAdminEntity]
   );
   const [searchParams] = useSearchParams();
@@ -163,13 +207,7 @@ const ServicePOList = () => {
   const [categoryFilter, setCategoryFilter] = useState(categoryIdParam || 'all');
   const [typeFilter, setTypeFilter] = useState('all');
   const [poFilter, setPoFilter] = useState(servicePoIdParam || 'all');
-  const [buFilter, setBuFilter] = useState('all');
-  // Same problem the Timesheet Imports Entity filter had: this endpoint has no way to scope a
-  // single request to "every BU under this Entity" (only one company_id, or every reachable BU),
-  // so picking an Entity while "All BUs" stayed selected would silently keep showing every BU
-  // across every Entity rather than narrowing. Require an explicit BU pick when the selected
-  // Entity has more than one, and auto-pick it when there's only one (effect below).
-  const needsAdminBuChoice = isAdminActor && adminEntityFilter !== 'all' && buFilter === 'all' && companiesForAdminEntity.length > 1;
+  const [buFilters, setBuFilters] = useState([]);
   const [filtersOpen, setFiltersOpen] = useState(!!categoryIdParam || !!servicePoIdParam);
   const [exporting, setExporting] = useState(false);
   const [hierarchyTarget, setHierarchyTarget] = useState(null);
@@ -184,10 +222,16 @@ const ServicePOList = () => {
   // to more than one BU gets the standard master BU filter here. An Admin is excluded: their list
   // is deliberately cross-BU (crossBuScopeForAdmin) and they narrow with the ?company_id filter
   // below instead — running both would fight over the same axis.
+  // Multi-select via useMasterBuFilter for the non-Admin path — backend support has landed on
+  // GET /service-pos (see BACKEND_MULTI_SELECT_ENTITY_BU_PROMPT.md). The Admin-only cross-BU
+  // `company_ids`/`buFilters` picker just above is a separate control that never reads from
+  // useMasterBuFilter (disabled entirely for Admin below) — it's also multi-select now, just via
+  // its own state and its own new `company_ids` param (see
+  // BACKEND_MULTI_SELECT_SERVICEPO_ADMIN_BU_PROMPT.md).
   const {
     entityId, setEntityId, showEntityFilter, isEntityFiltered, resetEntityId,
     buId, setBuId, showBuFilter, isBuFiltered, resetBuId, buParams,
-  } = useMasterBuFilter({ enabled: !isAdminActor });
+  } = useMasterBuFilter({ enabled: !isAdminActor, multiple: true });
 
   const params = {
     page,
@@ -199,18 +243,16 @@ const ServicePOList = () => {
     ...(categoryFilter !== 'all' && { service_category_id: categoryFilter }),
     ...(typeFilter !== 'all' && { service_type_id: typeFilter }),
     ...(poFilter !== 'all' && { service_po_id: poFilter }),
-    // Admin-only, and the only BU narrowing they get — no X-Company-Id is sent for them.
-    ...(isAdminActor && buFilter !== 'all' && { company_id: buFilter }),
+    // Admin-only — no X-Company-Id is sent for them, so this is the only BU/Entity narrowing they
+    // get. Same `entityIds`/`businessUnitIds` (comma-separated) convention the non-Admin path uses
+    // just above via useMasterBuFilter — GET /service-pos already supports both independently, so
+    // Entity alone now filters across every BU under it instead of requiring a BU pick too.
+    ...(isAdminActor && adminEntityFilters.length > 0 && { entityIds: adminEntityFilters.join(',') }),
+    ...(isAdminActor && buFilters.length > 0 && { businessUnitIds: buFilters.join(',') }),
     ...(sorting[0] && { sortBy: sorting[0].id, sortOrder: sorting[0].desc ? 'desc' : 'asc' }),
   };
 
-  useEffect(() => {
-    if (isAdminActor && adminEntityFilter !== 'all' && buFilter === 'all' && companiesForAdminEntity.length === 1) {
-      setBuFilter(String(companiesForAdminEntity[0].id));
-    }
-  }, [isAdminActor, adminEntityFilter, buFilter, companiesForAdminEntity]);
-
-  const { data, isPending } = useServicePOs(params, { enabled: !needsAdminBuChoice });
+  const { data, isPending } = useServicePOs(params);
   const { data: clients = [] } = useActiveClients();
   const { data: activePOs = [] } = useActiveServicePOs();
   const { data: serviceTypes = [] } = useActiveServiceTypes();
@@ -267,8 +309,8 @@ const ServicePOList = () => {
     typeFilter !== 'all' ? 1 : 0,
     poFilter !== 'all' ? 1 : 0,
     statusFilter !== 'all' ? 1 : 0,
-    isAdminActor && buFilter !== 'all' ? 1 : 0,
-    isAdminActor && adminEntityFilter !== 'all' ? 1 : 0,
+    isAdminActor && buFilters.length > 0 ? 1 : 0,
+    isAdminActor && adminEntityFilters.length > 0 ? 1 : 0,
     isEntityFiltered ? 1 : 0,
     isBuFiltered ? 1 : 0,
   ].reduce((a, b) => a + b, 0);
@@ -279,21 +321,32 @@ const ServicePOList = () => {
     setTypeFilter('all');
     setPoFilter('all');
     setStatusFilter('all');
-    setBuFilter('all');
-    setAdminEntityFilter('all');
+    setBuFilters([]);
+    setAdminEntityFilters([]);
     resetEntityId();
     resetBuId();
     setPage(1);
   };
 
-  // Export pulls every matching record (not just the current page) with one extra request.
+  // Export pulls every matching record (not just the current page) — paged in EXPORT_PAGE_LIMIT
+  // chunks rather than one `limit: total` request, since the backend hard-caps `limit` at 100
+  // (backend/src/utils/pagination.js MAX_LIMIT, same cap reports.api.js's own fetchAll* helpers
+  // page around) and silently truncates anything above that: a single big request here was
+  // confirmed live to return only the first 100 of 221 rows with no error, so "Export Excel"
+  // looked like it worked while quietly dropping every row past the cap.
+  const EXPORT_PAGE_LIMIT = 100;
   const handleExport = async () => {
     setExporting(true);
     try {
-      const total = meta.total > 0 ? meta.total : 1000;
-      const res = await servicePOsApi.getAll({ ...params, page: 1, limit: total });
-      const all = Array.isArray(res?.data) ? res.data : [];
-      exportToExcel(all, categoryNameByTypeId);
+      const first = await servicePOsApi.getAll({ ...params, page: 1, limit: EXPORT_PAGE_LIMIT });
+      const totalRows = first?.meta?.total ?? 0;
+      const totalPages = Math.max(1, Math.ceil(totalRows / EXPORT_PAGE_LIMIT));
+      const all = Array.isArray(first?.data) ? [...first.data] : [];
+      for (let p = 2; p <= totalPages; p++) {
+        const res = await servicePOsApi.getAll({ ...params, page: p, limit: EXPORT_PAGE_LIMIT });
+        if (Array.isArray(res?.data)) all.push(...res.data);
+      }
+      exportToExcel(all, categoryNameByTypeId, { isCompanyLessActor, buRootNameById, subBuNameById, buNameById });
     } finally {
       setExporting(false);
     }
@@ -400,15 +453,28 @@ const ServicePOList = () => {
             id: 'bu_name',
             header: 'BU Name',
             size: 200,
+            // Resolved through buRootNameById first — the PO's company_id can itself be a Sub-BU's
+            // id, and that map always walks up to the top-level Parent BU's own name regardless.
+            // The embedded `row.original.company` relation (whichever row company_id actually
+            // points to) is only a fallback for while the company master itself is still loading.
             cell: ({ row }) => (
               <TruncatedCell
                 value={
-                  row.original.company?.company_name
+                  buRootNameById.get(String(row.original.company_id))
+                  ?? row.original.company?.company_name
                   ?? row.original.company?.name
                   ?? buNameById.get(String(row.original.company_id))
                 }
                 maxWidth="180px"
               />
+            ),
+          }),
+          columnHelper.display({
+            id: 'sub_bu_name',
+            header: 'Sub BU',
+            size: 160,
+            cell: ({ row }) => (
+              <TruncatedCell value={subBuNameById.get(String(row.original.company_id))} maxWidth="140px" />
             ),
           }),
         ]
@@ -583,34 +649,34 @@ const ServicePOList = () => {
           {isAdminActor && adminBuEntityOptions.length > 1 && (
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs">Entity</Label>
-              <SearchableSelect
-                options={[{ label: 'All Entities', value: 'all' }, ...adminBuEntityOptions.map((e) => ({ label: e.name, value: String(e.id) }))]}
-                value={adminEntityFilter}
-                onValueChange={(v) => { setAdminEntityFilter(v ?? 'all'); setBuFilter('all'); setPage(1); }}
+              <MultiSelect
+                options={adminBuEntityOptions.map((e) => ({ label: e.name, value: String(e.id) }))}
+                value={adminEntityFilters}
+                onValueChange={(v) => { setAdminEntityFilters(v); setBuFilters([]); setPage(1); }}
                 placeholder="All Entities"
                 searchPlaceholder="Search entity..."
-                className="h-9 w-full text-sm bg-white"
+                className="bg-white"
               />
             </div>
           )}
           {isAdminActor && (
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs">Business Unit</Label>
-              <SearchableSelect
+              <MultiSelect
                 options={buOptions}
-                value={buFilter}
-                onValueChange={(v) => { setBuFilter(v); setPage(1); }}
+                value={buFilters}
+                onValueChange={(v) => { setBuFilters(v); setPage(1); }}
                 placeholder="All BUs"
                 searchPlaceholder="Search BU..."
-                className="h-9 w-full text-sm bg-white"
+                className="bg-white"
               />
             </div>
           )}
           {showEntityFilter && (
-            <EntityFilter value={entityId} onChange={(v) => { setEntityId(v); setPage(1); }} />
+            <EntityFilter multiple value={entityId} onChange={(v) => { setEntityId(v); setPage(1); }} />
           )}
           {showBuFilter && (
-            <BusinessUnitFilter value={buId} entityId={entityId} onChange={(v) => { setBuId(v); setPage(1); }} />
+            <BusinessUnitFilter multiple value={buId} entityId={entityId} onChange={(v) => { setBuId(v); setPage(1); }} />
           )}
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs">Client</Label>
@@ -724,13 +790,7 @@ const ServicePOList = () => {
         className="hidden md:flex"
         columns={columns}
         data={servicePOs}
-        isLoading={isPending && !needsAdminBuChoice}
-        emptyState={needsAdminBuChoice ? (
-          <EmptyState
-            title="Pick a Business Unit"
-            description={`${companiesForAdminEntity.length} Business Units belong to this Entity — pick one to see its Service POs.`}
-          />
-        ) : undefined}
+        isLoading={isPending}
         toolbar={null}
         pagination={
           meta.total != null
@@ -751,7 +811,7 @@ const ServicePOList = () => {
       {/* Mobile — compact card list instead of the frozen-column table, same data/handlers. */}
       <div className="flex min-h-0 flex-1 flex-col gap-3 md:hidden">
         <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
-          {isPending && !needsAdminBuChoice ? (
+          {isPending ? (
             Array.from({ length: 5 }).map((_, i) => (
               <div key={i} className="flex items-center gap-3 rounded-xl border bg-white p-3 shadow-sm">
                 <Skeleton className="h-10 w-10 shrink-0 rounded-full" />
@@ -761,11 +821,6 @@ const ServicePOList = () => {
                 </div>
               </div>
             ))
-          ) : needsAdminBuChoice ? (
-            <EmptyState
-              title="Pick a Business Unit"
-              description={`${companiesForAdminEntity.length} Business Units belong to this Entity — pick one to see its Service POs.`}
-            />
           ) : servicePOs.length === 0 ? (
             <EmptyState title="No records found" description="Try adjusting your search or filters." />
           ) : (
@@ -832,7 +887,7 @@ const ServicePOList = () => {
           )}
         </div>
 
-        {meta.total != null && !needsAdminBuChoice && (() => {
+        {meta.total != null && (() => {
           const mobileLimit = meta.limit ?? limit;
           const mobilePage = meta.page ?? page;
           const totalPages = Math.max(1, Math.ceil(meta.total / mobileLimit));

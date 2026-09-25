@@ -112,7 +112,7 @@ const columns = [
 // Section 1 — Project Overview: the default view of GET /pm-dashboard/projects. Deliberately
 // deferred (useInViewOnce) — the KPI row and Action Required feed above the fold must populate
 // instantly on load; this table is allowed to lazy-load once it's about to scroll into view.
-const ProjectOverviewTable = ({ monthYear, buId }) => {
+const ProjectOverviewTable = ({ monthYear, buScope }) => {
   const [sectionRef, inView] = useInViewOnce();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState(ALL_STATUS);
@@ -125,7 +125,7 @@ const ProjectOverviewTable = ({ monthYear, buId }) => {
   const debouncedSearch = useDebounce(search, 400);
 
   const params = {
-    buId,
+    ...buScope,
     month: monthYear.month,
     year: monthYear.year,
     page,
@@ -142,7 +142,7 @@ const ProjectOverviewTable = ({ monthYear, buId }) => {
   // See STATUS_PROBE_LIMIT above — a second, status-unfiltered fetch purely to populate the
   // dropdown's option list from whatever `project_status` values are actually present.
   const { data: statusProbeData } = usePmDashboardProjects(
-    { buId, month: monthYear.month, year: monthYear.year, page: 1, limit: STATUS_PROBE_LIMIT },
+    { ...buScope, month: monthYear.month, year: monthYear.year, page: 1, limit: STATUS_PROBE_LIMIT },
     inView
   );
   const statusOptions = useMemo(() => {

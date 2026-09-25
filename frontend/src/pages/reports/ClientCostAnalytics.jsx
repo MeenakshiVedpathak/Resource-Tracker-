@@ -106,8 +106,8 @@ const ClientCostAnalytics = () => {
   // This report has no other filter, so the Filters panel exists purely to host the BU picker
   // — every other Reports page already carries one, and the BU choice belongs in the same place.
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [entityId, setEntityId] = useState(ALL_ENTITIES);
-  const [buId, setBuId] = useState(ALL_BUS);
+  const [entityIds, setEntityIds] = useState([]);
+  const [buIds, setBuIds] = useState([]);
 
   // Role no longer grants Original-data visibility (e.g. role reassigned mid-session) — force
   // back to Modified, same as every other report.
@@ -116,7 +116,16 @@ const ClientCostAnalytics = () => {
   }, [canViewOriginal]);
 
   // No period/date filter at all — this report is always all-time.
-  const params = { hoursSource, page, limit, buId, ...(entityId !== ALL_ENTITIES && { entityId }) };
+  // `buId` is always the 'all' sentinel so explicitBuScope always drops the X-Company-Id
+  // header, letting `businessUnitIds` below narrow the full role reach instead.
+  const params = {
+    hoursSource,
+    page,
+    limit,
+    buId: ALL_BUS,
+    ...(entityIds.length > 0 && { entityIds: entityIds.join(',') }),
+    ...(buIds.length > 0 && { businessUnitIds: buIds.join(',') }),
+  };
 
   const { data, isPending, isError, error } = useClientCostAnalytics(params);
   const errorMessage = isError ? extractApiError(error) : null;
@@ -168,15 +177,15 @@ const ClientCostAnalytics = () => {
   };
 
   const handleBuChange = (value) => {
-    setBuId(value);
+    setBuIds(value);
     setPage(1);
   };
 
   // Picking a different Entity can strand a BU that no longer belongs to it — reset the BU
   // state the same way changing BU itself resets the page.
   const handleEntityChange = (value) => {
-    setEntityId(value);
-    setBuId(ALL_BUS);
+    setEntityIds(value);
+    setBuIds([]);
     setPage(1);
   };
 
@@ -200,7 +209,7 @@ const ClientCostAnalytics = () => {
             <FilterToggleButton
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((p) => !p)}
-              activeCount={(entityId !== ALL_ENTITIES ? 1 : 0) + (buId !== ALL_BUS ? 1 : 0)}
+              activeCount={(entityIds.length > 0 ? 1 : 0) + (buIds.length > 0 ? 1 : 0)}
               className="h-9"
             />
             {(clients.length > 0 || topClients.length > 0 || categoryMatrix.length > 0) && (
@@ -219,12 +228,12 @@ const ClientCostAnalytics = () => {
       <FilterPanel
         isOpen={filtersOpen}
         maxHeightClass="max-h-[160px]"
-        onClear={() => { setEntityId(ALL_ENTITIES); handleBuChange(ALL_BUS); }}
-        showClear={entityId !== ALL_ENTITIES || buId !== ALL_BUS}
+        onClear={() => { setEntityIds([]); handleBuChange([]); }}
+        showClear={entityIds.length > 0 || buIds.length > 0}
       >
-        <EntityFilter value={entityId} onChange={handleEntityChange} />
+        <EntityFilter multiple value={entityIds} onChange={handleEntityChange} />
 
-        <BusinessUnitFilter value={buId} entityId={entityId} onChange={handleBuChange} />
+        <BusinessUnitFilter multiple value={buIds} entityId={entityIds} onChange={handleBuChange} />
       </FilterPanel>
 
       {errorMessage && (

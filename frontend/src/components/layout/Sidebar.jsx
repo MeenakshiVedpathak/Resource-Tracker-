@@ -11,7 +11,7 @@ import { useFormCategories } from '@/hooks/useFormCategories';
 import { resolveFormRoute, FORM_NAMES } from '@/constants/rbacForms';
 import { useCanManageBusinessUnits, useCanManageEmployeeRecords, useCanManageClientProjectPO, useCanWrite } from '@/hooks/usePermissions';
 import { ROUTES } from '@/constants/routes';
-import { ChevronLeft, ChevronRight, ChevronDown, UserPlus, Shield, ClipboardList, Network, Folder, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, UserPlus, Shield, ClipboardList, Network, Folder, Plus, Layers } from 'lucide-react';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import ScrollOnHoverText from '@/components/common/ScrollOnHoverText';
 
@@ -26,6 +26,7 @@ const SUPER_ADMIN_NAV_GROUPS = [
       { label: 'Role Master', icon: Shield, to: ROUTES.ROLES, exact: false, addTo: ROUTES.ROLE_NEW, addLabel: 'Add Role' },
       { label: 'Forms Master', icon: ClipboardList, to: ROUTES.FORMS, exact: false, addTo: `${ROUTES.FORM_NEW}?type=form`, addLabel: 'Add Form' },
       { label: 'Organization Overview', icon: Network, to: ROUTES.ORGANIZATION_OVERVIEW, exact: true },
+      { label: 'Service Types', icon: Layers, to: ROUTES.SERVICE_TYPES, exact: false, addTo: ROUTES.SERVICE_TYPE_NEW, addLabel: 'Add Service Type' },
     ],
   },
 ];

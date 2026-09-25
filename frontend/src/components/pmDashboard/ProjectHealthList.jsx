@@ -20,12 +20,12 @@ const DEFAULT_PAGE_SIZE = 5;
 // to turn the page.
 const FETCH_LIMIT = 50;
 
-const ProjectHealthList = ({ monthYear, buId }) => {
+const ProjectHealthList = ({ monthYear, buScope }) => {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(DEFAULT_PAGE_SIZE);
 
   const { data, isPending } = usePmDashboardProjects({
-    buId,
+    ...buScope,
     month: monthYear.month,
     year: monthYear.year,
     page: 1,

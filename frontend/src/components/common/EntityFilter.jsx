@@ -1,6 +1,7 @@
 import { useSelectableEntities } from '@/hooks/useSelectableEntities';
 import { Label } from '@/components/ui/label';
 import { SearchableSelect } from '@/components/ui/searchable-select';
+import { MultiSelect } from '@/components/ui/multi-select';
 
 export const ALL_ENTITIES = 'all';
 
@@ -23,10 +24,33 @@ const EntityFilter = ({
   // Mirrors BusinessUnitFilter's own labelClassName escape hatch, for pages that restyle their
   // filter labels — kept in sync so Entity never reads as the odd one out next to Business Unit.
   labelClassName = 'text-xs',
+  // Opt-in — every existing caller is untouched (single-value `value`/`onChange(v)`, the
+  // ALL_ENTITIES sentinel). When true, `value` is an array of entity id strings (empty = "All
+  // Entities", the same "no filter" meaning ALL_ENTITIES carries in single mode) and `onChange`
+  // receives the next array. Reuses the same `MultiSelect` already shipped for BU Head <-> BU
+  // mapping (see buHeads/BuHeadForm.jsx) rather than a new control.
+  multiple = false,
 }) => {
   const { entities, canFilter } = useSelectableEntities();
 
   if (!canFilter) return null;
+
+  if (multiple) {
+    const options = entities.map((e) => ({ label: e.name, value: String(e.id) }));
+    return (
+      <div className="flex flex-col gap-1.5">
+        <Label className={labelClassName}>{label}</Label>
+        <MultiSelect
+          options={options}
+          value={value ?? []}
+          onValueChange={onChange}
+          placeholder="All Entities"
+          searchPlaceholder="Search entity..."
+          className={className}
+        />
+      </div>
+    );
+  }
 
   const options = [
     { label: 'All Entities', value: ALL_ENTITIES },

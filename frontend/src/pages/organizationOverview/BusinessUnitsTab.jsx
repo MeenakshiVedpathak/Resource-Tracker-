@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { MultiSelect } from '@/components/ui/multi-select';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,6 +20,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useNotification } from '@/hooks/useNotification';
+import { useCompanies } from '@/hooks/useCompanies';
 import { cn } from '@/utils/cn';
 import { matchesBusinessUnit } from '@/utils/organizationOverview';
 
@@ -27,8 +29,13 @@ const DEFAULT_LIMIT = 10;
 const columnHelper = createColumnHelper();
 
 // Exported as-is, respecting whatever the current search/filters show — not just the current page.
-const toExportRows = (rows) => rows.map((bu) => ({
-  'BU Name': bu.name,
+// `buRootNameById`/`subBuNameById` are this tab's own client-side BU-master join (see below) — a
+// row here IS a BU itself, which can itself be a Sub-BU, so "BU Name" must always resolve up to
+// the top-level Parent BU's own name, and "Sub BU" restates the row's own name only when it
+// actually has a parent.
+const toExportRows = (rows, buRootNameById, subBuNameById) => rows.map((bu) => ({
+  'BU Name': buRootNameById.get(String(bu.id)) ?? bu.name,
+  'Sub BU': subBuNameById.get(String(bu.id)) ?? '—',
   Entity: bu.entityName,
   Status: bu.status,
   'Created Date': bu.createdAt ? new Date(bu.createdAt).toLocaleDateString() : '',
@@ -50,10 +57,39 @@ const TruncatedCell = ({ value, maxWidth = '150px', className }) => {
 const BusinessUnitsTab = ({ businessUnits, search, isLoading, toolbarSlot }) => {
   const { success, error: showError } = useNotification();
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [entityFilter, setEntityFilter] = useState(ALL);
+  // Multi-select — purely client-side, no backend param involved.
+  const [entityFilters, setEntityFilters] = useState([]);
   const [statusFilter, setStatusFilter] = useState(ALL);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(DEFAULT_LIMIT);
+
+  // Client-side-only BU hierarchy join — the org-overview response itself has no
+  // parent_business_unit_id, so the BU master is fetched separately just for this. A row here IS
+  // a BU itself, so "Sub BU" means "is THIS row a Sub-BU", not a lookup of some other BU's child —
+  // and "BU Name" must always resolve up to the top-level Parent BU's own name when the row itself
+  // is a Sub-BU (same proven pattern as ServicePOList.jsx's buRootNameById/subBuNameById).
+  const { data: companiesData } = useCompanies({ status: 'active', limit: 500 }, { staleTime: 1000 * 60 * 10 });
+  const companyById = useMemo(() => {
+    const map = new Map();
+    (companiesData?.data ?? []).forEach((c) => map.set(String(c.id), c));
+    return map;
+  }, [companiesData]);
+  const buRootNameById = useMemo(() => {
+    const map = new Map();
+    (companiesData?.data ?? []).forEach((c) => {
+      const parentId = c.parent_business_unit_id ?? c.parent?.id;
+      const root = parentId != null ? companyById.get(String(parentId)) : null;
+      map.set(String(c.id), root ? root.company_name : c.company_name);
+    });
+    return map;
+  }, [companiesData, companyById]);
+  const subBuNameById = useMemo(() => {
+    const map = new Map();
+    (companiesData?.data ?? []).forEach((c) => {
+      if ((c.parent_business_unit_id ?? c.parent?.id) != null) map.set(String(c.id), c.company_name);
+    });
+    return map;
+  }, [companiesData]);
 
   const entityOptions = useMemo(
     () => Array.from(new Set(businessUnits.map((bu) => bu.entityName))).sort(),
@@ -64,24 +100,24 @@ const BusinessUnitsTab = ({ businessUnits, search, isLoading, toolbarSlot }) => 
     const term = search.toLowerCase();
     return businessUnits.filter((bu) =>
       (!term || matchesBusinessUnit(bu, term)) &&
-      (entityFilter === ALL || bu.entityName === entityFilter) &&
+      (entityFilters.length === 0 || entityFilters.includes(bu.entityName)) &&
       (statusFilter === ALL || bu.status === statusFilter)
     );
-  }, [businessUnits, search, entityFilter, statusFilter]);
+  }, [businessUnits, search, entityFilters, statusFilter]);
 
   // A filter/search change can strand `page` past the new (smaller) result set — reset back to
   // page 1 whenever the filtered set's own inputs change, same as every other paginated list.
-  useEffect(() => setPage(1), [search, entityFilter, statusFilter]);
+  useEffect(() => setPage(1), [search, entityFilters, statusFilter]);
 
   const paged = useMemo(
     () => filtered.slice((page - 1) * limit, page * limit),
     [filtered, page, limit],
   );
 
-  const activeCount = [entityFilter, statusFilter].filter((v) => v !== ALL).length;
+  const activeCount = entityFilters.length + (statusFilter !== ALL ? 1 : 0);
 
   const clearFilters = () => {
-    setEntityFilter(ALL);
+    setEntityFilters([]);
     setStatusFilter(ALL);
   };
 
@@ -91,7 +127,7 @@ const BusinessUnitsTab = ({ businessUnits, search, isLoading, toolbarSlot }) => 
       return;
     }
     try {
-      const ws = XLSX.utils.json_to_sheet(toExportRows(filtered));
+      const ws = XLSX.utils.json_to_sheet(toExportRows(filtered, buRootNameById, subBuNameById));
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Business Units');
       XLSX.writeFile(wb, 'business_units_export.xlsx');
@@ -111,8 +147,8 @@ const BusinessUnitsTab = ({ businessUnits, search, isLoading, toolbarSlot }) => 
       const doc = new jsPDF();
       doc.text('Business Units', 14, 15);
       autoTable(doc, {
-        head: [['BU Name', 'Entity', 'Status', 'Created Date']],
-        body: filtered.map((bu) => [bu.name, bu.entityName, bu.status, bu.createdAt ? new Date(bu.createdAt).toLocaleDateString() : '-']),
+        head: [['BU Name', 'Sub BU', 'Entity', 'Status', 'Created Date']],
+        body: filtered.map((bu) => [buRootNameById.get(String(bu.id)) ?? bu.name, subBuNameById.get(String(bu.id)) ?? '-', bu.entityName, bu.status, bu.createdAt ? new Date(bu.createdAt).toLocaleDateString() : '-']),
         startY: 20,
       });
       doc.save('business_units_export.pdf');
@@ -124,10 +160,25 @@ const BusinessUnitsTab = ({ businessUnits, search, isLoading, toolbarSlot }) => 
   };
 
   const columns = [
-    columnHelper.accessor('name', {
+    columnHelper.display({
+      id: 'name',
       header: 'BU Name',
       size: 220,
-      cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="200px" className="font-medium" />,
+      // Resolved through buRootNameById first — this row can itself be a Sub-BU, and that map
+      // always walks up to the top-level Parent BU's own name regardless.
+      cell: ({ row }) => (
+        <TruncatedCell
+          value={buRootNameById.get(String(row.original.id)) ?? row.original.name}
+          maxWidth="200px"
+          className="font-medium"
+        />
+      ),
+    }),
+    columnHelper.display({
+      id: 'subBuName',
+      header: 'Sub BU',
+      size: 180,
+      cell: ({ row }) => <TruncatedCell value={subBuNameById.get(String(row.original.id))} maxWidth="160px" />,
     }),
     columnHelper.accessor('entityName', {
       header: 'Entity',
@@ -184,13 +235,14 @@ const BusinessUnitsTab = ({ businessUnits, search, isLoading, toolbarSlot }) => 
       <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[200px]" gridClassName="grid-cols-1 sm:grid-cols-2" onClear={clearFilters} showClear={activeCount > 0}>
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Entity</Label>
-          <Select value={entityFilter} onValueChange={setEntityFilter}>
-            <SelectTrigger className="h-9 bg-white text-sm"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>All Entities</SelectItem>
-              {entityOptions.map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <MultiSelect
+            options={entityOptions.map((e) => ({ label: e, value: e }))}
+            value={entityFilters}
+            onValueChange={setEntityFilters}
+            placeholder="All Entities"
+            searchPlaceholder="Search entity..."
+            className="bg-white"
+          />
         </div>
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Status</Label>

@@ -13,8 +13,8 @@ import { formatDate, formatHoursMinutes, formatHourMinuteValue, getStatusColor }
 import PageHeader from '@/components/common/PageHeader';
 import FilterPanel from '@/components/common/FilterPanel';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
-import BusinessUnitFilter, { ALL_BUS } from '@/components/common/BusinessUnitFilter';
-import EntityFilter, { ALL_ENTITIES } from '@/components/common/EntityFilter';
+import BusinessUnitFilter from '@/components/common/BusinessUnitFilter';
+import EntityFilter from '@/components/common/EntityFilter';
 import DataTable from '@/components/common/DataTable';
 import SearchInput from '@/components/common/SearchInput';
 import MobilePagination from '@/components/common/MobilePagination';
@@ -86,7 +86,7 @@ const EmployeeDetailModal = ({
   onOpenChange,
   employeeId,
   periodParams,
-  companyId,
+  companyIds,
   periodLabel,
   summaryRowTotal,
 }) => {
@@ -104,11 +104,11 @@ const EmployeeDetailModal = ({
       params.month = periodParams.monthYear.month;
       params.year = periodParams.monthYear.year;
     }
-    if (companyId && companyId !== ALL_BUS) {
-      params.company_id = companyId;
+    if (companyIds && companyIds.length > 0) {
+      params.company_ids = companyIds.join(',');
     }
     return params;
-  }, [periodParams, companyId, detailPage]);
+  }, [periodParams, companyIds, detailPage]);
 
   const { data: detailRes, isLoading, isError } = useEmployeeWorkLogHoursSummaryDetails(
     employeeId,
@@ -326,8 +326,8 @@ const EmployeeWorkLogHoursSummaryReport = () => {
     month: now.month() + 1,
     year: now.year(),
   });
-  const [companyId, setCompanyId] = useState(ALL_BUS);
-  const [entityId, setEntityId] = useState(ALL_ENTITIES);
+  const [companyIds, setCompanyIds] = useState([]);
+  const [entityIds, setEntityIds] = useState([]);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const debouncedSearch = useDebounce(searchInput, 300);
@@ -347,12 +347,12 @@ const EmployeeWorkLogHoursSummaryReport = () => {
   // BU-wise employee dropdown fetching
   const activeEmployeeParams = useMemo(() => {
     const params = { status: 'active', limit: 1000 };
-    if (companyId && companyId !== ALL_BUS) {
-      params.business_unit_id = companyId;
-      params.company_id = companyId;
+    if (companyIds && companyIds.length > 0) {
+      params.business_unit_ids = companyIds.join(',');
+      params.company_ids = companyIds.join(',');
     }
     return params;
-  }, [companyId]);
+  }, [companyIds]);
 
   const { data: employeesRes } = useEmployees(activeEmployeeParams);
 
@@ -381,7 +381,7 @@ const EmployeeWorkLogHoursSummaryReport = () => {
         setSelectedEmployeeId('');
       }
     }
-  }, [companyId, activeEmployees, selectedEmployeeId]);
+  }, [companyIds, activeEmployees, selectedEmployeeId]);
 
   const sortBy = sorting[0]?.id || 'employee_name';
   const sortOrder = sorting[0]?.desc ? 'DESC' : 'ASC';
@@ -399,11 +399,11 @@ const EmployeeWorkLogHoursSummaryReport = () => {
       params.month = monthYear.month;
       params.year = monthYear.year;
     }
-    if (companyId && companyId !== ALL_BUS) {
-      params.company_id = companyId;
+    if (companyIds && companyIds.length > 0) {
+      params.company_ids = companyIds.join(',');
     }
-    if (entityId && entityId !== ALL_ENTITIES) {
-      params.entity_id = entityId;
+    if (entityIds && entityIds.length > 0) {
+      params.entity_ids = entityIds.join(',');
     }
     if (selectedEmployeeId) {
       params.employeeId = selectedEmployeeId;
@@ -412,7 +412,7 @@ const EmployeeWorkLogHoursSummaryReport = () => {
       params.search = debouncedSearch.trim();
     }
     return params;
-  }, [periodMode, selectedDate, monthYear, companyId, entityId, selectedEmployeeId, debouncedSearch, sortBy, sortOrder, page, limit]);
+  }, [periodMode, selectedDate, monthYear, companyIds, entityIds, selectedEmployeeId, debouncedSearch, sortBy, sortOrder, page, limit]);
 
   const { data: summaryRes, isLoading, isError } = useEmployeeWorkLogHoursSummary(queryParams);
 
@@ -442,8 +442,8 @@ const EmployeeWorkLogHoursSummaryReport = () => {
 
   const activeFilterCount = [
     periodMode !== 'date',
-    entityId !== ALL_ENTITIES,
-    companyId !== ALL_BUS,
+    entityIds.length > 0,
+    companyIds.length > 0,
     selectedEmployeeId !== '',
   ].filter(Boolean).length;
 
@@ -457,8 +457,8 @@ const EmployeeWorkLogHoursSummaryReport = () => {
     setPeriodMode('date');
     setSelectedDate(now.format('YYYY-MM-DD'));
     setMonthYear({ month: now.month() + 1, year: now.year() });
-    setEntityId(ALL_ENTITIES);
-    setCompanyId(ALL_BUS);
+    setEntityIds([]);
+    setCompanyIds([]);
     setSelectedEmployeeId('');
     setSearchInput('');
     setSorting([{ id: 'employee_name', desc: false }]);
@@ -616,22 +616,24 @@ const EmployeeWorkLogHoursSummaryReport = () => {
         </div>
 
         <EntityFilter
+          multiple
           labelClassName={FILTER_LABEL}
-          value={entityId}
+          value={entityIds}
           onChange={(val) => {
-            setEntityId(val);
-            setCompanyId(ALL_BUS);
+            setEntityIds(val);
+            setCompanyIds([]);
             setPage(1);
           }}
         />
 
         {/* Business Unit Selector */}
         <BusinessUnitFilter
+          multiple
           labelClassName={FILTER_LABEL}
-          value={companyId}
-          entityId={entityId}
+          value={companyIds}
+          entityId={entityIds}
           onChange={(val) => {
-            setCompanyId(val);
+            setCompanyIds(val);
             setPage(1);
           }}
         />
@@ -691,7 +693,7 @@ const EmployeeWorkLogHoursSummaryReport = () => {
         }
         employeeId={modalState.employeeId}
         periodParams={{ periodMode, date: selectedDate, monthYear }}
-        companyId={companyId}
+        companyIds={companyIds}
         periodLabel={periodLabel}
         summaryRowTotal={modalState.summaryTotalHours}
       />

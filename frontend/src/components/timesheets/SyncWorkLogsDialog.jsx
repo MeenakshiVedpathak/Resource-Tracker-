@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
+import { BusinessUnitCascadeSelect, SubBusinessUnitSelect, useBuHierarchy } from '@/components/common/BusinessUnitCascadeSelect';
 
 const now = new Date();
 const currentMonthYear = { month: now.getMonth() + 1, year: now.getFullYear() };
@@ -27,7 +28,14 @@ const currentMonthYear = { month: now.getMonth() + 1, year: now.getFullYear() };
 const SyncWorkLogsDialog = ({ open, onOpenChange, activeBusinessUnits = [] }) => {
   const isMobile = useIsMobile();
   const [entityId, setEntityId] = useState('all');
-  const [buId, setBuId] = useState('');
+  // Two-step BU pick: `buRootId` is whatever's chosen in the Business Unit dropdown (always a
+  // top-level BU, or a Sub-BU this login is mapped to with no reachable Parent of its own — see
+  // cascadeUnits below); `buSubId` is the separate Sub BU dropdown that appears only once the
+  // chosen root actually has Sub-BUs. The backend rejects a sync scoped to a BU that has Sub-BUs
+  // (it must target one specific Sub-BU instead), so requiring this second pick whenever it
+  // applies is what keeps that request from ever being sent in the first place — see canSync.
+  const [buRootId, setBuRootId] = useState('');
+  const [buSubId, setBuSubId] = useState('');
   const [monthYear, setMonthYear] = useState(currentMonthYear);
   const [preview, setPreview] = useState(null);
   // Mobile-only: drives the standalone "Work logs synced successfully!" screen (mockup's Success
@@ -54,29 +62,59 @@ const SyncWorkLogsDialog = ({ open, onOpenChange, activeBusinessUnits = [] }) =>
       ? activeBusinessUnits.filter((bu) => String(bu.entity_id ?? bu.entityId) === String(id))
       : activeBusinessUnits;
 
+  // components/common/BusinessUnitCascadeSelect's useBuHierarchy expects `{ id, name, parentId }`,
+  // and groups strictly by whatever's IN the list it's given — this login's own mapped BUs, unlike
+  // the full company master that component was originally built against. A Sub-BU this login is
+  // mapped to without also being mapped to its own Parent (a real, if rare, mapping shape) would
+  // otherwise vanish entirely — filtered into childrenByParent under a Parent id no root row ever
+  // reaches. Normalized to `parentId: null` in that case instead, so it surfaces as its own
+  // directly-selectable top-level entry, same as it did in the old flat list.
+  const currentBuScope = buOptionsForEntity(entityId);
+  const cascadeUnits = useMemo(() => {
+    const idsInScope = new Set(currentBuScope.map((bu) => String(bu.id)));
+    return currentBuScope.map((bu) => {
+      const parentId = bu.parent_business_unit_id ?? bu.parentId ?? null;
+      return {
+        id: bu.id,
+        name: bu.name,
+        parentId: parentId != null && idsInScope.has(String(parentId)) ? parentId : null,
+      };
+    });
+  }, [currentBuScope]);
+  const { childrenOf } = useBuHierarchy(cascadeUnits);
+  const subBuOptions = useMemo(
+    () => childrenOf(buRootId).map((u) => ({ value: String(u.id), label: u.name })),
+    [childrenOf, buRootId]
+  );
+  const needsSubBuChoice = subBuOptions.length > 0;
+
   // Re-seed on every open (not just mount) — a single-BU login gets it pre-selected, a multi-BU
   // one starts blank so they must choose, and a stale choice from the last time this dialog was
   // open never survives into a new one.
   useEffect(() => {
     if (!open) return;
     setEntityId('all');
-    setBuId(activeBusinessUnits.length === 1 ? String(activeBusinessUnits[0].id) : '');
+    setBuRootId(activeBusinessUnits.length === 1 ? String(activeBusinessUnits[0].id) : '');
+    setBuSubId('');
     setMonthYear(currentMonthYear);
     setPreview(null);
     syncMutation.reset();
     confirmMutation.reset();
   }, [open, activeBusinessUnits]);
 
+  // The Sub-BU pick (once offered) always wins over its own Parent — the Parent alone is only
+  // ever the actual sync target when it has no Sub-BUs to choose between in the first place.
+  const buId = needsSubBuChoice ? buSubId : buRootId;
   const buName = activeBusinessUnits.find((bu) => String(bu.id) === buId)?.name ?? null;
   const needsBuChoice = activeBusinessUnits.length > 1;
   // A BU pick is only required when there's actually more than one to choose from — same rule
   // as the Upload dialog's Continue button just below in TimesheetList.jsx. A login with zero
   // mapped BUs (a cross-BU role like Admin/Entity Admin/Platform Admin with no explicit BU
-  // mapping — confirmed live: rut_business_units comes back `[]` for one) never gets `buId` set
-  // at all, since the effect above only auto-fills it for the exactly-one case; requiring it
+  // mapping — confirmed live: rut_business_units comes back `[]` for one) never gets `buRootId`
+  // set at all, since the effect above only auto-fills it for the exactly-one case; requiring it
   // unconditionally here left Sync permanently disabled with no dropdown ever rendering to fix
   // it from (needsBuChoice is also false for 0, same as for 1).
-  const canSync = (!needsBuChoice || !!buId) && !!monthYear;
+  const canSync = (!needsBuChoice || (!!buRootId && (!needsSubBuChoice || !!buSubId))) && !!monthYear;
   // '' (no BU to send) must become null, not Number('') === 0 — sendEmployeeWorkLogs/confirm
   // already treat a null buId as "let the backend infer scope from role reach", the same
   // contract explicitBuScope relies on elsewhere.
@@ -85,6 +123,9 @@ const SyncWorkLogsDialog = ({ open, onOpenChange, activeBusinessUnits = [] }) =>
   const resetAndClose = (nextOpen) => onOpenChange(nextOpen);
 
   const handleSync = () => {
+    // Belt-and-braces alongside the disabled button above — canSync already blocks this, but the
+    // request must never fire for a BU with Sub-BUs regardless of how this got triggered.
+    if (!canSync) return;
     syncMutation.mutate({ month: monthYear.month, year: monthYear.year, buId: buIdForRequest }, {
       onSuccess: (result) => {
         setPreview({
@@ -167,7 +208,7 @@ const SyncWorkLogsDialog = ({ open, onOpenChange, activeBusinessUnits = [] }) =>
                         <SearchableSelect
                           options={[{ label: 'All Entities', value: 'all' }, ...buEntityOptions.map((e) => ({ label: e.name, value: String(e.id) }))]}
                           value={entityId}
-                          onValueChange={(v) => { setEntityId(v ?? 'all'); setBuId(''); }}
+                          onValueChange={(v) => { setEntityId(v ?? 'all'); setBuRootId(''); setBuSubId(''); }}
                           placeholder="All Entities"
                           searchPlaceholder="Search entity..."
                           showSearch={buEntityOptions.length > 6}
@@ -178,13 +219,25 @@ const SyncWorkLogsDialog = ({ open, onOpenChange, activeBusinessUnits = [] }) =>
                     {needsBuChoice && (
                       <div className="flex flex-col gap-1.5">
                         <Label className="text-xs">Business Unit</Label>
-                        <SearchableSelect
-                          options={buOptionsForEntity(entityId).map((bu) => ({ label: bu.name, value: String(bu.id) }))}
-                          value={buId}
-                          onValueChange={setBuId}
+                        <BusinessUnitCascadeSelect
+                          units={cascadeUnits}
+                          value={buRootId}
+                          onValueChange={(v) => { setBuRootId(v ?? ''); setBuSubId(''); }}
                           placeholder="Select a Business Unit"
                           searchPlaceholder="Search business unit..."
-                          showSearch={activeBusinessUnits.length > 6}
+                          className="h-11 w-full bg-white"
+                        />
+                      </div>
+                    )}
+                    {needsSubBuChoice && (
+                      <div className="flex flex-col gap-1.5">
+                        <Label className="text-xs">Sub BU</Label>
+                        <SubBusinessUnitSelect
+                          options={subBuOptions}
+                          value={buSubId}
+                          onValueChange={(v) => setBuSubId(v ?? '')}
+                          placeholder="Select a Sub BU"
+                          searchPlaceholder="Search sub BU..."
                           className="h-11 w-full bg-white"
                         />
                       </div>
@@ -386,7 +439,7 @@ const SyncWorkLogsDialog = ({ open, onOpenChange, activeBusinessUnits = [] }) =>
                   <SearchableSelect
                     options={[{ label: 'All Entities', value: 'all' }, ...buEntityOptions.map((e) => ({ label: e.name, value: String(e.id) }))]}
                     value={entityId}
-                    onValueChange={(v) => { setEntityId(v ?? 'all'); setBuId(''); }}
+                    onValueChange={(v) => { setEntityId(v ?? 'all'); setBuRootId(''); setBuSubId(''); }}
                     placeholder="All Entities"
                     searchPlaceholder="Search entity..."
                     showSearch={buEntityOptions.length > 6}
@@ -396,13 +449,24 @@ const SyncWorkLogsDialog = ({ open, onOpenChange, activeBusinessUnits = [] }) =>
               {needsBuChoice && (
                 <div className="grid gap-2">
                   <Label>Business Unit</Label>
-                  <SearchableSelect
-                    options={buOptionsForEntity(entityId).map((bu) => ({ label: bu.name, value: String(bu.id) }))}
-                    value={buId}
-                    onValueChange={setBuId}
+                  <BusinessUnitCascadeSelect
+                    units={cascadeUnits}
+                    value={buRootId}
+                    onValueChange={(v) => { setBuRootId(v ?? ''); setBuSubId(''); }}
                     placeholder="Select a Business Unit"
                     searchPlaceholder="Search business unit..."
-                    showSearch={activeBusinessUnits.length > 6}
+                  />
+                </div>
+              )}
+              {needsSubBuChoice && (
+                <div className="grid gap-2">
+                  <Label>Sub BU</Label>
+                  <SubBusinessUnitSelect
+                    options={subBuOptions}
+                    value={buSubId}
+                    onValueChange={(v) => setBuSubId(v ?? '')}
+                    placeholder="Select a Sub BU"
+                    searchPlaceholder="Search sub BU..."
                   />
                 </div>
               )}

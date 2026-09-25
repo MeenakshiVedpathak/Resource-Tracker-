@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { MultiSelect } from '@/components/ui/multi-select';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,6 +20,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useNotification } from '@/hooks/useNotification';
+import { useCompanies } from '@/hooks/useCompanies';
 import { cn } from '@/utils/cn';
 import { matchesUser } from '@/utils/organizationOverview';
 
@@ -27,12 +29,15 @@ const DEFAULT_LIMIT = 10;
 const columnHelper = createColumnHelper();
 
 // Exported as-is, respecting whatever the current search/filters show — not just the current page.
-const toExportRows = (rows) => rows.map((u) => ({
+// `buRootNameById`/`subBuNameById` are this tab's own client-side BU-master join (see below),
+// keyed by BU id.
+const toExportRows = (rows, buRootNameById, subBuNameById) => rows.map((u) => ({
   Name: u.name,
   Email: u.email,
   'Employee ID': u.employeeId,
   'Role(s)': u.roles.join(', '),
-  BU: u.buName,
+  BU: buRootNameById.get(String(u.buId)) ?? u.buName,
+  'Sub BU': subBuNameById.get(String(u.buId)) ?? '—',
   Entity: u.entityName,
   Status: u.status,
 }));
@@ -54,12 +59,42 @@ const TruncatedCell = ({ value, maxWidth = '150px', className }) => {
 const UsersTab = ({ users, search, isLoading, toolbarSlot }) => {
   const { success, error: showError } = useNotification();
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [entityFilter, setEntityFilter] = useState(ALL);
-  const [buFilter, setBuFilter] = useState(ALL);
+  // Multi-select — purely client-side, no backend param involved.
+  const [entityFilters, setEntityFilters] = useState([]);
+  const [buFilters, setBuFilters] = useState([]);
   const [roleFilter, setRoleFilter] = useState(ALL);
   const [statusFilter, setStatusFilter] = useState(ALL);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(DEFAULT_LIMIT);
+
+  // Client-side-only BU hierarchy join — the org-overview response itself has no
+  // parent_business_unit_id, so the BU master is fetched separately just for this, and joined
+  // against each user's own `buId` (from normalizeUser).
+  const { data: companiesData } = useCompanies({ status: 'active', limit: 500 }, { staleTime: 1000 * 60 * 10 });
+  // A user's `buId` can itself be a Sub-BU's id — the "BU" column must always show the top-level
+  // Parent BU regardless (same proven pattern as ServicePOList.jsx's buRootNameById/subBuNameById:
+  // resolve through companyById to the row's parent, else fall back to its own name).
+  const companyById = useMemo(() => {
+    const map = new Map();
+    (companiesData?.data ?? []).forEach((c) => map.set(String(c.id), c));
+    return map;
+  }, [companiesData]);
+  const buRootNameById = useMemo(() => {
+    const map = new Map();
+    (companiesData?.data ?? []).forEach((c) => {
+      const parentId = c.parent_business_unit_id ?? c.parent?.id;
+      const root = parentId != null ? companyById.get(String(parentId)) : null;
+      map.set(String(c.id), root ? root.company_name : c.company_name);
+    });
+    return map;
+  }, [companiesData, companyById]);
+  const subBuNameById = useMemo(() => {
+    const map = new Map();
+    (companiesData?.data ?? []).forEach((c) => {
+      if ((c.parent_business_unit_id ?? c.parent?.id) != null) map.set(String(c.id), c.company_name);
+    });
+    return map;
+  }, [companiesData]);
 
   const entityOptions = useMemo(() => Array.from(new Set(users.map((u) => u.entityName))).sort(), [users]);
   // Narrowed by the Entity choice above it — offering another Entity's BUs here just produced
@@ -67,9 +102,9 @@ const UsersTab = ({ users, search, isLoading, toolbarSlot }) => {
   // the app already does (see components/common/BusinessUnitFilter's `entityId` prop).
   const buOptions = useMemo(
     () => Array.from(new Set(
-      users.filter((u) => entityFilter === ALL || u.entityName === entityFilter).map((u) => u.buName)
+      users.filter((u) => entityFilters.length === 0 || entityFilters.includes(u.entityName)).map((u) => u.buName)
     )).sort(),
-    [users, entityFilter]
+    [users, entityFilters]
   );
   const roleOptions = useMemo(() => Array.from(new Set(users.flatMap((u) => u.roles))).sort(), [users]);
 
@@ -77,27 +112,28 @@ const UsersTab = ({ users, search, isLoading, toolbarSlot }) => {
     const term = search.toLowerCase();
     return users.filter((u) =>
       (!term || matchesUser(u, term)) &&
-      (entityFilter === ALL || u.entityName === entityFilter) &&
-      (buFilter === ALL || u.buName === buFilter) &&
+      (entityFilters.length === 0 || entityFilters.includes(u.entityName)) &&
+      (buFilters.length === 0 || buFilters.includes(u.buName)) &&
       (roleFilter === ALL || u.roles.includes(roleFilter)) &&
       (statusFilter === ALL || u.status === statusFilter)
     );
-  }, [users, search, entityFilter, buFilter, roleFilter, statusFilter]);
+  }, [users, search, entityFilters, buFilters, roleFilter, statusFilter]);
 
   // A filter/search change can strand `page` past the new (smaller) result set — reset back to
   // page 1 whenever the filtered set's own inputs change, same as every other paginated list.
-  useEffect(() => setPage(1), [search, entityFilter, buFilter, roleFilter, statusFilter]);
+  useEffect(() => setPage(1), [search, entityFilters, buFilters, roleFilter, statusFilter]);
 
   const paged = useMemo(
     () => filtered.slice((page - 1) * limit, page * limit),
     [filtered, page, limit],
   );
 
-  const activeCount = [entityFilter, buFilter, roleFilter, statusFilter].filter((v) => v !== ALL).length;
+  const activeCount = entityFilters.length + buFilters.length
+    + (roleFilter !== ALL ? 1 : 0) + (statusFilter !== ALL ? 1 : 0);
 
   const clearFilters = () => {
-    setEntityFilter(ALL);
-    setBuFilter(ALL);
+    setEntityFilters([]);
+    setBuFilters([]);
     setRoleFilter(ALL);
     setStatusFilter(ALL);
   };
@@ -108,7 +144,7 @@ const UsersTab = ({ users, search, isLoading, toolbarSlot }) => {
       return;
     }
     try {
-      const ws = XLSX.utils.json_to_sheet(toExportRows(filtered));
+      const ws = XLSX.utils.json_to_sheet(toExportRows(filtered, buRootNameById, subBuNameById));
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Users');
       XLSX.writeFile(wb, 'users_export.xlsx');
@@ -128,8 +164,8 @@ const UsersTab = ({ users, search, isLoading, toolbarSlot }) => {
       const doc = new jsPDF();
       doc.text('Users', 14, 15);
       autoTable(doc, {
-        head: [['Name', 'Email', 'Employee ID', 'Role(s)', 'BU', 'Entity', 'Status']],
-        body: filtered.map((u) => [u.name, u.email, u.employeeId, u.roles.join(', '), u.buName, u.entityName, u.status]),
+        head: [['Name', 'Email', 'Employee ID', 'Role(s)', 'BU', 'Sub BU', 'Entity', 'Status']],
+        body: filtered.map((u) => [u.name, u.email, u.employeeId, u.roles.join(', '), buRootNameById.get(String(u.buId)) ?? u.buName, subBuNameById.get(String(u.buId)) ?? '-', u.entityName, u.status]),
         startY: 20,
       });
       doc.save('users_export.pdf');
@@ -169,10 +205,24 @@ const UsersTab = ({ users, search, isLoading, toolbarSlot }) => {
         );
       },
     }),
-    columnHelper.accessor('buName', {
+    columnHelper.display({
+      id: 'buName',
       header: 'BU',
       size: 170,
-      cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="150px" />,
+      // Resolved through buRootNameById first — a user's buId can itself be a Sub-BU's id, and
+      // that map always walks up to the top-level Parent BU's own name regardless.
+      cell: ({ row }) => (
+        <TruncatedCell
+          value={buRootNameById.get(String(row.original.buId)) ?? row.original.buName}
+          maxWidth="150px"
+        />
+      ),
+    }),
+    columnHelper.display({
+      id: 'subBuName',
+      header: 'Sub BU',
+      size: 150,
+      cell: ({ row }) => <TruncatedCell value={subBuNameById.get(String(row.original.buId))} maxWidth="130px" />,
     }),
     columnHelper.accessor('entityName', {
       header: 'Entity',
@@ -220,23 +270,25 @@ const UsersTab = ({ users, search, isLoading, toolbarSlot }) => {
       <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[200px]" gridClassName="grid-cols-2 sm:grid-cols-4" onClear={clearFilters} showClear={activeCount > 0}>
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Entity</Label>
-          <Select value={entityFilter} onValueChange={(v) => { setEntityFilter(v); setBuFilter(ALL); }}>
-            <SelectTrigger className="h-9 bg-white text-sm"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>All Entities</SelectItem>
-              {entityOptions.map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <MultiSelect
+            options={entityOptions.map((e) => ({ label: e, value: e }))}
+            value={entityFilters}
+            onValueChange={(v) => { setEntityFilters(v); setBuFilters([]); }}
+            placeholder="All Entities"
+            searchPlaceholder="Search entity..."
+            className="bg-white"
+          />
         </div>
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">BU</Label>
-          <Select value={buFilter} onValueChange={setBuFilter}>
-            <SelectTrigger className="h-9 bg-white text-sm"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>All BUs</SelectItem>
-              {buOptions.map((bu) => <SelectItem key={bu} value={bu}>{bu}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <MultiSelect
+            options={buOptions.map((bu) => ({ label: bu, value: bu }))}
+            value={buFilters}
+            onValueChange={setBuFilters}
+            placeholder="All BUs"
+            searchPlaceholder="Search BU..."
+            className="bg-white"
+          />
         </div>
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Role</Label>

@@ -79,10 +79,12 @@ const SubProjectList = () => {
 
   // Business Unit filter. Renders only for a login mapped to more than one BU, and starts on
   // "All Business Units" — the list opens cross-BU and narrowing to one is an explicit choice.
+  // Multi-select — backend support for entityIds/businessUnitIds has landed on GET /sub-projects
+  // (see BACKEND_MULTI_SELECT_ENTITY_BU_PROMPT.md).
   const {
     entityId, setEntityId, showEntityFilter, isEntityFiltered, resetEntityId,
     buId, setBuId, showBuFilter, isBuFiltered, resetBuId, buParams,
-  } = useMasterBuFilter();
+  } = useMasterBuFilter({ multiple: true });
 
   const params = {
     page,
@@ -225,10 +227,10 @@ const SubProjectList = () => {
 
       <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[200px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
         {showEntityFilter && (
-          <EntityFilter value={entityId} onChange={(v) => { setEntityId(v); setPage(1); }} />
+          <EntityFilter multiple value={entityId} onChange={(v) => { setEntityId(v); setPage(1); }} />
         )}
         {showBuFilter && (
-          <BusinessUnitFilter value={buId} entityId={entityId} onChange={(v) => { setBuId(v); setPage(1); }} />
+          <BusinessUnitFilter multiple value={buId} entityId={entityId} onChange={(v) => { setBuId(v); setPage(1); }} />
         )}
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Service PO</Label>

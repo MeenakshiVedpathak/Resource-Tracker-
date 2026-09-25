@@ -140,6 +140,7 @@ const PmWiseUtilizationReport = lazy(() => import('@/pages/reports/PmWiseUtiliza
 const ProjectWiseUtilizationReport = lazy(() => import('@/pages/reports/ProjectWiseUtilizationReport'));
 const MonthWiseBenchReport = lazy(() => import('@/pages/reports/MonthWiseBenchReport'));
 const ResourceWiseBenchReport = lazy(() => import('@/pages/reports/ResourceWiseBenchReport'));
+const ResourceCostUtilizationReport = lazy(() => import('@/pages/reports/ResourceCostUtilizationReport'));
 
 // ── AI Copilot (new pages, launched from the floating AI Copilot widget) ──
 const RootCauseView = lazy(() => import('@/pages/ai/RootCauseView'));
@@ -449,6 +450,7 @@ const AppRoutes = () => {
           <Route path={ROUTES.REPORT_PROJECT_WISE_UTILIZATION} element={<ProtectedRoute formName={FORM_NAMES.REPORT_PROJECT_WISE_UTILIZATION}><ProjectWiseUtilizationReport /></ProtectedRoute>} />
           <Route path={ROUTES.REPORT_MONTH_WISE_BENCH} element={<ProtectedRoute formName={FORM_NAMES.REPORT_MONTH_WISE_BENCH}><MonthWiseBenchReport /></ProtectedRoute>} />
           <Route path={ROUTES.REPORT_RESOURCE_WISE_BENCH} element={<ProtectedRoute formName={FORM_NAMES.REPORT_RESOURCE_WISE_BENCH}><ResourceWiseBenchReport /></ProtectedRoute>} />
+          <Route path={ROUTES.REPORT_RESOURCE_COST_UTILIZATION} element={<ProtectedRoute formName={FORM_NAMES.REPORT_RESOURCE_COST_UTILIZATION}><ResourceCostUtilizationReport /></ProtectedRoute>} />
           <Route path={ROUTES.REPORT_EMPLOYEE_WORK_LOG_HOURS_SUMMARY} element={<ProtectedRoute formName={FORM_NAMES.REPORT_EMPLOYEE_WORK_LOG_HOURS_SUMMARY} allowIfNoFormsMapped><EmployeeWorkLogHoursSummaryReport /></ProtectedRoute>} />
           {/* No formName gate — reachable by any authenticated login regardless of Role-Form
               Mapping, since Team Lead Timesheet Approval's "Check Pending & Remind" button links

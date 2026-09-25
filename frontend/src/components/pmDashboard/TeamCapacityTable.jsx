@@ -117,7 +117,7 @@ const STATUS_FILTERS = [
 // `benchThresholdHours` that shapes the flag itself), same page of results, since a PM's own team
 // size makes a second server round-trip pointless. `initialStatusFilter` lets the Overallocated
 // Employees KPI land here pre-filtered.
-const TeamCapacityTable = ({ monthYear, buId, initialStatusFilter = 'all' }) => {
+const TeamCapacityTable = ({ monthYear, buScope, initialStatusFilter = 'all' }) => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState(initialStatusFilter);
   const [designationFilter, setDesignationFilter] = useState(ALL_DESIGNATIONS);
@@ -129,7 +129,7 @@ const TeamCapacityTable = ({ monthYear, buId, initialStatusFilter = 'all' }) => 
   const hasClientFilter = statusFilter !== 'all' || designationFilter !== ALL_DESIGNATIONS;
 
   const params = {
-    buId,
+    ...buScope,
     month: monthYear.month,
     year: monthYear.year,
     // Fetch a wide page when either client-side filter is active, since neither narrows anything
@@ -148,7 +148,7 @@ const TeamCapacityTable = ({ monthYear, buId, initialStatusFilter = 'all' }) => 
   // See DESIGNATION_PROBE_LIMIT above — a second, otherwise-unfiltered fetch purely to populate
   // the dropdown's option list from whatever `designation` values are actually present.
   const { data: designationProbeData } = usePmDashboardTeam({
-    buId, month: monthYear.month, year: monthYear.year, page: 1, limit: DESIGNATION_PROBE_LIMIT,
+    ...buScope, month: monthYear.month, year: monthYear.year, page: 1, limit: DESIGNATION_PROBE_LIMIT,
   });
   const designationOptions = useMemo(() => {
     const distinct = new Set(

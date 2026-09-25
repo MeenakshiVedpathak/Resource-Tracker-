@@ -20,6 +20,7 @@ import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
 import EmptyState from '@/components/common/EmptyState';
 import { useNotification } from '@/hooks/useNotification';
+import { useCompanies } from '@/hooks/useCompanies';
 import ServicePOHierarchyNode from './components/ServicePOHierarchyNode';
 import { matchesServicePONode } from '@/utils/organizationOverview';
 
@@ -36,12 +37,16 @@ const FILTER_FIELDS = [
 
 // Exported as-is (flattened root rows only, matching what's on screen) — a row's own
 // Parent/Child hierarchy is a drill-down detail, not part of this one-row-per-Service-PO export.
-const toExportRows = (rows) => rows.map((r) => ({
+// `buRootNameById`/`subBuNameById` are this tab's own client-side BU-master join (see below),
+// keyed by BU id — each root row here is a Service PO (normalizeServicePO), which can carry its
+// own buId independent of its parent project's.
+const toExportRows = (rows, buRootNameById, subBuNameById) => rows.map((r) => ({
   Project: r.projectName,
   Client: r.clientName,
   'Service PO': r.servicePOName,
   'PO Code': r.poCode !== '—' ? r.poCode : '',
-  'Business Unit': r.buName,
+  'Business Unit': buRootNameById.get(String(r.buId)) ?? r.buName,
+  'Sub BU': subBuNameById.get(String(r.buId)) ?? '—',
   Entity: r.entityName,
 }));
 
@@ -58,6 +63,36 @@ const ProjectsServicePOsTab = ({ servicePOs, search, isLoading, toolbarSlot }) =
   const [expanded, setExpanded] = useState(new Set());
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(DEFAULT_LIMIT);
+
+  // Client-side-only BU hierarchy join — the org-overview response itself has no
+  // parent_business_unit_id, so the BU master is fetched separately just for this, and joined
+  // against each row's own `buId` (a Service PO's own BU can differ from its parent project's).
+  const { data: companiesData } = useCompanies({ status: 'active', limit: 500 }, { staleTime: 1000 * 60 * 10 });
+  // A Service PO's own buId can itself be a Sub-BU's id — the "BU" column must always show the
+  // top-level Parent BU regardless (same proven pattern as ServicePOList.jsx's
+  // buRootNameById/subBuNameById: resolve through companyById to the row's parent, else fall back
+  // to its own name).
+  const companyById = useMemo(() => {
+    const map = new Map();
+    (companiesData?.data ?? []).forEach((c) => map.set(String(c.id), c));
+    return map;
+  }, [companiesData]);
+  const buRootNameById = useMemo(() => {
+    const map = new Map();
+    (companiesData?.data ?? []).forEach((c) => {
+      const parentId = c.parent_business_unit_id ?? c.parent?.id;
+      const root = parentId != null ? companyById.get(String(parentId)) : null;
+      map.set(String(c.id), root ? root.company_name : c.company_name);
+    });
+    return map;
+  }, [companiesData, companyById]);
+  const subBuNameById = useMemo(() => {
+    const map = new Map();
+    (companiesData?.data ?? []).forEach((c) => {
+      if ((c.parent_business_unit_id ?? c.parent?.id) != null) map.set(String(c.id), c.company_name);
+    });
+    return map;
+  }, [companiesData]);
 
   const optionsFor = (key) => Array.from(new Set(roots.map((r) => r[key]).filter(Boolean))).sort();
   const optionsByKey = useMemo(
@@ -105,7 +140,7 @@ const ProjectsServicePOsTab = ({ servicePOs, search, isLoading, toolbarSlot }) =
       return;
     }
     try {
-      const ws = XLSX.utils.json_to_sheet(toExportRows(filtered));
+      const ws = XLSX.utils.json_to_sheet(toExportRows(filtered, buRootNameById, subBuNameById));
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Projects & Service POs');
       XLSX.writeFile(wb, 'projects_service_pos_export.xlsx');
@@ -125,8 +160,8 @@ const ProjectsServicePOsTab = ({ servicePOs, search, isLoading, toolbarSlot }) =
       const doc = new jsPDF();
       doc.text('Projects / Service POs', 14, 15);
       autoTable(doc, {
-        head: [['Project', 'Client', 'Service PO', 'PO Code', 'Business Unit', 'Entity']],
-        body: filtered.map((r) => [r.projectName, r.clientName, r.servicePOName, r.poCode !== '—' ? r.poCode : '-', r.buName, r.entityName]),
+        head: [['Project', 'Client', 'Service PO', 'PO Code', 'Business Unit', 'Sub BU', 'Entity']],
+        body: filtered.map((r) => [r.projectName, r.clientName, r.servicePOName, r.poCode !== '—' ? r.poCode : '-', buRootNameById.get(String(r.buId)) ?? r.buName, subBuNameById.get(String(r.buId)) ?? '-', r.entityName]),
         startY: 20,
       });
       doc.save('projects_service_pos_export.pdf');
@@ -192,6 +227,7 @@ const ProjectsServicePOsTab = ({ servicePOs, search, isLoading, toolbarSlot }) =
               <TableHead>Client</TableHead>
               <TableHead>Service PO</TableHead>
               <TableHead>BU</TableHead>
+              <TableHead>Sub BU</TableHead>
               <TableHead>Entity</TableHead>
             </TableRow>
           </TableHeader>
@@ -199,14 +235,14 @@ const ProjectsServicePOsTab = ({ servicePOs, search, isLoading, toolbarSlot }) =
             {isLoading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <TableRow key={i}>
-                  {Array.from({ length: 6 }).map((__, j) => (
+                  {Array.from({ length: 7 }).map((__, j) => (
                     <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
                   ))}
                 </TableRow>
               ))
             ) : filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="p-0">
+                <TableCell colSpan={7} className="p-0">
                   <EmptyState title="No projects / Service POs found" description="Try adjusting your search or filters." />
                 </TableCell>
               </TableRow>
@@ -233,12 +269,13 @@ const ProjectsServicePOsTab = ({ servicePOs, search, isLoading, toolbarSlot }) =
                           {root.poCode !== '—' && <Badge variant="outline" className="text-[10px] font-normal">{root.poCode}</Badge>}
                         </div>
                       </TableCell>
-                      <TableCell className="text-sm">{root.buName}</TableCell>
+                      <TableCell className="text-sm">{buRootNameById.get(String(root.buId)) ?? root.buName}</TableCell>
+                      <TableCell className="text-sm">{subBuNameById.get(String(root.buId)) ?? '—'}</TableCell>
                       <TableCell className="text-sm">{root.entityName}</TableCell>
                     </TableRow>
                     {hasChildren && isOpen && (
                       <TableRow>
-                        <TableCell colSpan={6} className="bg-muted/20">
+                        <TableCell colSpan={7} className="bg-muted/20">
                           <div className="space-y-1 py-1">
                             {root.children.map((child) => (
                               <ServicePOHierarchyNode key={child.id} node={child} />

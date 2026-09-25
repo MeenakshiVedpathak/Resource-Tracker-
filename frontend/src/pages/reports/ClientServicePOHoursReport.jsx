@@ -196,8 +196,8 @@ const ClientServicePOHoursReport = () => {
   const [serviceTypeId, setServiceTypeId] = useState('all');
   const [employeeId, setEmployeeId] = useState('all');
   const [status, setStatus] = useState('all');
-  const [entityId, setEntityId] = useState(ALL_ENTITIES);
-  const [buId, setBuId] = useState(ALL_BUS);
+  const [entityIds, setEntityIds] = useState([]);
+  const [buIds, setBuIds] = useState([]);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [collapsedClientIds, setCollapsedClientIds] = useState(() => new Set());
   const [expandedPoIds, setExpandedPoIds] = useState(() => new Set());
@@ -239,8 +239,11 @@ const ClientServicePOHoursReport = () => {
     ...(serviceTypeId !== 'all' && { serviceTypeId }),
     ...(employeeId !== 'all' && { employeeId }),
     ...(status !== 'all' && { status }),
-    buId,
-    ...(entityId !== ALL_ENTITIES && { entityId }),
+    // `buId` is always the 'all' sentinel so explicitBuScope always drops the X-Company-Id
+    // header, letting `businessUnitIds` below narrow the full role reach instead.
+    buId: ALL_BUS,
+    ...(entityIds.length > 0 && { entityIds: entityIds.join(',') }),
+    ...(buIds.length > 0 && { businessUnitIds: buIds.join(',') }),
   };
 
   const periodReady = !!(monthYear?.month && monthYear?.year);
@@ -309,8 +312,8 @@ const ClientServicePOHoursReport = () => {
     serviceTypeId !== 'all',
     employeeId !== 'all',
     status !== 'all',
-    entityId !== ALL_ENTITIES,
-    buId !== ALL_BUS,
+    entityIds.length > 0,
+    buIds.length > 0,
   ].filter(Boolean).length;
 
   const clearFilters = () => {
@@ -319,8 +322,8 @@ const ClientServicePOHoursReport = () => {
     setServiceTypeId('all');
     setEmployeeId('all');
     setStatus('all');
-    setEntityId(ALL_ENTITIES);
-    setBuId(ALL_BUS);
+    setEntityIds([]);
+    setBuIds([]);
   };
 
   const toggleClient = (clientKey) => {
@@ -399,9 +402,9 @@ const ClientServicePOHoursReport = () => {
         showClear={activeFilterCount > 0}
         onClose={() => setFiltersOpen(false)}
       >
-            <EntityFilter value={entityId} onChange={(v) => { setEntityId(v); setBuId(ALL_BUS); }} />
+            <EntityFilter multiple value={entityIds} onChange={(v) => { setEntityIds(v); setBuIds([]); }} />
 
-            <BusinessUnitFilter value={buId} entityId={entityId} onChange={setBuId} />
+            <BusinessUnitFilter multiple value={buIds} entityId={entityIds} onChange={setBuIds} />
 
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs">Month &amp; Year <span className="text-destructive">*</span></Label>
@@ -606,7 +609,7 @@ const ClientServicePOHoursReport = () => {
                                   poId={po.service_po_id}
                                   monthYear={monthYear}
                                   hoursSource={hoursSource}
-                                  buId={buId}
+                                  buId={ALL_BUS}
                                 />
                               </motion.div>
                             )}
@@ -715,7 +718,7 @@ const ClientServicePOHoursReport = () => {
                                       poId={po.service_po_id}
                                       monthYear={monthYear}
                                       hoursSource={hoursSource}
-                                      buId={buId}
+                                      buId={ALL_BUS}
                                     />
                                   </motion.div>
                                 )}

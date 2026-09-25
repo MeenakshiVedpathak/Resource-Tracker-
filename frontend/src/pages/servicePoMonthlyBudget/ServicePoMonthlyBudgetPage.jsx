@@ -43,22 +43,31 @@ const ServicePoMonthlyBudgetPage = () => {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const debouncedSearch = useDebounce(search, 400);
 
-  // Business Unit filter — the Reports-suite convention (components/common/BusinessUnitFilter +
-  // explicitBuScope), not the Masters' useMasterBuFilter: this screen is consumed by every
-  // BU-mapped login, so the filter renders whenever the login has ANY mapped BU rather than only
-  // above two. Defaults to "All Business Units", same as every report. The control hides itself
-  // for a login with no BU at all (Platform Admin/Entity Admin), which is already unscoped.
-  const [entityId, setEntityId] = useState(ALL_ENTITIES);
-  const isEntityFiltered = entityId !== ALL_ENTITIES;
-  const [buId, setBuId] = useState(ALL_BUS);
-  const isBuFiltered = buId !== ALL_BUS;
+  // Multi-select — backend support for entityIds/businessUnitIds has landed on both
+  // GET /service-po-monthly-budgets and its /service-pos sub-route (see
+  // BACKEND_MULTI_SELECT_ENTITY_BU_PROMPT.md), so both the saved-budget rows and the Service PO
+  // dropdown/grid narrow consistently now. `buId` sent to the API layer is always the ALL_BUS
+  // sentinel so explicitBuScope drops the X-Company-Id header unconditionally, and
+  // entityIds/businessUnitIds (joined strings) do the real narrowing.
+  const [entityIds, setEntityIds] = useState([]);
+  const isEntityFiltered = entityIds.length > 0;
+  const [buIds, setBuIds] = useState([]);
+  const isBuFiltered = buIds.length > 0;
+  const entityIdsParam = entityIds.length > 0 ? entityIds.join(',') : undefined;
+  const businessUnitIdsParam = buIds.length > 0 ? buIds.join(',') : undefined;
+  // The edit sheet and the PO-dropdown-population call downstream are inherently single-BU (a
+  // Service PO belongs to exactly one BU) — resolves to that one BU when exactly one is selected,
+  // same as the old single-select behavior; falls back to unscoped ('all') for 0 or 2+ selected,
+  // same graceful-degradation pattern MonthlyCostList's delete mutation uses for the same reason.
+  const effectiveSingleBuId = buIds.length === 1 ? buIds[0] : ALL_BUS;
 
   const { data: activeClients = [] } = useActiveClients();
   const { data: activePOs = [] } = useActiveServicePOs();
   const { data: activeServiceTypes = [] } = useActiveServiceTypes();
   const { data: activeServiceCategories = [] } = useActiveServiceCategories();
-  const monthSummaries = useServicePoMonthlyBudgetYearSummary(year, buId);
-  const { data: records = [], isPending: isListLoading } = useServicePoMonthlyBudgetList(selectedMonth, year, buId);
+  const monthSummaries = useServicePoMonthlyBudgetYearSummary(year, ALL_BUS, entityIdsParam, businessUnitIdsParam);
+  const { data: records = [], isPending: isListLoading } =
+    useServicePoMonthlyBudgetList(selectedMonth, year, ALL_BUS, entityIdsParam, businessUnitIdsParam);
 
   // The budget records above are BU-scoped by the request itself, but the Service PO lookups this
   // page also relies on — the "Service PO" dropdown and the month strip's "x/y filled"
@@ -70,8 +79,9 @@ const ServicePoMonthlyBudgetPage = () => {
   const buScopedPOs = useMemo(() => {
     if (!isBuFiltered) return activePOs;
     if (!activePOs.some((po) => po.company_id != null)) return activePOs;
-    return activePOs.filter((po) => String(po.company_id) === String(buId));
-  }, [activePOs, isBuFiltered, buId]);
+    const wanted = new Set(buIds.map(String));
+    return activePOs.filter((po) => wanted.has(String(po.company_id)));
+  }, [activePOs, isBuFiltered, buIds]);
 
   const isCurrentPeriod = selectedMonth === CURRENT_MONTH && year === CURRENT_YEAR;
   const countdown = useMemo(() => getInvoiceMasterCountdown(selectedMonth, year), [selectedMonth, year]);
@@ -132,15 +142,15 @@ const ServicePoMonthlyBudgetPage = () => {
     setCategoryFilter('all');
     setTypeFilter('all');
     setPoFilter('all');
-    setEntityId(ALL_ENTITIES);
-    setBuId(ALL_BUS);
+    setEntityIds([]);
+    setBuIds([]);
   };
 
   // Picking a different Entity can strand a BU (and everything chained off it) that no longer
   // belongs to the new Entity — reset the whole chain the same way changing BU does below.
   const handleEntityChange = (v) => {
-    setEntityId(v);
-    setBuId(ALL_BUS);
+    setEntityIds(v);
+    setBuIds([]);
     setCategoryFilter('all');
     setTypeFilter('all');
     setPoFilter('all');
@@ -150,7 +160,7 @@ const ServicePoMonthlyBudgetPage = () => {
   // longer in scope, which reads as an empty grid with no obvious cause — reset the PO chain the
   // same way changing Category resets Type and PO.
   const handleBuChange = (v) => {
-    setBuId(v);
+    setBuIds(v);
     setCategoryFilter('all');
     setTypeFilter('all');
     setPoFilter('all');
@@ -241,9 +251,9 @@ const ServicePoMonthlyBudgetPage = () => {
         onClear={clearFilters}
         showClear={activeFilterCount > 0}
       >
-        <EntityFilter value={entityId} onChange={handleEntityChange} className="h-9 w-full text-sm" />
+        <EntityFilter multiple value={entityIds} onChange={handleEntityChange} className="h-9 w-full text-sm" />
 
-        <BusinessUnitFilter value={buId} entityId={entityId} onChange={handleBuChange} className="h-9 w-full text-sm" />
+        <BusinessUnitFilter multiple value={buIds} entityId={entityIds} onChange={handleBuChange} className="h-9 w-full text-sm" />
 
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Client</Label>
@@ -328,7 +338,7 @@ const ServicePoMonthlyBudgetPage = () => {
         search={debouncedSearch}
         clientFilter={clientFilter}
         poFilterIds={allowedPoIds}
-        buId={buId}
+        buId={effectiveSingleBuId}
         onEdit={(poId) => setEditSheet({ servicePoId: String(poId), month: selectedMonth, year })}
         onExportStateChange={handleExportStateChange}
         countdown={countdown}
@@ -340,7 +350,7 @@ const ServicePoMonthlyBudgetPage = () => {
         month={editSheet?.month ?? selectedMonth}
         year={editSheet?.year ?? year}
         initialServicePoId={editSheet?.servicePoId ?? ''}
-        buId={buId}
+        buId={effectiveSingleBuId}
       />
     </div>
   );

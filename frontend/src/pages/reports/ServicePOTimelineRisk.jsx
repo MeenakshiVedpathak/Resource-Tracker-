@@ -177,8 +177,8 @@ const SummaryItem = ({ label, value }) => (
 const ServicePOTimelineRisk = () => {
   const [asOfDate, setAsOfDate] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [buId, setBuId] = useState(ALL_BUS);
-  const [entityId, setEntityId] = useState(ALL_ENTITIES);
+  const [buIds, setBuIds] = useState([]);
+  const [entityIds, setEntityIds] = useState([]);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
@@ -187,8 +187,9 @@ const ServicePOTimelineRisk = () => {
     ...(asOfDate && { asOfDate }),
     page: 1,
     limit: MAX_RECORDS_FETCH,
-    buId,
-    ...(entityId !== ALL_ENTITIES && { entityId }),
+    buId: ALL_BUS,
+    ...(entityIds.length > 0 && { entityIds: entityIds.join(',') }),
+    ...(buIds.length > 0 && { businessUnitIds: buIds.join(',') }),
   };
 
   const { data, isPending } = useServicePOTimelineRisk(params);
@@ -206,11 +207,11 @@ const ServicePOTimelineRisk = () => {
   }, [records, search]);
   const pagedRecords = filteredRecords.slice((page - 1) * limit, page * limit);
 
-  const activeFilterCount = (asOfDate ? 1 : 0) + (buId !== ALL_BUS ? 1 : 0) + (entityId !== ALL_ENTITIES ? 1 : 0);
+  const activeFilterCount = (asOfDate ? 1 : 0) + (buIds.length > 0 ? 1 : 0) + (entityIds.length > 0 ? 1 : 0);
 
   const clearFilters = () => {
-    setEntityId(ALL_ENTITIES);
-    setBuId(ALL_BUS);
+    setEntityIds([]);
+    setBuIds([]);
     setAsOfDate('');
     setPage(1);
   };
@@ -251,9 +252,9 @@ const ServicePOTimelineRisk = () => {
       </PageHeader>
 
       <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[340px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
-        <EntityFilter value={entityId} onChange={(v) => { setEntityId(v); setBuId(ALL_BUS); }} />
+        <EntityFilter multiple value={entityIds} onChange={(v) => { setEntityIds(v); setBuIds([]); setPage(1); }} />
 
-        <BusinessUnitFilter value={buId} entityId={entityId} onChange={setBuId} />
+        <BusinessUnitFilter multiple value={buIds} entityId={entityIds} onChange={(v) => { setBuIds(v); setPage(1); }} />
 
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">As Of Date</Label>

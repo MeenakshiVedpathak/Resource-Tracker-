@@ -134,8 +134,8 @@ const BUPerformanceScorecard = () => {
   });
   const [search, setSearch] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [entityId, setEntityId] = useState(ALL_ENTITIES);
-  const [buId, setBuId] = useState(ALL_BUS);
+  const [entityIds, setEntityIds] = useState([]);
+  const [buIds, setBuIds] = useState([]);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
 
@@ -143,14 +143,17 @@ const BUPerformanceScorecard = () => {
   // authenticateMultiBU/resolveReportCompanyScope (it's scoped to the caller's
   // req.entityIds instead, via requireEntityAdminOrAdmin), so it never reads the
   // X-Company-Id header getReport()/explicitBuScope would set for a `buId` param.
-  // It reads a plain `companyId` query param instead (see managementReportService.
-  // getBUPerformanceScorecard's `if (query.companyId) where.id = ...`), so the BU
-  // filter has to be sent as that instead of the usual pseudo-param.
+  // Backend has since migrated its BU filter to the standard `businessUnitIds`
+  // (comma-separated, proper `Op.in`) — the old `companyId` param still works as a
+  // fallback but silently truncated a multi-select to just its first id, so this now
+  // sends the real one. `entityIds` is NOT sent: the backend scopes Entity via the
+  // caller's own req.entityIds (authorization), not a query filter, so the Entity
+  // control here only narrows which BUs the BU dropdown below it offers.
   const params = {
     ...(monthYear && { month: monthYear.month, year: monthYear.year }),
     page: 1,
     limit: MAX_RECORDS_FETCH,
-    ...(buId !== ALL_BUS && { companyId: buId }),
+    ...(buIds.length > 0 && { businessUnitIds: buIds.join(',') }),
   };
 
   const { data, isPending, isError, error } = useBUPerformanceScorecard(params);
@@ -200,7 +203,7 @@ const BUPerformanceScorecard = () => {
             <FilterToggleButton
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((p) => !p)}
-              activeCount={(entityId !== ALL_ENTITIES ? 1 : 0) + (buId !== ALL_BUS ? 1 : 0)}
+              activeCount={(entityIds.length > 0 ? 1 : 0) + (buIds.length > 0 ? 1 : 0)}
               className="h-9"
             />
             {!errorMessage && filteredRecords.length > 0 && (
@@ -216,12 +219,12 @@ const BUPerformanceScorecard = () => {
       <FilterPanel
         isOpen={filtersOpen}
         maxHeightClass="max-h-[300px]"
-        onClear={() => { setEntityId(ALL_ENTITIES); setBuId(ALL_BUS); }}
-        showClear={entityId !== ALL_ENTITIES || buId !== ALL_BUS}
+        onClear={() => { setEntityIds([]); setBuIds([]); }}
+        showClear={entityIds.length > 0 || buIds.length > 0}
       >
-        <EntityFilter value={entityId} onChange={(v) => { setEntityId(v); setBuId(ALL_BUS); }} />
+        <EntityFilter multiple value={entityIds} onChange={(v) => { setEntityIds(v); setBuIds([]); }} />
 
-        <BusinessUnitFilter value={buId} entityId={entityId} onChange={setBuId} />
+        <BusinessUnitFilter multiple value={buIds} entityId={entityIds} onChange={setBuIds} />
 
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Month &amp; Year <span className="text-destructive">*</span></Label>

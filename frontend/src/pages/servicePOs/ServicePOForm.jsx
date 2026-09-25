@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -8,8 +8,10 @@ import { useServicePO, useCreateServicePO, useUpdateServicePO } from '@/hooks/us
 import { useAuth } from '@/hooks/useAuth';
 import { NO_COMPANY_ROLES, ROLE_NAMES } from '@/constants/roleHierarchy';
 import { useSelectableBusinessUnits } from '@/hooks/useSelectableBusinessUnits';
+import { BusinessUnitCascadeSelect, SubBusinessUnitSelect, useBuHierarchy } from '@/components/common/BusinessUnitCascadeSelect';
 import { useActiveClients, useClients } from '@/hooks/useClients';
 import { useCompanies } from '@/hooks/useCompanies';
+import { useActiveEntities } from '@/hooks/useEntities';
 import { useProjectsByClient } from '@/hooks/useProjects';
 import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
 import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
@@ -57,7 +59,7 @@ const servicePoCodeField = (required) =>
       }
     });
 
-const poSchema = (isEdit, requiresBuField) => z
+const poSchema = (isEdit, requiresBuField, requiresEntityField) => z
   .object({
     service_po_name: z
       .string()
@@ -68,10 +70,24 @@ const poSchema = (isEdit, requiresBuField) => z
     // (depends on is_centralised, another field in this object) lives in the superRefine below.
     // Preprocess '' -> undefined first, since z.coerce.number() would otherwise still run on the
     // empty string left behind once the field is cleared/disabled and fail .positive() on 0.
+    // UI-only grouping field for company-less actors (Entity selector) — narrows which BUs the
+    // BU Name dropdown offers. Never sent to the backend (stripped in onSubmit); optional here
+    // because an entity-less tenant / BU-less actor simply has nothing to pick. Required for a
+    // company-less actor on a Normal Service PO (the requiresEntityField superRefine below) —
+    // same conditional pattern as company_id.
+    entity_id: z.preprocess(
+      (v) => (v === '' || v == null ? undefined : v),
+      z.coerce.number().positive().optional()
+    ),
     company_id: z.preprocess(
       (v) => (v === '' || v == null ? undefined : v),
       z.coerce.number().positive('Business Unit is required').optional()
     ),
+    // UI-only grouping field, never sent to the backend as-is (see onSubmit) — required only when
+    // the picked root BU actually has Sub-BUs, checked at submit time against the live hierarchy
+    // rather than encoded here (a static zod rule can't see the BU master's live parent/child
+    // shape).
+    sub_business_unit_id: z.string().optional(),
     client_id: z.coerce.number({ required_error: 'Client is required' }).positive('Client is required'),
     project_id: z.coerce.number({ required_error: 'Project is required' }).positive('Project is required'),
     // Delivery Head is never collected on this form — the backend sets it NULL on create, and
@@ -120,6 +136,16 @@ const poSchema = (isEdit, requiresBuField) => z
   // and make the form unsaveable; a single-BU actor's BU is filled in from the header/global
   // switcher in onSubmit instead.
   .superRefine((data, ctx) => {
+    // Entity same as Business Unit: required for a Normal Service PO only, and only when the
+    // picker is actually rendered for this actor (a company-less one). Skipped for a Centralised
+    // PO and for "My Clients" (BU-less client, so no BU → nothing to group under either).
+    if (requiresEntityField && !data.is_centralised && !data.is_my_clients && data.entity_id == null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Entity is required',
+        path: ['entity_id'],
+      });
+    }
     if (requiresBuField && !data.is_centralised && !data.is_my_clients && data.company_id == null) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -136,9 +162,9 @@ const poSchema = (isEdit, requiresBuField) => z
     }
   });
 
-// Sentinel row added to the BU Name dropdown (company-less actors only — see buFieldOptions) so
-// picking "My Clients" there is intercepted before it's ever treated as a real BU id; it clears
-// company_id instead and switches the Client field below to that actor's BU-less clients.
+// Sentinel row added to the BU Name dropdown (company-less actors only — see buUnits/extraOptions
+// below) so picking "My Clients" there is intercepted before it's ever treated as a real BU id; it
+// clears company_id instead and switches the Client field below to that actor's BU-less clients.
 const MY_CLIENTS_BU_VALUE = '__my_clients__';
 
 const FormSkeleton = () => (
@@ -166,24 +192,28 @@ const ServicePOForm = () => {
   // the same rule Client/Project creation already enforce via useSelectableBusinessUnits;
   // showBuScopedPicker below closes that gap for Service PO creation.
   const isCompanyLessActor = hasRole(...NO_COMPANY_ROLES);
-  const { units: mappedBusinessUnits, canFilter: hasMultipleMappedBus } = useSelectableBusinessUnits();
+  const { units: mappedBusinessUnits, canFilter: hasMultipleMappedBus, isLoading: isLoadingMappedBus } = useSelectableBusinessUnits();
   const showBuScopedPicker = !isCompanyLessActor && hasMultipleMappedBus;
   // "Is Centralised" auto-maps every future Employee to this Service PO and drops its BU
-  // requirement — a tenant-wide policy decision, so only Admin gets to flip it. Everyone else's
-  // is_centralised stays at its `false` default; they can't toggle it on.
-  const isAdmin = hasRole(ROLE_NAMES.ADMIN);
+  // requirement — a tenant-wide policy decision, so only Admin (and Platform Admin, above it in
+  // the role hierarchy) gets to flip it. Everyone else's is_centralised stays at its `false`
+  // default; they can't toggle it on. hasRole() is an exact match, not hierarchy-aware, so
+  // Platform Admin has to be listed explicitly or it fails this check despite outranking Admin.
+  const isAdmin = hasRole(ROLE_NAMES.PLATFORM_ADMIN, ROLE_NAMES.ADMIN);
   const { data: companiesData, isPending: isLoadingCompanies } = useCompanies({ limit: 200 });
   const activeCompanies = companiesData?.data ?? [];
+  // Entity selector — shown only to company-less actors (Admin/Entity Admin/Platform Admin),
+  // the exact mirror of the Entity filter that gates BU scoping in the rest of the project
+  // (see useEntities.js's comments: GET /entities is already scoped server-side to the actor —
+  // an Entity Admin sees only their Entities, Admin/Platform Admin see all). Picking one narrows
+  // the BU Name options below to that Entity's BUs, same Entity → BU cascade used everywhere else.
+  const { data: activeEntities = [], isPending: isLoadingEntities } = useActiveEntities({
+    enabled: isCompanyLessActor,
+  });
   // A cross-BU actor picks from the full BU master above; a multi-BU BU-scoped actor picks from
   // only their OWN mapped BUs. The "My Clients" row is prepended only for the company-less actor
   // — a BU-scoped actor's clients always belong to one of their own BUs (see ClientForm.jsx), so
   // there's no BU-less case for them to surface here.
-  const buFieldOptions = isCompanyLessActor
-    ? [
-        { value: MY_CLIENTS_BU_VALUE, label: 'My Clients (No Business Unit)' },
-        ...activeCompanies.map((c) => ({ value: String(c.id), label: c.company_name })),
-      ]
-    : mappedBusinessUnits.map((bu) => ({ value: String(bu.id), label: bu.name }));
   const { data: activeClients = [], isPending: isLoadingClients } = useActiveClients();
   const { data: serviceTypes = [], isPending: isLoadingTypes } = useActiveServiceTypes();
   const { data: activeCategories = [], isPending: isLoadingCategories } = useActiveServiceCategories();
@@ -193,11 +223,13 @@ const ServicePOForm = () => {
   const [selectedCategory, setSelectedCategory] = useState('');
 
   const form = useForm({
-    resolver: zodResolver(poSchema(isEdit, isCompanyLessActor || showBuScopedPicker)),
+    resolver: zodResolver(poSchema(isEdit, isCompanyLessActor || showBuScopedPicker, isCompanyLessActor)),
     defaultValues: {
       service_po_name: '',
       service_po_code: '',
+      entity_id: '',
       company_id: '',
+      sub_business_unit_id: '',
       client_id: '',
       project_id: '',
       delivery_head_employee_id: '',
@@ -216,13 +248,45 @@ const ServicePOForm = () => {
   // BU (see company_id's superRefine in poSchema above).
   const isCentralised = form.watch('is_centralised');
   // "My Clients" — Admin/Entity Admin/Platform Admin only (§ isCompanyLessActor below covers the
-  // exact same role set). Set via the "My Clients (No Business Unit)" row prepended to the BU
-  // Name dropdown (see buFieldOptions/MY_CLIENTS_BU_VALUE below), it surfaces clients THEY
-  // created directly with no Business Unit at all — ClientForm never even shows a BU picker to
+  // exact same role set). Set via the "My Clients (No Business Unit)" row given to the BU Name
+  // field as an extraOptions entry (see buUnits/MY_CLIENTS_BU_VALUE below), it surfaces clients
+  // THEY created directly with no Business Unit at all — ClientForm never even shows a BU picker to
   // these roles, so their clients are always saved BU-less by design (see ClientForm.jsx). A real
   // form field (not local component state) so poSchema's superRefine can see it and skip
   // requiring company_id for this specific case — same pattern as is_centralised above.
   const myClientsOnly = form.watch('is_my_clients');
+
+  // Entity Name — shown only to company-less actors (Admin/Entity Admin/Platform Admin), the same
+  // Entity selector that gates BU scoping everywhere else in the project (see useActiveEntities:
+  // GET /entities is already scoped server-side, so an Entity Admin sees only their Entities).
+  // Picking one narrows the BU Name options below to that Entity's BUs (selectedEntityId), so the
+  // two fields can never disagree. Entity is a UI-only grouping step — the backend authorizes a
+  // Service PO via company_id, never entity_id, so nothing is sent for it (see the strip in
+  // onSubmit). Mirrors EntityFilter/useSelectableBusinessUnits(entityId)'s Entity → BU cascade.
+  const selectedEntityId = form.watch('entity_id');
+  // For a company-less actor the BU list is narrowed to the Entity picked in the Entity Name
+  // selector above (± selectedEntityId set); "My Clients (No Business Unit)" is offered
+  // separately as the BU field's `extraOptions` below, not mixed into this hierarchy-bearing
+  // list. Normalized to { id, name, parentId } either way so BusinessUnitCascadeSelect can offer
+  // top-level BUs first and reveal a Sub-BU only once its own Parent is picked, instead of every
+  // Sub-BU appearing as just another flat row alongside top-level BUs the moment it's created.
+  // Memoized — this feeds the po-edit-reset effect below by reference; a plain recomputed-every-
+  // render array here made that effect's own `buUnits` dependency look "changed" on every render
+  // (new array, same contents), which re-ran form.reset() in a loop for a company-less actor
+  // editing a PO (isCrossBu's mappedBusinessUnits branch was already stable via its own useMemo
+  // inside useSelectableBusinessUnits — only this branch was the culprit).
+  const buUnits = useMemo(() => (
+    isCompanyLessActor
+      ? activeCompanies
+          .filter(
+            (c) =>
+              !selectedEntityId ||
+              String(c.entity_id ?? c.entity?.id) === String(selectedEntityId)
+          )
+          .map((c) => ({ id: c.id, name: c.company_name, parentId: c.parent_business_unit_id ?? null }))
+      : mappedBusinessUnits
+  ), [isCompanyLessActor, activeCompanies, selectedEntityId, mappedBusinessUnits]);
+  const { childrenOf } = useBuHierarchy(buUnits);
 
   // The Client list must be scoped to the chosen BU whenever the BU field is shown (company-less
   // actor or a multi-BU BU-scoped one) — same rule Project create enforces. The backend resolves
@@ -253,6 +317,12 @@ const ServicePOForm = () => {
   );
   const myClients = (allClientsForMyClients?.data ?? []).filter((c) => !c.company_id);
 
+  // The picked root BU's own Sub-BUs — recomputed live off `selectedBuId`, never off a snapshot,
+  // and deliberately NOT part of `showBuField`/Client scoping above: Client loading must never
+  // wait on this separately mandatory pick, only on the root BU itself.
+  const subBuOptions = childrenOf(selectedBuId).map((u) => ({ value: String(u.id), label: u.name }));
+  const showSubBuField = showBuField && !myClientsOnly && subBuOptions.length > 0;
+
   const clientSourceList = myClientsOnly ? myClients : (showBuField ? (scopedClients?.data ?? []) : activeClients);
   const clientOptions = clientSourceList.map((c) => ({ value: String(c.id), label: c.client_name }));
   const clientsLoading = myClientsOnly ? isLoadingMyClients : (showBuField ? isLoadingScopedClients : isLoadingClients);
@@ -273,18 +343,75 @@ const ServicePOForm = () => {
     error: projectsError,
   } = useProjectsByClient(watchedClientId);
 
+  // Best-effort restore for the Entity selector on edit — the PO payload may embed the company
+  // relation (po.company.entity_id) or not, so the company master (activeCompanies) is the
+  // reliable fallback that also feeds the BU options, keeping field + options in sync.
+  const poEntityId = useMemo(() => {
+    if (!po) return '';
+    const poCompany = po.company_id ?? po.company?.id;
+    return (
+      po.company?.entity_id ??
+      po.entity_id ??
+      activeCompanies.find((c) => String(c.id) === String(poCompany))?.entity_id ??
+      activeCompanies.find((c) => String(c.id) === String(poCompany))?.entity?.id ??
+      ''
+    );
+  }, [po, activeCompanies]);
+
+  // Split from the form.reset effect below on purpose — serviceTypes can finish loading AFTER po
+  // does, so this needs to react to it independently; it only ever touches local component state
+  // (selectedCategory), never the form itself, so re-running it repeatedly is harmless.
   useEffect(() => {
-    if (po && isEdit) {
-      if (serviceTypes.length > 0 && po.service_type_id) {
-        const typeObj = serviceTypes.find(t => t.id === po.service_type_id);
-        if (typeObj) {
-          setSelectedCategory(String(typeObj.service_category_id));
-        }
+    if (po && isEdit && serviceTypes.length > 0 && po.service_type_id) {
+      const typeObj = serviceTypes.find((t) => t.id === po.service_type_id);
+      if (typeObj) {
+        setSelectedCategory(String(typeObj.service_category_id));
       }
+    }
+  }, [po, isEdit, serviceTypes]);
+
+  // Guarded to fire exactly ONCE per PO id being edited (resetForPoIdRef), not on every render
+  // that happens to give `po`/`buUnits` a new reference — `buUnits` depends on `activeCompanies`
+  // (GET /companies), which React Query silently refetches on window refocus, and an unguarded
+  // effect here would re-run form.reset() on that refetch and snap every field — including
+  // whatever the user had just changed and not yet saved (e.g. a different Sub BU pick) — straight
+  // back to the ORIGINALLY loaded PO's values with no visible warning. That's the exact "I changed
+  // the Sub BU, saved, and it's still not updated" bug: the user's edit was silently reverted by a
+  // background refetch before Save was ever clicked.
+  //
+  // `buUnitsReady` guards a SECOND, subtler race the "fire once" fix above introduced: for a
+  // company-less actor, `buUnits` is built from GET /companies (activeCompanies), a separate query
+  // from GET /service-pos/:id (po) — if `po` happens to resolve first, this effect used to fire
+  // with `buUnits` still `[]`, so `poCompanyUnit` was never found, `poIsSubBu` came out `false` no
+  // matter what, and a PO whose BU actually WAS a Sub-BU got miscategorized as a root BU on that
+  // one and only run — permanently for this mount, since the ref above stops it from ever
+  // re-checking once activeCompanies finally loads. Confirmed live: editing a PO whose BU is a
+  // Sub-BU intermittently reopened showing the OLD Sub-BU again after a successful save, because
+  // the save itself round-tripped through this same misdetection. Waiting for the relevant
+  // "still loading" flag (not just "the list is non-empty", which can't tell apart from "still
+  // loading" from "genuinely empty tenant") before allowing the one-time reset to run and mark the
+  // ref fixes it — `isLoadingCompanies` for a company-less actor (whose buUnits comes straight from
+  // activeCompanies), `isLoadingMappedBus` for a BU-scoped one (whose buUnits/mappedBusinessUnits
+  // comes from useSelectableBusinessUnits, which enriches the login's own BU mapping with
+  // entity/parent info from ITS OWN internal, separately-loading company-master fetch).
+  const buUnitsReady = isCompanyLessActor ? !isLoadingCompanies : !isLoadingMappedBus;
+  const resetForPoIdRef = useRef(null);
+  useEffect(() => {
+    if (po && isEdit && buUnitsReady && resetForPoIdRef.current !== po.id) {
+      resetForPoIdRef.current = po.id;
+      // The PO's saved company_id can itself be a Sub-BU's id — resolve which root it belongs to
+      // so the form reopens with BOTH dropdowns correctly pre-populated (root BU, and that Sub-BU
+      // already selected under it) instead of the flat id sitting in company_id with no root
+      // chosen to ever reveal the Sub-BU dropdown at all.
+      const poCompanyId = po.company_id ?? po.company?.id;
+      const poCompanyUnit = poCompanyId ? buUnits.find((u) => String(u.id) === String(poCompanyId)) : null;
+      const poIsSubBu = poCompanyUnit?.parentId != null;
       form.reset({
         service_po_name: po.service_po_name ?? '',
         service_po_code: po.service_po_code ?? '',
-        company_id: po.company_id ?? po.company?.id ?? '',
+        entity_id: poEntityId,
+        company_id: poCompanyId ? String(poIsSubBu ? poCompanyUnit.parentId : poCompanyId) : '',
+        sub_business_unit_id: poIsSubBu ? String(poCompanyId) : '',
         client_id: po.client_id ?? '',
         project_id: po.project_id ?? po.project?.id ?? '',
         delivery_head_employee_id:
@@ -303,9 +430,16 @@ const ServicePOForm = () => {
         is_my_clients: false,
       });
     }
-  }, [po, isEdit, form, serviceTypes]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [po, isEdit, form, buUnits, buUnitsReady]);
 
   const onSubmit = async (values) => {
+    // The picked root BU has Sub-BUs — picking one of them is mandatory once they exist.
+    if (showSubBuField && !values.sub_business_unit_id) {
+      form.setError('sub_business_unit_id', { message: 'Sub Business Unit is required.' });
+      return;
+    }
+
     let is_billable = false;
     if (selectedCategory && activeCategories.length > 0) {
       const category = activeCategories.find((c) => String(c.id) === String(selectedCategory));
@@ -322,6 +456,9 @@ const ServicePOForm = () => {
     // Clients"; it only ever needs to see the resulting client_id (and the absence of
     // company_id), never this flag.
     delete clean.is_my_clients;
+    // UI-only grouping step for company-less actors (Entity selector) — the backend authorizes
+    // via company_id, so the chosen Entity is stripped here and only the filtered BU rides along.
+    delete clean.entity_id;
 
     // A multi-BU BU-scoped actor already sent their picked company_id via the field above (see
     // showBuScopedPicker) — `values.company_id` wins below as-is. A single-BU actor never saw a
@@ -332,6 +469,10 @@ const ServicePOForm = () => {
       const buId = values.company_id || po?.company_id || po?.company?.id || activeBuId;
       if (buId) clean.company_id = buId;
     }
+    // A chosen Sub-BU overrides the root — the backend only ever sees ONE BU id, whichever is the
+    // most specific one actually picked. Never sent as its own field either way.
+    if (clean.sub_business_unit_id) clean.company_id = Number(clean.sub_business_unit_id);
+    delete clean.sub_business_unit_id;
 
     const mutation = isEdit ? updateMutation : createMutation;
     mutation.mutate(clean, {
@@ -348,7 +489,7 @@ const ServicePOForm = () => {
         } else if (err?.response?.status === 403 && /business unit/i.test(message)) {
           // A cached mapped-BU list can outlive the mapping behind it (same handling as
           // ClientForm) — pin the resulting 403 to the field that caused it, not just a toast.
-          form.setError('company_id', { type: 'server', message });
+          form.setError(showSubBuField ? 'sub_business_unit_id' : 'company_id', { type: 'server', message });
           showError(message);
         } else {
           showError(message);
@@ -474,6 +615,54 @@ const ServicePOForm = () => {
                 )}
               />
 
+              {/* Entity Name — company-less actors (Admin/Entity Admin/Platform Admin) only, the
+                  exact mirror of the Entity selector used elsewhere in the project (CompanyForm,
+                  every EntityFilter). Picking one narrows the BU Name options just below to that
+                  Entity's BUs, so the two fields can never disagree. Entity Admin sees only their
+                  own Entities (GET /entities is scoped server-side), Admin/Platform Admin see all. */}
+              {isCompanyLessActor && !isCentralised && (
+                <FormField
+                  control={form.control}
+                  name="entity_id"
+                  render={({ field }) => (
+                    <FormItem className="space-y-1">
+                      <FormLabel className="text-[13px]">
+                        <span className="text-destructive">*</span> Entity Name
+                      </FormLabel>
+                      <SearchableSelect
+                        options={activeEntities.map((e) => ({
+                          value: String(e.id),
+                          label: e.entity_name,
+                        }))}
+                        value={field.value ? String(field.value) : ''}
+                        onValueChange={(val) => {
+                          field.onChange(val ? parseInt(val, 10) : undefined);
+                          // Changing Entity invalidates whatever BU/Client/Project were picked
+                          // under the previous one — never carry them over. These resets are
+                          // DELIBERATELY silent (no shouldValidate): forcing validation here would
+                          // surface "Business Unit is required" the moment an Entity is picked,
+                          // while the BU field is still empty and untouched — and react-hook-form
+                          // then keeps that stale error even after a BU is chosen. The BU field's
+                          // own onValueChange clears it once a real BU lands.
+                          form.setValue('company_id', '');
+                          form.setValue('sub_business_unit_id', '');
+                          form.setValue('is_my_clients', false);
+                          form.setValue('client_id', '');
+                          form.setValue('project_id', '');
+                          form.clearErrors(['company_id', 'sub_business_unit_id', 'is_my_clients']);
+                        }}
+                        disabled={isLoadingEntities}
+                        placeholder="Select entity"
+                        searchPlaceholder="Search entity..."
+                        emptyMessage="No active entities found."
+                        className="h-8 text-sm"
+                      />
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
               {/* Asked before Client whenever this actor has more than one BU to choose between
                   (or none of their own at all) — the Client list right below is then scoped to
                   whichever BU is picked here, so the two fields can never disagree. */}
@@ -486,8 +675,11 @@ const ServicePOForm = () => {
                       <FormLabel className="text-[13px]">
                         <span className="text-destructive">*</span> BU Name
                       </FormLabel>
-                      <SearchableSelect
-                        options={buFieldOptions}
+                      <BusinessUnitCascadeSelect
+                        units={buUnits}
+                        extraOptions={isCompanyLessActor
+                          ? [{ value: MY_CLIENTS_BU_VALUE, label: 'My Clients (No Business Unit)' }]
+                          : []}
                         // field.value stays a real BU id or '' — "My Clients" is represented here,
                         // not stored on company_id itself, so the schema/submission always see a
                         // real number or nothing.
@@ -496,6 +688,14 @@ const ServicePOForm = () => {
                           const pickedMyClients = val === MY_CLIENTS_BU_VALUE;
                           form.setValue('is_my_clients', pickedMyClients, { shouldValidate: true });
                           field.onChange(pickedMyClients || !val ? undefined : parseInt(val, 10));
+                          // A real BU (or "My Clients") satisfies the company_id superRefine —
+                          // clear its stale error explicitly so the message never lingers once a
+                          // valid choice is made.
+                          form.clearErrors('company_id');
+                          // A different root's own Sub-BUs are a different set — never leave a
+                          // Sub-BU id from the PREVIOUS root silently selected underneath.
+                          form.setValue('sub_business_unit_id', '');
+                          form.clearErrors('sub_business_unit_id');
                           // Changing BU (or switching to/from "My Clients") invalidates whatever
                           // Client/Project were picked under the previous one — never carry them
                           // over.
@@ -505,6 +705,32 @@ const ServicePOForm = () => {
                         disabled={isCompanyLessActor && isLoadingCompanies}
                         placeholder="Select business unit"
                         searchPlaceholder="Search business unit..."
+                        className="h-8 text-sm"
+                      />
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
+              {/* Mandatory, not optional, once the picked BU actually has Sub-BUs — its own
+                  sibling field (own grid cell in this 2-column layout) rather than nested inside
+                  the BU Name field above, so it doesn't stretch that field's own row/column. Never
+                  gated on "My Clients" (a BU-less client has no Sub-BU to pick either) or on
+                  Client/Project loading, which key off company_id (the root) alone. */}
+              {showSubBuField && (
+                <FormField
+                  control={form.control}
+                  name="sub_business_unit_id"
+                  render={({ field }) => (
+                    <FormItem className="space-y-1">
+                      <FormLabel className="text-[13px]">
+                        <span className="text-destructive">*</span> Sub BU Name
+                      </FormLabel>
+                      <SubBusinessUnitSelect
+                        options={subBuOptions}
+                        value={field.value}
+                        onValueChange={field.onChange}
                         className="h-8 text-sm"
                       />
                       <FormMessage />

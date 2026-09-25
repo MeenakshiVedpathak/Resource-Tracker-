@@ -101,8 +101,8 @@ const BudgetVsBilled = () => {
   const [serviceTypeId, setServiceTypeId] = useState('all');
   const [poId, setPoId] = useState('all');
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [entityId, setEntityId] = useState(ALL_ENTITIES);
-  const [buId, setBuId] = useState(ALL_BUS);
+  const [entityIds, setEntityIds] = useState([]);
+  const [buIds, setBuIds] = useState([]);
 
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
@@ -156,8 +156,11 @@ const BudgetVsBilled = () => {
     ...(sortBy && { sortBy, sortOrder }),
     page,
     limit,
-    buId,
-    ...(entityId !== ALL_ENTITIES && { entityId }),
+    // `buId` is always the 'all' sentinel so explicitBuScope always drops the X-Company-Id
+    // header, letting `businessUnitIds` below narrow the full role reach instead.
+    buId: ALL_BUS,
+    ...(entityIds.length > 0 && { entityIds: entityIds.join(',') }),
+    ...(buIds.length > 0 && { businessUnitIds: buIds.join(',') }),
   };
 
   const { data, isPending, isError, error } = useBudgetVsBilled(params);
@@ -176,16 +179,16 @@ const BudgetVsBilled = () => {
   const sheetTitle = sheetKind === 'over' ? 'Over Budget Service POs' : 'Under Budget Service POs';
 
   const activeFilterCount = [
-    entityId !== ALL_ENTITIES,
-    buId !== ALL_BUS,
+    entityIds.length > 0,
+    buIds.length > 0,
     clientId !== 'all',
     serviceTypeId !== 'all',
     poId !== 'all',
   ].filter(Boolean).length;
 
   const clearFilters = () => {
-    setEntityId(ALL_ENTITIES);
-    setBuId(ALL_BUS);
+    setEntityIds([]);
+    setBuIds([]);
     setClientId('all');
     setServiceTypeId('all');
     setPoId('all');
@@ -348,9 +351,9 @@ const BudgetVsBilled = () => {
       />
 
       <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[460px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
-        <EntityFilter value={entityId} onChange={(v) => { setEntityId(v); setBuId(ALL_BUS); }} />
+        <EntityFilter multiple value={entityIds} onChange={(v) => { setEntityIds(v); setBuIds([]); }} />
 
-        <BusinessUnitFilter value={buId} entityId={entityId} onChange={setBuId} />
+        <BusinessUnitFilter multiple value={buIds} entityId={entityIds} onChange={setBuIds} />
 
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Period <span className="text-destructive">*</span></Label>

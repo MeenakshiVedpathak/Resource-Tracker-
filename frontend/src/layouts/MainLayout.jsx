@@ -8,7 +8,12 @@ import { ROUTES } from '@/constants/routes';
 
 // RBAC redesign (§6.1): the full set of routes a Platform Admin may reach. Platform Admin only
 // manages Admins now — Entity Admin/Company management moved to the Admin/Entity Admin tiers.
-const PLATFORM_ADMIN_ROUTES = [ROUTES.ADMINS, ROUTES.ADMIN_NEW, ROUTES.ROLES, ROUTES.FORMS, ROUTES.ORGANIZATION_OVERVIEW];
+// Service Types is the one deliberate exception (added on request) — kept in its own line below
+// rather than folded into the list so the §6.1 restriction's original scope stays legible.
+const PLATFORM_ADMIN_ROUTES = [
+  ROUTES.ADMINS, ROUTES.ADMIN_NEW, ROUTES.ROLES, ROUTES.FORMS, ROUTES.ORGANIZATION_OVERVIEW,
+  ROUTES.SERVICE_TYPES, ROUTES.SERVICE_TYPE_NEW,
+];
 
 const MainLayout = () => {
   // Mounted for every authenticated page load — including a hard refresh (a fresh page

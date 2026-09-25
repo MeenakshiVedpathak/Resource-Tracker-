@@ -112,6 +112,16 @@ const ManagerFillWorkLog = () => {
     [myBusinessUnits],
   );
 
+  // Sub-BU name lookup, purely client-side off the same BU list — only Sub-BUs (units carrying a
+  // non-null parentId) get an entry, so an id belonging to a top-level Parent BU falls through to
+  // '—' in the Sub BU column instead of misreporting a Parent BU as its own Sub-BU.
+  const subBuNameById = useMemo(
+    () => new Map(
+      myBusinessUnits.filter((bu) => bu.parentId != null).map((bu) => [String(bu.id), bu.name]),
+    ),
+    [myBusinessUnits],
+  );
+
   const myTeamParams = useMemo(
     () => (selectedBuId != null ? { buId: selectedBuId } : {}),
     [selectedBuId],
@@ -175,6 +185,16 @@ const ManagerFillWorkLog = () => {
       { min: 150, max: 320 },
     ),
     [pagedEmployees, buNameById],
+  );
+  // Same shape as businessUnitColumnWidth, but measuring only Sub-BU names — an Employee mapped to
+  // several Sub-BUs renders them comma-joined the same way.
+  const subBuColumnWidth = useMemo(
+    () => measureColumnWidth(
+      pagedEmployees,
+      (e) => (e.business_unit_ids ?? []).map((id) => subBuNameById.get(String(id))).filter(Boolean).join(', '),
+      { min: 120, max: 280 },
+    ),
+    [pagedEmployees, subBuNameById],
   );
 
   const handleMonthYearChange = (v) => setMonthYear(v ?? defaultMonthYear());
@@ -240,6 +260,18 @@ const ManagerFillWorkLog = () => {
         // `truncate` (not `whitespace-nowrap` alone) so a name list that still outgrows the
         // clamped column width ellipsizes in place instead of visually overflowing into the next
         // cell — the `title` surfaces the full list on hover either way.
+        return <span className="block truncate text-sm text-muted-foreground" title={joined}>{joined}</span>;
+      },
+    }),
+    columnHelper.display({
+      id: 'sub_bu_name',
+      header: 'Sub BU',
+      size: subBuColumnWidth,
+      cell: ({ row }) => {
+        const names = (row.original.business_unit_ids ?? [])
+          .map((id) => subBuNameById.get(String(id)))
+          .filter(Boolean);
+        const joined = names.length ? names.join(', ') : '—';
         return <span className="block truncate text-sm text-muted-foreground" title={joined}>{joined}</span>;
       },
     }),

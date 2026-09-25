@@ -2,19 +2,21 @@ import { useQueries, useQuery, useMutation, useQueryClient } from '@tanstack/rea
 import { servicePoMonthlyBudgetApi } from '@/api/servicePoMonthlyBudget.api';
 import { QUERY_KEYS } from '@/constants/queryKeys';
 
-export const useServicePoMonthlyBudgetServicePOs = (buId) =>
+// `entityIds`/`businessUnitIds` (multi-select, comma-joined strings, optional) narrow further —
+// backend support confirmed live on this endpoint (see BACKEND_MULTI_SELECT_ENTITY_BU_PROMPT.md).
+export const useServicePoMonthlyBudgetServicePOs = (buId, entityIds, businessUnitIds) =>
   useQuery({
-    queryKey: QUERY_KEYS.SERVICE_PO_MONTHLY_BUDGET_SERVICE_POS(buId),
-    queryFn: () => servicePoMonthlyBudgetApi.getServicePOs(buId),
+    queryKey: QUERY_KEYS.SERVICE_PO_MONTHLY_BUDGET_SERVICE_POS(buId, entityIds, businessUnitIds),
+    queryFn: () => servicePoMonthlyBudgetApi.getServicePOs(buId, entityIds, businessUnitIds),
     staleTime: 1000 * 60 * 10,
   });
 
 // `buId` is Monthly PO Reporting's own Business Unit filter — undefined for a single-BU login
 // (no filter shown), which keeps the request following the global BU header as before.
-export const useServicePoMonthlyBudgetList = (month, year, buId) =>
+export const useServicePoMonthlyBudgetList = (month, year, buId, entityIds, businessUnitIds) =>
   useQuery({
-    queryKey: QUERY_KEYS.SERVICE_PO_MONTHLY_BUDGET_LIST(month, year, buId),
-    queryFn: () => servicePoMonthlyBudgetApi.getMonthList(month, year, buId),
+    queryKey: QUERY_KEYS.SERVICE_PO_MONTHLY_BUDGET_LIST(month, year, buId, entityIds, businessUnitIds),
+    queryFn: () => servicePoMonthlyBudgetApi.getMonthList(month, year, buId, entityIds, businessUnitIds),
     enabled: !!month && !!year,
   });
 
@@ -23,13 +25,13 @@ export const useServicePoMonthlyBudgetList = (month, year, buId) =>
 // which isn't in the documented contract. Each month's cache entry is shared with
 // useServicePoMonthlyBudgetList when that exact month is selected, so picking a month never
 // re-fetches data this hook already has.
-export const useServicePoMonthlyBudgetYearSummary = (year, buId) => {
+export const useServicePoMonthlyBudgetYearSummary = (year, buId, entityIds, businessUnitIds) => {
   const queries = useQueries({
     queries: Array.from({ length: 12 }, (_, i) => {
       const month = i + 1;
       return {
-        queryKey: QUERY_KEYS.SERVICE_PO_MONTHLY_BUDGET_LIST(month, year, buId),
-        queryFn: () => servicePoMonthlyBudgetApi.getMonthList(month, year, buId),
+        queryKey: QUERY_KEYS.SERVICE_PO_MONTHLY_BUDGET_LIST(month, year, buId, entityIds, businessUnitIds),
+        queryFn: () => servicePoMonthlyBudgetApi.getMonthList(month, year, buId, entityIds, businessUnitIds),
         enabled: !!year,
         select: (records) => ({
           invoiceTotal: records.reduce((sum, r) => sum + Number(r.invoice_amount ?? 0), 0),

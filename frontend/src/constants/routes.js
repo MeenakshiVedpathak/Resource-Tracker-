@@ -166,6 +166,7 @@ export const ROUTES = {
   REPORT_PROJECT_WISE_UTILIZATION: '/reports/project-wise-utilization',
   REPORT_MONTH_WISE_BENCH: '/reports/month-wise-bench',
   REPORT_RESOURCE_WISE_BENCH: '/reports/resource-wise-bench',
+  REPORT_RESOURCE_COST_UTILIZATION: '/reports/resource-cost-utilization',
 
   // Team Mapping — Service PO Admin self-service (§7)
   TEAM_MAPPINGS: '/team-mappings',

@@ -140,10 +140,19 @@ const MonthlyCostList = () => {
       ? activeBusinessUnits.filter((bu) => String(bu.entity_id) === String(id))
       : activeBusinessUnits;
 
+  // Multi-select is live for this screen's report query only (GET /reports/monthly-cost-summary
+  // — see BACKEND_MULTI_SELECT_ENTITY_BU_PROMPT.md). The period-delete mutation below still hits
+  // an endpoint with no confirmed multi-BU support, so it deliberately keeps its own
+  // single-BU-or-unscoped resolution (see `deleteBuId`) rather than trusting `buParams.buId`,
+  // which this hook's multi mode always pins to the 'all' sentinel.
   const {
     entityId, setEntityId, showEntityFilter, isEntityFiltered, resetEntityId,
     buId, setBuId, showBuFilter, isBuFiltered, resetBuId, buParams,
-  } = useMasterBuFilter();
+  } = useMasterBuFilter({ multiple: true });
+  // Only meaningful when exactly one BU is selected — matches what the single-select delete path
+  // used to send (`buParams.buId` was that one id). 0 or 2+ selected falls back to 'all', the same
+  // "no BU narrowing" the delete already did whenever nothing was filtered before this change.
+  const deleteBuId = buId.length === 1 ? buId[0] : 'all';
 
   const params = {
     page,
@@ -224,7 +233,7 @@ const MonthlyCostList = () => {
   };
 
   const handleDelete = () => {
-    deletePeriodsMutation.mutate({ periods: [{ month: deleteTarget.month, year: deleteTarget.year }], buId: buParams.buId }, {
+    deletePeriodsMutation.mutate({ periods: [{ month: deleteTarget.month, year: deleteTarget.year }], buId: deleteBuId }, {
       onSuccess: () => {
         success(`${formatMonthYear(deleteTarget.month, deleteTarget.year)} records deleted.`);
         setDeleteTarget(null);
@@ -241,7 +250,7 @@ const MonthlyCostList = () => {
       .filter((r) => selectedKeys.includes(periodKey(r)))
       .map((r) => ({ month: r.month, year: r.year }));
     const count = periods.length;
-    deletePeriodsMutation.mutate({ periods, buId: buParams.buId }, {
+    deletePeriodsMutation.mutate({ periods, buId: deleteBuId }, {
       onSuccess: () => {
         success(`${count} period${count !== 1 ? 's' : ''} deleted.`);
         clearSelection();
@@ -446,10 +455,10 @@ const MonthlyCostList = () => {
         onClose={() => setFiltersOpen(false)}
       >
         {showEntityFilter && (
-          <EntityFilter value={entityId} onChange={handleEntityChange} />
+          <EntityFilter multiple value={entityId} onChange={handleEntityChange} />
         )}
         {showBuFilter && (
-          <BusinessUnitFilter value={buId} entityId={entityId} onChange={handleBuChange} />
+          <BusinessUnitFilter multiple value={buId} entityId={entityId} onChange={handleBuChange} />
         )}
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Month &amp; Year</Label>

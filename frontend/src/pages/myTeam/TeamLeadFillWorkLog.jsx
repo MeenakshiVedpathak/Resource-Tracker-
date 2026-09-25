@@ -212,6 +212,37 @@ const TeamLeadFillWorkLog = () => {
     [buNameById],
   );
 
+  // Sub-BU name lookup, purely client-side off the same BU list — only Sub-BUs (units carrying a
+  // non-null parentId) get an entry, so an id belonging to a top-level Parent BU falls through to
+  // '—' in the Sub BU column instead of misreporting a Parent BU as its own Sub-BU.
+  const subBuNameById = useMemo(
+    () => new Map(
+      myBusinessUnits.filter((bu) => bu.parentId != null).map((bu) => [String(bu.id), bu.name]),
+    ),
+    [myBusinessUnits],
+  );
+
+  // Mirrors getEmployeeBuNames, but resolved through subBuNameById so a Parent BU id (no Sub-BU
+  // match) is silently dropped rather than rendered as its own Sub-BU.
+  const getEmployeeSubBuNames = useCallback(
+    (employee) => {
+      if (Array.isArray(employee.business_units) && employee.business_units.length > 0) {
+        const names = [
+          ...new Set(
+            employee.business_units
+              .map((bu) => subBuNameById.get(String(bu.id)))
+              .filter(Boolean)
+          ),
+        ];
+        if (names.length > 0) return names;
+      }
+      return (employee.business_unit_ids ?? [])
+        .map((id) => subBuNameById.get(String(id)))
+        .filter(Boolean);
+    },
+    [subBuNameById],
+  );
+
   const ended = monthHasEnded(monthYear);
 
   // Fanned out off the full roster (not the search/page-narrowed rows) so typing in Search or
@@ -276,6 +307,17 @@ const TeamLeadFillWorkLog = () => {
         { min: 120, max: 260 },
       ),
     [pagedEmployees, getEmployeeEntityNames],
+  );
+  // Same shape as businessUnitColumnWidth, but measuring only Sub-BU names — an Employee mapped to
+  // several Sub-BUs renders them comma-joined the same way.
+  const subBuColumnWidth = useMemo(
+    () =>
+      measureColumnWidth(
+        pagedEmployees,
+        (e) => getEmployeeSubBuNames(e).join(', '),
+        { min: 120, max: 280 },
+      ),
+    [pagedEmployees, getEmployeeSubBuNames],
   );
 
   const handleMonthYearChange = (v) => setMonthYear(v ?? defaultMonthYear());
@@ -349,6 +391,16 @@ const TeamLeadFillWorkLog = () => {
         // `truncate` (not `whitespace-nowrap` alone) so a name list that still outgrows the
         // clamped column width ellipsizes in place instead of visually overflowing into the next
         // cell — the `title` surfaces the full list on hover either way.
+        return <span className="block truncate text-sm text-muted-foreground" title={joined}>{joined}</span>;
+      },
+    }),
+    columnHelper.display({
+      id: 'sub_bu_name',
+      header: 'Sub BU',
+      size: subBuColumnWidth,
+      cell: ({ row }) => {
+        const names = getEmployeeSubBuNames(row.original);
+        const joined = names.length ? names.join(', ') : '—';
         return <span className="block truncate text-sm text-muted-foreground" title={joined}>{joined}</span>;
       },
     }),
