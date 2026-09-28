@@ -1,7 +1,7 @@
 import { Outlet } from 'react-router-dom';
 import EmployeeSidebar from '@/components/layout/EmployeeSidebar';
 import Topbar from '@/components/layout/Topbar';
-import { useSyncAccessibleForms } from '@/hooks/useAccessibleForms';
+import { useSyncAccessibleForms, useSyncBusinessUnits } from '@/hooks/useAccessibleForms';
 
 // Employee self-service shell — same structure as MainLayout (Sidebar + Topbar + Outlet +
 // footer) but with the reduced EmployeeSidebar and no AICopilotWidget (admin/reporting-scoped
@@ -12,6 +12,13 @@ const EmployeeLayout = () => {
   // Login.jsx's one-shot fetch, so a Role-Form Mapping change or hard refresh never re-syncs it
   // here the way every other role's layout already does.
   useSyncAccessibleForms();
+  // Same rationale, and just as critical here: an Employee-only login never reaches MainLayout at
+  // all (MainLayout redirects it straight to homeRoute — see its own isEmployeeOnly guard), so
+  // adding useSyncBusinessUnits there alone never covered this shell. Confirmed live: this is
+  // exactly why a BU's saturday_off_rule (or any other BU field My Work Log/Monthly Summary/Time
+  // Entry read off the employee's own businessUnits[]) kept requiring a full logout/login to show
+  // up here, even after that fix landed on MainLayout.
+  useSyncBusinessUnits();
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">

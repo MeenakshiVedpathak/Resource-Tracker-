@@ -9,6 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import { useAuth } from '@/hooks/useAuth';
+import { useSaturdayOffRule } from '@/hooks/useSaturdayOffRule';
 import { useEmployeeCalendar, useEmployeeMonthlySummary, useEmployeeEntries } from '@/hooks/useEmployeeWorkLog';
 import { STANDARD_MONTHLY_HOURS } from '@/components/employee/MonthlyHoursCard';
 import WeatherHeroBanner from '@/components/employee/dashboard/WeatherHeroBanner';
@@ -51,6 +52,7 @@ const getGreeting = (hour) => {
 // the month (see findSelectedDay).
 const EmployeeDashboard = () => {
   const { employee } = useAuth();
+  const saturdayOffRule = useSaturdayOffRule();
   const today = dayjs();
   const todayKey = today.format('YYYY-MM-DD');
   const prevMonthDate = today.subtract(1, 'month');
@@ -105,7 +107,7 @@ const EmployeeDashboard = () => {
   const dailyTrend = Array.from({ length: 7 }, (_, i) => {
     const date = today.subtract(6 - i, 'day');
     const key = date.format('YYYY-MM-DD');
-    const classification = classifyWorkDay(date, findDay(key));
+    const classification = classifyWorkDay(date, findDay(key), { saturdayOffRule });
     return {
       key,
       label: `${date.format('ddd')} ${date.date()}`,
@@ -128,7 +130,7 @@ const EmployeeDashboard = () => {
     let workingDays = 0;
     for (let d = 0; d < 7; d += 1) {
       const date = bucketStart.add(d, 'day');
-      const classification = classifyWorkDay(date, findDay(date.format('YYYY-MM-DD')));
+      const classification = classifyWorkDay(date, findDay(date.format('YYYY-MM-DD')), { saturdayOffRule });
       sum += classification.loggedHours;
       if (!isNonWorkingDay(classification.status)) workingDays += 1;
     }
@@ -166,7 +168,7 @@ const EmployeeDashboard = () => {
       key,
       weekdayLabel,
       dateLabel: date.format('DD MMM YYYY'),
-      ...classifyWorkDay(date, findSelectedDay(key)),
+      ...classifyWorkDay(date, findSelectedDay(key), { saturdayOffRule }),
     };
   });
 

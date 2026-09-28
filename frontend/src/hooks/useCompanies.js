@@ -12,11 +12,12 @@ export const useCompanies = (params, options = {}) =>
     ...options,
   });
 
-export const useCompany = (id) =>
+export const useCompany = (id, options = {}) =>
   useQuery({
     queryKey: QUERY_KEYS.COMPANY(id),
     queryFn: () => companiesApi.getById(id),
     enabled: !!id,
+    ...options,
   });
 
 export const useCreateCompany = () => {

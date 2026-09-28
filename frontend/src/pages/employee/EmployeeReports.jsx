@@ -135,15 +135,25 @@ const EmployeeReports = () => {
 
       {/* Collapsible filter panel */}
       <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[160px]">
+          {/* A fixed 2x2 button grid, not a single row of 4 — a single row (even with min-w-0/
+              truncate/extra column-span) still depends on the FILTER PANEL happening to give this
+              control enough width at whatever breakpoint the viewport lands on, and that assumption
+              kept breaking in practice ("Range" clipped even on screens that should have had room).
+              2x2 sidesteps the whole question: each button only ever competes for HALF its
+              container's width against one sibling, which is enough room for "Monthly" (the longest
+              label) at any realistic filter-column width, on any screen size, with no breakpoint
+              dependency at all. */}
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs">Report Type</Label>
-            <div className="flex items-center rounded-md border overflow-hidden h-9 text-sm bg-white">
-              {REPORT_TYPES.map(({ label, value }) => (
+            <div className="grid grid-cols-2 rounded-md border overflow-hidden text-sm bg-white">
+              {REPORT_TYPES.map(({ label, value }, i) => (
                 <button
                   key={value}
                   onClick={() => setReportType(value)}
                   className={cn(
-                    'flex-1 px-3 h-full font-medium text-center whitespace-nowrap transition-colors border-r last:border-r-0',
+                    'h-9 px-2 min-w-0 font-medium text-center truncate transition-colors',
+                    i % 2 === 0 && 'border-r',
+                    i < 2 && 'border-b',
                     reportType === value
                       ? 'bg-primary text-primary-foreground'
                       : 'bg-background text-muted-foreground hover:bg-muted'

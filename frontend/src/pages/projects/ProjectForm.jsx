@@ -89,22 +89,27 @@ const ProjectForm = () => {
     },
   });
 
-  // The Client list must be scoped to the chosen ROOT BU whenever the BU is asked for — never to
-  // the (possibly still-empty, separately mandatory) Sub-BU pick below, so Client loading is never
-  // stuck waiting on it. The backend resolves the client WITHIN the company_id sent on the
-  // request, so offering clients from the login's other BUs lets the two fields disagree and the
-  // create fails with "Client not found." Held until a BU is picked — there is nothing sensible to
-  // list before then.
+  // The Client list is scoped to whichever BU is currently the MOST SPECIFIC one picked — once a
+  // Sub-BU is selected, that's what actually gets sent as the Project's own company_id (see
+  // onSubmit), and a Client can itself belong to a Sub-BU specifically rather than its Parent, so
+  // scoping the list to the root alone would both hide such a Client and mismatch the request's
+  // own company_id (backend resolves the client WITHIN that id, so a mismatch there fails with
+  // "Client not found"). Never GATED on the Sub-BU pick being made, though — Client loading starts
+  // as soon as a root BU is chosen (the Sub-BU field is only asked for once options exist and is
+  // mandatory when it is, but nothing here should sit disabled waiting on it); it simply re-scopes
+  // once a Sub-BU is added on top of the root, the same way it already re-scopes on a root change.
   const selectedBuId = form.watch('company_id');
+  const selectedSubBuId = form.watch('sub_business_unit_id');
+  const effectiveBuId = selectedSubBuId || selectedBuId;
   const { data: scopedClients, isPending: isLoadingScopedClients } = useClients(
-    { buId: selectedBuId, status: 'active', limit: 200 },
-    { enabled: showBuSelector && !!selectedBuId }
+    { buId: effectiveBuId, status: 'active', limit: 200 },
+    { enabled: showBuSelector && !!effectiveBuId }
   );
 
   const clientOptions = (showBuSelector ? (scopedClients?.data ?? []) : activeClients)
     .map((c) => ({ value: String(c.id), label: c.client_name }));
   const clientsLoading = showBuSelector ? isLoadingScopedClients : isLoadingClients;
-  const clientDisabled = showBuSelector ? (!selectedBuId || clientsLoading) : clientsLoading;
+  const clientDisabled = showBuSelector ? (!effectiveBuId || clientsLoading) : clientsLoading;
 
   // The selected root BU's own Sub-BUs — recomputed live, never off a snapshot, so switching
   // roots immediately shows (or hides) the right Sub-BU list.
@@ -239,6 +244,9 @@ const ProjectForm = () => {
                                   // leave a Sub-BU id from the PREVIOUS root silently selected.
                                   form.setValue('sub_business_unit_id', '');
                                   form.clearErrors('sub_business_unit_id');
+                                  // Changing BU invalidates whatever Client was picked under the
+                                  // previous one (the scoped list below is about to change too).
+                                  form.setValue('client_id', '');
                                 }}
                                 placeholder="Select business unit"
                                 searchPlaceholder="Search business unit..."
@@ -267,7 +275,14 @@ const ProjectForm = () => {
                               <SubBusinessUnitSelect
                                 options={subBuOptions}
                                 value={field.value}
-                                onValueChange={field.onChange}
+                                onValueChange={(val) => {
+                                  field.onChange(val);
+                                  // The Sub-BU is the most specific BU the Client list now scopes
+                                  // to (see effectiveBuId) — whatever Client was picked under the
+                                  // root alone (or a different Sub-BU) doesn't necessarily belong
+                                  // to this one, so it can't carry over unchecked.
+                                  form.setValue('client_id', '');
+                                }}
                                 className="h-8 text-sm w-full"
                               />
                             </FormControl>
@@ -284,14 +299,11 @@ const ProjectForm = () => {
                         <FormItem className="space-y-1">
                           <FormLabel className="text-[11px] text-muted-foreground font-medium"><span className="text-destructive mr-0.5">*</span> Client</FormLabel>
                           <SearchableSelect
-                            options={activeClients.map((c) => ({
-                              value: String(c.id),
-                              label: c.client_name,
-                            }))}
+                            options={clientOptions}
                             value={field.value}
                             onValueChange={(val) => field.onChange(val ? parseInt(val, 10) : undefined)}
-                            disabled={isLoadingClients}
-                            placeholder="Select client"
+                            disabled={clientDisabled}
+                            placeholder={showBuSelector && !effectiveBuId ? 'Select a business unit first' : 'Select client'}
                             searchPlaceholder="Search client..."
                             className="h-8 text-sm"
                           />

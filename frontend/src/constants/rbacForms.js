@@ -19,7 +19,7 @@ import {
   ListTree, ListChecks, Banknote, CalendarClock, Timer, Hourglass,
   TrendingUp, LineChart, Target, Percent, Award, BatteryCharging, AlertTriangle, Crown,
   ReceiptText, GitCompare, Scale, BarChart3, Building, Activity, Armchair, Users2,
-  ClipboardCheck, XCircle, UserCog, CalendarPlus, Briefcase,
+  ClipboardCheck, XCircle, UserCog, CalendarPlus, Briefcase, FileSpreadsheet,
 } from 'lucide-react';
 import { ROUTES } from '@/constants/routes';
 
@@ -177,6 +177,10 @@ export const FORM_NAMES = {
   // is dropped from the sidebar for everyone (see file-header comment) — the route itself still
   // works if navigated to directly, but the report won't appear in Reports Center/sidebar.
   REPORT_RESOURCE_COST_UTILIZATION: 'Consolidated Monthly Report',
+  // Guessed name — same caveat as the rest of this file: brand new report (backend spec dated
+  // 2026-09-26, GET /reports/project-timesheet confirmed live). Confirm against the real
+  // GET /roles/forms response once a Form Master row is seeded and mapped to roles.
+  REPORT_PROJECT_TIMESHEET: 'Project-Wise Timesheet Report',
   // Project Manager Dashboard (net-new, backend spec 2026-09-11) — not formName-gated (see
   // ProtectedRoute's allowedRoles in routes/index.jsx, same as Team Mapping), so this entry
   // exists purely so the sidebar picks it up automatically the moment a real Form Master row
@@ -262,6 +266,7 @@ export const FORM_ROUTE_CONFIG = {
   [FORM_NAMES.REPORT_MONTH_WISE_BENCH]: { to: ROUTES.REPORT_MONTH_WISE_BENCH, icon: Hourglass, description: 'Org-wide bench trend by month — resources on bench, bench hours, and bench % across a range.' },
   [FORM_NAMES.REPORT_RESOURCE_WISE_BENCH]: { to: ROUTES.REPORT_RESOURCE_WISE_BENCH, icon: Users2, description: "Each resource's bench % by month across a range, sorted by average bench % by default." },
   [FORM_NAMES.REPORT_RESOURCE_COST_UTILIZATION]: { to: ROUTES.REPORT_RESOURCE_COST_UTILIZATION, icon: IndianRupee, description: 'Per-employee monthly cost contribution, projected vs. actual utilization, across a month range.' },
+  [FORM_NAMES.REPORT_PROJECT_TIMESHEET]: { to: ROUTES.REPORT_PROJECT_TIMESHEET, icon: FileSpreadsheet, description: 'Employee-wise, day-wise timesheet entries with work description, Project Manager, leave and approval status.' },
   // RBAC form name stays "Project Manager Dashboard" (must match the backend Form Master
   // record); `label` only shortens what the sidebar displays, same short "Dashboard" every
   // other role's landing page uses.

@@ -14,8 +14,10 @@ export const projectsApi = {
   create: (payload) => apiClient.post('/projects', payload).then((r) => r.data),
   update: (id, payload) => apiClient.put(`/projects/${id}`, payload).then((r) => r.data),
   delete: (id) => apiClient.delete(`/projects/${id}`).then((r) => r.data),
-  // Each row carries its own Client (Code or Name) — the backend resolves that row's Business
-  // Unit off the actor/Client exactly like a single create does, so no company_id is sent here.
+  // Each row carries its own Client (Code or Name) and, for a company-less actor, its own "BU
+  // Name"/"Entity Name"/"Sub BU" columns — the backend resolves that row's Business Unit from the
+  // sheet, falling back to the Client's own BU when "BU Name" is blank, so no company_id is sent
+  // here; a BU-scoped actor's rows land under their active BU/Sub-BU instead.
   import: (file) => {
     const formData = new FormData();
     formData.append('file', file);

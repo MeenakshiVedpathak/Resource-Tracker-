@@ -737,7 +737,7 @@ const StatusToggle = ({ employee }) => {
 
 const EmployeeList = () => {
   const navigate = useNavigate();
-  const { success, error: showError } = useNotification();
+  const { success, error: showError, warning } = useNotification();
 
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
@@ -1000,26 +1000,73 @@ const EmployeeList = () => {
     setPage(1);
   };
 
+  // "Business Units" alone still accepts "Parent -> Sub" (same convention the Export Excel button
+  // already writes for a Sub-BU — see handleExportExcel above) to target a Sub-BU nested under a
+  // Parent — equivalent to naming the Parent in "Business Units" and its Sub-BU in the separate
+  // "Sub BU" column below (row 2), so a file this screen exports can always be re-imported as-is.
   const handleDownloadSample = () => {
-    const ws = XLSX.utils.json_to_sheet([{
-      'Employee Code': 'EMP-0076',
-      'Full Name': 'Omkar Patil',
-      'Designation': 'Software Engineer',
-      'Total Experience': 5.2,
-      'Company Experience': 2.1,
-      'Email ID': 'omkar@example.com',
-      'Resource Description': 'Java, React',
-      'Payroll Entity': 'GTT India Pvt Ltd',
-      'Location': 'Pune',
-      'Sub Location': 'Hinjewadi',
-      'Original Entity': 'GTT Client Entity',
-      'Date of Joining': '2023-01-15',
-      'Date of Leaving': '',
-      // A plain name targets a top-level Parent BU; "Parent -> Sub" (same convention the Export
-      // Excel button already writes for a Sub-BU — see handleExportExcel above) targets a Sub-BU
-      // nested under that Parent instead.
-      'Business Units': 'Finance BU, Delivery BU -> Delivery Sub BU'
-    }]);
+    const ws = XLSX.utils.json_to_sheet([
+      // Row 1: a Business Unit with no Sub-BUs — Sub BU stays blank.
+      {
+        'Employee Code': 'EMP-0076',
+        'Full Name': 'Omkar Patil',
+        'Designation': 'Software Engineer',
+        'Total Experience': 5.2,
+        'Company Experience': 2.1,
+        'Email ID': 'omkar@example.com',
+        'Resource Description': 'Java, React',
+        'Payroll Entity': 'GTT India Pvt Ltd',
+        'Location': 'Pune',
+        'Sub Location': 'Hinjewadi',
+        'Original Entity': 'GTT Client Entity',
+        'Date of Joining': '2023-01-15',
+        'Date of Leaving': '',
+        'Business Units': 'Finance BU',
+        'Entity Name': '',
+        'Sub BU': '',
+      },
+      // Row 2: a Business Unit that has Sub-BUs — Sub BU is required (here via the separate
+      // column; "Delivery BU -> Delivery Sub BU" inside "Business Units" itself means the same
+      // thing).
+      {
+        'Employee Code': 'EMP-0077',
+        'Full Name': 'Priya Sharma',
+        'Designation': 'Business Analyst',
+        'Total Experience': 3.0,
+        'Company Experience': 1.5,
+        'Email ID': 'priya@example.com',
+        'Resource Description': 'SQL, Power BI',
+        'Payroll Entity': 'GTT India Pvt Ltd',
+        'Location': 'Pune',
+        'Sub Location': 'Hinjewadi',
+        'Original Entity': 'GTT Client Entity',
+        'Date of Joining': '2024-03-01',
+        'Date of Leaving': '',
+        'Business Units': 'Delivery BU',
+        'Entity Name': '',
+        'Sub BU': 'Delivery Sub BU',
+      },
+      // Row 3: this Business Unit name happens to exist under more than one of the user's
+      // Entities — Entity Name is required to pick which one.
+      {
+        'Employee Code': 'EMP-0078',
+        'Full Name': 'Rahul Deshmukh',
+        'Designation': 'HR Executive',
+        'Total Experience': 4.0,
+        'Company Experience': 1.0,
+        'Email ID': 'rahul@example.com',
+        'Resource Description': 'Recruitment, Payroll',
+        'Payroll Entity': 'GTT India Pvt Ltd',
+        'Location': 'Pune',
+        'Sub Location': 'Hinjewadi',
+        'Original Entity': 'GTT Client Entity',
+        'Date of Joining': '2022-07-01',
+        'Date of Leaving': '',
+        'Business Units': 'HR BU',
+        'Entity Name': 'Entity 1',
+        'Sub BU': '',
+      },
+    ]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Employees");
     XLSX.writeFile(wb, "employee_sample.xlsx");
@@ -1052,12 +1099,28 @@ const EmployeeList = () => {
     reader.readAsBinaryString(file);
   };
 
+  // Shared by both the mutation's onSuccess and its onError-with-a-body branch below — either way
+  // the response carries the same { total, imported, error_rows } shape, and either way the user
+  // needs the same "how many actually made it in" toast, not just a silent result screen.
+  const notifyImportResult = (result) => {
+    const data = result?.data || result;
+    const errors = data.error_rows || data.errors || data.failed || [];
+    const total = data.total ?? data.total_processed ?? 0;
+    const imported = data.imported ?? data.success_count ?? 0;
+    if (errors.length > 0) {
+      warning(`Imported ${imported} of ${total}. ${errors.length} row(s) need fixing — see Error Rows.`);
+    } else {
+      success(`Imported ${imported} of ${total} rows successfully.`);
+    }
+  };
+
   const handleConfirmImport = () => {
     if (!previewFile) return;
-    
+
     importMutation.mutate(previewFile, {
       onSuccess: (res) => {
         setImportResult(res);
+        notifyImportResult(res);
         setIsPreviewOpen(false);
         setPreviewFile(null);
         setPreviewData(null);
@@ -1066,6 +1129,7 @@ const EmployeeList = () => {
         // If the backend returns a 400 with a detailed error array, capture it
         if (err.response?.data) {
           setImportResult(err.response.data);
+          notifyImportResult(err.response.data);
           setIsPreviewOpen(false);
           setPreviewFile(null);
           setPreviewData(null);
@@ -1256,7 +1320,13 @@ const EmployeeList = () => {
     const errors = data.error_rows || data.errors || data.failed || [];
     const total = data.total ?? data.total_processed ?? 0;
     const imported = data.imported ?? data.success_count ?? 0;
-    const skipped = data.skipped ?? data.error_count ?? errors.length ?? 0;
+    // `skipped` (from the API) counts DUPLICATE rows only — validation errors (missing required
+    // field, invalid reference, etc.) come back in `errors` with `skipped` still 0. The error table
+    // used to be gated on `skipped > 0`, so a sheet that was 100% validation errors (no duplicates
+    // at all) rendered NO error table and just "0 imported" with nothing to explain why.
+    const skipped = data.skipped ?? data.error_count ?? 0;
+    // Rows that failed for a reason OTHER than "duplicate" — a plain validation failure.
+    const failed = Math.max(0, errors.length - skipped);
 
     return (
       <div className="space-y-5">
@@ -1273,18 +1343,24 @@ const EmployeeList = () => {
           {skipped > 0 && (
             <Badge variant="destructive" className="gap-1.5">
               <AlertCircle className="h-3.5 w-3.5" />
-              {skipped} skipped
+              {skipped} duplicates skipped
+            </Badge>
+          )}
+          {failed > 0 && (
+            <Badge variant="destructive" className="gap-1.5">
+              <AlertCircle className="h-3.5 w-3.5" />
+              {failed} failed
             </Badge>
           )}
         </div>
 
         {/* Error rows */}
-        {skipped > 0 && errors.length > 0 && (
+        {errors.length > 0 && (
           <Card className="border-destructive/40">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-sm text-destructive">
                 <AlertCircle className="h-4 w-4" />
-                Error Rows ({skipped})
+                Error Rows ({errors.length})
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
@@ -1299,12 +1375,12 @@ const EmployeeList = () => {
                   <TableBody>
                     {errors.map((row, idx) => (
                       <TableRow key={idx} className="hover:bg-destructive/5">
-                        <TableCell className="font-mono text-xs">
+                        <TableCell className="font-mono text-xs align-top">
                           {row.row ?? row.rowNumber ?? row.row_number ?? idx + 1}
                         </TableCell>
-                        <TableCell className="text-sm text-destructive">
+                        <TableCell className="text-sm text-destructive whitespace-pre-line">
                           {row.errors?.length > 0
-                            ? row.errors.join(', ')
+                            ? row.errors.join('\n')
                             : row.message ?? row.error_message ?? row.error ?? '—'}
                         </TableCell>
                       </TableRow>
@@ -1315,8 +1391,8 @@ const EmployeeList = () => {
             </CardContent>
           </Card>
         )}
-        
-        {skipped === 0 && (
+
+        {errors.length === 0 && (
           <div className="text-center py-8 text-green-600 bg-green-50 rounded-md border border-green-100">
              All records were imported successfully!
           </div>

@@ -55,8 +55,9 @@ const exportToExcel = (rows, categoryByTypeId, buOpts) => {
   const header = [
     'Service PO Number', 'Service PO Name', 'Client', 'Project', 'Service Category', 'Service Type', 'Account Manager',
     'Description', 'PO Value', 'Invoice Frequency', 'Invoice Amount',
-    'Start Date', 'End Date', 'Status',
+    'Start Date', 'End Date', 'Status', 'Created By',
     ...(isCompanyLessActor ? ['BU Name', 'Sub BU'] : []),
+    'Project Manager',
   ];
   const dataRows = rows.map((r) => [
     r.service_po_code ?? '',
@@ -73,6 +74,7 @@ const exportToExcel = (rows, categoryByTypeId, buOpts) => {
     r.start_date ? formatDate(r.start_date) : '',
     r.end_date ? formatDate(r.end_date) : '',
     r.status ?? '',
+    r.creator?.full_name ?? '',
     ...(isCompanyLessActor
       ? [
           buRootNameById.get(String(r.company_id))
@@ -83,6 +85,7 @@ const exportToExcel = (rows, categoryByTypeId, buOpts) => {
           subBuNameById.get(String(r.company_id)) ?? '',
         ]
       : []),
+    (r.project_managers ?? []).map((pm) => pm.full_name).join(', '),
   ]);
   const ws = XLSX.utils.aoa_to_sheet([header, ...dataRows]);
   const wb = XLSX.utils.book_new();
@@ -479,6 +482,20 @@ const ServicePOList = () => {
           }),
         ]
       : []),
+    // Every employee currently marked Project Manager for this Service PO (GET /service-pos'
+    // `project_managers`, an array of `{ id, full_name }` — empty, never null, when nobody's
+    // marked PM yet). A Service PO can have more than one, so this joins them rather than picking
+    // just one — same "comma-join, em-dash fallback" convention the Consolidated Monthly Report's
+    // own PM column already uses for the identical underlying relation.
+    columnHelper.display({
+      id: 'project_managers',
+      header: 'Project Manager',
+      size: 200,
+      cell: ({ row }) => {
+        const pms = row.original.project_managers ?? [];
+        return <TruncatedCell value={pms.map((pm) => pm.full_name).join(', ')} maxWidth="180px" />;
+      },
+    }),
     columnHelper.accessor('serviceType.service_type_name', {
       header: 'Service Type',
       size: 220,
@@ -528,6 +545,12 @@ const ServicePOList = () => {
         ) : (
           <span className="text-muted-foreground">—</span>
         ),
+    }),
+    columnHelper.display({
+      id: 'created_by',
+      header: 'Created By',
+      size: 170,
+      cell: ({ row }) => <TruncatedCell value={row.original.creator?.full_name} maxWidth="150px" />,
     }),
   ];
 

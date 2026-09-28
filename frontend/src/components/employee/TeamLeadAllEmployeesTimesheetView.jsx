@@ -177,8 +177,11 @@ const TeamLeadAllEmployeesTimesheetView = ({
   // Clicking a column header (wired to DataTable's `sorting`/`onSortingChange` below) sorts the
   // WHOLE filtered set, not just the rows on the current page — everything's already in memory, so
   // there's no reason a sort should only reorder the 20 rows currently in view. With no column
-  // explicitly picked yet, falls back to most-recent-period-first across every Employee, ties
-  // broken by name so a given period's rows stay grouped together instead of shuffling on refetch.
+  // explicitly picked yet, falls back to Pending rows first (the ones that actually need this
+  // Team Lead's action, surfaced ahead of what's already Approved/Rejected), then most-recent-
+  // period-first within each group, ties broken by name so a given period's rows stay grouped
+  // together instead of shuffling on refetch.
+  const pendingFirstRank = (r) => (r.approval_status === 'pending' ? 0 : 1);
   const sortedRows = useMemo(() => {
     const filtered = rows
       .filter((r) => statusFilter === 'all' || r.approval_status === statusFilter)
@@ -193,6 +196,8 @@ const TeamLeadAllEmployeesTimesheetView = ({
     const sortSpec = sorting[0];
     if (!sortSpec) {
       return [...filtered].sort((a, b) => {
+        const rankDiff = pendingFirstRank(a) - pendingFirstRank(b);
+        if (rankDiff !== 0) return rankDiff;
         const diff = periodKey(b).localeCompare(periodKey(a));
         return diff !== 0 ? diff : a.employeeName.localeCompare(b.employeeName);
       });

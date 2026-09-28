@@ -271,15 +271,21 @@ const EmployeeWorkLogTimeReport = () => {
           </div>
         )}
 
+        {/* A fixed 2x2 button grid, not a single row of 4 — see EmployeeReports.jsx's identical
+            control for why a single row (even with extra column-span/min-w-0/truncate) still
+            wasn't reliably enough room at every screen size. Each button here only ever competes
+            for half its container's width against one sibling, with no breakpoint dependency. */}
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Period</Label>
-          <div className="flex items-center rounded-md border overflow-hidden h-9 text-sm bg-white">
-            {PERIOD_TYPES.map(({ label, value }) => (
+          <div className="grid grid-cols-2 rounded-md border overflow-hidden text-sm bg-white">
+            {PERIOD_TYPES.map(({ label, value }, i) => (
               <button
                 key={value}
                 onClick={() => setPeriodType(value)}
                 className={cn(
-                  'flex-1 px-3 h-full font-medium text-center whitespace-nowrap transition-colors border-r last:border-r-0',
+                  'h-9 px-2 min-w-0 font-medium text-center truncate transition-colors',
+                  i % 2 === 0 && 'border-r',
+                  i < 2 && 'border-b',
                   periodType === value
                     ? 'bg-primary text-primary-foreground'
                     : 'bg-background text-muted-foreground hover:bg-muted'

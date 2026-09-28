@@ -184,6 +184,15 @@ const ServicePOForm = () => {
   const { data: po, isPending: isLoadingPO } = useServicePO(id);
   const { hasRole, activeBuId } = useAuth();
 
+  // A PO's Client/Project can each be BU-less ("My Clients (No Business Unit)" was used to create
+  // them) even while the PO ITSELF has a real saved BU (`po.company`) — the two are independent.
+  // On edit this matters because the Client dropdown is normally scoped to the PO's own BU
+  // (scopedClients below), and a BU-less client was never assigned to that BU, so it wouldn't be
+  // in that scoped list at all — see clientSourceList's poClientIsBuLess branch below. Declared
+  // this early (right after `po`/`isEdit`) since it's read by the Client-list hooks/memos further
+  // down, before poEntityId or the other po-derived values are computed.
+  const poClientIsBuLess = isEdit && !!po?.client && po.client.company_id == null;
+
   // Company-less actors (Admin/Entity Admin/Platform Admin) always pick a BU per Service PO,
   // from the full BU master fetched below — they have no BU of their own. A BU-scoped actor
   // (BU Admin, Project Manager, ...) mapped to exactly one BU still has nothing to choose —
@@ -304,32 +313,74 @@ const ServicePOForm = () => {
   // mismatch for the backend to reject in the first place.
   const showBuField = (isCompanyLessActor || showBuScopedPicker) && !isCentralised;
   const selectedBuId = form.watch('company_id');
+  // The Client list is scoped to whichever BU is currently the MOST SPECIFIC one picked — once a
+  // Sub-BU is selected, that's what actually gets sent as the PO's own company_id (see onSubmit
+  // below), and a Client can itself belong to a Sub-BU specifically rather than its Parent, so
+  // scoping to the root alone would both hide such a Client and mismatch the request's own
+  // company_id (the backend resolves the client WITHIN that id, so a mismatch fails with "Client
+  // not found"). Never GATED on the Sub-BU pick being made, though (see the effectiveBuId fallback
+  // to the root alone) — Client loading still starts as soon as a root BU is chosen, then simply
+  // re-scopes/refetches once a Sub-BU is added on top, the same way it already re-scopes on a root
+  // change.
+  const selectedSubBuId = form.watch('sub_business_unit_id');
+  const effectiveBuId = selectedSubBuId || selectedBuId;
   const { data: scopedClients, isPending: isLoadingScopedClients } = useClients(
-    { buId: selectedBuId, status: 'active', limit: 200 },
-    { enabled: showBuField && !!selectedBuId }
+    { buId: effectiveBuId, status: 'active', limit: 200 },
+    { enabled: showBuField && !!effectiveBuId }
   );
   // Same GET /clients endpoint as scopedClients above, just with no buId — clients.api.js's own
-  // comment documents that as "all clients (their own BU-less + every BU)" for this actor. Only
-  // fetched once the toggle is actually on, and only for the roles the button renders for.
+  // comment documents that as "all clients (their own BU-less + every BU)" for this actor. Fetched
+  // for the "My Clients" toggle as before, and ALSO whenever editing a PO whose already-saved
+  // Client is itself BU-less (poClientIsBuLess) — that client needs to come from this same
+  // unscoped list, since it was never assigned to the PO's own BU and so won't appear in
+  // scopedClients below.
   const { data: allClientsForMyClients, isPending: isLoadingMyClients } = useClients(
     { status: 'active', limit: 200 },
-    { enabled: isCompanyLessActor && myClientsOnly }
+    { enabled: isCompanyLessActor && (myClientsOnly || poClientIsBuLess) }
   );
   const myClients = (allClientsForMyClients?.data ?? []).filter((c) => !c.company_id);
 
-  // The picked root BU's own Sub-BUs — recomputed live off `selectedBuId`, never off a snapshot,
-  // and deliberately NOT part of `showBuField`/Client scoping above: Client loading must never
-  // wait on this separately mandatory pick, only on the root BU itself.
+  // The picked root BU's own Sub-BUs — recomputed live off `selectedBuId`, never off a snapshot.
+  // Client loading is never GATED on this separately mandatory pick (it already starts once the
+  // root alone is chosen — see effectiveBuId above), but once a Sub-BU IS picked, the Client list
+  // does re-scope to it.
   const subBuOptions = childrenOf(selectedBuId).map((u) => ({ value: String(u.id), label: u.name }));
   const showSubBuField = showBuField && !myClientsOnly && subBuOptions.length > 0;
 
-  const clientSourceList = myClientsOnly ? myClients : (showBuField ? (scopedClients?.data ?? []) : activeClients);
-  const clientOptions = clientSourceList.map((c) => ({ value: String(c.id), label: c.client_name }));
-  const clientsLoading = myClientsOnly ? isLoadingMyClients : (showBuField ? isLoadingScopedClients : isLoadingClients);
+  // On edit, a PO with a BU-less Client is scoped to its own BU (scopedClients) same as any other
+  // PO — but that BU-less client itself needs to be added back in from the unscoped `myClients`
+  // list, or it simply isn't among scopedClients' options at all. De-duped by id (a client that's
+  // somehow in both lists — shouldn't happen, but harmless either way — must not render twice).
+  const clientSourceList = myClientsOnly
+    ? myClients
+    : showBuField
+    ? (() => {
+        const base = scopedClients?.data ?? [];
+        if (!poClientIsBuLess) return base;
+        const seen = new Set(base.map((c) => c.id));
+        return [...base, ...myClients.filter((c) => !seen.has(c.id))];
+      })()
+    : activeClients;
+  // Safety net: the PO's currently-saved Client must always be selectable and visibly labeled,
+  // even in the (should-be-impossible-now, but cheap to guard) case it's still missing from
+  // clientSourceList above for some other reason — an option-less selected value renders as a
+  // blank/placeholder in SearchableSelect instead of the client's actual name.
+  const clientOptions = (() => {
+    const opts = clientSourceList.map((c) => ({ value: String(c.id), label: c.client_name }));
+    if (isEdit && po?.client && !opts.some((o) => o.value === String(po.client.id))) {
+      opts.push({ value: String(po.client.id), label: po.client.client_name });
+    }
+    return opts;
+  })();
+  const clientsLoading = myClientsOnly
+    ? isLoadingMyClients
+    : showBuField
+    ? isLoadingScopedClients || (poClientIsBuLess && isLoadingMyClients)
+    : isLoadingClients;
   // Client is never gated on a BU pick while myClientsOnly is on — these clients have no BU to
   // wait for (see the BU Name field below, where picking "My Clients" clears company_id
   // entirely rather than setting a real BU id).
-  const clientDisabled = myClientsOnly ? clientsLoading : (showBuField ? (!selectedBuId || clientsLoading) : clientsLoading);
+  const clientDisabled = myClientsOnly ? clientsLoading : (showBuField ? (!effectiveBuId || clientsLoading) : clientsLoading);
 
   // Project dropdown is scoped to whichever Client is currently selected — refetches whenever
   // it changes, and is disabled until a Client is picked (see Project field below).
@@ -342,14 +393,27 @@ const ServicePOForm = () => {
     isError: isProjectsError,
     error: projectsError,
   } = useProjectsByClient(watchedClientId);
+  // Same safety net as clientOptions above, one level down: the PO's saved Project must stay
+  // selectable/labeled even if useProjectsByClient's own list (scoped to whatever Client id is
+  // CURRENTLY watched) hasn't included it yet — e.g. the instant after reset sets client_id, before
+  // this query has refetched for that client.
+  const projectOptions = useMemo(() => {
+    const opts = clientProjects.map((p) => ({ value: String(p.id), label: p.project_name }));
+    if (isEdit && po?.project && !opts.some((o) => o.value === String(po.project.id))) {
+      opts.push({ value: String(po.project.id), label: po.project.project_name });
+    }
+    return opts;
+  }, [clientProjects, isEdit, po]);
 
-  // Best-effort restore for the Entity selector on edit — the PO payload may embed the company
-  // relation (po.company.entity_id) or not, so the company master (activeCompanies) is the
-  // reliable fallback that also feeds the BU options, keeping field + options in sync.
+  // Restore for the Entity selector on edit — GET /service-pos/:id now embeds the PO's own BU as
+  // `po.company` (including its `entity` relation), so that's the primary, always-current source
+  // for which Entity to prefill; the company master (activeCompanies) lookup is kept only as a
+  // fallback for the (now rare) case that relation isn't embedded.
   const poEntityId = useMemo(() => {
     if (!po) return '';
     const poCompany = po.company_id ?? po.company?.id;
     return (
+      po.company?.entity?.id ??
       po.company?.entity_id ??
       po.entity_id ??
       activeCompanies.find((c) => String(c.id) === String(poCompany))?.entity_id ??
@@ -406,12 +470,22 @@ const ServicePOForm = () => {
       const poCompanyId = po.company_id ?? po.company?.id;
       const poCompanyUnit = poCompanyId ? buUnits.find((u) => String(u.id) === String(poCompanyId)) : null;
       const poIsSubBu = poCompanyUnit?.parentId != null;
+      // A "My Clients (No Business Unit)" PO — created by a company-less actor (Admin/Entity
+      // Admin/Platform Admin) with a BU-less Client and no BU of its own on the PO. Distinct from
+      // just "this PO's Client happens to be BU-less" (poClientIsBuLess alone, used above to widen
+      // the Client options list) — a PO CAN have a real BU while its Client is BU-less (an older
+      // PO created before this became a hard rule), and that case must keep resolving to its own
+      // real BU below, not "My Clients". Only when the PO ITSELF has no BU (po.company_id == null)
+      // AND its Client is BU-less does this actually mean "My Clients" was used to create it.
+      const poIsMyClients = isCompanyLessActor && !po.is_centralised && po.company_id == null && poClientIsBuLess;
       form.reset({
         service_po_name: po.service_po_name ?? '',
         service_po_code: po.service_po_code ?? '',
-        entity_id: poEntityId,
-        company_id: poCompanyId ? String(poIsSubBu ? poCompanyUnit.parentId : poCompanyId) : '',
-        sub_business_unit_id: poIsSubBu ? String(poCompanyId) : '',
+        // "My Clients" has no Entity/BU/Sub-BU to prefill — same empty state Create is in right
+        // after picking "My Clients (No Business Unit)" from the BU Name dropdown.
+        entity_id: poIsMyClients ? '' : poEntityId,
+        company_id: poIsMyClients ? '' : (poCompanyId ? String(poIsSubBu ? poCompanyUnit.parentId : poCompanyId) : ''),
+        sub_business_unit_id: poIsMyClients ? '' : (poIsSubBu ? String(poCompanyId) : ''),
         client_id: po.client_id ?? '',
         project_id: po.project_id ?? po.project?.id ?? '',
         delivery_head_employee_id:
@@ -423,15 +497,14 @@ const ServicePOForm = () => {
         invoice_frequency: po.invoice_frequency ?? '',
         status: po.status ?? 'in-progress',
         is_centralised: po.is_centralised ?? false,
-        // Not inferred from the loaded PO (there's no server-side signal for "this client has no
-        // BU" to key off of) — editing a PO that already has a BU-less client just shows a blank
-        // BU Name field rather than pre-selecting "My Clients"; picking it again re-derives the
-        // right Client list if the actor wants to change it.
-        is_my_clients: false,
+        // Set true only for a genuine "My Clients" PO (see poIsMyClients above) — this is what
+        // makes the BU Name field reopen showing "My Clients (No Business Unit)" instead of a
+        // blank/wrong BU, and routes the Client field to the unscoped myClients list below.
+        is_my_clients: poIsMyClients,
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [po, isEdit, form, buUnits, buUnitsReady]);
+  }, [po, isEdit, form, buUnits, buUnitsReady, isCompanyLessActor, poClientIsBuLess, poEntityId]);
 
   const onSubmit = async (values) => {
     // The picked root BU has Sub-BUs — picking one of them is mandatory once they exist.
@@ -464,8 +537,11 @@ const ServicePOForm = () => {
     // showBuScopedPicker) — `values.company_id` wins below as-is. A single-BU actor never saw a
     // picker, so carry their BU through explicitly instead — the one the PO already had when
     // editing, otherwise the active BU from the global switcher/header. Without this a single-BU
-    // actor's field would simply drop off the payload. A Centralised PO stays BU-less.
-    if (!isCompanyLessActor && !values.is_centralised) {
+    // actor's field would simply drop off the payload. A Centralised PO stays BU-less, and so does
+    // a "My Clients" one — without excluding it here too, a BU-less PO being re-saved unchanged
+    // would have the active Global BU silently pushed onto it via the `po?.company_id`/`activeBuId`
+    // fallback, exactly the case this whole block exists to AVOID for Centralised POs already.
+    if (!isCompanyLessActor && !values.is_centralised && !values.is_my_clients) {
       const buId = values.company_id || po?.company_id || po?.company?.id || activeBuId;
       if (buId) clean.company_id = buId;
     }
@@ -716,8 +792,9 @@ const ServicePOForm = () => {
               {/* Mandatory, not optional, once the picked BU actually has Sub-BUs — its own
                   sibling field (own grid cell in this 2-column layout) rather than nested inside
                   the BU Name field above, so it doesn't stretch that field's own row/column. Never
-                  gated on "My Clients" (a BU-less client has no Sub-BU to pick either) or on
-                  Client/Project loading, which key off company_id (the root) alone. */}
+                  gated on "My Clients" (a BU-less client has no Sub-BU to pick either); Client/
+                  Project loading isn't gated on THIS field being filled in either, but does
+                  re-scope to it once it is (see effectiveBuId). */}
               {showSubBuField && (
                 <FormField
                   control={form.control}
@@ -730,7 +807,14 @@ const ServicePOForm = () => {
                       <SubBusinessUnitSelect
                         options={subBuOptions}
                         value={field.value}
-                        onValueChange={field.onChange}
+                        onValueChange={(val) => {
+                          field.onChange(val);
+                          // The Sub-BU is now the most specific BU the Client list scopes to (see
+                          // effectiveBuId) — whatever Client was picked under the root alone (or a
+                          // different Sub-BU) doesn't necessarily belong to this one.
+                          form.setValue('client_id', '');
+                          form.setValue('project_id', '');
+                        }}
                         className="h-8 text-sm"
                       />
                       <FormMessage />
@@ -757,7 +841,7 @@ const ServicePOForm = () => {
                         form.setValue('project_id', '');
                       }}
                       disabled={clientDisabled}
-                      placeholder={myClientsOnly ? 'Select client' : (showBuField && !selectedBuId ? 'Select a business unit first' : 'Select client')}
+                      placeholder={myClientsOnly ? 'Select client' : (showBuField && !effectiveBuId ? 'Select a business unit first' : 'Select client')}
                       searchPlaceholder="Search client..."
                       emptyMessage={myClientsOnly ? 'No clients without a Business Unit found.' : undefined}
                       className="h-8 text-sm"
@@ -776,10 +860,7 @@ const ServicePOForm = () => {
                       <span className="text-destructive">*</span> Project
                     </FormLabel>
                     <SearchableSelect
-                      options={clientProjects.map(p => ({
-                        value: String(p.id),
-                        label: p.project_name
-                      }))}
+                      options={projectOptions}
                       value={field.value}
                       onValueChange={(val) => field.onChange(val ? parseInt(val, 10) : undefined)}
                       disabled={!watchedClientId || isLoadingProjects}

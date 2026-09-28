@@ -193,6 +193,10 @@ const EmployeeProjectHoursReport = () => {
   };
 
   return (
+    // `h-full min-h-0` (see MainLayout.jsx's own comment) — this page now opts INTO owning its own
+    // internal scroll region (the hierarchy tree box below), the same pattern DataTable-based
+    // report pages use, instead of relying on the page-level scrollbar. Filters/header/Grand Total
+    // stay fixed in place; only the tree's own row list scrolls.
     <div className="flex h-full min-h-0 flex-col space-y-4">
       <PageHeader
         title="Project Hours Report"
@@ -207,15 +211,21 @@ const EmployeeProjectHoursReport = () => {
       />
 
       <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[260px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
+        {/* A fixed 2x2 button grid, not a single row of 4 — see EmployeeReports.jsx's identical
+            control for why a single row (even with extra column-span/min-w-0/truncate) still
+            wasn't reliably enough room at every screen size. Each button here only ever competes
+            for half its container's width against one sibling, with no breakpoint dependency. */}
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Report Type</Label>
-          <div className="flex items-center rounded-md border overflow-hidden h-9 text-sm bg-white">
-            {REPORT_TYPES.map(({ label, value }) => (
+          <div className="grid grid-cols-2 rounded-md border overflow-hidden text-sm bg-white">
+            {REPORT_TYPES.map(({ label, value }, i) => (
               <button
                 key={value}
                 onClick={() => setReportType(value)}
                 className={cn(
-                  'flex-1 px-3 h-full font-medium text-center whitespace-nowrap transition-colors border-r last:border-r-0',
+                  'h-9 px-2 min-w-0 font-medium text-center truncate transition-colors',
+                  i % 2 === 0 && 'border-r',
+                  i < 2 && 'border-b',
                   reportType === value
                     ? 'bg-primary text-primary-foreground'
                     : 'bg-background text-muted-foreground hover:bg-muted'
@@ -293,17 +303,23 @@ const EmployeeProjectHoursReport = () => {
           <EmptyState title="No mapped Projects/Service POs for this period." />
         ) : (
           <>
-            <div className="rounded-lg border overflow-hidden">
-              <div className={cn('grid gap-2 bg-muted/50 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground', GRID_COLS)}>
+            {/* `flex-1 min-h-0` makes this box take exactly the remaining space below the filters
+                (and above Grand Total), and its OWN `overflow-y-auto` is what scrolls — not the
+                page. The "Project / Service PO / Hierarchy" header row stays outside that scroll
+                region (a `shrink-0` sibling) so it never scrolls out of view. */}
+            <div className="flex flex-1 min-h-0 flex-col rounded-lg border overflow-hidden">
+              <div className={cn('shrink-0 grid gap-2 bg-muted/50 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground', GRID_COLS)}>
                 <span>Project / Service PO / Hierarchy</span>
                 <span className="text-right">Hours</span>
               </div>
-              {projects.map((project) => (
-                <TreeRow key={project.key} node={project} depth={0} expandedKeys={expandedKeys} onToggle={toggleKey} />
-              ))}
+              <div className="flex-1 min-h-0 overflow-y-auto">
+                {projects.map((project) => (
+                  <TreeRow key={project.key} node={project} depth={0} expandedKeys={expandedKeys} onToggle={toggleKey} />
+                ))}
+              </div>
             </div>
 
-            <div className="flex justify-end rounded-lg border bg-muted/40 px-4 py-3">
+            <div className="shrink-0 flex justify-end rounded-lg border bg-muted/40 px-4 py-3">
               <span className="text-sm font-semibold tabular-nums">
                 Grand Total: {formatHours(data?.grand_total_hours)}
               </span>

@@ -157,4 +157,30 @@ export const reportsApi = {
     const filename = match?.[1] ?? 'Resource_Cost_Utilization_Report.xlsx';
     return { blob: res.data, filename };
   },
+
+  // Project-Wise Timesheet Report (§ new report, 2026-09-26) — employee-wise, day-wise timesheet
+  // entries with work description, for monthly project review, effort validation, client billing
+  // and management reporting. Scoping is via the `entity_ids`/`business_unit_ids` query params
+  // the page sends explicitly (not the navbar's active BU header) — routed through getReport so
+  // it drops X-Company-Id the same way every other multi-select report does; confirmed live that
+  // going through a bare apiClient.get() here inherited the active BU header instead and silently
+  // scoped every result down to just that one BU (0 rows instead of the full filtered set).
+  getProjectTimesheet: (params) => getReport('/reports/project-timesheet', params),
+  // `format` always overrides to 'excel'/'csv' and reads back a real file, same
+  // Content-Disposition filename pattern as exportResourceCostUtilization above. Manual header
+  // handling (not getReport, which only returns `.data` for JSON) but the same BU-scope pseudo-
+  // param handling: `buId` rides inside `params` (see the page's own params builder) purely to
+  // reach this pull-out, never as a real query-string field.
+  downloadProjectTimesheet: async (params, format) => {
+    const { buId, ...query } = params;
+    const res = await apiClient.get('/reports/project-timesheet', {
+      params: { ...query, format },
+      responseType: 'blob',
+      ...explicitBuScope(buId),
+    });
+    const match = /filename="?([^"]+)"?/i.exec(res.headers['content-disposition'] ?? '');
+    const ext = format === 'csv' ? 'csv' : 'xlsx';
+    const filename = match?.[1] ?? `project-timesheet.${ext}`;
+    return { blob: res.data, filename };
+  },
 };

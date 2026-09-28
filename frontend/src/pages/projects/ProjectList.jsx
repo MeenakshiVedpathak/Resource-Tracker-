@@ -86,8 +86,13 @@ const ProjectList = () => {
  
   const debouncedSearch = useDebounce(search, 400);
   const canManage = useCanManageClientProjectPO();
- 
-  const [sorting, setSorting] = useState([]);
+
+  // Defaults to newest-created first, not the backend's own default (id/creation order
+  // ascending) — a freshly created project used to land wherever it fell in that order, often off
+  // the first page entirely, reading as if the create had silently failed. Still a real column
+  // sort, not a client-side reorder — the user can still click any header to sort by something
+  // else, same as ClientList.jsx's own fix for this.
+  const [sorting, setSorting] = useState([{ id: 'created_at', desc: true }]);
  
   const importMutation = useImportProjects();
   const fileInputRef = useRef(null);
@@ -173,6 +178,40 @@ const ProjectList = () => {
         <TruncatedCell value={row.original.client_name ?? row.original.client?.client_name} maxWidth="180px" />
       ),
     }),
+    // A Project's own "Business Unit" reads as whichever BU its CREATOR belongs to, not the
+    // Project's own `company`/`company_id` (both exist on the row, but product intent here is
+    // "e.g. a Project created by a UV Tech BU Admin should show UV Tech") — resolved off the
+    // `creator` object the backend now includes (see BACKEND_CREATED_BY_AND_PROJECT_BU_PROMPT.md).
+    // The creator's OWN entry in `creator.business_units` (matched by `creator.company_id`)
+    // already carries that BU's own parent info, so Sub BU needs no extra lookup/request either.
+    columnHelper.display({
+      id: 'creator_bu',
+      header: 'Business Unit',
+      size: 180,
+      cell: ({ row }) => {
+        const creator = row.original.creator;
+        const buEntry = creator?.business_units?.find((bu) => bu.id === creator.company_id);
+        const rootName = buEntry?.parent_business_unit_name ?? buEntry?.name ?? creator?.company_name;
+        return <TruncatedCell value={rootName} maxWidth="160px" />;
+      },
+    }),
+    columnHelper.display({
+      id: 'creator_sub_bu',
+      header: 'Sub BU',
+      size: 150,
+      cell: ({ row }) => {
+        const creator = row.original.creator;
+        const buEntry = creator?.business_units?.find((bu) => bu.id === creator.company_id);
+        const subBuName = buEntry?.parent_business_unit_id != null ? buEntry.name : null;
+        return <TruncatedCell value={subBuName} maxWidth="130px" />;
+      },
+    }),
+    columnHelper.display({
+      id: 'created_by',
+      header: 'Created By',
+      size: 170,
+      cell: ({ row }) => <TruncatedCell value={row.original.creator?.full_name} maxWidth="150px" />,
+    }),
     columnHelper.accessor('project_description', {
       header: 'Description',
       size: 220,
@@ -197,8 +236,14 @@ const ProjectList = () => {
  
   // Row 1 carries every column in order, which is what fixes the header order for the whole
   // sheet — json_to_sheet takes its columns from the keys as first seen.
+  //
+  // Same template for every role now — "BU Name" only ever matches BUs the importing user
+  // themselves owns (Admin/Entity Admin/Platform Admin) or is mapped to (BU Admin/PM and other
+  // BU-scoped roles, whose own Sub-BUs are namable directly too), so there's nothing role-specific
+  // left to vary in the columns, only in the help text below.
   const handleDownloadSample = () => {
-    const ws = XLSX.utils.json_to_sheet([
+    const rows = [
+      // Row 1: a BU with no Sub-BUs — Sub BU stays blank.
       {
         'Project Name': 'Website Revamp',
         'Project Code': '',
@@ -206,7 +251,11 @@ const ProjectList = () => {
         'Client Name': 'Acme Corporation',
         'Description': 'Q3 marketing site redesign',
         'Status': 'active',
+        'BU Name': 'BU 1',
+        'Entity Name': '',
+        'Sub BU': '',
       },
+      // Row 2: a BU that has Sub-BUs — Sub BU is required.
       {
         'Project Name': 'Mobile App Rollout',
         'Project Code': 'PRJ-MOBILE-01',
@@ -214,7 +263,12 @@ const ProjectList = () => {
         'Client Name': '',
         'Description': 'iOS/Android release',
         'Status': 'active',
+        'BU Name': 'BU 2',
+        'Entity Name': '',
+        'Sub BU': 'Sub BU 2a',
       },
+      // Row 3: this BU Name happens to exist under more than one of the user's Entities — Entity
+      // Name is required to pick which one.
       {
         'Project Name': 'Data Migration',
         'Project Code': '',
@@ -222,8 +276,12 @@ const ProjectList = () => {
         'Client Name': 'Globex Inc',
         'Description': '',
         'Status': 'inactive',
+        'BU Name': 'BU 3',
+        'Entity Name': 'Entity 1',
+        'Sub BU': '',
       },
-    ]);
+    ];
+    const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Projects');
     XLSX.writeFile(wb, 'project_sample.xlsx');

@@ -2,7 +2,7 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import Sidebar from '@/components/layout/Sidebar';
 import Topbar from '@/components/layout/Topbar';
 import AICopilotWidget from '@/components/ai/AICopilotWidget';
-import { useSyncAccessibleForms } from '@/hooks/useAccessibleForms';
+import { useSyncAccessibleForms, useSyncBusinessUnits } from '@/hooks/useAccessibleForms';
 import { useAuth } from '@/hooks/useAuth';
 import { ROUTES } from '@/constants/routes';
 
@@ -21,6 +21,10 @@ const MainLayout = () => {
   // just when the store happens to be empty) — so the sidebar/route guards reflect the
   // logged-in user's current role-form mappings, not a stale snapshot from last login.
   useSyncAccessibleForms();
+  // Same rationale as useSyncAccessibleForms above, but for the employee's own BU mapping — see
+  // useSyncBusinessUnits' comment for the bug this fixes (BU Admin reassigns a BU/project,
+  // manager previously had to log out/in to see it).
+  useSyncBusinessUnits();
 
   const { isPlatformAdmin, isEmployeeOnly, homeRoute } = useAuth();
   const { pathname } = useLocation();

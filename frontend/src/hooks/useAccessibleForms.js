@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { rolesApi } from '@/api/roles.api';
+import { employeesApi } from '@/api/employees.api';
 import { QUERY_KEYS } from '@/constants/queryKeys';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -43,4 +44,29 @@ export const useRefreshAccessibleForms = () => {
       // Non-fatal — MainLayout's fallback sync will retry on next render if this failed.
     }
   };
+};
+
+// Mounted in MainLayout, alongside useSyncAccessibleForms. Previously, an employee's own BU
+// mapping (`businessUnits` in the store) was only ever fetched once, at login — a BU Admin
+// mapping that employee to a new BU/project afterwards stayed invisible in their live session
+// until they logged out and back in, because a plain page reload only re-read the stale
+// localStorage snapshot rather than hitting the network. This re-fetches
+// GET /employees/:id/business-units on every authenticated page load (fresh QueryClient per
+// load, so it's never served from a stale cache) and overwrites the store with the live result,
+// the same "instant-paint placeholder until this resolves" pattern useSyncAccessibleForms uses.
+export const useSyncBusinessUnits = () => {
+  const { employee, isAuthenticated, setBusinessUnits } = useAuth();
+  const employeeId = isAuthenticated ? employee?.id : null;
+
+  const { data, isSuccess } = useQuery({
+    queryKey: QUERY_KEYS.EMPLOYEE_OWN_BUSINESS_UNITS(employeeId),
+    queryFn: () => employeesApi.getBusinessUnits(employeeId),
+    enabled: employeeId != null,
+    staleTime: 1000 * 60 * 5,
+  });
+
+  useEffect(() => {
+    if (isSuccess && data) setBusinessUnits(data?.data?.businessUnits);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSuccess, data]);
 };

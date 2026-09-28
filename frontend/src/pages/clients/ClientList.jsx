@@ -77,7 +77,7 @@ const StatusToggle = ({ client, canManage }) => {
 
 const ClientList = () => {
   const navigate = useNavigate();
-  const { success, error: showError } = useNotification();
+  const { success, error: showError, warning } = useNotification();
 
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
@@ -88,7 +88,12 @@ const ClientList = () => {
   const debouncedSearch = useDebounce(search, 400);
   const canManage = useCanManageClientProjectPO();
 
-  const [sorting, setSorting] = useState([]);
+  // Defaults to newest-created first, not the backend's own default (id/creation order
+  // ascending) — a freshly created client used to land wherever it fell in that order, often off
+  // the first page entirely, reading as if the create had silently failed. Still a real column
+  // sort, not a client-side reorder — the user can still click any header to sort by something
+  // else, same as before.
+  const [sorting, setSorting] = useState([{ id: 'created_at', desc: true }]);
 
   // BU filter, from the same shared hook every other Master screen uses (ProjectList,
   // ServicePOList, SubProjectList, ...) so availability can't drift between them.
@@ -283,13 +288,31 @@ const ClientList = () => {
       size: 140,
       cell: (info) => <StatusToggle client={info.row.original} canManage={canManage} />,
     }),
+    columnHelper.display({
+      id: 'created_by',
+      header: 'Created By',
+      size: 170,
+      cell: ({ row }) => <TruncatedCell value={row.original.creator?.full_name} maxWidth="150px" />,
+    }),
   ];
 
+  // Same template for every role now — "BU Name" only ever matches BUs the importing user
+  // themselves owns (Admin/Entity Admin/Platform Admin) or is mapped to (BU Admin/PM and other
+  // BU-scoped roles, whose own Sub-BUs are namable directly too), so there's nothing role-specific
+  // left to vary in the columns, only in the help text below.
   const handleDownloadSample = () => {
-    const ws = XLSX.utils.json_to_sheet([{
-      'Client Name': 'Acme Corp',
-      'Industry': 'Technology'
-    }]);
+    const rows = [
+      // Row 1: a BU with no Sub-BUs — Sub BU stays blank.
+      { 'Client Name': 'Acme Corp', 'Industry': 'Technology', 'BU Name': 'BU 1', 'Entity Name': '', 'Sub BU': '' },
+      // Row 2: a BU that has Sub-BUs — Sub BU is required.
+      { 'Client Name': 'Globex Ltd', 'Industry': 'Manufacturing', 'BU Name': 'BU 2', 'Entity Name': '', 'Sub BU': 'Sub BU 2a' },
+      // Row 3: this BU Name happens to exist under more than one of the user's Entities — Entity
+      // Name is required to pick which one.
+      { 'Client Name': 'Initech LLC', 'Industry': 'Finance', 'BU Name': 'BU 3', 'Entity Name': 'Entity 1', 'Sub BU': '' },
+      // Row 4 (Client only): BU Name left blank — the client is created with no Business Unit.
+      { 'Client Name': 'No-BU Client', 'Industry': 'Retail', 'BU Name': '', 'Entity Name': '', 'Sub BU': '' },
+    ];
+    const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Clients");
     XLSX.writeFile(wb, "client_sample.xlsx");
@@ -331,6 +354,7 @@ const ClientList = () => {
         'Client Code': c.client_code,
         'Industry': c.industry,
         'Status': c.status,
+        'Created By': c.creator?.full_name ?? '',
       }));
       const ws = XLSX.utils.json_to_sheet(exportData);
       const wb = XLSX.utils.book_new();
@@ -370,12 +394,28 @@ const ClientList = () => {
     reader.readAsBinaryString(file);
   };
 
+  // Shared by both the mutation's onSuccess and its onError-with-a-body branch below — either way
+  // the response carries the same { total, imported, error_rows } shape, and either way the user
+  // needs the same "how many actually made it in" toast, not just a silent result screen.
+  const notifyImportResult = (result) => {
+    const data = result?.data || result;
+    const errors = data.error_rows || data.errors || data.failed || [];
+    const total = data.total ?? data.total_processed ?? 0;
+    const imported = data.imported ?? data.success_count ?? 0;
+    if (errors.length > 0) {
+      warning(`Imported ${imported} of ${total}. ${errors.length} row(s) need fixing — see Error Rows.`);
+    } else {
+      success(`Imported ${imported} of ${total} rows successfully.`);
+    }
+  };
+
   const handleConfirmImport = () => {
     if (!previewFile) return;
 
     importMutation.mutate(previewFile, {
       onSuccess: (res) => {
         setImportResult(res);
+        notifyImportResult(res);
         setIsPreviewOpen(false);
         setPreviewFile(null);
         setPreviewData(null);
@@ -385,6 +425,7 @@ const ClientList = () => {
           showError(extractApiError(err));
         } else if (err.response?.data) {
           setImportResult(err.response.data);
+          notifyImportResult(err.response.data);
           setIsPreviewOpen(false);
           setPreviewFile(null);
           setPreviewData(null);
@@ -402,7 +443,14 @@ const ClientList = () => {
     const errors = data.error_rows || data.errors || data.failed || [];
     const total = data.total ?? data.total_processed ?? 0;
     const imported = data.imported ?? data.success_count ?? 0;
-    const skipped = data.skipped ?? data.error_count ?? errors.length ?? 0;
+    // `skipped` (from the API) counts DUPLICATE rows only — validation errors (BU not found, Sub
+    // BU required, Client Name required, etc.) come back in `errors` with `skipped` still 0. The
+    // error table used to be gated on `skipped > 0`, so a sheet that was 100% validation errors
+    // (no duplicates at all) rendered NO error table and just "0 imported" with nothing to explain
+    // why — this is what actually needs fixing, not skipped.
+    const skipped = data.skipped ?? data.error_count ?? 0;
+    // Rows that failed for a reason OTHER than "duplicate" — a plain validation failure.
+    const failed = Math.max(0, errors.length - skipped);
 
     return (
       <div className="space-y-5">
@@ -418,17 +466,23 @@ const ClientList = () => {
           {skipped > 0 && (
             <Badge variant="destructive" className="gap-1.5">
               <AlertCircle className="h-3.5 w-3.5" />
-              {skipped} skipped
+              {skipped} duplicates skipped
+            </Badge>
+          )}
+          {failed > 0 && (
+            <Badge variant="destructive" className="gap-1.5">
+              <AlertCircle className="h-3.5 w-3.5" />
+              {failed} failed
             </Badge>
           )}
         </div>
 
-        {skipped > 0 && errors.length > 0 && (
+        {errors.length > 0 && (
           <Card className="border-destructive/40">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-sm text-destructive">
                 <AlertCircle className="h-4 w-4" />
-                Error Rows ({skipped})
+                Error Rows ({errors.length})
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
@@ -443,12 +497,12 @@ const ClientList = () => {
                   <TableBody>
                     {errors.map((row, idx) => (
                       <TableRow key={idx} className="hover:bg-destructive/5">
-                        <TableCell className="font-mono text-xs">
+                        <TableCell className="font-mono text-xs align-top">
                           {row.row ?? row.rowNumber ?? row.row_number ?? idx + 1}
                         </TableCell>
-                        <TableCell className="text-sm text-destructive">
+                        <TableCell className="text-sm text-destructive whitespace-pre-line">
                           {row.errors?.length > 0
-                            ? row.errors.join(', ')
+                            ? row.errors.join('\n')
                             : row.message ?? row.error_message ?? row.error ?? '—'}
                         </TableCell>
                       </TableRow>
@@ -460,7 +514,7 @@ const ClientList = () => {
           </Card>
         )}
 
-        {skipped === 0 && (
+        {errors.length === 0 && (
           <div className="text-center py-8 text-green-600 bg-green-50 rounded-md border border-green-100">
              All records were imported successfully!
           </div>

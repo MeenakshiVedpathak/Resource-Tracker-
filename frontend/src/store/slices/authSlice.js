@@ -73,13 +73,31 @@ const authSlice = createSlice({
     // Role-Based Login: populates businessUnits from the dedicated GET
     // /employees/:id/business-units call made right after login/select-role — auto-selects the
     // first BU so the employee never has to pick one manually when there's exactly one (or none).
+    //
+    // useSyncBusinessUnits (MainLayout) dispatches this same action again on EVERY authenticated
+    // page load, not just at login — it's the live re-fetch that keeps a multi-BU employee's own
+    // mapping (and each BU's own fields, e.g. saturday_off_rule) from going stale for the rest of
+    // the session. This reducer used to unconditionally reset `activeBuId` to
+    // `nextBusinessUnits[0]?.id` every single time it ran — confirmed live: for an employee mapped
+    // to several BUs, the "first" one in this response isn't guaranteed to come back in the same
+    // order call to call, so the active BU (which drives the X-Company-Id header, the weekend/
+    // off-day policy, and everything else scoped by "current BU") silently reshuffled to a
+    // different one of their BUs on every plain page reload — completely independent of whatever
+    // they (or a BU Admin editing that BU's settings) actually intended. Now it only auto-selects
+    // when there's no existing selection to preserve, or the previous selection no longer applies
+    // (e.g. that BU mapping was removed) — the common "pick one on first login" case still works,
+    // but a reload/background refresh never yanks an already-active BU out from under the user.
     setBusinessUnits: (state, action) => {
       const nextBusinessUnits = action.payload ?? [];
       state.businessUnits = nextBusinessUnits;
       saveBusinessUnits(nextBusinessUnits);
-      const nextActiveBuId = nextBusinessUnits[0]?.id ?? null;
-      state.activeBuId = nextActiveBuId;
-      saveActiveBuId(nextActiveBuId);
+      const stillValid = state.activeBuId != null
+        && nextBusinessUnits.some((bu) => bu.id === state.activeBuId);
+      if (!stillValid) {
+        const nextActiveBuId = nextBusinessUnits[0]?.id ?? null;
+        state.activeBuId = nextActiveBuId;
+        saveActiveBuId(nextActiveBuId);
+      }
     },
     setTokens: (state, action) => {
       const { accessToken, refreshToken } = action.payload;

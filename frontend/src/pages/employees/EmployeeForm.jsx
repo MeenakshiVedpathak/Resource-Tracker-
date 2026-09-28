@@ -316,7 +316,7 @@ const EmployeeForm = () => {
                       name="original_entity"
                       render={({ field }) => (
                         <FormItem className="space-y-1">
-                          <FormLabel className="text-[11px] text-muted-foreground font-medium"><span className="text-destructive mr-0.5">*</span> Original Entity</FormLabel>
+                          <FormLabel className="flex h-4 items-center text-[11px] text-muted-foreground font-medium"><span className="text-destructive mr-0.5">*</span> Original Entity</FormLabel>
                           <FormControl>
                             <Input placeholder="e.g. GTT Client Entity" maxLength={512} {...field} className="h-8 text-sm border-gray-200" />
                           </FormControl>
@@ -330,7 +330,7 @@ const EmployeeForm = () => {
                       name="payroll_entity"
                       render={({ field }) => (
                         <FormItem className="space-y-1">
-                          <FormLabel className="text-[11px] text-muted-foreground font-medium"><span className="text-destructive mr-0.5">*</span> Payroll Entity</FormLabel>
+                          <FormLabel className="flex h-4 items-center text-[11px] text-muted-foreground font-medium"><span className="text-destructive mr-0.5">*</span> Payroll Entity</FormLabel>
                           <FormControl>
                             <Input placeholder="e.g. GTT India Pvt Ltd" maxLength={64} {...field} className="h-8 text-sm border-gray-200" />
                           </FormControl>
@@ -344,7 +344,14 @@ const EmployeeForm = () => {
                       name="location"
                       render={({ field }) => (
                         <FormItem className="space-y-1">
-                          <FormLabel className="flex items-center gap-1 text-[11px] text-muted-foreground font-medium">
+                          {/* h-4 (applied to all four labels in this row, not just this one) pins
+                              every label to the same fixed height — without it, this field's Info
+                              icon made its own flex row render at a slightly different height than
+                              its plain-text siblings' natural line-height, and space-y-1's fixed
+                              gap below then started at a different point for each, leaving the
+                              four inputs visibly out of line despite every FormItem starting at
+                              the same grid-row top. */}
+                          <FormLabel className="flex h-4 items-center gap-1 text-[11px] text-muted-foreground font-medium">
                             <span className="text-destructive mr-0.5">*</span> Location
                             <Tooltip>
                               <TooltipTrigger asChild>
@@ -366,7 +373,7 @@ const EmployeeForm = () => {
                       name="sub_location"
                       render={({ field }) => (
                         <FormItem className="space-y-1">
-                          <FormLabel className="text-[11px] text-muted-foreground font-medium"><span className="text-destructive mr-0.5">*</span> Sub Location</FormLabel>
+                          <FormLabel className="flex h-4 items-center text-[11px] text-muted-foreground font-medium"><span className="text-destructive mr-0.5">*</span> Sub Location</FormLabel>
                           <FormControl>
                             <Input placeholder="e.g. Hinjewadi" maxLength={256} {...field} className="h-8 text-sm border-gray-200" />
                           </FormControl>

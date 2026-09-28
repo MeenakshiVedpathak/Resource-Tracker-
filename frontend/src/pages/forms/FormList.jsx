@@ -87,7 +87,7 @@ const FormRow = ({ form, canWrite, onEdit, onMove, sortable = true, indent = fal
       {sortable ? (
         <button
           type="button"
-          title={canWrite ? 'Drag to reorder within this module' : undefined}
+          title={canWrite ? (indent ? 'Drag to reorder within this category' : 'Drag to reorder within this module') : undefined}
           className={cn('flex items-center justify-center pl-4 text-muted-foreground', canWrite ? 'cursor-grab active:cursor-grabbing' : 'cursor-not-allowed opacity-30')}
           {...(canWrite ? { ...attributes, ...listeners } : {})}
         >
@@ -124,9 +124,10 @@ const ModuleBlock = ({ module, canWrite, expanded, onToggleExpand, onEditModule,
 
   const formSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
-  // Forms with a category_id are grouped under their category and shown in seq order only — the
-  // API has no reorder-within-category endpoint (only module-scoped PATCH /forms/reorder), so
-  // only the uncategorized subset below is drag-sortable.
+  // Forms with a category_id are grouped under their category, each category sorted and
+  // drag-reordered independently (same PATCH /forms/reorder endpoint as the uncategorized list
+  // below — it only ever touches the exact ids it's given, so scoping a drag to one category's
+  // own siblings never disturbs any other category or the uncategorized list; confirmed live).
   const uncategorizedForms = module.forms.filter((f) => f.category_id == null);
   const categorizedGroups = useMemo(() => {
     const byCategory = new Map();
@@ -152,6 +153,18 @@ const ModuleBlock = ({ module, canWrite, expanded, onToggleExpand, onEditModule,
     const newIndex = uncategorizedForms.findIndex((f) => f.id === over.id);
     if (oldIndex === -1 || newIndex === -1) return;
     onFormsReorder(module.form_name, arrayMove(uncategorizedForms, oldIndex, newIndex));
+  };
+
+  // Same shape as handleFormsDragEnd above, just scoped to one category's own forms list instead
+  // of the module's uncategorized ones — onFormsReorder only ever reassigns seq for the exact ids
+  // it's handed, so this never touches sibling categories or the uncategorized list.
+  const handleCategoryFormsDragEnd = (categoryForms) => (event) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = categoryForms.findIndex((f) => f.id === active.id);
+    const newIndex = categoryForms.findIndex((f) => f.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    onFormsReorder(module.form_name, arrayMove(categoryForms, oldIndex, newIndex));
   };
 
   return (
@@ -203,17 +216,22 @@ const ModuleBlock = ({ module, canWrite, expanded, onToggleExpand, onEditModule,
                     {categoryExpanded ? <ChevronDown className="h-3 w-3 shrink-0" /> : <ChevronRight className="h-3 w-3 shrink-0" />}
                     <FolderCog className="h-3 w-3 shrink-0" /> {group.name}
                   </button>
-                  {categoryExpanded && group.forms.map((form) => (
-                    <FormRow
-                      key={form.id}
-                      form={form}
-                      canWrite={canWrite}
-                      sortable={false}
-                      indent
-                      onEdit={() => onEditForm(form)}
-                      onMove={onMoveForm}
-                    />
-                  ))}
+                  {categoryExpanded && (
+                    <DndContext sensors={formSensors} collisionDetection={closestCenter} onDragEnd={handleCategoryFormsDragEnd(group.forms)}>
+                      <SortableContext items={group.forms.map((f) => f.id)} strategy={verticalListSortingStrategy}>
+                        {group.forms.map((form) => (
+                          <FormRow
+                            key={form.id}
+                            form={form}
+                            canWrite={canWrite}
+                            indent
+                            onEdit={() => onEditForm(form)}
+                            onMove={onMoveForm}
+                          />
+                        ))}
+                      </SortableContext>
+                    </DndContext>
+                  )}
                 </div>
               );
             })}

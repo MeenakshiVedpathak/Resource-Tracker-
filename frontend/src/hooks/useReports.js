@@ -509,3 +509,17 @@ export const useEmployeeWorkLogHoursSummaryDetails = (employeeId, params, isModa
   });
 };
 
+// Project-Wise Timesheet Report — backend requires exactly one period mode: {month, year} XOR
+// {start_date, end_date}, same "OR" gate as useEmployeeBenchPercentage above.
+export const useProjectTimesheet = (params) => {
+  const hasMonthYear = !!(params?.month && params?.year);
+  const hasDateRange = !!(params?.start_date && params?.end_date);
+  return useQuery({
+    queryKey: QUERY_KEYS.REPORT_PROJECT_TIMESHEET(params),
+    queryFn: () => reportsApi.getProjectTimesheet(params),
+    enabled: hasMonthYear !== hasDateRange,
+    staleTime: 0,
+    placeholderData: (prev) => prev,
+  });
+};
+

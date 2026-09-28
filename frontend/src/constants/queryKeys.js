@@ -17,6 +17,7 @@ export const QUERY_KEYS = {
   ELIGIBLE_TEAM_LEADS: ['employees', 'eligible-team-leads'],
   EMPLOYEE: (id) => ['employees', id],
   EMPLOYEE_MAPPINGS: (id) => ['employees', id, 'mappings'],
+  EMPLOYEE_OWN_BUSINESS_UNITS: (id) => ['employees', id, 'business-units', 'own'],
 
   // Roles
   ROLES: (params) => ['roles', params],
@@ -187,6 +188,7 @@ export const QUERY_KEYS = {
   REPORT_MONTH_WISE_BENCH: (params) => ['reports', 'month-wise-bench', params],
   REPORT_RESOURCE_WISE_BENCH: (params) => ['reports', 'resource-wise-bench', params],
   REPORT_RESOURCE_COST_UTILIZATION: (params) => ['reports', 'resource-cost-utilization', params],
+  REPORT_PROJECT_TIMESHEET: (params) => ['reports', 'project-timesheet', params],
 
   // Notifications
   NOTIFICATIONS: (params) => ['notifications', params],

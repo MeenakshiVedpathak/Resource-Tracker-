@@ -158,17 +158,34 @@ const WorkLogEntryModal = ({ open, onOpenChange, date, task }) => {
           // breakdown, but there isn't one here anyway).
           ...(isTimeBased ? { time_entries: filledSegments } : { hours: values.hours }),
         };
-        await updateMutation.mutateAsync({ id: task.id, payload });
+        const updateResult = await updateMutation.mutateAsync({ id: task.id, payload });
+        // Re-check status off the update RESPONSE, not the stale `task` prop captured when the
+        // modal opened — per this repo's own contract (see useResubmitWorkLogEntry's comment),
+        // a plain edit is documented to leave status at 'rejected' untouched, but that's been
+        // observed live NOT holding: the backend can flip it to 'pending' as a side effect of the
+        // update itself. Calling resubmit anyway in that case is guaranteed to 409 ("current
+        // status: pending") — if the entry already isn't 'rejected' post-update, treat it as
+        // already effectively resubmitted instead of firing a call known to fail.
+        const freshStatus = updateResult?.data?.status ?? updateResult?.status ?? task.status;
 
-        if (task.status === 'rejected') {
+        if (freshStatus === 'rejected') {
           try {
             await resubmitMutation.mutateAsync(task.id);
             success('Entry updated and resubmitted for approval.');
           } catch (resubmitErr) {
-            showError(`Entry updated, but couldn't resubmit automatically: ${extractApiError(resubmitErr)}`);
+            const message = extractApiError(resubmitErr);
+            // The backend has been seen leaking a raw, internal serialization error ("Converting
+            // circular structure to JSON...") into this message on at least one occasion — never
+            // show that verbatim to the user.
+            const isRawServerError = /circular structure|constructor '/i.test(message);
+            showError(
+              `Entry updated, but couldn't resubmit automatically: ${
+                isRawServerError ? 'Please try resubmitting this entry again from the Rejected Entries list.' : message
+              }`
+            );
           }
         } else {
-          success('Entry updated.');
+          success('Entry updated and resubmitted for approval.');
         }
       } else {
         await saveDayMutation.mutateAsync({
@@ -207,14 +224,14 @@ const WorkLogEntryModal = ({ open, onOpenChange, date, task }) => {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[calc(100dvh-2rem)] max-w-md flex-col overflow-hidden">
+      <DialogContent className="flex max-h-[calc(100dvh-2rem)] max-w-md flex-col overflow-y-hidden overflow-x-hidden">
         <DialogHeader>
           <DialogTitle>{isEdit ? 'Edit Work Log Entry' : 'Add Work Log Entry'}</DialogTitle>
         </DialogHeader>
 
         {/* Only this middle band scrolls — the title above and the buttons below stay in place
             however short the viewport is. */}
-        <div className="-mr-2 min-h-0 flex-1 space-y-4 overflow-y-auto pr-2">
+        <div className="-mr-3 min-h-0 flex-1 space-y-4 overflow-y-auto pr-3">
         {task?.status === 'rejected' && (
           <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
             <p className="font-medium">
