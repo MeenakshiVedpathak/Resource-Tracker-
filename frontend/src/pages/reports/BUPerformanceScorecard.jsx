@@ -191,7 +191,6 @@ const BUPerformanceScorecard = () => {
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
         title="BU Performance Scorecard"
-        description="Per-company scorecard of active employees, POs, and margin. Visible to Entity Admin and Admin roles only."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <SearchInput
@@ -204,7 +203,6 @@ const BUPerformanceScorecard = () => {
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((p) => !p)}
               activeCount={(entityIds.length > 0 ? 1 : 0) + (buIds.length > 0 ? 1 : 0)}
-              className="h-9"
             />
             {!errorMessage && filteredRecords.length > 0 && (
               <Button variant="outline" size="toolbar" onClick={handleExport}>

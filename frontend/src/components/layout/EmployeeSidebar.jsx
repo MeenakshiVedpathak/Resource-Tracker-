@@ -124,7 +124,7 @@ const EmployeeNavItem = ({ item, active, collapsed, badgeCount }) => {
       title={collapsed ? `${item.label}${hasBadge ? ` (${badgeCount})` : ''}` : undefined}
     >
       <span className="relative shrink-0">
-        <item.icon className={cn('shrink-0', collapsed ? 'h-5 w-5' : 'h-4 w-4')} />
+        <item.icon className={cn('shrink-0', collapsed ? 'h-[clamp(1.125rem,1.4vw,1.25rem)] w-[clamp(1.125rem,1.4vw,1.25rem)]' : 'h-[clamp(0.875rem,1.1vw,1rem)] w-[clamp(0.875rem,1.1vw,1rem)]')} />
         {hasBadge && collapsed && (
           <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-destructive" />
         )}
@@ -161,7 +161,7 @@ const PinnedDashboardItem = ({ active, collapsed }) => (
     style={active ? { background: 'linear-gradient(135deg, #6d28d9, #2563eb)' } : undefined}
     title={collapsed ? 'Dashboard' : undefined}
   >
-    <LayoutDashboard className={cn('shrink-0', collapsed ? 'h-5 w-5' : 'h-4 w-4')} />
+    <LayoutDashboard className={cn('shrink-0', collapsed ? 'h-[clamp(1.125rem,1.4vw,1.25rem)] w-[clamp(1.125rem,1.4vw,1.25rem)]' : 'h-[clamp(0.875rem,1.1vw,1rem)] w-[clamp(0.875rem,1.1vw,1rem)]')} />
     {!collapsed && <span>Dashboard</span>}
   </Link>
 );
@@ -280,14 +280,14 @@ const EmployeeSidebar = () => {
 
         <div
           className={cn(
-            'relative z-10 flex h-16 shrink-0 items-center border-b border-sidebar-border px-4',
+            'relative z-10 flex shrink-0 items-center border-b border-sidebar-border px-4 h-[clamp(3.25rem,6vw,4rem)]',
             collapsed ? 'justify-center px-2' : ''
           )}
         >
           <div
             className={cn(
               'flex shrink-0 items-center overflow-hidden rounded-md',
-              collapsed ? 'h-11 w-11 justify-center' : 'h-14 justify-start px-1'
+              collapsed ? 'h-[clamp(2.25rem,4.5vw,2.75rem)] w-[clamp(2.25rem,4.5vw,2.75rem)] justify-center' : 'h-[clamp(2.75rem,5.5vw,3.5rem)] justify-start px-1'
             )}
           >
             <img
@@ -324,7 +324,7 @@ const EmployeeSidebar = () => {
                   // Hub-page module — label is a link to the hub, no chevron, no expanded list.
                   <Link
                     to={overviewRoute}
-                    className="flex w-full items-center gap-1 px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/30 whitespace-nowrap hover:text-sidebar-foreground/60 transition-colors"
+                    className="flex w-full items-center gap-1 px-3 pt-2 pb-1 text-[clamp(0.5625rem,0.7vw,0.625rem)] font-semibold uppercase tracking-widest text-sidebar-foreground/30 whitespace-nowrap hover:text-sidebar-foreground/60 transition-colors"
                   >
                     <Folder className="h-3 w-3 shrink-0" />
                     <span className="truncate">{group.label}</span>
@@ -333,7 +333,7 @@ const EmployeeSidebar = () => {
                   <button
                     type="button"
                     onClick={() => toggleModule(group.label)}
-                    className="flex w-full items-center gap-1 px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/30 whitespace-nowrap hover:text-sidebar-foreground/60 transition-colors"
+                    className="flex w-full items-center gap-1 px-3 pt-2 pb-1 text-[clamp(0.5625rem,0.7vw,0.625rem)] font-semibold uppercase tracking-widest text-sidebar-foreground/30 whitespace-nowrap hover:text-sidebar-foreground/60 transition-colors"
                   >
                     {moduleCollapsed
                       ? <ChevronRight className="h-3 w-3 shrink-0 transition-transform duration-150" />
@@ -378,16 +378,16 @@ const EmployeeSidebar = () => {
           <button
             onClick={() => dispatch(toggleSidebar())}
             className={cn(
-              'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs text-sidebar-foreground/50',
+              'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[clamp(0.6875rem,0.85vw,0.75rem)] text-sidebar-foreground/50',
               'hover:bg-sidebar-hover hover:text-sidebar-foreground transition-colors',
               collapsed && 'justify-center px-2'
             )}
           >
             {collapsed ? (
-              <ChevronRight className="h-4 w-4" />
+              <ChevronRight className="h-[clamp(0.875rem,1.1vw,1rem)] w-[clamp(0.875rem,1.1vw,1rem)]" />
             ) : (
               <>
-                <ChevronLeft className="h-4 w-4" />
+                <ChevronLeft className="h-[clamp(0.875rem,1.1vw,1rem)] w-[clamp(0.875rem,1.1vw,1rem)]" />
                 <span>Collapse</span>
               </>
             )}

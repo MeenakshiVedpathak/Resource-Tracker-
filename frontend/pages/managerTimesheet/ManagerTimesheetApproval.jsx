@@ -254,7 +254,7 @@ const ManagerTimesheetApproval = () => {
     <div className="flex h-full min-h-0 flex-col space-y-3">
       <PageHeader
         title="Timesheet Approval"
-        description="Review and approve your team's timesheets."
+        description=""
         actions={
           // Desktop only — on mobile this whole row would overflow the viewport (a fixed-width
           // search box plus two more buttons never fits), so it moves into the dedicated

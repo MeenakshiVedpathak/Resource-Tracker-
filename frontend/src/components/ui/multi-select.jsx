@@ -67,7 +67,8 @@ export function MultiSelect({
             aria-expanded={open}
             disabled={disabled}
             className={cn(
-              "w-full justify-between h-9 text-sm font-normal",
+              // Fluid clamp() sizing (see button.jsx's own comment) instead of a fixed h-9/text-sm.
+              "w-full justify-between h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)] font-normal",
               selectedLabels.length === 0 && "text-muted-foreground",
               selectedLabels.length > 0 && "pr-8",
               className
@@ -80,7 +81,7 @@ export function MultiSelect({
                 ? selectedLabels[0]
                 : `${selectedLabels.length} selected`}
             </span>
-            <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
+            <ChevronDown className="h-[1em] w-[1em] shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">

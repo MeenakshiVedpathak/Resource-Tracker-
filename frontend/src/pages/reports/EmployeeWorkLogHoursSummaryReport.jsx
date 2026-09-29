@@ -522,7 +522,6 @@ const EmployeeWorkLogHoursSummaryReport = () => {
     <div className="flex h-full min-h-0 flex-col space-y-4">
       <PageHeader
         title="Employee Work Log Hours Summary"
-        description="Aggregated work log hours per employee for the selected date or month."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <SearchInput
@@ -539,7 +538,6 @@ const EmployeeWorkLogHoursSummaryReport = () => {
               isOpen={showFilters}
               onToggle={() => setShowFilters((prev) => !prev)}
               activeCount={activeFilterCount}
-              className="h-9"
             />
             {records.length > 0 && (
               <Button
@@ -559,7 +557,7 @@ const EmployeeWorkLogHoursSummaryReport = () => {
       <FilterPanel
         isOpen={showFilters}
         maxHeightClass="max-h-[240px]"
-        gridClassName="items-end gap-x-4 gap-y-5 rounded-xl border-slate-200/80 bg-slate-50/70 p-5 shadow-sm"
+        gridClassName="grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 items-end gap-x-[clamp(0.5rem,0.8vw,0.75rem)] gap-y-[clamp(0.625rem,1vw,0.875rem)] rounded-xl border-slate-200/80 bg-slate-50/70 p-[clamp(0.5rem,0.8vw,0.75rem)] shadow-sm"
         onClear={handleResetFilters}
         showClear={activeFilterCount > 0}
       >
@@ -597,7 +595,7 @@ const EmployeeWorkLogHoursSummaryReport = () => {
                   setPage(1);
                 }
               }}
-              className="w-full text-sm"
+              className="w-full"
             />
           ) : (
             <MonthYearPicker
@@ -610,7 +608,7 @@ const EmployeeWorkLogHoursSummaryReport = () => {
               }}
               placeholder="Select month"
               clearable={false}
-              className="w-full text-sm"
+              className="w-full"
             />
           )}
         </div>
@@ -650,7 +648,7 @@ const EmployeeWorkLogHoursSummaryReport = () => {
             }}
             placeholder="All Employees"
             searchPlaceholder="Search employee..."
-            className="h-9 w-full text-sm bg-white"
+            className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)] bg-white"
           />
         </div>
       </FilterPanel>

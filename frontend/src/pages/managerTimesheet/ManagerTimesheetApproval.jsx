@@ -314,7 +314,7 @@ const ManagerTimesheetApproval = () => {
             value={dateRange}
             onChange={setDateRange}
             placeholder="Select a date range"
-            className="h-9 w-full text-sm bg-white"
+            className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)] bg-white"
           />
         </div>
       )}
@@ -326,7 +326,7 @@ const ManagerTimesheetApproval = () => {
           value={statusFilter}
           onValueChange={setStatusFilter}
           placeholder="All Statuses"
-          className="h-9 w-full text-sm bg-white"
+          className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)] bg-white"
         />
       </div>
     </>
@@ -348,7 +348,7 @@ const ManagerTimesheetApproval = () => {
           value={weekendDateRange}
           onChange={setWeekendDateRange}
           placeholder="Select a date range"
-          className="h-9 w-full text-sm bg-white"
+          className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)] bg-white"
         />
       </div>
 
@@ -359,7 +359,7 @@ const ManagerTimesheetApproval = () => {
           value={weekendStatusFilter}
           onValueChange={setWeekendStatusFilter}
           placeholder="All Statuses"
-          className="h-9 w-full text-sm bg-white"
+          className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)] bg-white"
         />
       </div>
     </>
@@ -380,7 +380,7 @@ const ManagerTimesheetApproval = () => {
         description={
           isWeekendTab
             ? 'Review and approve weekend and off-day requests submitted by your team.'
-            : "Review and approve your team's timesheets."
+            : ""
         }
         actions={
           <div className="hidden md:flex items-center gap-2">

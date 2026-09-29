@@ -256,8 +256,15 @@
   }
 
   /* ── Sidebar nav item ── */
+  /* Fluid clamp() sizing (see ui/button.jsx's own comment) instead of a fixed px-3/py-[7px]/13px,
+     so sidebar labels/icons shrink smoothly with the viewport like the rest of the app. */
   .nav-item {
-    @apply flex items-center gap-2.5 rounded-md px-3 py-[7px] text-[13px] font-medium text-sidebar-muted transition-all duration-150 cursor-pointer hover:bg-sidebar-hover hover:text-sidebar-foreground;
+    @apply flex items-center gap-2.5 rounded-md font-medium text-sidebar-muted transition-all duration-150 cursor-pointer hover:bg-sidebar-hover hover:text-sidebar-foreground;
+    padding-left: clamp(0.625rem, 1vw, 0.75rem);
+    padding-right: clamp(0.625rem, 1vw, 0.75rem);
+    padding-top: clamp(0.3125rem, 0.5vw, 0.4375rem);
+    padding-bottom: clamp(0.3125rem, 0.5vw, 0.4375rem);
+    font-size: clamp(0.75rem, 0.9vw, 0.8125rem);
   }
 
   .nav-item.active {
@@ -265,7 +272,9 @@
   }
 
   .nav-item-icon {
-    @apply w-4 h-4 flex-shrink-0;
+    @apply flex-shrink-0;
+    width: clamp(0.875rem, 1.1vw, 1rem);
+    height: clamp(0.875rem, 1.1vw, 1rem);
   }
 
   /* ── Sticky Table Columns ── */

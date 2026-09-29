@@ -398,7 +398,7 @@ const AIInsights = () => {
                 isOpen={filtersOpen}
                 onToggle={() => setFiltersOpen((prev) => !prev)}
                 activeCount={audience !== 'all' ? 1 : 0}
-                className="h-9 rounded-xl"
+                className="rounded-xl"
               />
             )}
             <Button variant="outline" size="toolbar" onClick={() => refetch()} disabled={isFetching} className="rounded-xl bg-background">
@@ -410,11 +410,11 @@ const AIInsights = () => {
 
         {audienceOptions.length > 0 && (
           <div className="relative px-5 sm:px-6 pb-5">
-            <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[140px]" gridClassName="grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 w-full" onClear={clearFilters} showClear={audience !== 'all'}>
+            <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[140px]" gridClassName="grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-[clamp(0.5rem,0.8vw,0.75rem)] w-full" onClear={clearFilters} showClear={audience !== 'all'}>
               <div className="flex flex-col gap-1.5">
                 <Label className="text-xs">Audience</Label>
                 <Select value={audience} onValueChange={setAudience}>
-                  <SelectTrigger className="w-full h-9 rounded-xl gap-1.5 bg-background">
+                  <SelectTrigger className="w-full h-[clamp(1.875rem,2vw,2.25rem)] rounded-xl gap-1.5 bg-background">
                     <Users className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                     <SelectValue />
                   </SelectTrigger>

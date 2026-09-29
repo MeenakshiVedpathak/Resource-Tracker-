@@ -20,6 +20,7 @@ import EntityFilter from '@/components/common/EntityFilter';
 import DataTable from '@/components/common/DataTable';
 import EmptyState from '@/components/common/EmptyState';
 import MobilePagination from '@/components/common/MobilePagination';
+import SearchInput from '@/components/common/SearchInput';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
@@ -66,12 +67,14 @@ const STAT_TILES = [
   { key: 'rejected_hours', label: 'Rejected Hours', tone: 'rose', format: formatHours2dp },
 ];
 
+// Fluid clamp() sizing (see ui/button.jsx's own comment) instead of a fixed px-3/py-1.5/text-xs,
+// matching the same treatment already applied to MonthlyResourceUtilization's own summary chips.
 const StatChips = ({ totals }) => (
   <>
     {/* Desktop — flex-wrap pills */}
-    <div className="hidden shrink-0 flex-wrap gap-3 md:flex">
+    <div className="hidden shrink-0 flex-wrap gap-[clamp(0.4rem,0.7vw,0.75rem)] md:flex">
       {STAT_TILES.map(({ key, label, tone, format }) => (
-        <div key={key} className={`rounded-md border px-3 py-1.5 text-xs ${STAT_TONES[tone]}`}>
+        <div key={key} className={`rounded-md border px-[clamp(0.5rem,0.7vw,0.75rem)] py-[clamp(0.25rem,0.4vw,0.375rem)] text-[clamp(0.6875rem,0.75vw,0.75rem)] whitespace-nowrap ${STAT_TONES[tone]}`}>
           {label}&nbsp;
           <span className="font-semibold tabular-nums">{format(totals[key])}</span>
         </div>
@@ -80,9 +83,9 @@ const StatChips = ({ totals }) => (
     {/* Mobile — compact 2-column KPI grid */}
     <div className="grid shrink-0 grid-cols-2 gap-2 md:hidden">
       {STAT_TILES.map(({ key, label, tone, format }) => (
-        <div key={key} className={`rounded-lg border px-3 py-2 ${STAT_TONES[tone]}`}>
-          <p className="text-xs">{label}</p>
-          <p className="text-sm font-semibold tabular-nums">{format(totals[key])}</p>
+        <div key={key} className={`rounded-lg border px-[clamp(0.5rem,0.7vw,0.75rem)] py-[clamp(0.375rem,0.5vw,0.5rem)] ${STAT_TONES[tone]}`}>
+          <p className="text-[clamp(0.6875rem,0.75vw,0.75rem)]">{label}</p>
+          <p className="text-[clamp(0.75rem,0.85vw,0.875rem)] font-semibold tabular-nums">{format(totals[key])}</p>
         </div>
       ))}
     </div>
@@ -422,13 +425,17 @@ const ProjectWiseTimesheetReport = () => {
         title="Project-Wise Timesheet Report"
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <SearchInput
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              placeholder="Search…"
+            />
             <FilterToggleButton
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((p) => !p)}
               activeCount={activeFilterCount}
-              className="h-9"
             />
-            <Button variant="outline" size="sm" className="h-9" onClick={() => handleDownload('excel')} disabled={!!exportingFormat}>
+            <Button variant="outline" size="sm" className="h-[clamp(1.875rem,2vw,2.25rem)]" onClick={() => handleDownload('excel')} disabled={!!exportingFormat}>
               <Download className="mr-1.5 h-4 w-4" />{exportingFormat === 'excel' ? 'Exporting…' : 'Export Excel'}
             </Button>
           </div>
@@ -438,7 +445,7 @@ const ProjectWiseTimesheetReport = () => {
       <FilterPanel
         isOpen={filtersOpen}
         maxHeightClass="max-h-[560px]"
-        gridClassName="grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 w-full"
+        gridClassName="grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-[clamp(0.5rem,0.8vw,0.75rem)] w-full"
         onClear={handleReset}
         showClear={activeFilterCount > 0}
         onClose={() => setFiltersOpen(false)}
@@ -497,7 +504,7 @@ const ProjectWiseTimesheetReport = () => {
         <div className="flex flex-col gap-1.5">
           <Label className={FILTER_LABEL}>Approval Status</Label>
           <Select value={approvalStatus} onValueChange={(v) => { setApprovalStatus(v); setPage(1); }}>
-            <SelectTrigger className="h-9 w-full bg-white text-sm"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-[clamp(1.875rem,2vw,2.25rem)] w-full bg-white text-[clamp(0.75rem,0.85vw,0.875rem)]"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All</SelectItem>
               <SelectItem value="pending">Pending</SelectItem>
@@ -510,7 +517,7 @@ const ProjectWiseTimesheetReport = () => {
         <div className="flex flex-col gap-1.5">
           <Label className={FILTER_LABEL}>Sort</Label>
           <Select value={sortBy} onValueChange={(v) => { setSortBy(v); setPage(1); }}>
-            <SelectTrigger className="h-9 w-full bg-white text-sm"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-[clamp(1.875rem,2vw,2.25rem)] w-full bg-white text-[clamp(0.75rem,0.85vw,0.875rem)]"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="project">Project-wise</SelectItem>
               <SelectItem value="employee">Employee-wise</SelectItem>
@@ -530,8 +537,8 @@ const ProjectWiseTimesheetReport = () => {
         </div>
 
         <div className="flex items-end gap-2 xl:col-span-2">
-          <Button size="sm" className="h-9" onClick={handleApply}>Apply</Button>
-          <Button variant="outline" size="sm" className="h-9" onClick={handleReset}>Reset</Button>
+          <Button size="sm" className="h-[clamp(1.875rem,2vw,2.25rem)]" onClick={handleApply}>Apply</Button>
+          <Button variant="outline" size="sm" className="h-[clamp(1.875rem,2vw,2.25rem)]" onClick={handleReset}>Reset</Button>
         </div>
       </FilterPanel>
 
@@ -652,7 +659,7 @@ const ProjectSummaryTab = ({ rows, isLoading }) => {
   if (isLoading) {
     return (
       <div className="space-y-2 rounded-lg border p-3">
-        {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-9 w-full" />)}
+        {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-[clamp(1.875rem,2vw,2.25rem)] w-full" />)}
       </div>
     );
   }
@@ -746,7 +753,7 @@ const EmployeeSummaryTab = ({ rows, isLoading }) => {
   if (isLoading) {
     return (
       <div className="space-y-2 rounded-lg border p-3">
-        {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-9 w-full" />)}
+        {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-[clamp(1.875rem,2vw,2.25rem)] w-full" />)}
       </div>
     );
   }

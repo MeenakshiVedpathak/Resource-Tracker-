@@ -58,7 +58,10 @@ const FilterPanel = ({ isOpen, gridClassName, onClear, showClear, onClose, child
             actually hides the content while the track is animating down to `0fr` — the outer grid
             itself has nothing to clip. */}
         <div className="overflow-hidden">
-          <div className={cn('grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 w-full rounded-lg border bg-muted/30 p-3', gridClassName)}>
+          {/* Fluid clamp() sizing (see ui/button.jsx's own comment) instead of a fixed gap-3/p-3,
+              so this box's own padding/gap shrinks in step with the now-fluid fields inside it
+              instead of standing out as disproportionately large once those fields got smaller. */}
+          <div className={cn('grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-[clamp(0.5rem,0.8vw,0.75rem)] w-full rounded-lg border bg-muted/30 p-[clamp(0.5rem,0.8vw,0.75rem)]', gridClassName)}>
             {children}
             {showClear && (
               <button

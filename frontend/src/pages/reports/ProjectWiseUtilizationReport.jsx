@@ -237,7 +237,6 @@ const ProjectWiseUtilizationReport = () => {
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
         title="Project-wise Report"
-        description=""
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <SearchInput
@@ -255,7 +254,7 @@ const ProjectWiseUtilizationReport = () => {
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((p) => !p)}
               activeCount={activeFilterCount}
-              className="order-1 h-9 md:order-none"
+              className="order-1 h-[clamp(1.875rem,2vw,2.25rem)] md:order-none"
             />
           </div>
         }

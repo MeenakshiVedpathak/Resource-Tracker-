@@ -621,7 +621,7 @@ const TimesheetList = () => {
     <div className="flex h-full min-h-0 flex-col space-y-4">
       <PageHeader
         title="Timesheet Imports"
-        description="History of all uploaded timesheet files"
+        description=""
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <FilterToggleButton
@@ -669,7 +669,7 @@ const TimesheetList = () => {
       <FilterPanel
         isOpen={filtersOpen}
         maxHeightClass="max-h-[140px]"
-        gridClassName="grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 w-full"
+        gridClassName="grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-[clamp(0.5rem,0.8vw,0.75rem)] w-full"
         onClear={clearFilters}
         showClear={activeFilterCount > 0}
       >

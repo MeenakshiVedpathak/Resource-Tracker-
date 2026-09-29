@@ -191,7 +191,6 @@ const BudgetedMarginForecast = () => {
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
         title="Budgeted Margin Forecast"
-        description="Forecasted margin from budgeted revenue vs budgeted cost, by Service PO."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <SearchInput
@@ -204,7 +203,6 @@ const BudgetedMarginForecast = () => {
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((p) => !p)}
               activeCount={activeFilterCount}
-              className="h-9"
             />
             {filteredRecords.length > 0 && (
               <Button variant="outline" size="toolbar" onClick={handleExport}>

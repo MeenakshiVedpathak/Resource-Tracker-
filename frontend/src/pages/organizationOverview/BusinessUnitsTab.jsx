@@ -247,7 +247,7 @@ const BusinessUnitsTab = ({ businessUnits, search, isLoading, toolbarSlot }) => 
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Status</Label>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="h-9 bg-white text-sm"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-[clamp(1.875rem,2vw,2.25rem)] bg-white text-[clamp(0.75rem,0.85vw,0.875rem)]"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value={ALL}>All Statuses</SelectItem>
               <SelectItem value="active">Active</SelectItem>

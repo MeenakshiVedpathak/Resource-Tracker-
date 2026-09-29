@@ -172,10 +172,10 @@ const SubProjectList = () => {
             {/* Desktop toolbar — unchanged from the original layout. */}
             <div className="hidden flex-wrap items-center gap-2 md:flex">
               <div className="relative">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-[clamp(0.875rem,1vw,1rem)] w-[clamp(0.875rem,1vw,1rem)] text-muted-foreground" />
                 <Input
                   placeholder="Search sub-projects…"
-                  className="pl-9 w-[250px] h-9 text-sm bg-white"
+                  className="pl-9 w-[250px] h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)] bg-white"
                   value={search}
                   onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                 />
@@ -220,7 +220,6 @@ const SubProjectList = () => {
             isOpen={filtersOpen}
             onToggle={() => setFiltersOpen((prev) => !prev)}
             activeCount={activeFilterCount}
-            className="h-10"
           />
         </div>
       </div>
@@ -246,7 +245,7 @@ const SubProjectList = () => {
             onValueChange={(v) => { setPoFilter(v); setPage(1); }}
             placeholder="All POs"
             searchPlaceholder="Search PO..."
-            className="h-9 w-full text-sm bg-white"
+            className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)] bg-white"
           />
         </div>
         <div className="flex flex-col gap-1.5">
@@ -261,7 +260,7 @@ const SubProjectList = () => {
             value={statusFilter}
             onValueChange={(v) => { setStatusFilter(v); setPage(1); }}
             placeholder="All statuses"
-            className="h-9 w-full text-sm bg-white"
+            className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)] bg-white"
           />
         </div>
       </FilterPanel>

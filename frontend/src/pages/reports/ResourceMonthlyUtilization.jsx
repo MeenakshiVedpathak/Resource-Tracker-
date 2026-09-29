@@ -237,7 +237,6 @@ const ResourceMonthlyUtilization = () => {
     <div className="flex flex-col">
       <PageHeader
         title="Resource Monthly Utilisation"
-        description=""
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <SearchInput
@@ -250,7 +249,6 @@ const ResourceMonthlyUtilization = () => {
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((p) => !p)}
               activeCount={activeFilterCount}
-              className="h-9"
             />
             {records.length > 0 && (
               <Button variant="outline" size="toolbar" onClick={handleExport} disabled={exporting}>
@@ -290,7 +288,7 @@ const ResourceMonthlyUtilization = () => {
             onValueChange={(v) => { setEmployeeId(v ?? ALL); setPage(1); }}
             placeholder="All Employees"
             searchPlaceholder="Search employee..."
-            className="h-9 w-full text-sm"
+            className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)]"
           />
         </div>
 
@@ -302,7 +300,7 @@ const ResourceMonthlyUtilization = () => {
             onValueChange={(v) => { setClientId(v ?? ALL); setPage(1); }}
             placeholder="All Clients"
             searchPlaceholder="Search client..."
-            className="h-9 w-full text-sm"
+            className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)]"
           />
         </div>
 
@@ -317,7 +315,7 @@ const ResourceMonthlyUtilization = () => {
             onValueChange={(v) => { setPoId(v ?? ALL); setPage(1); }}
             placeholder="All Service POs"
             searchPlaceholder="Search service PO..."
-            className="h-9 w-full text-sm"
+            className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)]"
           />
         </div>
       </FilterPanel>

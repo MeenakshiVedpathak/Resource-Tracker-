@@ -161,10 +161,10 @@ const EmployeeWorkLogSyncedTab = ({ toolbarSlot }) => {
       {toolbarSlot && createPortal(
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-[clamp(0.875rem,1vw,1rem)] w-[clamp(0.875rem,1vw,1rem)] text-muted-foreground" />
             <Input
               placeholder="Search employees…"
-              className="pl-9 w-[220px] h-9 text-sm bg-white"
+              className="pl-9 w-[220px] h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)] bg-white"
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             />
@@ -175,7 +175,7 @@ const EmployeeWorkLogSyncedTab = ({ toolbarSlot }) => {
             clearable={false}
           />
           <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
-            <SelectTrigger className="h-9 w-[160px] bg-white text-sm">
+            <SelectTrigger className="h-[clamp(1.875rem,2vw,2.25rem)] w-[160px] bg-white text-[clamp(0.75rem,0.85vw,0.875rem)]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

@@ -225,7 +225,7 @@ const CompanyForm = () => {
                     {isEdit && !isEditingSubBu && (
                       <div className="space-y-1">
                         <span className="text-xs text-foreground font-medium"># BU Code</span>
-                        <Input value={company?.company_code ?? ''} disabled className="h-9 text-sm border-gray-200 bg-muted/40" />
+                        <Input value={company?.company_code ?? ''} disabled className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)] border-gray-200 bg-muted/40" />
                       </div>
                     )}
 
@@ -249,7 +249,7 @@ const CompanyForm = () => {
                               placeholder="Select entity"
                               searchPlaceholder="Search entity..."
                               emptyMessage={isEntitiesError ? 'Failed to load entities.' : 'No active entities found.'}
-                              className="h-9 text-sm"
+                              className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)]"
                             />
                             <p className="text-[11px] text-muted-foreground">Choose the parent entity for this business unit.</p>
                             {isEntitiesError && (
@@ -273,7 +273,7 @@ const CompanyForm = () => {
                               BU Code <span className="text-destructive ml-0.5">*</span>
                             </FormLabel>
                             <FormControl>
-                              <Input placeholder="e.g. ACME" maxLength={20} className="h-9 text-sm border-gray-200" {...field} />
+                              <Input placeholder="e.g. ACME" maxLength={20} className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)] border-gray-200" {...field} />
                             </FormControl>
                             <p className="text-[11px] text-muted-foreground">Unique code for the business unit (max 20 characters).</p>
                             <FormMessage className="text-[11px]" />
@@ -291,7 +291,7 @@ const CompanyForm = () => {
                             {isSubBu ? 'Sub BU Name' : 'BU Name'} <span className="text-destructive ml-0.5">*</span>
                           </FormLabel>
                           <FormControl>
-                            <Input placeholder="e.g. Acme Corporation" className="h-9 text-sm border-gray-200" {...field} />
+                            <Input placeholder="e.g. Acme Corporation" className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)] border-gray-200" {...field} />
                           </FormControl>
                           <p className="text-[11px] text-muted-foreground">
                             {isSubBu ? 'Enter a descriptive name for the Sub-BU.' : 'Enter a descriptive name for the business unit.'}
@@ -379,10 +379,10 @@ const CompanyForm = () => {
         </div>
 
         <SheetFooter className="px-6 py-4 border-t bg-gray-50/80 mt-auto flex justify-end gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={handleClose} className="h-9 text-xs">
+          <Button type="button" variant="outline" size="sm" onClick={handleClose} className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.6875rem,0.75vw,0.75rem)]">
             Cancel
           </Button>
-          <Button type="submit" form="company-form" disabled={isSubmitting} size="sm" className="h-9 text-xs bg-blue-600 hover:bg-blue-700 text-white">
+          <Button type="submit" form="company-form" disabled={isSubmitting} size="sm" className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.6875rem,0.75vw,0.75rem)] bg-blue-600 hover:bg-blue-700 text-white">
             <Save className="mr-2 h-3.5 w-3.5" />
             {isSubmitting ? 'Saving...' : isEdit ? 'Save Changes' : isSubBu ? 'Create Sub-BU' : 'Create BU'}
           </Button>

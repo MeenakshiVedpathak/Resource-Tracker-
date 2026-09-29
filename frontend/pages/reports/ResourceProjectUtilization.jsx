@@ -331,7 +331,7 @@ const ResourceProjectUtilization = () => {
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
         title="Resource Project Utilization"
-        description="Per-employee hours breakdown across projects, for a given month."
+        description=""
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <SearchInput

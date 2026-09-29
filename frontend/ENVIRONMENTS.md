@@ -94,8 +94,13 @@ served from must be registered as an SPA redirect uri** on the Entra App Registr
 - `https://rutbackend-production.up.railway.app/auth/microsoft/callback` *(if the SPA is served from Railway too)*
  
 These are the same urls the old `VITE_MICROSOFT_REDIRECT_URI` held, so no Entra change is
-needed for targets that already worked. Tenant id and client id are unchanged and remain
-ordinary build-time env vars — they are identical in every environment.
+needed for targets that already worked. The client id is unchanged and remains an ordinary
+build-time env var — identical in every environment.
+ 
+Sign-in is multi-tenant: MSAL uses the `https://login.microsoftonline.com/organizations`
+authority (override with `VITE_MICROSOFT_AUTHORITY` only if needed), so employees of every
+organization sign in with their own company's Microsoft account. `VITE_MICROSOFT_TENANT_ID`
+is no longer read. Who may enter the app is decided by the backend's Employee Master.
  
 ## `.env`
  
@@ -103,7 +108,8 @@ ordinary build-time env vars — they are identical in every environment.
  
 ```
 VITE_APP_NAME, VITE_APP_VERSION, VITE_RBAC_MOCK,
-VITE_MICROSOFT_TENANT_ID, VITE_MICROSOFT_CLIENT_ID
+VITE_MICROSOFT_CLIENT_ID, (optional) VITE_MICROSOFT_AUTHORITY
 ```
+ 
  
  

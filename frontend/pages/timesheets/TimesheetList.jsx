@@ -518,7 +518,7 @@ const TimesheetList = () => {
     <div className="flex h-full min-h-0 flex-col space-y-4">
       <PageHeader
         title="Timesheet Imports"
-        description="History of all uploaded timesheet files"
+        description=""
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <FilterToggleButton

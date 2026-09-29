@@ -108,7 +108,7 @@ export function WeekPicker({ value, onChange, placeholder = 'Select week', class
           <ChevronLeft className="h-4 w-4" />
         </button>
 
-        <div className="flex h-9 flex-1 items-center justify-center rounded-md border border-input bg-background px-2 text-sm font-semibold truncate">
+        <div className="flex h-[clamp(1.875rem,2vw,2.25rem)] flex-1 items-center justify-center rounded-md border border-input bg-background px-2 text-[clamp(0.75rem,0.85vw,0.875rem)] font-semibold truncate">
           {triggerLabel || <span className="font-normal text-muted-foreground">{placeholder}</span>}
         </div>
 

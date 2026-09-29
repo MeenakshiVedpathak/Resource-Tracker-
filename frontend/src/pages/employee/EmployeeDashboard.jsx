@@ -252,25 +252,25 @@ const EmployeeDashboard = () => {
             value={selectedMonthYear}
             onChange={(v) => v && setSelectedMonthYear(v)}
             clearable={false}
-            className="h-7 w-full justify-center rounded-xl border-0 bg-white/90 px-2 text-[11px] font-semibold text-slate-800 shadow-sm hover:bg-white sm:h-8 sm:w-auto sm:px-3 sm:text-xs"
+            className="h-[clamp(1.5rem,2.8vw,2rem)] w-full justify-center rounded-xl border-0 bg-white/90 px-[clamp(0.5rem,0.9vw,0.75rem)] text-[clamp(0.625rem,0.85vw,0.75rem)] font-semibold text-slate-800 shadow-sm hover:bg-white sm:w-auto"
           />
         )}
         actions={(
           <>
             <Link
               to={ROUTES.EMPLOYEE_TIMESHEET}
-              className={cn(buttonVariants({ size: 'sm' }), 'h-7 rounded-xl px-2 text-[11px] shadow-sm sm:h-8 sm:px-3 sm:text-xs')}
+              className={cn(buttonVariants({ size: 'sm' }), 'h-[clamp(1.5rem,2.8vw,2rem)] rounded-xl px-[clamp(0.5rem,0.9vw,0.75rem)] text-[clamp(0.625rem,0.85vw,0.75rem)] shadow-sm')}
             >
-              <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> Log Today's Work
+              <Plus className="h-[clamp(0.875rem,1.1vw,1rem)] w-[clamp(0.875rem,1.1vw,1rem)]" /> Log Today's Work
             </Link>
             <Link
               to={ROUTES.EMPLOYEE_MONTHLY_SUMMARY}
               className={cn(
                 buttonVariants({ size: 'sm', variant: 'outline' }),
-                'h-7 rounded-xl border-0 bg-white/90 px-2 text-[11px] text-slate-800 shadow-sm hover:bg-white sm:h-8 sm:px-3 sm:text-xs'
+                'h-[clamp(1.5rem,2.8vw,2rem)] rounded-xl border-0 bg-white/90 px-[clamp(0.5rem,0.9vw,0.75rem)] text-[clamp(0.625rem,0.85vw,0.75rem)] text-slate-800 shadow-sm hover:bg-white'
               )}
             >
-              <BarChart3 className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> View Monthly Summary
+              <BarChart3 className="h-[clamp(0.875rem,1.1vw,1rem)] w-[clamp(0.875rem,1.1vw,1rem)]" /> View Monthly Summary
             </Link>
           </>
         )}
@@ -284,35 +284,35 @@ const EmployeeDashboard = () => {
 
       {/* `grid-cols-2` from the base breakpoint up (not just `sm:`) — a phone-width viewport
           gets the same 2-up layout as tablet, instead of stacking to a single column; `lg:` and
-          up is completely untouched (still 4-across), so the desktop view never changes. Padding/
-          text sizes below step up at `sm:` to their exact original values for the same reason —
-          only the sub-`sm` (phone) sizes are new. */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+          up is completely untouched (still 4-across). Padding/text/icon sizes now use fluid
+          clamp() (see ui/button.jsx's own comment) instead of the old sub-`sm`/`sm:` breakpoint
+          pair, so they shrink smoothly with the viewport instead of jumping at one fixed width. */}
+      <div className="grid grid-cols-2 gap-[clamp(0.5rem,1vw,1rem)] lg:grid-cols-4">
         {statCards.map((c) => (
           <div key={c.key} className="relative overflow-hidden rounded-2xl border bg-card shadow-sm transition-shadow hover:shadow-md">
             <div className={cn('absolute inset-x-0 top-0 h-[3px]', c.bar)} />
-            <div className="px-3 pb-3 pt-4 sm:px-4 sm:pb-4 sm:pt-5">
-              <div className="mb-2 flex items-start justify-between gap-1 sm:mb-2.5">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">{c.title}</p>
+            <div className="px-[clamp(0.625rem,1.2vw,1rem)] pb-[clamp(0.625rem,1.2vw,1rem)] pt-[clamp(0.75rem,1.4vw,1.25rem)]">
+              <div className="mb-[clamp(0.375rem,0.6vw,0.625rem)] flex items-start justify-between gap-1">
+                <p className="text-[clamp(0.5625rem,0.8vw,0.75rem)] font-semibold uppercase tracking-wide text-muted-foreground">{c.title}</p>
                 <div className="flex shrink-0 items-center gap-1.5">
                   {c.badge && (
-                    <span className="hidden whitespace-nowrap rounded-full bg-muted px-2 py-0.5 text-[9px] font-semibold text-muted-foreground sm:inline-block">
+                    <span className="hidden whitespace-nowrap rounded-full bg-muted px-2 py-0.5 text-[clamp(0.5rem,0.7vw,0.5625rem)] font-semibold text-muted-foreground sm:inline-block">
                       {c.badge}
                     </span>
                   )}
-                  <div className={cn('shrink-0 rounded-lg p-1 sm:p-1.5', c.iconBg)}>
-                    <c.icon className={cn('h-3.5 w-3.5 sm:h-4 sm:w-4', c.iconColor)} />
+                  <div className={cn('shrink-0 rounded-lg p-[clamp(0.2rem,0.4vw,0.375rem)]', c.iconBg)}>
+                    <c.icon className={cn('h-[clamp(0.875rem,1.3vw,1rem)] w-[clamp(0.875rem,1.3vw,1rem)]', c.iconColor)} />
                   </div>
                 </div>
               </div>
               {c.loading ? (
                 <>
-                  <Skeleton className="h-6 w-16 sm:h-7 sm:w-20" />
+                  <Skeleton className="h-[clamp(1.5rem,2.5vw,1.75rem)] w-16 sm:w-20" />
                   <Skeleton className="mt-2 h-3 w-24 sm:w-28" />
                 </>
               ) : (
                 <>
-                  <p className="text-lg font-bold leading-none tracking-tight sm:text-2xl">{c.value}</p>
+                  <p className="text-[clamp(1.125rem,2vw,1.5rem)] font-bold leading-none tracking-tight">{c.value}</p>
                   {c.extra}
                 </>
               )}

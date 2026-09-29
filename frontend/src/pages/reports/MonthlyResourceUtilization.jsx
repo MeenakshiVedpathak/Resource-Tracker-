@@ -346,16 +346,15 @@ const MonthlyResourceUtilization = () => {
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
         title="Monthly Utilization"
-        description="Detailed resource utilization based on service categories"
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative w-full md:w-56">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-[clamp(0.875rem,1vw,1rem)] w-[clamp(0.875rem,1vw,1rem)] text-muted-foreground" />
               <Input
                 placeholder="Search employee…"
                 value={search}
                 onChange={handleSearchChange}
-                className="h-9 pl-9 w-full text-sm"
+                className="h-[clamp(1.875rem,2vw,2.25rem)] pl-9 w-full text-[clamp(0.75rem,0.85vw,0.875rem)]"
                 disabled={!enabled}
               />
             </div>
@@ -382,10 +381,9 @@ const MonthlyResourceUtilization = () => {
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((prev) => !prev)}
               activeCount={activeFilterCount}
-              className="h-9"
             />
             {records.length > 0 && (
-              <Button variant="outline" size="sm" className="h-9" onClick={handleExport} disabled={exporting}>
+              <Button variant="outline" size="sm" className="h-[clamp(1.875rem,2vw,2.25rem)]" onClick={handleExport} disabled={exporting}>
                 <Download className="mr-1.5 h-4 w-4" />{exporting ? 'Exporting…' : 'Export Excel'}
               </Button>
             )}
@@ -400,7 +398,7 @@ const MonthlyResourceUtilization = () => {
       <FilterPanel
         isOpen={filtersOpen}
         maxHeightClass="max-h-[460px]"
-        gridClassName="grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 w-full"
+        gridClassName="grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-[clamp(0.5rem,0.8vw,0.75rem)] w-full"
         onClear={clearFilters}
         showClear={activeFilterCount > 0}
         onClose={() => setFiltersOpen(false)}
@@ -432,7 +430,7 @@ const MonthlyResourceUtilization = () => {
               onValueChange={(v) => { setEmployeeId(v); setPage(1); }}
               placeholder="All Employees"
               searchPlaceholder="Search employee..."
-              className="h-9 text-sm w-full"
+              className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)] w-full"
             />
           </div>
 
@@ -444,7 +442,7 @@ const MonthlyResourceUtilization = () => {
               onValueChange={(v) => { setServiceCategoryId(v); setServiceTypeId('all'); setPage(1); }}
               placeholder="All Categories"
               searchPlaceholder="Search category..."
-              className="h-9 text-sm w-full"
+              className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)] w-full"
             />
           </div>
 
@@ -456,7 +454,7 @@ const MonthlyResourceUtilization = () => {
               onValueChange={(v) => { setServiceTypeId(v); setPage(1); }}
               placeholder="All Service Types"
               searchPlaceholder="Search service type..."
-              className="h-9 text-sm w-full"
+              className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)] w-full"
             />
           </div>
       </FilterPanel>
@@ -476,40 +474,42 @@ const MonthlyResourceUtilization = () => {
         </div>
       ) : (
         <div className="flex flex-1 min-h-0 flex-col">
-          {/* ── Summary chips (desktop): unchanged flex-wrap pills ── */}
-          <div className="hidden shrink-0 mb-4 md:flex flex-wrap gap-3">
+          {/* ── Summary chips (desktop): fluid clamp() sizing (see ui/button.jsx's own comment)
+              instead of a fixed px-3/py-1.5/text-xs, so this row shrinks with the viewport like
+              the rest of the app instead of running out of room and wrapping to a 2nd line. ── */}
+          <div className="hidden shrink-0 mb-4 md:flex flex-wrap gap-[clamp(0.4rem,0.7vw,0.75rem)]">
             {summary.billable_total != null && (
-              <div className="rounded-md border bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-700 dark:text-emerald-400">
+              <div className="rounded-md border bg-emerald-500/10 px-[clamp(0.5rem,0.7vw,0.75rem)] py-[clamp(0.25rem,0.4vw,0.375rem)] text-[clamp(0.6875rem,0.75vw,0.75rem)] text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
                 Billable Total&nbsp;
                 <span className="font-semibold tabular-nums">{Number(summary.billable_total).toFixed(1)} hrs</span>
               </div>
             )}
             {summary.non_billable_total != null && (
-              <div className="rounded-md border bg-orange-500/10 px-3 py-1.5 text-xs text-orange-700 dark:text-orange-400">
+              <div className="rounded-md border bg-orange-500/10 px-[clamp(0.5rem,0.7vw,0.75rem)] py-[clamp(0.25rem,0.4vw,0.375rem)] text-[clamp(0.6875rem,0.75vw,0.75rem)] text-orange-700 dark:text-orange-400 whitespace-nowrap">
                 Non-Billable Total&nbsp;
                 <span className="font-semibold tabular-nums">{Number(summary.non_billable_total).toFixed(1)} hrs</span>
               </div>
             )}
             {summary.customer_non_billable_total != null && (
-              <div className="rounded-md border bg-cyan-500/10 px-3 py-1.5 text-xs text-cyan-700 dark:text-cyan-400">
+              <div className="rounded-md border bg-cyan-500/10 px-[clamp(0.5rem,0.7vw,0.75rem)] py-[clamp(0.25rem,0.4vw,0.375rem)] text-[clamp(0.6875rem,0.75vw,0.75rem)] text-cyan-700 dark:text-cyan-400 whitespace-nowrap">
                 Customer Non-Billable&nbsp;
                 <span className="font-semibold tabular-nums">{Number(summary.customer_non_billable_total).toFixed(1)} hrs</span>
               </div>
             )}
             {summary.total_utilization != null && (
-              <div className="rounded-md border bg-blue-500/10 px-3 py-1.5 text-xs text-blue-700 dark:text-blue-400">
+              <div className="rounded-md border bg-blue-500/10 px-[clamp(0.5rem,0.7vw,0.75rem)] py-[clamp(0.25rem,0.4vw,0.375rem)] text-[clamp(0.6875rem,0.75vw,0.75rem)] text-blue-700 dark:text-blue-400 whitespace-nowrap">
                 Total Utilization&nbsp;
                 <span className="font-semibold tabular-nums">{Number(summary.total_utilization).toFixed(1)} hrs</span>
               </div>
             )}
             {summary.leaves_hours != null && (
-              <div className="rounded-md border bg-amber-500/10 px-3 py-1.5 text-xs text-amber-700 dark:text-amber-400">
+              <div className="rounded-md border bg-amber-500/10 px-[clamp(0.5rem,0.7vw,0.75rem)] py-[clamp(0.25rem,0.4vw,0.375rem)] text-[clamp(0.6875rem,0.75vw,0.75rem)] text-amber-700 dark:text-amber-400 whitespace-nowrap">
                 Leaves&nbsp;
                 <span className="font-semibold tabular-nums">{Number(summary.leaves_hours).toFixed(1)} hrs</span>
               </div>
             )}
             {contributedPercentage != null && (
-              <div className="rounded-md border bg-violet-500/10 px-3 py-1.5 text-xs text-violet-700 dark:text-violet-400">
+              <div className="rounded-md border bg-violet-500/10 px-[clamp(0.5rem,0.7vw,0.75rem)] py-[clamp(0.25rem,0.4vw,0.375rem)] text-[clamp(0.6875rem,0.75vw,0.75rem)] text-violet-700 dark:text-violet-400 whitespace-nowrap">
                 Contributed %&nbsp;
                 <span className="font-semibold tabular-nums">{contributedPercentage}%</span>
               </div>

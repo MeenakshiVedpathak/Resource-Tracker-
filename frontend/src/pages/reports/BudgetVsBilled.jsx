@@ -332,14 +332,12 @@ const BudgetVsBilled = () => {
             <TrendingUp className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
           </span>
         }
-        description="Budget cost vs billed amount per Service PO, with a monthly trend and over/under-budget breakdown."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <FilterToggleButton
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((p) => !p)}
               activeCount={activeFilterCount}
-              className="h-9"
             />
             {(byServicePO.length > 0 || monthly.length > 0) && (
               <Button variant="outline" size="toolbar" onClick={handleExport} disabled={exporting}>
@@ -414,7 +412,7 @@ const BudgetVsBilled = () => {
             onValueChange={(v) => { setClientId(v); setPage(1); }}
             placeholder="All Clients"
             searchPlaceholder="Search client..."
-            className="h-9 w-full text-sm"
+            className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)]"
           />
         </div>
 
@@ -429,7 +427,7 @@ const BudgetVsBilled = () => {
             onValueChange={handleServiceTypeChange}
             placeholder="All Service Types"
             searchPlaceholder="Search service type..."
-            className="h-9 w-full text-sm"
+            className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)]"
           />
         </div>
 
@@ -447,7 +445,7 @@ const BudgetVsBilled = () => {
             onValueChange={(v) => { setPoId(v); setPage(1); }}
             placeholder="All Projects"
             searchPlaceholder="Search project..."
-            className="h-9 w-full text-sm"
+            className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)]"
           />
         </div>
       </FilterPanel>
@@ -472,16 +470,18 @@ const BudgetVsBilled = () => {
             <div
               key={label}
               className={cn(
-                'flex items-center justify-between gap-3 px-5 py-4',
+                // Fluid clamp() sizing (see ui/button.jsx's own comment) instead of a fixed
+                // gap-3/px-5/py-4, so this card row shrinks smoothly with the viewport.
+                'flex items-center justify-between gap-[clamp(0.5rem,0.8vw,0.75rem)] px-[clamp(0.875rem,1.4vw,1.25rem)] py-[clamp(0.625rem,1vw,1rem)]',
                 i > 0 && 'border-t lg:border-t-0 lg:border-l'
               )}
             >
               <div className="min-w-0">
-                <p className="text-[13px] text-muted-foreground">{label}</p>
-                <p className={cn('mt-1 text-xl font-bold tabular-nums', valueClass)}>{value}</p>
+                <p className="text-[clamp(0.6875rem,0.85vw,0.8125rem)] text-muted-foreground">{label}</p>
+                <p className={cn('mt-1 text-[clamp(1rem,1.5vw,1.25rem)] font-bold tabular-nums', valueClass)}>{value}</p>
               </div>
-              <div className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-xl', iconWrap)}>
-                <Icon className={cn('h-5 w-5', iconClass)} />
+              <div className={cn('flex h-[clamp(2rem,3vw,2.5rem)] w-[clamp(2rem,3vw,2.5rem)] shrink-0 items-center justify-center rounded-xl', iconWrap)}>
+                <Icon className={cn('h-[clamp(1rem,1.4vw,1.25rem)] w-[clamp(1rem,1.4vw,1.25rem)]', iconClass)} />
               </div>
             </div>
           ))}
@@ -492,27 +492,27 @@ const BudgetVsBilled = () => {
         <button
           type="button"
           onClick={() => setSheetKind('over')}
-          className="flex items-center justify-between gap-4 rounded-xl border bg-card shadow-sm px-5 py-4 text-left transition-colors hover:bg-muted/40"
+          className="flex items-center justify-between gap-[clamp(0.75rem,1.1vw,1rem)] rounded-xl border bg-card shadow-sm px-[clamp(0.875rem,1.4vw,1.25rem)] py-[clamp(0.625rem,1vw,1rem)] text-left transition-colors hover:bg-muted/40"
         >
           <div>
-            <p className="text-[13px] text-muted-foreground">Over Budget</p>
-            <p className="mt-1 text-2xl font-bold tabular-nums text-destructive">{overBudget.length}</p>
+            <p className="text-[clamp(0.6875rem,0.85vw,0.8125rem)] text-muted-foreground">Over Budget</p>
+            <p className="mt-1 text-[clamp(1.125rem,1.7vw,1.5rem)] font-bold tabular-nums text-destructive">{overBudget.length}</p>
           </div>
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-50 dark:bg-red-500/10">
-            <TrendingUp className="h-5 w-5 text-red-500 dark:text-red-400" />
+          <div className="flex h-[clamp(2.25rem,3.3vw,2.75rem)] w-[clamp(2.25rem,3.3vw,2.75rem)] shrink-0 items-center justify-center rounded-full bg-red-50 dark:bg-red-500/10">
+            <TrendingUp className="h-[clamp(1rem,1.4vw,1.25rem)] w-[clamp(1rem,1.4vw,1.25rem)] text-red-500 dark:text-red-400" />
           </div>
         </button>
         <button
           type="button"
           onClick={() => setSheetKind('under')}
-          className="flex items-center justify-between gap-4 rounded-xl border bg-card shadow-sm px-5 py-4 text-left transition-colors hover:bg-muted/40"
+          className="flex items-center justify-between gap-[clamp(0.75rem,1.1vw,1rem)] rounded-xl border bg-card shadow-sm px-[clamp(0.875rem,1.4vw,1.25rem)] py-[clamp(0.625rem,1vw,1rem)] text-left transition-colors hover:bg-muted/40"
         >
           <div>
-            <p className="text-[13px] text-muted-foreground">Under Budget</p>
-            <p className="mt-1 text-2xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{underBudget.length}</p>
+            <p className="text-[clamp(0.6875rem,0.85vw,0.8125rem)] text-muted-foreground">Under Budget</p>
+            <p className="mt-1 text-[clamp(1.125rem,1.7vw,1.5rem)] font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{underBudget.length}</p>
           </div>
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-50 dark:bg-emerald-500/10">
-            <TrendingDown className="h-5 w-5 text-emerald-500 dark:text-emerald-400" />
+          <div className="flex h-[clamp(2.25rem,3.3vw,2.75rem)] w-[clamp(2.25rem,3.3vw,2.75rem)] shrink-0 items-center justify-center rounded-full bg-emerald-50 dark:bg-emerald-500/10">
+            <TrendingDown className="h-[clamp(1rem,1.4vw,1.25rem)] w-[clamp(1rem,1.4vw,1.25rem)] text-emerald-500 dark:text-emerald-400" />
           </div>
         </button>
       </div>

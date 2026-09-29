@@ -185,7 +185,7 @@ const ProjectOverviewTable = ({ monthYear, buScope }) => {
           value={statusFilter}
           onValueChange={(v) => { setStatusFilter(v ?? ALL_STATUS); setPage(1); }}
           placeholder="All Status"
-          className="h-9 w-36 shrink-0 text-sm"
+          className="h-[clamp(1.875rem,2vw,2.25rem)] w-36 shrink-0 text-[clamp(0.75rem,0.85vw,0.875rem)]"
         />
       </div>
       <DataTable

@@ -159,7 +159,7 @@ const SubProjectForm = () => {
                             <span className="text-destructive mr-0.5">*</span> Sub-Project Name
                           </FormLabel>
                           <FormControl>
-                            <Input placeholder="e.g. Phase 1 – Discovery" className="h-8 text-sm border-gray-200" {...field} />
+                            <Input placeholder="e.g. Phase 1 – Discovery" className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)] border-gray-200" {...field} />
                           </FormControl>
                           <FormMessage className="text-[10px]" />
                         </FormItem>
@@ -183,7 +183,7 @@ const SubProjectForm = () => {
                             onValueChange={(v) => field.onChange(v ?? '')}
                             placeholder="Select a Service PO"
                             searchPlaceholder="Search PO..."
-                            className="h-8 text-sm border-gray-200"
+                            className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)] border-gray-200"
                           />
                           <FormMessage className="text-[10px]" />
                         </FormItem>
@@ -231,7 +231,7 @@ const SubProjectForm = () => {
                               value={field.value || ''}
                               onChange={field.onChange}
                               clearable
-                              className="h-8 text-sm border-gray-200"
+                              className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)] border-gray-200"
                             />
                           </FormControl>
                           <FormMessage className="text-[10px]" />
@@ -250,7 +250,7 @@ const SubProjectForm = () => {
                               value={field.value || ''}
                               onChange={field.onChange}
                               clearable
-                              className="h-8 text-sm border-gray-200"
+                              className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)] border-gray-200"
                             />
                           </FormControl>
                           <FormMessage className="text-[10px]" />

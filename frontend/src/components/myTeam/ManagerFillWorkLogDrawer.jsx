@@ -219,7 +219,7 @@ const ManagerFillWorkLogDrawer = ({ employee, monthYear: initialMonthYear, open,
                 value={monthYear}
                 onChange={(v) => v && setMonthYear(v)}
                 placeholder="Select month"
-                className="h-11 w-full bg-white sm:h-9"
+                className="h-11 w-full bg-white sm:h-[clamp(1.875rem,2vw,2.25rem)]"
                 clearable={false}
               />
             </div>
@@ -233,7 +233,7 @@ const ManagerFillWorkLogDrawer = ({ employee, monthYear: initialMonthYear, open,
                   placeholder={addOptions.length === 0 ? 'All mapped Service POs added' : 'Select Service PO'}
                   searchPlaceholder="Search Service PO…"
                   disabled={addOptions.length === 0}
-                  className="h-11 w-full bg-white sm:h-9"
+                  className="h-11 w-full bg-white sm:h-[clamp(1.875rem,2vw,2.25rem)]"
                 />
               </div>
             )}

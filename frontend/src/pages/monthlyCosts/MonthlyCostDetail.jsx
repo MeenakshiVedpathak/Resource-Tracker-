@@ -282,7 +282,7 @@ const MonthlyCostDetail = () => {
         mobileCardRenderer={renderMobileCard}
         toolbar={
           <div className="relative w-full sm:w-72">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-[clamp(0.875rem,1vw,1rem)] w-[clamp(0.875rem,1vw,1rem)] text-muted-foreground" />
             <Input
               placeholder="Search by employee..."
               className="pl-9"

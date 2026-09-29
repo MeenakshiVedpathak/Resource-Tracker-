@@ -613,7 +613,6 @@ const ClientList = () => {
             isOpen={filtersOpen}
             onToggle={() => setFiltersOpen((prev) => !prev)}
             activeCount={activeFilterCount}
-            className="h-10"
           />
           {(clients.length > 0 || canManage) && (
             <DropdownMenu>

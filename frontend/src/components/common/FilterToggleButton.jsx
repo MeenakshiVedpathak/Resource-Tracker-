@@ -15,10 +15,10 @@ const FilterToggleButton = ({ isOpen, onToggle, activeCount = 0, label = 'Filter
     onClick={onToggle}
     aria-expanded={isOpen}
   >
-    <Filter className="h-4 w-4" />
+    <Filter />
     {label}
     {activeCount > 0 && (
-      <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+      <span className="flex h-[1.15em] w-[1.15em] items-center justify-center rounded-full bg-primary text-[0.7em] font-semibold text-primary-foreground">
         {activeCount}
       </span>
     )}

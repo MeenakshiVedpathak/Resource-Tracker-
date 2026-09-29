@@ -108,7 +108,7 @@ const ReportsCenter = () => {
     // screen it was measured against: it left a constant dead gap at the bottom, and drifted
     // further at any other viewport height, browser zoom, or OS display-scaling level.
     <div className="flex h-full min-h-0 flex-col">
-      <PageHeader title="Reports Center" description="Browse reports by category" />
+      <PageHeader title="Reports Center" />
 
       {/* Mobile: flat searchable report list + a category bottom sheet, instead of the desktop
           two-pane folder browser — see Sections 1-2 of the mobile spec. Same `reportRows` /
@@ -116,10 +116,10 @@ const ReportsCenter = () => {
           the desktop pane below, just different markup. */}
       <div className="flex flex-1 min-h-0 flex-col gap-3 md:hidden">
         <div className="relative shrink-0">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-[clamp(0.875rem,1vw,1rem)] w-[clamp(0.875rem,1vw,1rem)] text-muted-foreground" />
           <Input
             placeholder="Search reports..."
-            className="h-11 pl-9 text-sm"
+            className="h-[clamp(2.25rem,3vw,2.75rem)] pl-9 text-[clamp(0.8125rem,1vw,0.9375rem)]"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -229,10 +229,10 @@ const ReportsCenter = () => {
         <div className="w-64 shrink-0 flex flex-col rounded-lg border bg-white overflow-hidden">
           <div className="p-3 border-b">
             <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-[clamp(0.875rem,1vw,1rem)] w-[clamp(0.875rem,1vw,1rem)] text-muted-foreground" />
               <Input
                 placeholder="Search reports"
-                className="pl-9 h-9 text-sm"
+                className="pl-9 h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)]"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />

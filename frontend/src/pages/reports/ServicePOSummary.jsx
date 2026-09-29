@@ -304,7 +304,6 @@ const ServicePOSummary = () => {
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
         title="Service PO Summary"
-        description="Service PO Summary with Hours & Billing"
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <SearchInput
@@ -336,7 +335,6 @@ const ServicePOSummary = () => {
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((p) => !p)}
               activeCount={activeFilterCount}
-              className="h-9"
             />
             {records.length > 0 && (
               <Button variant="outline" size="toolbar" onClick={handleExport} disabled={exporting}>
@@ -387,7 +385,7 @@ const ServicePOSummary = () => {
               onValueChange={(v) => { setClientId(v); setPage(1); }}
               placeholder="All Clients"
               searchPlaceholder="Search client..."
-              className="h-9 w-full text-sm"
+              className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)]"
             />
           </div>
 
@@ -402,7 +400,7 @@ const ServicePOSummary = () => {
               value={categoryId}
               onValueChange={handleCategoryChange}
               placeholder="All Categories"
-              className="h-9 w-full text-sm"
+              className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)]"
             />
           </div>
 
@@ -420,7 +418,7 @@ const ServicePOSummary = () => {
               onValueChange={handleTypeChange}
               placeholder="All Service Types"
               searchPlaceholder="Search service type..."
-              className="h-9 w-full text-sm"
+              className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)]"
             />
           </div>
 
@@ -438,7 +436,7 @@ const ServicePOSummary = () => {
               onValueChange={(v) => { setPoId(v); setPage(1); }}
               placeholder="All POs"
               searchPlaceholder="Search PO..."
-              className="h-9 w-full text-sm"
+              className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)]"
             />
           </div>
 
@@ -457,7 +455,7 @@ const ServicePOSummary = () => {
               value={status}
               onValueChange={(v) => { setStatus(v); setPage(1); }}
               placeholder="All"
-              className="h-9 w-full text-sm"
+              className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)]"
             />
           </div>
       </FilterPanel>

@@ -206,7 +206,6 @@ const EmployeeUtilizationSummary = () => {
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
         title="Employee Utilization Summary"
-        description="Each employee's total logged hours for the month, billable/non-billable breakdown"
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <SearchInput
@@ -219,7 +218,6 @@ const EmployeeUtilizationSummary = () => {
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((p) => !p)}
               activeCount={activeFilterCount}
-              className="h-9"
             />
             {records.length > 0 && (
               <Button variant="outline" size="toolbar" onClick={handleExport} disabled={exporting}>

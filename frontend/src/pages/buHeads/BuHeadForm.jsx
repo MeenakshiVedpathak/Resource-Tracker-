@@ -168,7 +168,7 @@ const BuHeadForm = ({ open, onOpenChange }) => {
                             placeholder="e.g. EMP-001"
                             {...field}
                             onChange={(e) => field.onChange(e.target.value.toUpperCase())}
-                            className="h-8 text-sm border-gray-200"
+                            className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)] border-gray-200"
                           />
                         </FormControl>
                         <FormMessage className="text-[10px]" />
@@ -187,7 +187,7 @@ const BuHeadForm = ({ open, onOpenChange }) => {
                             placeholder="e.g. John Smith"
                             {...field}
                             onChange={(e) => field.onChange(e.target.value.replace(/[^A-Za-z\s]/g, ''))}
-                            className="h-8 text-sm border-gray-200"
+                            className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)] border-gray-200"
                           />
                         </FormControl>
                         <FormMessage className="text-[10px]" />
@@ -202,7 +202,7 @@ const BuHeadForm = ({ open, onOpenChange }) => {
                       <FormItem className="space-y-1">
                         <FormLabel className="text-[11px] text-muted-foreground font-medium"><span className="text-destructive mr-0.5">*</span> Email</FormLabel>
                         <FormControl>
-                          <Input placeholder="e.g. john@example.com" type="email" {...field} className="h-8 text-sm border-gray-200" />
+                          <Input placeholder="e.g. john@example.com" type="email" {...field} className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)] border-gray-200" />
                         </FormControl>
                         <FormMessage className="text-[10px]" />
                       </FormItem>
@@ -216,7 +216,7 @@ const BuHeadForm = ({ open, onOpenChange }) => {
                       <FormItem className="space-y-1">
                         <FormLabel className="text-[11px] text-muted-foreground font-medium">Designation</FormLabel>
                         <FormControl>
-                          <Input placeholder="e.g. Business Unit Head" {...field} className="h-8 text-sm border-gray-200" />
+                          <Input placeholder="e.g. Business Unit Head" {...field} className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)] border-gray-200" />
                         </FormControl>
                         <FormMessage className="text-[10px]" />
                       </FormItem>
@@ -243,7 +243,7 @@ const BuHeadForm = ({ open, onOpenChange }) => {
                         disabled={isLoadingCompanies}
                         placeholder={isLoadingCompanies ? 'Loading…' : 'Select BUs…'}
                         searchPlaceholder="Search BU…"
-                        className="h-8 text-sm border-gray-200"
+                        className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)] border-gray-200"
                       />
                       <FormMessage className="text-[10px]" />
                     </FormItem>
@@ -338,7 +338,7 @@ const BuHeadForm = ({ open, onOpenChange }) => {
                             value={field.value || ''}
                             onChange={field.onChange}
                             max={todayIsoDate()}
-                            className="h-8 text-sm border-gray-200"
+                            className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)] border-gray-200"
                           />
                         </FormControl>
                         <FormMessage className="text-[10px]" />
@@ -356,7 +356,7 @@ const BuHeadForm = ({ open, onOpenChange }) => {
                             type="number" step="0.1" min="0" max="60" placeholder="e.g. 7.5"
                             {...field}
                             value={field.value ?? ''}
-                            className="h-8 text-sm border-gray-200"
+                            className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)] border-gray-200"
                           />
                         </FormControl>
                         <FormMessage className="text-[10px]" />

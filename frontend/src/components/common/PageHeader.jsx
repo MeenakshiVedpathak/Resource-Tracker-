@@ -34,10 +34,12 @@ const PageHeader = ({ title, description, actions, backTo, backLabel, className,
               <ArrowLeft />
             </Button>
           )}
-          <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+          {/* Fluid clamp() sizing (see button.jsx's own comment) instead of a fixed text-2xl, so
+              every page's title shrinks smoothly with the viewport alongside its toolbar actions. */}
+          <h1 className="text-[clamp(1.125rem,1.6vw,1.5rem)] font-semibold tracking-tight">{title}</h1>
         </div>
         {description && (
-          <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+          <p className="mt-1 text-[clamp(0.75rem,0.85vw,0.875rem)] text-muted-foreground">{description}</p>
         )}
         {children}
       </div>

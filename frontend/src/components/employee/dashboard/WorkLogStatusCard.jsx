@@ -16,7 +16,7 @@ const WorkLogStatusCard = ({ days = [], monthLabel, isLoading }) => {
       <Card className="h-full">
         <CardHeader><Skeleton className="h-5 w-32" /></CardHeader>
         <CardContent className="space-y-3">
-          {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-9 w-full" />)}
+          {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-[clamp(1.875rem,2vw,2.25rem)] w-full" />)}
         </CardContent>
       </Card>
     );

@@ -256,7 +256,6 @@ const ServicePOProfitability = () => {
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
         title="Service PO Profitability"
-        description="Margin analysis per Service PO — invoiced amount vs delivery cost."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <SearchInput
@@ -269,7 +268,6 @@ const ServicePOProfitability = () => {
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((p) => !p)}
               activeCount={activeFilterCount}
-              className="h-9"
             />
             {filteredRecords.length > 0 && (
               <Button variant="outline" size="toolbar" onClick={handleExport}>
@@ -316,7 +314,7 @@ const ServicePOProfitability = () => {
             onValueChange={(v) => { setClientId(v); setPage(1); }}
             placeholder="All Clients"
             searchPlaceholder="Search client..."
-            className="h-9 w-full text-sm"
+            className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)]"
           />
         </div>
 
@@ -331,7 +329,7 @@ const ServicePOProfitability = () => {
             onValueChange={(v) => { setServiceType(v); setPage(1); }}
             placeholder="All Service Types"
             searchPlaceholder="Search service type..."
-            className="h-9 w-full text-sm"
+            className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)]"
           />
         </div>
 
@@ -346,7 +344,7 @@ const ServicePOProfitability = () => {
             onValueChange={handleCategoryChange}
             placeholder="All Categories"
             searchPlaceholder="Search category..."
-            className="h-9 w-full text-sm"
+            className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)]"
           />
         </div>
       </FilterPanel>

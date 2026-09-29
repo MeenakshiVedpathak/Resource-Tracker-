@@ -44,7 +44,7 @@ const WeatherHeroBanner = ({ greeting, firstName, datePicker, actions }) => {
             off/under the edge. */}
         <div className="min-w-0 sm:max-w-md">
           <h1 className={cn(
-            'text-lg font-black tracking-tight sm:text-xl lg:text-2xl',
+            'text-[clamp(1.125rem,2.2vw,1.5rem)] font-black tracking-tight',
             isRainy
               ? 'text-white [text-shadow:0_2px_6px_rgba(0,0,0,0.65)]'
               : 'text-slate-900 [text-shadow:0_1px_3px_rgba(255,255,255,0.75)]',
@@ -53,7 +53,7 @@ const WeatherHeroBanner = ({ greeting, firstName, datePicker, actions }) => {
             {greeting}, {firstName} 👋
           </h1>
           <p className={cn(
-            'mt-1 text-xs font-semibold sm:text-sm',
+            'mt-1 text-[clamp(0.75rem,1vw,0.875rem)] font-semibold',
             isRainy
               ? 'text-white/90 [text-shadow:0_1px_4px_rgba(0,0,0,0.55)]'
               : 'text-slate-800 [text-shadow:0_1px_2px_rgba(255,255,255,0.6)]',
@@ -85,14 +85,14 @@ const WeatherHeroBanner = ({ greeting, firstName, datePicker, actions }) => {
                 reserved pb-8/pb-9 below and clip under the card's overflow-hidden. */}
             <div className="absolute left-1/2 top-full mt-2 hidden -translate-x-1/2 sm:block">
               <div className="mx-auto h-0.5 w-10 rounded bg-blue-500/70" />
-              <p className="mt-2 whitespace-nowrap text-center text-xs italic font-bold text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.35)] sm:text-sm">
+              <p className="mt-2 whitespace-nowrap text-center text-[clamp(0.75rem,1vw,0.875rem)] italic font-bold text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.35)]">
                 &ldquo;{quote}&rdquo;
               </p>
             </div>
           </div>
           <div className="hidden h-5 w-px self-center bg-slate-400/40 sm:block" />
-          <div className="flex h-7 items-center justify-center gap-1 rounded-full bg-white/90 px-2.5 text-[11px] font-semibold text-slate-700 shadow-sm sm:h-8 sm:gap-1.5 sm:px-3.5 sm:text-xs">
-            <span className="text-xs leading-none sm:text-sm">{isLoading || !weather ? '⛅' : weather.icon}</span>
+          <div className="flex h-[clamp(1.5rem,2.8vw,2rem)] items-center justify-center gap-[clamp(0.25rem,0.4vw,0.375rem)] rounded-full bg-white/90 px-[clamp(0.5rem,0.95vw,0.875rem)] text-[clamp(0.625rem,0.85vw,0.75rem)] font-semibold text-slate-700 shadow-sm">
+            <span className="text-[clamp(0.75rem,1vw,0.875rem)] leading-none">{isLoading || !weather ? '⛅' : weather.icon}</span>
             <span>{isLoading || !weather ? '--°C' : `${weather.tempC}°C`}</span>
             <span className="text-slate-300">|</span>
             <span className="font-medium text-slate-500">{isLoading || !weather ? 'Loading…' : weather.label}</span>

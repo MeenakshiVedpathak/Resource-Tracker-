@@ -223,7 +223,6 @@ const ServicePOTimelineRisk = () => {
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
         title="Service PO Timeline Risk"
-        description="Burn-rate risk per Service PO based on elapsed time vs hours consumed."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <SearchInput
@@ -236,7 +235,6 @@ const ServicePOTimelineRisk = () => {
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((p) => !p)}
               activeCount={activeFilterCount}
-              className="h-9"
             />
             {filteredRecords.length > 0 && (
               <Button variant="outline" size="toolbar" onClick={handleExport}>
@@ -261,7 +259,7 @@ const ServicePOTimelineRisk = () => {
           <DatePicker
             value={asOfDate}
             onChange={(d) => { setAsOfDate(d); setPage(1); }}
-            className="w-full text-sm"
+            className="w-full"
           />
         </div>
       </FilterPanel>

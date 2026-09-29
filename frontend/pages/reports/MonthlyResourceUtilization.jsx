@@ -320,7 +320,7 @@ const MonthlyResourceUtilization = () => {
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
         title="Monthly Utilization"
-        description="Detailed resource utilization based on service categories"
+        description=""
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative w-full md:w-56">

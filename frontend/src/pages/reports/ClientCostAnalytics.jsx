@@ -193,7 +193,6 @@ const ClientCostAnalytics = () => {
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
         title="Client Cost Analytics"
-        description="Cost and hours breakdown per client — an all-time view with no date range filter."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {canViewOriginal && (
@@ -210,7 +209,6 @@ const ClientCostAnalytics = () => {
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((p) => !p)}
               activeCount={(entityIds.length > 0 ? 1 : 0) + (buIds.length > 0 ? 1 : 0)}
-              className="h-9"
             />
             {(clients.length > 0 || topClients.length > 0 || categoryMatrix.length > 0) && (
               <Button

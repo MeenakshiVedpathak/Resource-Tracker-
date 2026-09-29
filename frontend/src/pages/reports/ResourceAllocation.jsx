@@ -359,7 +359,6 @@ const ResourceAllocation = () => {
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
         title="Resource Allocation"
-        description="View employee-to-PO assignments and hours logged."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <SearchInput
@@ -391,7 +390,6 @@ const ResourceAllocation = () => {
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((prev) => !prev)}
               activeCount={activeFilterCount}
-              className="h-9"
             />
             {rows.length > 0 && (
               <Button variant="outline" size="toolbar" onClick={handleExport} disabled={exporting}>
@@ -432,7 +430,7 @@ const ResourceAllocation = () => {
               onValueChange={(v) => { setClientId(v); setPage(1); }}
               placeholder="All Clients"
               searchPlaceholder="Search client..."
-              className="h-9 text-sm w-full"
+              className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)] w-full"
             />
           </div>
 
@@ -450,7 +448,7 @@ const ResourceAllocation = () => {
               onValueChange={(v) => { setEmployeeId(v); setPage(1); }}
               placeholder="All Employees"
               searchPlaceholder="Search employee..."
-              className="h-9 text-sm w-full"
+              className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)] w-full"
             />
           </div>
 
@@ -468,7 +466,7 @@ const ResourceAllocation = () => {
               onValueChange={handleCategoryChange}
               placeholder="All Categories"
               searchPlaceholder="Search category..."
-              className="h-9 text-sm w-full"
+              className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)] w-full"
             />
           </div>
 
@@ -486,7 +484,7 @@ const ResourceAllocation = () => {
               onValueChange={handleTypeChange}
               placeholder="All Service Types"
               searchPlaceholder="Search type..."
-              className="h-9 text-sm w-full"
+              className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)] w-full"
             />
           </div>
 
@@ -504,7 +502,7 @@ const ResourceAllocation = () => {
               onValueChange={(v) => { setPoId(v); setPage(1); }}
               placeholder="All POs"
               searchPlaceholder="Search PO..."
-              className="h-9 text-sm w-full"
+              className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)] w-full"
             />
           </div>
 
@@ -523,7 +521,7 @@ const ResourceAllocation = () => {
               value={poStatus}
               onValueChange={(v) => { setPoStatus(v); setPage(1); }}
               placeholder="All statuses"
-              className="h-9 text-sm w-full"
+              className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)] w-full"
             />
           </div>
       </FilterPanel>

@@ -40,7 +40,7 @@ const MICROSOFT_POPUP_CANCELLED = 'Sign-in was cancelled. Please try again — o
 // Taller, tinted pill inputs (icon-left) for this screen only — the shared Input component keeps
 // its plain compact look everywhere else (tables, filters, forms), so this is applied via
 // className override here rather than changed globally.
-const LOGIN_INPUT_CLASS = 'h-12 rounded-xl border-transparent bg-muted/70 pl-10 text-[15px] focus-visible:bg-background focus-visible:ring-1 focus-visible:ring-ring';
+const LOGIN_INPUT_CLASS = 'h-[clamp(2.5rem,3.2vw,3rem)] rounded-xl border-transparent bg-muted/70 pl-10 text-[clamp(0.8125rem,1vw,0.9375rem)] focus-visible:bg-background focus-visible:ring-1 focus-visible:ring-ring';
 
 const loginSchema = z.object({
   email: emailSchema,
@@ -232,8 +232,8 @@ const Login = () => {
         transition={{ duration: 0.3 }}
       >
         <div className="mb-8">
-          <h2 className="text-2xl font-bold tracking-tight text-foreground">Choose a role</h2>
-          <p className="mt-1.5 text-sm text-muted-foreground">
+          <h2 className="text-[clamp(1.375rem,2vw,1.5rem)] font-bold tracking-tight text-foreground">Choose a role</h2>
+          <p className="mt-1.5 text-[clamp(0.8125rem,1vw,0.875rem)] text-muted-foreground">
             Your account has more than one role. Pick which one to sign in as — you'll only have
             that role's access for this session.
           </p>
@@ -246,7 +246,7 @@ const Login = () => {
               type="button"
               disabled={isSelectingRole}
               onClick={() => handleSelectRole(r.id)}
-              className="w-full rounded-md border border-border/60 bg-muted/20 px-4 py-3 text-left text-sm font-medium transition-colors hover:bg-muted/40 disabled:pointer-events-none disabled:opacity-60"
+              className="w-full rounded-md border border-border/60 bg-muted/20 px-4 py-3 text-left text-[clamp(0.8125rem,1vw,0.875rem)] font-medium transition-colors hover:bg-muted/40 disabled:pointer-events-none disabled:opacity-60"
             >
               {r.name}
             </button>
@@ -277,8 +277,8 @@ const Login = () => {
           desktop's spacing is untouched. Same pattern on the form's own space-y, the divider's
           my-6, and the admin-contact line's mt-6 below. */}
       <div className="mb-3 lg:mb-8">
-        <h2 className="text-3xl font-extrabold tracking-tight text-foreground">Welcome back</h2>
-        <p className="mt-1.5 text-sm text-muted-foreground">
+        <h2 className="text-[clamp(1.5rem,2.6vw,1.875rem)] font-extrabold tracking-tight text-foreground">Welcome back</h2>
+        <p className="mt-1.5 text-[clamp(0.8125rem,1vw,0.875rem)] text-muted-foreground">
           Sign in to your Trackio account
         </p>
       </div>
@@ -374,12 +374,12 @@ const Login = () => {
           />
 
           <div className="flex justify-end">
-            <Link to={ROUTES.FORGOT_PASSWORD} className="text-xs font-medium text-primary hover:underline">
+            <Link to={ROUTES.FORGOT_PASSWORD} className="text-[clamp(0.6875rem,0.85vw,0.75rem)] font-medium text-primary hover:underline">
               Forgot password?
             </Link>
           </div>
 
-          <Button type="submit" className="mt-2 h-12 w-full rounded-xl text-[15px]" disabled={isBusy} size="lg">
+          <Button type="submit" className="mt-2 h-[clamp(2.5rem,3.2vw,3rem)] w-full rounded-xl text-[clamp(0.8125rem,1vw,0.9375rem)]" disabled={isBusy} size="lg">
             {isLoading ? (
               <span className="flex items-center gap-2">
                 <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
@@ -397,7 +397,7 @@ const Login = () => {
 
       <div className="my-2 flex items-center gap-3 lg:my-6">
         <Separator className="flex-1" />
-        <span className="text-xs text-muted-foreground">or</span>
+        <span className="text-[clamp(0.6875rem,0.85vw,0.75rem)] text-muted-foreground">or</span>
         <Separator className="flex-1" />
       </div>
 
@@ -405,7 +405,7 @@ const Login = () => {
 
       {/* `flex` + `justify-center` here renders identically to the original plain `text-center`
           block once the icon is hidden (lg:hidden below), so desktop's line is unaffected. */}
-      <p className="mt-2 flex items-center justify-center gap-1.5 text-center text-xs text-muted-foreground lg:mt-6">
+      <p className="mt-2 flex items-center justify-center gap-1.5 text-center text-[clamp(0.6875rem,0.85vw,0.75rem)] text-muted-foreground lg:mt-6">
         <ShieldCheck className="h-3.5 w-3.5 shrink-0 lg:hidden" />
         Contact your administrator if you don't have access.
       </p>

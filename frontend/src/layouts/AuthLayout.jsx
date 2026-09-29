@@ -34,7 +34,7 @@ const AuthLayout = () => {
           <motion.img
             src="/logo-dark.png"
             alt="Trackio"
-            className="h-20 object-contain"
+            className="h-[clamp(3.5rem,7vw,5rem)] object-contain"
             animate={{
               scale: [1, 1.05, 1],
               filter: [
@@ -49,12 +49,12 @@ const AuthLayout = () => {
 
         {/* Center copy */}
         <div className="relative z-10 space-y-6 mt-10">
-          <h1 className="text-4xl font-bold text-white leading-tight">
+          <h1 className="text-[clamp(1.75rem,3.2vw,2.25rem)] font-bold text-white leading-tight">
             Manage resources,<br />
             track costs,<br />
-            <span className="text-primary-foreground/70 text-3xl">deliver results.</span>
+            <span className="text-primary-foreground/70 text-[clamp(1.375rem,2.4vw,1.875rem)]">deliver results.</span>
           </h1>
-          <p className="text-white/60 text-base max-w-xs leading-relaxed">
+          <p className="text-white/60 text-[clamp(0.8125rem,1.1vw,1rem)] max-w-xs leading-relaxed">
             A unified platform for workforce planning, service PO tracking, and financial reporting across your organization.
           </p>
           {/* Feature pills */}
@@ -62,7 +62,7 @@ const AuthLayout = () => {
             {['Timesheet Import', 'Service PO Tracking', 'Cost Analytics', 'Role-Based Access'].map((f) => (
               <span
                 key={f}
-                className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70"
+                className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[clamp(0.6875rem,0.85vw,0.75rem)] text-white/70"
               >
                 {f}
               </span>
@@ -71,7 +71,7 @@ const AuthLayout = () => {
         </div>
 
         {/* Bottom tagline */}
-        <p className="relative z-10 mt-auto text-xs text-white/30">
+        <p className="relative z-10 mt-auto text-[clamp(0.6875rem,0.85vw,0.75rem)] text-white/30">
           © {new Date().getFullYear()} GTT Data Solutions Ltd. All Rights Reserved.
         </p>
       </div>
@@ -111,11 +111,11 @@ const AuthLayout = () => {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             transition={{ duration: 0.7, ease: 'easeOut' }}
           >
-            <img src="/logo-dark.png" alt="Trackio" className="h-12 object-contain" />
-            <p className="mt-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/50">
+            <img src="/logo-dark.png" alt="Trackio" className="h-[clamp(2.5rem,6vw,3rem)] object-contain" />
+            <p className="mt-1.5 text-[clamp(0.625rem,1.8vw,0.6875rem)] font-semibold uppercase tracking-[0.2em] text-white/50">
               Workforce Intelligence
             </p>
-            <p className="mt-2 text-sm text-white/70">
+            <p className="mt-2 text-[clamp(0.75rem,2vw,0.875rem)] text-white/70">
               Plan. Track. <span className="font-semibold text-primary">Deliver.</span>
             </p>
           </motion.div>
@@ -144,7 +144,7 @@ const AuthLayout = () => {
             bottom of the screen rather than leaving a gap beneath it. */}
         <div className="relative mt-auto overflow-hidden bg-background px-6 pt-1 pb-2 text-center lg:hidden">
           <AuthHeroWaves tone="light" className="absolute inset-x-0 bottom-0 h-24 w-full" />
-          <p className="relative z-10 text-xs text-muted-foreground">
+          <p className="relative z-10 text-[clamp(0.6875rem,1.8vw,0.75rem)] text-muted-foreground">
             © {new Date().getFullYear()} GTT Data Solutions Ltd. All Rights Reserved.
           </p>
         </div>

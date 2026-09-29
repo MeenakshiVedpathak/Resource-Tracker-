@@ -350,7 +350,7 @@ const ResourceAllocation = () => {
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
         title="Resource Allocation"
-        description="View employee-to-PO assignments and hours logged."
+        description=""
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <SearchInput

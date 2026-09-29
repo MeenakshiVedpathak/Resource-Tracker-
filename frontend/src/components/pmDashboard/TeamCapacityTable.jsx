@@ -199,7 +199,7 @@ const TeamCapacityTable = ({ monthYear, buScope, initialStatusFilter = 'all' }) 
             value={designationFilter}
             onValueChange={(v) => { setDesignationFilter(v ?? ALL_DESIGNATIONS); setPage(1); }}
             placeholder="All Designations"
-            className="h-9 w-40 shrink-0 text-sm"
+            className="h-[clamp(1.875rem,2vw,2.25rem)] w-40 shrink-0 text-[clamp(0.75rem,0.85vw,0.875rem)]"
           />
         </div>
         <SegmentedToggle

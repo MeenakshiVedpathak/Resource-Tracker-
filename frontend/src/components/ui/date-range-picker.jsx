@@ -120,16 +120,17 @@ export function DateRangePicker({
       <PopoverTrigger asChild>
         <button
           className={cn(
-            'inline-flex items-center gap-2 rounded-md border border-input bg-background px-3 text-sm h-9 text-left whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-ring',
+            // Fluid clamp() sizing (see button.jsx's own comment) instead of a fixed h-9/text-sm.
+            'inline-flex items-center gap-2 rounded-md border border-input bg-background px-[clamp(0.5rem,0.7vw,0.75rem)] text-[clamp(0.75rem,0.85vw,0.875rem)] h-[clamp(1.875rem,2vw,2.25rem)] text-left whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-ring',
             !triggerLabel && 'text-muted-foreground',
             className
           )}
         >
-          <CalendarDays className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <CalendarDays className="h-[1em] w-[1em] shrink-0 text-muted-foreground" />
           <span className="flex-1 truncate">{triggerLabel || placeholder}</span>
           {clearable && (startDate || endDate) && (
             <X
-              className="h-3.5 w-3.5 shrink-0 text-muted-foreground hover:text-foreground"
+              className="h-[0.9em] w-[0.9em] shrink-0 text-muted-foreground hover:text-foreground"
               onClick={handleClear}
             />
           )}

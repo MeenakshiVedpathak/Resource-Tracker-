@@ -626,7 +626,6 @@ const ServicePOList = () => {
             isOpen={filtersOpen}
             onToggle={() => setFiltersOpen((prev) => !prev)}
             activeCount={activeFilterCount}
-            className="h-10"
           />
           {(servicePOs.length > 0 || canManage) && (
             <DropdownMenu>
@@ -665,7 +664,7 @@ const ServicePOList = () => {
       <FilterPanel
         isOpen={filtersOpen}
         maxHeightClass="max-h-[460px]"
-        gridClassName="grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-4 w-full"
+        gridClassName="grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-[clamp(0.5rem,0.8vw,0.75rem)] w-full"
         onClear={clearFilters}
         showClear={activeFilterCount > 0}
       >
@@ -715,7 +714,7 @@ const ServicePOList = () => {
               onValueChange={(v) => { setClientFilter(v); setPage(1); }}
               placeholder="All Clients"
               searchPlaceholder="Search client..."
-              className="h-9 w-full text-sm bg-white"
+              className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)] bg-white"
             />
           </div>
           <div className="flex flex-col gap-1.5">
@@ -732,7 +731,7 @@ const ServicePOList = () => {
               onValueChange={handleCategoryChange}
               placeholder="All Categories"
               searchPlaceholder="Search category..."
-              className="h-9 w-full text-sm bg-white"
+              className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)] bg-white"
             />
           </div>
           <div className="flex flex-col gap-1.5">
@@ -749,7 +748,7 @@ const ServicePOList = () => {
               onValueChange={handleTypeChange}
               placeholder="All Service Types"
               searchPlaceholder="Search type..."
-              className="h-9 w-full text-sm bg-white"
+              className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)] bg-white"
             />
           </div>
           <div className="flex flex-col gap-1.5">
@@ -784,7 +783,7 @@ const ServicePOList = () => {
               onValueChange={(v) => { setPoFilter(v); setPage(1); }}
               placeholder="All POs"
               searchPlaceholder="Search PO..."
-              className="h-9 w-full text-sm bg-white"
+              className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)] bg-white"
             />
           </div>
           <div className="flex flex-col gap-1.5">
@@ -803,7 +802,7 @@ const ServicePOList = () => {
               value={statusFilter}
               onValueChange={(v) => { setStatusFilter(v); setPage(1); }}
               placeholder="All statuses"
-              className="h-9 w-full text-sm bg-white"
+              className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)] bg-white"
             />
           </div>
       </FilterPanel>

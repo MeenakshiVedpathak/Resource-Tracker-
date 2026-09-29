@@ -69,8 +69,8 @@ const columns = [
   }),
   columnHelper.accessor('designation', {
     header: 'Designation',
-    size: 160,
-    cell: (info) => info.getValue() || '—',
+    size: 200,
+    cell: (info) => <div className="truncate whitespace-nowrap max-w-[190px]" title={info.getValue()}>{info.getValue() || '—'}</div>,
   }),
   columnHelper.accessor('monthly_capacity_hours', {
     header: 'Monthly Capacity Hours',
@@ -182,7 +182,6 @@ const EmployeeCapacityForecast = () => {
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
         title="Employee Capacity & Bench Forecast"
-        description="Capacity utilization and bench/overallocation risk per employee for the selected month."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <SearchInput
@@ -195,7 +194,6 @@ const EmployeeCapacityForecast = () => {
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((p) => !p)}
               activeCount={activeFilterCount}
-              className="h-9"
             />
             {filteredRecords.length > 0 && (
               <Button variant="outline" size="toolbar" onClick={handleExport}>
@@ -260,7 +258,7 @@ const EmployeeCapacityForecast = () => {
             min={0}
             value={benchThresholdHours}
             onChange={(e) => { setBenchThresholdHours(e.target.value); setPage(1); }}
-            className="h-9 w-full text-sm"
+            className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)]"
           />
         </div>
       </FilterPanel>

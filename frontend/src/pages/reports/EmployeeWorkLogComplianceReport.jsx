@@ -591,7 +591,7 @@ const EmployeeWorkLogComplianceReport = () => {
               value={date}
               max={yesterdayStr}
               onChange={handleDateChange}
-              className="w-full text-sm"
+              className="w-full"
             />
           </div>
         ) : (
@@ -601,7 +601,7 @@ const EmployeeWorkLogComplianceReport = () => {
               value={monthYear}
               onChange={handleMonthYearChange}
               clearable={false}
-              className="h-9 w-full text-sm"
+              className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)]"
             />
           </div>
         )}

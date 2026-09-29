@@ -163,7 +163,6 @@ const ClientProfitabilityConcentration = () => {
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
         title="Client Profitability & Concentration"
-        description="Revenue concentration and margin per client for the selected month."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <SearchInput
@@ -176,10 +175,9 @@ const ClientProfitabilityConcentration = () => {
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((p) => !p)}
               activeCount={(entityIds.length > 0 ? 1 : 0) + (buIds.length > 0 ? 1 : 0)}
-              className="h-9"
             />
             {filteredRecords.length > 0 && (
-              <Button variant="outline" size="sm" className="h-9" onClick={handleExport}>
+              <Button variant="outline" size="sm" className="h-[clamp(1.875rem,2vw,2.25rem)]" onClick={handleExport}>
                 <Download className="mr-1.5 h-4 w-4" />Export Excel
               </Button>
             )}

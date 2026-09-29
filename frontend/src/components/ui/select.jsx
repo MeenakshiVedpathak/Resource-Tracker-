@@ -9,7 +9,9 @@ const SelectValue = SelectPrimitive.Value;
 const SelectTrigger = ({ className, children, ...props }) => (
   <SelectPrimitive.Trigger
     className={cn(
-      'flex h-9 w-full items-center justify-between whitespace-nowrap rounded-lg border border-input bg-transparent px-3 py-2 text-sm shadow-sm',
+      // Fluid clamp() sizing (see button.jsx's own comment) so every Select trigger app-wide
+      // shrinks smoothly with the viewport instead of holding a fixed h-9/text-sm forever.
+      'flex h-[clamp(1.875rem,2vw,2.25rem)] w-full items-center justify-between whitespace-nowrap rounded-lg border border-input bg-transparent px-[clamp(0.5rem,0.7vw,0.75rem)] py-2 text-[clamp(0.75rem,0.85vw,0.875rem)] shadow-sm',
       'ring-offset-background placeholder:text-muted-foreground',
       'focus:outline-none focus:ring-1 focus:ring-ring',
       'disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1',
@@ -19,7 +21,7 @@ const SelectTrigger = ({ className, children, ...props }) => (
   >
     {children}
     <SelectPrimitive.Icon asChild>
-      <ChevronDown className="h-4 w-4 opacity-50" />
+      <ChevronDown className="h-[1em] w-[1em] opacity-50 shrink-0" />
     </SelectPrimitive.Icon>
   </SelectPrimitive.Trigger>
 );

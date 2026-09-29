@@ -732,7 +732,7 @@ const ResourceBudgetPage = () => {
             </div>
 
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-[clamp(0.875rem,1vw,1rem)] w-[clamp(0.875rem,1vw,1rem)] text-muted-foreground" />
               <Input
                 value={mobileSearch}
                 onChange={(e) => setMobileSearch(e.target.value)}

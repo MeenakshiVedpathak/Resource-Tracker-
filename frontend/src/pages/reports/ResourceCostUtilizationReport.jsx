@@ -234,7 +234,6 @@ const ResourceCostUtilizationReport = () => {
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
         title="Consolidated Monthly Report"
-        description="View employee resource allocation, utilization and monthly cost contribution."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <SearchInput
@@ -247,10 +246,9 @@ const ResourceCostUtilizationReport = () => {
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((p) => !p)}
               activeCount={activeFilterCount}
-              className="h-9"
             />
-            <Button variant="outline" size="sm" className="h-9" onClick={handleExport} disabled={isExporting}>
-              <Download className="mr-1.5 h-4 w-4" />{isExporting ? 'Downloading…' : 'Download Excel'}
+            <Button variant="outline" size="sm" className="h-[clamp(1.875rem,2vw,2.25rem)]" onClick={handleExport} disabled={isExporting}>
+              <Download className="mr-1.5 h-4 w-4" />{isExporting ? 'Exporting…' : 'Export Excel'}
             </Button>
           </div>
         }
@@ -259,7 +257,7 @@ const ResourceCostUtilizationReport = () => {
       <FilterPanel
         isOpen={filtersOpen}
         maxHeightClass="max-h-[520px]"
-        gridClassName="grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 w-full"
+        gridClassName="grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-[clamp(0.5rem,0.8vw,0.75rem)] w-full"
         onClear={clearFilters}
         showClear={activeFilterCount > 0}
         onClose={() => setFiltersOpen(false)}
@@ -358,7 +356,7 @@ const ResourceCostUtilizationReport = () => {
         <EmptyState title="Select a valid month range" description="Start month cannot be after end month." />
       ) : showLoading ? (
         <div className="space-y-2 rounded-lg border p-3">
-          {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-9 w-full" />)}
+          {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-[clamp(1.875rem,2vw,2.25rem)] w-full" />)}
         </div>
       ) : !isError && records.length === 0 ? (
         <EmptyState
@@ -373,7 +371,7 @@ const ResourceCostUtilizationReport = () => {
                 <thead className="sticky top-0 z-20 bg-background">
                   <tr className="border-b bg-muted/60">
                     <th colSpan={2} className="sticky left-0 z-30 bg-muted" />
-                    <th colSpan={8} className="border-r border-border" />
+                    <th colSpan={9} className="border-r border-border" />
                     {months.map((m) => (
                       <th
                         key={m.key}
@@ -399,6 +397,7 @@ const ResourceCostUtilizationReport = () => {
                     <th className={th('min-w-[140px]')}>
                       <SortableHeader label="BU Name" column={SORTABLE.BU_NAME} sortBy={sortBy} sortOrder={sortOrder} onSort={handleSort} />
                     </th>
+                    <th className={th('min-w-[140px]')}>Sub BU Name</th>
                     <th className={th('w-[100px]')}>Billed Status</th>
                     <th className={th('min-w-[160px]')}>Project Manager</th>
                     <th className={th('min-w-[140px]')}>
@@ -455,6 +454,9 @@ const ResourceCostUtilizationReport = () => {
                           {row.monthlyCtc != null ? formatCurrency(row.monthlyCtc) : <span className="text-muted-foreground">—</span>}
                         </td>
                         <td className={td('truncate max-w-[140px]')} title={row.buName}>{row.buName || <span className="text-muted-foreground">—</span>}</td>
+                        <td className={td('truncate max-w-[140px]')} title={row.subBuName ?? ''}>
+                          {row.subBuName || <span className="text-muted-foreground">—</span>}
+                        </td>
                         <td className={td('text-muted-foreground')}>—</td>
                         <td className={td('min-w-[160px]')}>
                           {pmList.length > 0 ? pmList.join(', ') : <span className="text-muted-foreground">—</span>}

@@ -303,7 +303,6 @@ const MonthlyHoursTrend = () => {
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
         title="Monthly Hours Trend"
-        description="Hours by category, cost by category, utilization, and leave/no-work hours across a resolved month range."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {canViewOriginal && (
@@ -329,7 +328,6 @@ const MonthlyHoursTrend = () => {
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((p) => !p)}
               activeCount={activeFilterCount}
-              className="h-9"
             />
             {hasAnyData && (
               <Button variant="outline" size="toolbar" onClick={handleExport}>
@@ -343,7 +341,7 @@ const MonthlyHoursTrend = () => {
       <FilterPanel
         isOpen={filtersOpen}
         maxHeightClass="max-h-[420px]"
-        gridClassName="items-end gap-x-4 gap-y-5 rounded-xl border-slate-200/80 bg-slate-50/70 p-5 shadow-sm"
+        gridClassName="items-end gap-x-[clamp(0.5rem,0.8vw,0.75rem)] gap-y-[clamp(0.625rem,1vw,0.875rem)] rounded-xl border-slate-200/80 bg-slate-50/70 p-[clamp(0.5rem,0.8vw,0.75rem)] shadow-sm"
         onClear={clearFilters}
         showClear={activeFilterCount > 0}
       >
@@ -422,7 +420,7 @@ const MonthlyHoursTrend = () => {
             onValueChange={setClientId}
             placeholder="All Clients"
             searchPlaceholder="Search client..."
-            className="h-9 w-full text-sm"
+            className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)]"
           />
         </div>
 
@@ -437,7 +435,7 @@ const MonthlyHoursTrend = () => {
             onValueChange={handleServiceTypeChange}
             placeholder="All Service Types"
             searchPlaceholder="Search service type..."
-            className="h-9 w-full text-sm"
+            className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)]"
           />
         </div>
 
@@ -455,7 +453,7 @@ const MonthlyHoursTrend = () => {
             onValueChange={setPoId}
             placeholder="All Projects"
             searchPlaceholder="Search project..."
-            className="h-9 w-full text-sm"
+            className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)]"
           />
         </div>
 
@@ -470,7 +468,7 @@ const MonthlyHoursTrend = () => {
             onValueChange={setEmployeeId}
             placeholder="All Employees"
             searchPlaceholder="Search employee..."
-            className="h-9 w-full text-sm"
+            className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)]"
           />
         </div>
       </FilterPanel>

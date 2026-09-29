@@ -97,13 +97,13 @@ const columns = [
   }),
   columnHelper.accessor('service_type', {
     header: 'Service Type',
-    size: 150,
-    cell: (info) => info.getValue() || '—',
+    size: 190,
+    cell: (info) => <div className="truncate whitespace-nowrap max-w-[180px]" title={info.getValue()}>{info.getValue() || '—'}</div>,
   }),
   columnHelper.accessor('service_category_name', {
     header: 'Category',
-    size: 140,
-    cell: (info) => info.getValue() || '—',
+    size: 180,
+    cell: (info) => <div className="truncate whitespace-nowrap max-w-[170px]" title={info.getValue()}>{info.getValue() || '—'}</div>,
   }),
   columnHelper.accessor('status', {
     header: 'Status',
@@ -112,15 +112,15 @@ const columns = [
   }),
   columnHelper.accessor('is_billable', {
     header: 'Billable',
-    size: 110,
+    size: 140,
     cell: (info) => (
-      <Badge variant={info.getValue() ? 'success' : 'muted'}>{info.getValue() ? 'Billable' : 'Non-Billable'}</Badge>
+      <Badge variant={info.getValue() ? 'success' : 'muted'} className="whitespace-nowrap">{info.getValue() ? 'Billable' : 'Non-Billable'}</Badge>
     ),
   }),
   columnHelper.accessor('invoice_frequency', {
     header: 'Invoice Freq.',
-    size: 130,
-    cell: (info) => (info.getValue() ? capitalize(info.getValue()) : '—'),
+    size: 170,
+    cell: (info) => <div className="truncate whitespace-nowrap max-w-[160px]" title={info.getValue() ? capitalize(info.getValue()) : ''}>{info.getValue() ? capitalize(info.getValue()) : '—'}</div>,
   }),
   columnHelper.accessor('start_date', {
     header: 'Start Date',
@@ -310,7 +310,6 @@ const InvoicePOSummary = () => {
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
         title="Invoice PO Summary"
-        description="Invoiced, billed and unbilled amounts by Service PO"
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <SearchInput
@@ -323,7 +322,6 @@ const InvoicePOSummary = () => {
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((p) => !p)}
               activeCount={activeFilterCount}
-              className="h-9"
             />
             {records.length > 0 && (
               <Button variant="outline" size="toolbar" onClick={handleExport} disabled={exporting}>
@@ -371,7 +369,7 @@ const InvoicePOSummary = () => {
             onValueChange={(v) => { setClientId(v); setPage(1); }}
             placeholder="All Clients"
             searchPlaceholder="Search client..."
-            className="h-9 w-full text-sm"
+            className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)]"
           />
         </div>
 
@@ -386,7 +384,7 @@ const InvoicePOSummary = () => {
             value={categoryId}
             onValueChange={handleCategoryChange}
             placeholder="All Categories"
-            className="h-9 w-full text-sm"
+            className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)]"
           />
         </div>
 
@@ -401,7 +399,7 @@ const InvoicePOSummary = () => {
             onValueChange={handleTypeChange}
             placeholder="All Service Types"
             searchPlaceholder="Search service type..."
-            className="h-9 w-full text-sm"
+            className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)]"
           />
         </div>
 
@@ -416,7 +414,7 @@ const InvoicePOSummary = () => {
             onValueChange={(v) => { setPoId(v); setPage(1); }}
             placeholder="All POs"
             searchPlaceholder="Search PO..."
-            className="h-9 w-full text-sm"
+            className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)]"
           />
         </div>
 
@@ -436,7 +434,7 @@ const InvoicePOSummary = () => {
             value={status}
             onValueChange={(v) => { setStatus(v); setPage(1); }}
             placeholder="All"
-            className="h-9 w-full text-sm"
+            className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)]"
           />
         </div>
 
@@ -452,7 +450,7 @@ const InvoicePOSummary = () => {
             value={billable}
             onValueChange={(v) => { setBillable(v); setPage(1); }}
             placeholder="All"
-            className="h-9 w-full text-sm"
+            className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)]"
           />
         </div>
       </FilterPanel>

@@ -218,7 +218,6 @@ const ResourceStaffingPlanAccuracy = () => {
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
         title="Resource Staffing Plan Accuracy"
-        description="Planned vs actual hours per employee/Service PO, flagged when variance exceeds a threshold."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <SearchInput
@@ -231,7 +230,6 @@ const ResourceStaffingPlanAccuracy = () => {
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((p) => !p)}
               activeCount={activeFilterCount}
-              className="h-9"
             />
             {filteredRecords.length > 0 && (
               <Button variant="outline" size="toolbar" onClick={handleExport}>
@@ -265,7 +263,7 @@ const ResourceStaffingPlanAccuracy = () => {
             value={varianceThresholdPct}
             onChange={(e) => { setVarianceThresholdPct(e.target.value); setPage(1); }}
             placeholder="20"
-            className="h-9 w-full text-sm"
+            className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)]"
           />
         </div>
 
@@ -281,7 +279,7 @@ const ResourceStaffingPlanAccuracy = () => {
             value={riskFilter}
             onValueChange={(v) => { setRiskFilter(v); setPage(1); }}
             placeholder="All"
-            className="h-9 w-full text-sm"
+            className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)]"
           />
         </div>
       </FilterPanel>

@@ -310,7 +310,7 @@ const ManagerFillWorkLog = () => {
     <div className="flex h-full min-h-0 flex-col space-y-4">
       <PageHeader
         title="Log Work for My Team"
-        description="View and log work hours for your team members."
+        description=""
         actions={
           mode === 'bulk' ? (
             <Button type="button" variant="outline" size="sm" onClick={() => setMode('manual')}>
@@ -355,7 +355,7 @@ const ManagerFillWorkLog = () => {
               value={monthYear}
               onChange={handleMonthYearChange}
               placeholder="Select month"
-              className="h-9 w-full bg-white"
+              className="h-[clamp(1.875rem,2vw,2.25rem)] w-full bg-white"
               clearable={false}
             />
           </div>
@@ -409,7 +409,7 @@ const ManagerFillWorkLog = () => {
             value={monthYear}
             onChange={handleMonthYearChange}
             placeholder="Select month"
-            className="h-9 w-full bg-white"
+            className="h-[clamp(1.875rem,2vw,2.25rem)] w-full bg-white"
             clearable={false}
           />
           {!ended && (

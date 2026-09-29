@@ -92,20 +92,21 @@ export function DatePicker({
           disabled={disabled}
           aria-label={ariaLabel}
           className={cn(
-            'flex h-9 w-full items-center gap-2 rounded-md border border-input bg-background px-3 text-left text-sm',
+            // Fluid clamp() sizing (see ui/button.jsx's own comment) instead of a fixed h-9/text-sm.
+            'flex h-[clamp(1.875rem,2vw,2.25rem)] w-full items-center gap-2 rounded-md border border-input bg-background px-[clamp(0.5rem,0.7vw,0.75rem)] text-left text-[clamp(0.75rem,0.85vw,0.875rem)]',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
             !value && 'text-muted-foreground',
             className
           )}
         >
-          <CalendarDays className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <CalendarDays className="h-[1em] w-[1em] shrink-0 text-muted-foreground" />
           <span className="flex-1 truncate">{value ? formatDate(value) : placeholder}</span>
           {/* An <svg> child, not a nested <button> (which would be invalid inside the trigger) —
               stopping propagation here keeps the click from also toggling the popover open. This
               is the mouse shortcut only; the popover's "Clear selection" is the keyboard path. */}
           {clearable && value && !disabled && (
             <X
-              className="h-3.5 w-3.5 shrink-0 text-muted-foreground hover:text-foreground"
+              className="h-[0.9em] w-[0.9em] shrink-0 text-muted-foreground hover:text-foreground"
               onClick={(e) => {
                 e.stopPropagation();
                 onChange('');

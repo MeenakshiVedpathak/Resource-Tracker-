@@ -399,7 +399,7 @@ const MonthlyCostList = () => {
     <div className="flex h-full min-h-0 flex-col space-y-4">
       <PageHeader
         title="Monthly Costs"
-        description="Uploaded and calculated cost periods, grouped by month"
+        description=""
         actions={
           // Mobile: a deliberate stacked layout (search full-width, Filters/Download Sample paired
           // evenly, Upload Excel full-width below) instead of the plain flex-wrap row below wrapping
@@ -408,12 +408,12 @@ const MonthlyCostList = () => {
           <div className="flex w-full flex-col gap-2 md:w-auto md:flex-row md:flex-wrap md:items-center">
             {/* Mobile only — desktop has no search input here at all, unchanged. */}
             <div className="relative w-full md:hidden">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-[clamp(0.875rem,1vw,1rem)] w-[clamp(0.875rem,1vw,1rem)] text-muted-foreground" />
               <Input
                 placeholder="Search month..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="h-9 w-full pl-9 text-sm"
+                className="h-[clamp(1.875rem,2vw,2.25rem)] w-full pl-9 text-[clamp(0.75rem,0.85vw,0.875rem)]"
               />
             </div>
             <div className="grid grid-cols-2 gap-2 md:flex md:w-auto md:items-center md:gap-2">
@@ -600,7 +600,7 @@ const MonthlyCostList = () => {
                   placeholder="All Entities"
                   searchPlaceholder="Search entity..."
                   showSearch={uploadBuEntityOptions.length > 6}
-                  className="h-9 w-full text-sm"
+                  className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)]"
                 />
               </div>
             )}
@@ -613,7 +613,7 @@ const MonthlyCostList = () => {
                 placeholder="Select a Business Unit"
                 searchPlaceholder="Search business unit..."
                 showSearch={activeBusinessUnits.length > 6}
-                className="h-9 w-full text-sm"
+                className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)]"
               />
             </div>
           </div>

@@ -97,15 +97,16 @@ export function MonthRangePicker({
         <button
           type="button"
           className={cn(
-            'inline-flex h-9 items-center gap-2 whitespace-nowrap rounded-md border border-input bg-background px-3 text-left text-sm focus:outline-none focus:ring-2 focus:ring-ring',
+            // Fluid clamp() sizing (see ui/button.jsx's own comment) instead of a fixed h-9/text-sm.
+            'inline-flex h-[clamp(1.875rem,2vw,2.25rem)] items-center gap-2 whitespace-nowrap rounded-md border border-input bg-background px-[clamp(0.5rem,0.7vw,0.75rem)] text-left text-[clamp(0.75rem,0.85vw,0.875rem)] focus:outline-none focus:ring-2 focus:ring-ring',
             !triggerLabel && 'text-muted-foreground',
             className
           )}
         >
-          <CalendarDays className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <CalendarDays className="h-[1em] w-[1em] shrink-0 text-muted-foreground" />
           <span className="flex-1 truncate">{triggerLabel || placeholder}</span>
           {clearable && (from || to) && (
-            <X className="h-3.5 w-3.5 shrink-0 text-muted-foreground hover:text-foreground" onClick={handleClear} />
+            <X className="h-[0.9em] w-[0.9em] shrink-0 text-muted-foreground hover:text-foreground" onClick={handleClear} />
           )}
         </button>
       </PopoverTrigger>

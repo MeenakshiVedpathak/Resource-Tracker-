@@ -241,7 +241,6 @@ const ResourceWiseBenchReport = () => {
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
         title="Resource-wise Bench % by Month"
-        description=""
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <SearchInput
@@ -254,7 +253,6 @@ const ResourceWiseBenchReport = () => {
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((p) => !p)}
               activeCount={activeFilterCount}
-              className="h-9"
             />
             {(hasClientSearch ? filteredRows.length : rawRows.length) > 0 && (
               <Button variant="outline" size="toolbar" onClick={handleExport}>

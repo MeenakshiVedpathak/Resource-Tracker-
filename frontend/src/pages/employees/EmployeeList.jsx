@@ -563,10 +563,10 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
             </div>
             <p className="text-xs text-muted-foreground">Choose the Service POs this employee is mapped to, and mark PM where applicable</p>
             <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-[clamp(0.875rem,1vw,1rem)] w-[clamp(0.875rem,1vw,1rem)] text-muted-foreground" />
               <Input
                 placeholder="Search by Service PO, code or client..."
-                className="pl-9 h-9 text-sm"
+                className="pl-9 h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)]"
                 value={poSearch}
                 onChange={(e) => setPoSearch(e.target.value)}
               />
@@ -1000,10 +1000,12 @@ const EmployeeList = () => {
     setPage(1);
   };
 
-  // "Business Units" alone still accepts "Parent -> Sub" (same convention the Export Excel button
-  // already writes for a Sub-BU — see handleExportExcel above) to target a Sub-BU nested under a
+  // "Business Units" alone still accepts "Parent -> Sub" to target a Sub-BU nested under a
   // Parent — equivalent to naming the Parent in "Business Units" and its Sub-BU in the separate
-  // "Sub BU" column below (row 2), so a file this screen exports can always be re-imported as-is.
+  // "Sub BU" column below (row 2). Note: this is no longer the same shape the Export Excel button
+  // writes — that export now emits one row per BU mapping (see buExportRows/handleExportExcel
+  // above), so a multi-BU employee's exported file has several rows for that one employee and
+  // isn't a drop-in re-import template; only this single-row-per-employee sample format is.
   const handleDownloadSample = () => {
     const ws = XLSX.utils.json_to_sheet([
       // Row 1: a Business Unit with no Sub-BUs — Sub BU stays blank.
@@ -1168,6 +1170,31 @@ const EmployeeList = () => {
     return all;
   };
 
+  // Excel export rows for one employee's Business Units, as { businessUnit, subBu }:
+  //  - a Sub-BU mapping -> { its Parent's name, its own name }
+  //  - a Parent mapped together with one of its own Sub-BUs is already covered by that
+  //    Sub-BU's row, so it gets no extra blank-Sub-BU row of its own
+  //  - any other BU -> { its own name, '' }
+  //  - no BU at all -> a single blank row, so the employee still appears in the export
+  const buExportRows = (emp) => {
+    // GET /employees returns `business_units` (snake_case) — reading only `businessUnits`
+    // left the export's BU column blank for every employee.
+    const units = emp.business_units ?? emp.businessUnits ?? [];
+    const coveredParentIds = new Set(
+      units.map((bu) => bu.parent_business_unit_id).filter((id) => id != null)
+    );
+    const rows = units
+      .filter((bu) => bu.parent_business_unit_id != null || !coveredParentIds.has(bu.id))
+      .map((bu) => {
+        const name = bu.name ?? bu.company_name ?? '';
+        return bu.parent_business_unit_id != null && bu.parent_business_unit_name
+          ? { businessUnit: bu.parent_business_unit_name, subBu: name }
+          : { businessUnit: name, subBu: '' };
+      })
+      .sort((a, b) => a.businessUnit.localeCompare(b.businessUnit) || a.subBu.localeCompare(b.subBu));
+    return rows.length > 0 ? rows : [{ businessUnit: '', subBu: '' }];
+  };
+
   const handleExportExcel = async () => {
     try {
       const data = await fetchAllEmployeesForExport(getExportParams());
@@ -1175,7 +1202,9 @@ const EmployeeList = () => {
         showError("No data to export");
         return;
       }
-      const exportData = data.map(emp => ({
+      // One row per Business Unit mapping (never a comma-separated cell), with the BU and its
+      // Sub-BU in separate columns — an employee in 3 BUs gets 3 rows, every other column repeated.
+      const exportData = data.flatMap((emp) => buExportRows(emp).map((bu) => ({
         'Employee ID': emp.employee_code,
         'Name': emp.full_name,
         'Email ID': emp.email,
@@ -1184,22 +1213,14 @@ const EmployeeList = () => {
         'Location': emp.location,
         'Sub Location': emp.sub_location,
         'Original Entity': emp.original_entity,
-        // A Sub-BU entry renders "Parent -> Child" once the API includes parent_business_unit_id/
-        // parent_business_unit_name on it; a top-level Parent BU (or one from an API version that
-        // predates the hierarchy field) still renders as just its own name, unchanged.
-        'Business Units': (emp.businessUnits ?? [])
-          .map((bu) => {
-            const name = bu.name ?? bu.company_name;
-            const parentName = bu.parent_business_unit_name;
-            return parentName ? `${parentName} -> ${name}` : name;
-          })
-          .join(', '),
+        'Business Unit': bu.businessUnit,
+        'Sub BU': bu.subBu,
         'Total Experience (yrs)': emp.total_experience,
         'Company Experience (yrs)': emp.company_experience,
         'Joined Date': formatDate(emp.date_of_joining),
         'Status': emp.status,
         'Timesheet Approval': (emp.is_timesheet_approval_required ?? true) ? 'Required' : 'Not Required'
-      }));
+      })));
       const ws = XLSX.utils.json_to_sheet(exportData);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Employees");
@@ -1509,7 +1530,6 @@ const EmployeeList = () => {
             isOpen={filtersOpen}
             onToggle={() => setFiltersOpen((prev) => !prev)}
             activeCount={activeFilterCount}
-            className="h-10"
           />
           {(isHR || canManageEmployees) && (
             <DropdownMenu>
@@ -1580,7 +1600,7 @@ const EmployeeList = () => {
             onValueChange={(v) => { setRoleFilter(v); setPage(1); }}
             placeholder="All roles"
             searchPlaceholder="Search role..."
-            className="h-9 w-full text-sm bg-white"
+            className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)] bg-white"
           />
         </div>
         {showEntityFilter && (

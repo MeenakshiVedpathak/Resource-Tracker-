@@ -642,7 +642,7 @@ const ServicePOForm = () => {
                             }
                           }}
                         >
-                          <TabsList className="h-9 bg-white">
+                          <TabsList className="h-[clamp(1.875rem,2vw,2.25rem)] bg-white">
                             <TabsTrigger value="project" className="gap-1.5 text-xs">
                               <Network className="h-3.5 w-3.5" /> Project PO
                             </TabsTrigger>
@@ -668,7 +668,7 @@ const ServicePOForm = () => {
                       <span className="text-destructive">*</span> Service PO Name
                     </FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g. Annual Support Services" className="h-8 text-sm" {...field} />
+                      <Input placeholder="e.g. Annual Support Services" className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)]" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -731,7 +731,7 @@ const ServicePOForm = () => {
                         placeholder="Select entity"
                         searchPlaceholder="Search entity..."
                         emptyMessage="No active entities found."
-                        className="h-8 text-sm"
+                        className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)]"
                       />
                       <FormMessage />
                     </FormItem>
@@ -781,7 +781,7 @@ const ServicePOForm = () => {
                         disabled={isCompanyLessActor && isLoadingCompanies}
                         placeholder="Select business unit"
                         searchPlaceholder="Search business unit..."
-                        className="h-8 text-sm"
+                        className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)]"
                       />
                       <FormMessage />
                     </FormItem>
@@ -815,7 +815,7 @@ const ServicePOForm = () => {
                           form.setValue('client_id', '');
                           form.setValue('project_id', '');
                         }}
-                        className="h-8 text-sm"
+                        className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)]"
                       />
                       <FormMessage />
                     </FormItem>
@@ -844,7 +844,7 @@ const ServicePOForm = () => {
                       placeholder={myClientsOnly ? 'Select client' : (showBuField && !effectiveBuId ? 'Select a business unit first' : 'Select client')}
                       searchPlaceholder="Search client..."
                       emptyMessage={myClientsOnly ? 'No clients without a Business Unit found.' : undefined}
-                      className="h-8 text-sm"
+                      className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)]"
                     />
                     <FormMessage />
                   </FormItem>
@@ -867,7 +867,7 @@ const ServicePOForm = () => {
                       placeholder={watchedClientId ? 'Select project' : 'Select a client first'}
                       searchPlaceholder="Search project..."
                       emptyMessage={isProjectsError ? 'Failed to load projects.' : 'No projects found for this client.'}
-                      className="h-8 text-sm"
+                      className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)]"
                     />
                     {isProjectsError && (
                       <p className="text-[11px] text-destructive">
@@ -896,7 +896,7 @@ const ServicePOForm = () => {
                     disabled={isLoadingCategories}
                     placeholder="Select category"
                     searchPlaceholder="Search category..."
-                    className="h-8 text-sm"
+                    className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)]"
                   />
               </div>
 
@@ -920,7 +920,7 @@ const ServicePOForm = () => {
                           disabled={isLoadingTypes || !selectedCategory}
                           placeholder="Select service type"
                           searchPlaceholder="Search service type..."
-                          className="h-8 text-sm"
+                          className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)]"
                         />
                     <FormMessage />
                   </FormItem>
@@ -989,7 +989,7 @@ const ServicePOForm = () => {
                       <DatePicker
                         value={field.value || ''}
                         onChange={field.onChange}
-                        className="h-8 text-sm"
+                        className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)]"
                       />
                     </FormControl>
                     <FormMessage />
@@ -1013,7 +1013,7 @@ const ServicePOForm = () => {
                           min={watchedStartDate || undefined}
                           placeholder="Select date"
                           clearable
-                          className="h-8 text-sm"
+                          className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)]"
                         />
                       </FormControl>
                       <FormMessage />

@@ -66,7 +66,8 @@ export function SearchableSelect({
             aria-expanded={open}
             disabled={disabled}
             className={cn(
-              "w-full min-w-0 justify-between h-9 text-sm font-normal",
+              // Fluid clamp() sizing (see button.jsx's own comment) instead of a fixed h-9/text-sm.
+              "w-full min-w-0 justify-between h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)] font-normal",
               !value && "text-muted-foreground",
               showClear && "pr-8",
               className
@@ -75,7 +76,7 @@ export function SearchableSelect({
             <span className="truncate min-w-0">{selectedOption ? selectedOption.label : placeholder}</span>
             {/* The clear "X" (rendered below, absolutely positioned) takes over this slot once a
                 value is selected — showing both at once crowded them into an unreadable overlap. */}
-            {!showClear && <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />}
+            {!showClear && <ChevronDown className="ml-2 h-[1em] w-[1em] shrink-0 opacity-50" />}
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">

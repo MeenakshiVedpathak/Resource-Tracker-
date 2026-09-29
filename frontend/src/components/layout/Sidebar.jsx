@@ -211,7 +211,7 @@ const SubNavItem = ({ item, onNavAttempt, onQuickAdd }) => {
     // so a selected item reads the same way everywhere — nested under a Category or not.
     <div
       className={cn(
-        'group relative flex items-center rounded-md pl-8 pr-2 py-1 text-xs transition-colors min-w-0',
+        'group relative flex items-center rounded-md pl-8 pr-2 py-1 text-[clamp(0.6875rem,0.85vw,0.75rem)] transition-colors min-w-0',
         active
           ? 'text-white font-medium'
           : 'text-sidebar-foreground/55 hover:text-sidebar-foreground hover:bg-sidebar-hover/40'
@@ -251,7 +251,7 @@ const SubNavItem = ({ item, onNavAttempt, onQuickAdd }) => {
 const CategoryNavGroup = ({ category, onNavAttempt, onQuickAdd }) => (
   <div className="mt-0.5">
     <p
-      className="px-3 pt-1 pb-0.5 text-[10px] font-medium uppercase tracking-wide text-sidebar-foreground/40 truncate"
+      className="px-3 pt-1 pb-0.5 text-[clamp(0.5625rem,0.7vw,0.625rem)] font-medium uppercase tracking-wide text-sidebar-foreground/40 truncate"
       title={category.label}
     >
       {category.label}
@@ -293,7 +293,7 @@ const NavItem = ({ item, collapsed, onNavAttempt, onQuickAdd }) => {
           className={cn('relative flex flex-1 items-center gap-3 min-w-0', collapsed && 'flex-initial justify-center')}
           title={item.label}
         >
-          <item.icon className={cn('shrink-0', collapsed ? 'h-5 w-5' : 'h-4 w-4')} />
+          <item.icon className={cn('shrink-0', collapsed ? 'h-[clamp(1.125rem,1.4vw,1.25rem)] w-[clamp(1.125rem,1.4vw,1.25rem)]' : 'h-[clamp(0.875rem,1.1vw,1rem)] w-[clamp(0.875rem,1.1vw,1rem)]')} />
           <AnimatePresence initial={false}>
             {!collapsed && (
               <motion.span
@@ -489,15 +489,16 @@ const Sidebar = () => {
         </svg>
       </div>
 
-      {/* Logo */}
+      {/* Logo — fluid clamp() sizing (see ui/button.jsx's own comment) instead of a fixed
+          h-16/h-14/h-11, so the header bar and logo shrink smoothly with the viewport. */}
       <div className={cn(
-        'relative z-10 flex h-16 shrink-0 items-center border-b border-sidebar-border px-4',
+        'relative z-10 flex shrink-0 items-center border-b border-sidebar-border px-4 h-[clamp(3.25rem,6vw,4rem)]',
         collapsed ? 'justify-center px-2' : ''
       )}>
         <motion.div
           className={cn(
             'relative flex shrink-0 items-center overflow-hidden rounded-md',
-            collapsed ? 'h-11 w-11 justify-center' : 'h-14 justify-start px-1'
+            collapsed ? 'h-[clamp(2.25rem,4.5vw,2.75rem)] w-[clamp(2.25rem,4.5vw,2.75rem)] justify-center' : 'h-[clamp(2.75rem,5.5vw,3.5rem)] justify-start px-1'
           )}
           initial={{ opacity: 0, scale: 0.7 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -557,7 +558,7 @@ const Sidebar = () => {
                     <Link
                       to={overviewRoute}
                       onClick={(e) => handleNavAttempt(e, overviewRoute)}
-                      className="flex w-full items-center gap-1 px-3 pt-2 pb-1 text-[11px] font-bold uppercase tracking-widest text-sidebar-foreground/70 whitespace-nowrap hover:text-sidebar-foreground transition-colors"
+                      className="flex w-full items-center gap-1 px-3 pt-2 pb-1 text-[clamp(0.625rem,0.75vw,0.6875rem)] font-bold uppercase tracking-widest text-sidebar-foreground/70 whitespace-nowrap hover:text-sidebar-foreground transition-colors"
                     >
                       <Folder className="h-3 w-3 shrink-0" />
                       <span className="truncate">{group.label}</span>
@@ -566,7 +567,7 @@ const Sidebar = () => {
                     <button
                       type="button"
                       onClick={() => toggleModule(group.label)}
-                      className="flex w-full items-center gap-1 px-3 pt-2 pb-1 text-[11px] font-bold uppercase tracking-widest text-sidebar-foreground/70 whitespace-nowrap hover:text-sidebar-foreground transition-colors"
+                      className="flex w-full items-center gap-1 px-3 pt-2 pb-1 text-[clamp(0.625rem,0.75vw,0.6875rem)] font-bold uppercase tracking-widest text-sidebar-foreground/70 whitespace-nowrap hover:text-sidebar-foreground transition-colors"
                     >
                       {moduleCollapsed
                         ? <ChevronRight className="h-3 w-3 shrink-0 transition-transform duration-150" />
@@ -606,16 +607,16 @@ const Sidebar = () => {
         <button
           onClick={() => dispatch(toggleSidebar())}
           className={cn(
-            'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs text-sidebar-foreground/50',
+            'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[clamp(0.6875rem,0.85vw,0.75rem)] text-sidebar-foreground/50',
             'hover:bg-sidebar-hover hover:text-sidebar-foreground transition-colors',
             collapsed && 'justify-center px-2'
           )}
         >
           {collapsed ? (
-            <ChevronRight className="h-4 w-4" />
+            <ChevronRight className="h-[clamp(0.875rem,1.1vw,1rem)] w-[clamp(0.875rem,1.1vw,1rem)]" />
           ) : (
             <>
-              <ChevronLeft className="h-4 w-4" />
+              <ChevronLeft className="h-[clamp(0.875rem,1.1vw,1rem)] w-[clamp(0.875rem,1.1vw,1rem)]" />
               <span>Collapse</span>
             </>
           )}

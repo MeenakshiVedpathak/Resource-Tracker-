@@ -348,16 +348,15 @@ const ClientServicePOHoursReport = () => {
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
         title="Client Service PO Hours Report"
-        description="Hours delivered per Service PO, grouped by Client"
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative w-full md:w-56">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-[clamp(0.875rem,1vw,1rem)] w-[clamp(0.875rem,1vw,1rem)] text-muted-foreground" />
               <Input
                 placeholder="Search client, project…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="h-9 pl-9 w-full text-sm"
+                className="h-[clamp(1.875rem,2vw,2.25rem)] pl-9 w-full text-[clamp(0.75rem,0.85vw,0.875rem)]"
               />
             </div>
             {canViewOriginal && (
@@ -383,10 +382,9 @@ const ClientServicePOHoursReport = () => {
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((p) => !p)}
               activeCount={activeFilterCount}
-              className="h-9"
             />
             {visibleClientGroups.length > 0 && (
-              <Button variant="outline" size="sm" className="h-9" onClick={() => exportToExcel(visibleClientGroups, periodLabel)}>
+              <Button variant="outline" size="sm" className="h-[clamp(1.875rem,2vw,2.25rem)]" onClick={() => exportToExcel(visibleClientGroups, periodLabel)}>
                 <Download className="mr-1.5 h-4 w-4" />Export Excel
               </Button>
             )}
@@ -428,7 +426,7 @@ const ClientServicePOHoursReport = () => {
                 onValueChange={setClientId}
                 placeholder="All Clients"
                 searchPlaceholder="Search client..."
-                className="h-9 w-full text-sm"
+                className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)]"
               />
             </div>
 
@@ -443,7 +441,7 @@ const ClientServicePOHoursReport = () => {
                 onValueChange={handleServiceTypeChange}
                 placeholder="All Service Types"
                 searchPlaceholder="Search service type..."
-                className="h-9 w-full text-sm"
+                className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)]"
               />
             </div>
 
@@ -461,7 +459,7 @@ const ClientServicePOHoursReport = () => {
                 onValueChange={setPoId}
                 placeholder="All Projects"
                 searchPlaceholder="Search project..."
-                className="h-9 w-full text-sm"
+                className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)]"
               />
             </div>
 
@@ -476,7 +474,7 @@ const ClientServicePOHoursReport = () => {
                 onValueChange={setEmployeeId}
                 placeholder="All Employees"
                 searchPlaceholder="Search employee..."
-                className="h-9 w-full text-sm"
+                className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)]"
               />
             </div>
 
@@ -488,7 +486,7 @@ const ClientServicePOHoursReport = () => {
                 value={status}
                 onValueChange={setStatus}
                 placeholder="All"
-                className="h-9 w-full text-sm"
+                className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)]"
               />
             </div>
       </FilterPanel>

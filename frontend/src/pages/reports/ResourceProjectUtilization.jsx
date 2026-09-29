@@ -334,7 +334,6 @@ const ResourceProjectUtilization = () => {
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
         title="Resource Project Utilization"
-        description="Per-employee hours breakdown across projects, for a given month."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <SearchInput
@@ -366,7 +365,6 @@ const ResourceProjectUtilization = () => {
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((prev) => !prev)}
               activeCount={activeFilterCount}
-              className="h-9"
             />
             {(meta.total ?? rows.length) > 0 && (
               <Button variant="outline" size="toolbar" onClick={handleExport} disabled={exporting}>
@@ -434,7 +432,7 @@ const ResourceProjectUtilization = () => {
               onValueChange={handleCategoryChange}
               placeholder="All Categories"
               searchPlaceholder="Search category..."
-              className="h-9 text-sm w-full"
+              className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)] w-full"
             />
           </div>
 

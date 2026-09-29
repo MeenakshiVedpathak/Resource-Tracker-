@@ -242,14 +242,12 @@ const ClientWiseAnalytics = () => {
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
         title="Client Wise Analytics"
-        description="Cost, hours and project distribution per client for the selected period."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <FilterToggleButton
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((p) => !p)}
               activeCount={activeFilterCount}
-              className="h-9"
             />
             {records.length > 0 && (
               <Button variant="outline" size="toolbar" onClick={handleExport} disabled={exporting}>
@@ -263,7 +261,7 @@ const ClientWiseAnalytics = () => {
       <FilterPanel
         isOpen={filtersOpen}
         maxHeightClass="max-h-[460px]"
-        gridClassName="items-end gap-x-4 gap-y-5 rounded-xl border-slate-200/80 bg-slate-50/70 p-5 shadow-sm"
+        gridClassName="items-end gap-x-[clamp(0.5rem,0.8vw,0.75rem)] gap-y-[clamp(0.625rem,1vw,0.875rem)] rounded-xl border-slate-200/80 bg-slate-50/70 p-[clamp(0.5rem,0.8vw,0.75rem)] shadow-sm"
         onClear={clearFilters}
         showClear={activeFilterCount > 0}
       >
@@ -343,7 +341,7 @@ const ClientWiseAnalytics = () => {
             onValueChange={(v) => { setEmployeeId(v); setPage(1); }}
             placeholder="All Employees"
             searchPlaceholder="Search employee..."
-            className="h-9 w-full text-sm"
+            className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)]"
           />
         </div>
 
@@ -358,7 +356,7 @@ const ClientWiseAnalytics = () => {
             onValueChange={(v) => { setClientId(v); setPage(1); }}
             placeholder="All Clients"
             searchPlaceholder="Search client..."
-            className="h-9 w-full text-sm"
+            className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)]"
           />
         </div>
 
@@ -373,7 +371,7 @@ const ClientWiseAnalytics = () => {
             onValueChange={handleServiceTypeChange}
             placeholder="All Service Types"
             searchPlaceholder="Search service type..."
-            className="h-9 w-full text-sm"
+            className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)]"
           />
         </div>
 
@@ -391,7 +389,7 @@ const ClientWiseAnalytics = () => {
             onValueChange={(v) => { setPoId(v); setPage(1); }}
             placeholder="All Projects"
             searchPlaceholder="Search project..."
-            className="h-9 w-full text-sm"
+            className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)]"
           />
         </div>
       </FilterPanel>

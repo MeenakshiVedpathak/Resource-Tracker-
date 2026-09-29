@@ -155,7 +155,6 @@ const MonthWiseBenchReport = () => {
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
         title="Month-wise Bench Report"
-        description=""
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <SearchInput
@@ -168,7 +167,6 @@ const MonthWiseBenchReport = () => {
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((p) => !p)}
               activeCount={activeFilterCount}
-              className="h-9"
             />
             {filteredRows.length > 0 && (
               <Button variant="outline" size="toolbar" onClick={handleExport}>

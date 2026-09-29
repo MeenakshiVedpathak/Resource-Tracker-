@@ -201,18 +201,25 @@ const KpiCard = ({ cfg, value, isLoading }) => {
 
   // Long formatted values (e.g. full-precision PO Value) shrink to fit on one line
   // instead of wrapping mid-number; the exact figure is always available on hover.
+  // clamp() min/max around each fixed size below keeps the same three-tier length logic while
+  // also letting every tier itself shrink with the viewport — same fluid approach as the header's
+  // buttons/inputs (see ui/button.jsx's own comment) instead of a size fixed regardless of width.
   const formatted = String(cfg.fmt(value ?? 0));
-  const valueSizeClass = formatted.length > 13 ? 'text-[12px]' : formatted.length > 9 ? 'text-[13.5px]' : 'text-[15px]';
+  const valueSizeClass = formatted.length > 13
+    ? 'text-[clamp(0.625rem,1.1vw,0.75rem)]'
+    : formatted.length > 9
+    ? 'text-[clamp(0.6875rem,1.2vw,0.84375rem)]'
+    : 'text-[clamp(0.75rem,1.3vw,0.9375rem)]';
 
   return (
     <motion.div variants={itemVariants} className="cursor-default group">
-      <div className="relative flex flex-col gap-2 rounded-xl border border-border bg-card pl-4 pr-3 py-3.5 shadow-sm overflow-hidden transition-all duration-200 group-hover:shadow-md group-hover:-translate-y-0.5">
+      <div className="relative flex flex-col gap-[clamp(0.375rem,0.6vw,0.5rem)] rounded-xl border border-border bg-card pl-[clamp(0.75rem,1.1vw,1rem)] pr-[clamp(0.5rem,0.85vw,0.75rem)] py-[clamp(0.625rem,1vw,0.875rem)] shadow-sm overflow-hidden transition-all duration-200 group-hover:shadow-md group-hover:-translate-y-0.5">
         {/* left color bar */}
         <div className={`absolute left-0 top-0 h-full w-[3px] ${cfg.bar}`} />
 
         {/* icon — small */}
-        <div className={`flex h-7 w-7 items-center justify-center rounded-md shrink-0 ${cfg.iconBg}`}>
-          <cfg.icon className={`h-3.5 w-3.5 ${cfg.iconColor}`} />
+        <div className={`flex h-[clamp(1.375rem,2vw,1.75rem)] w-[clamp(1.375rem,2vw,1.75rem)] items-center justify-center rounded-md shrink-0 ${cfg.iconBg}`}>
+          <cfg.icon className={`h-[clamp(0.625rem,1vw,0.875rem)] w-[clamp(0.625rem,1vw,0.875rem)] ${cfg.iconColor}`} />
         </div>
 
         {/* value */}
@@ -228,7 +235,7 @@ const KpiCard = ({ cfg, value, isLoading }) => {
         </Tooltip>
 
         {/* title — full text, no truncation */}
-        <p className="text-[11px] font-semibold text-muted-foreground leading-tight">
+        <p className="text-[clamp(0.625rem,0.9vw,0.6875rem)] font-semibold text-muted-foreground leading-tight">
           {cfg.title}
         </p>
       </div>
@@ -253,14 +260,14 @@ const InsightCard = ({ icon: Icon, label, sub, type, isLoading, onClick }) => {
         <motion.div
           variants={itemVariants}
           onClick={onClick}
-          className={`flex items-center gap-3 rounded-2xl border px-4 py-3 flex-1 min-w-[200px] ${onClick ? 'cursor-pointer hover:brightness-95 active:scale-[0.98] transition-all duration-150' : 'cursor-default'} ${s.card}`}
+          className={`flex items-center gap-[clamp(0.5rem,0.8vw,0.75rem)] rounded-2xl border px-[clamp(0.75rem,1.1vw,1rem)] py-[clamp(0.5rem,0.85vw,0.75rem)] flex-1 min-w-[200px] ${onClick ? 'cursor-pointer hover:brightness-95 active:scale-[0.98] transition-all duration-150' : 'cursor-default'} ${s.card}`}
         >
-          <div className={`p-2 rounded-xl shrink-0 ${s.icon}`}>
-            <Icon className="h-4 w-4" />
+          <div className={`p-[clamp(0.375rem,0.55vw,0.5rem)] rounded-xl shrink-0 ${s.icon}`}>
+            <Icon className="h-[clamp(0.75rem,1vw,1rem)] w-[clamp(0.75rem,1vw,1rem)]" />
           </div>
           <div className="min-w-0">
-            <p className={`text-sm font-bold leading-tight truncate ${s.text}`}>{label}</p>
-            <p className={`text-xs mt-0.5 leading-tight truncate ${s.sub}`}>{sub}</p>
+            <p className={`text-[clamp(0.75rem,0.9vw,0.875rem)] font-bold leading-tight truncate ${s.text}`}>{label}</p>
+            <p className={`text-[clamp(0.6875rem,0.8vw,0.75rem)] mt-0.5 leading-tight truncate ${s.sub}`}>{sub}</p>
           </div>
         </motion.div>
       </TooltipTrigger>
@@ -805,11 +812,14 @@ const Dashboard = () => {
       {/* ══ PAGE HEADER ══════════════════════════════════════════════════════ */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 py-3">
         <div>
-          <div className="flex items-center gap-2.5">
-            <div className="p-1.5 rounded-lg bg-primary/10">
-              <BarChart2 className="h-5 w-5 text-primary" />
+          {/* Same fluid clamp() approach as the controls row on the right — logo badge and title
+              shrink smoothly between ~1800px and ~1300px viewport width instead of staying full
+              size and then being force-wrapped once the row runs out of room. */}
+          <div className="flex items-center gap-[clamp(0.4rem,0.8vw,0.625rem)]">
+            <div className="p-[clamp(0.2rem,0.4vw,0.375rem)] rounded-lg bg-primary/10">
+              <BarChart2 className="h-[clamp(1rem,1.4vw,1.25rem)] w-[clamp(1rem,1.4vw,1.25rem)] text-primary" />
             </div>
-            <h1 className="text-xl font-extrabold tracking-tight text-foreground">Analytics Dashboard</h1>
+            <h1 className="text-[clamp(0.9375rem,1.4vw,1.25rem)] font-extrabold tracking-tight text-foreground whitespace-nowrap">Analytics Dashboard</h1>
           </div>
           {/* <p className="text-xs text-muted-foreground mt-1 ml-0.5">
             Resource utilization & workforce analytics ·{' '}
@@ -822,8 +832,14 @@ const Dashboard = () => {
             wraps onto multiple lines (a single unwrapped line looks identical either way,
             since there's no leftover space to justify against) — justify-end was right-aligning
             each wrapped line independently, making the first control float alone with a large
-            empty gap to its left on narrow screens. */}
-        <div className="flex items-center gap-2 shrink-0 flex-wrap justify-start">
+            empty gap to its left on narrow screens.
+            `min-w-0` (not `shrink-0`) — `shrink-0` made this flex item always demand its full
+            one-line width from the `sm:flex-row justify-between` parent, so on medium widths
+            (too narrow to fit every control, wide enough to stay in the row layout) the row
+            overflowed the viewport instead of wrapping — the Filter button got pushed off-screen
+            behind a horizontal scrollbar rather than dropping to its own line. `min-w-0` lets
+            this item actually shrink, which is what lets its own `flex-wrap` kick in. */}
+        <div className="flex min-w-0 flex-wrap items-center justify-start gap-[clamp(0.2rem,0.6vw,0.5rem)]">
           {/* Entity — narrows the Business Unit select right beside it, same pairing as every
               FilterPanel-based BU filter elsewhere (components/common/EntityFilter). Rendered
               inline for the same reason as the BU control below: this row uses the header's own
@@ -837,7 +853,7 @@ const Dashboard = () => {
                 onValueChange={handleEntityChange}
                 placeholder="All Entities"
                 searchPlaceholder="Search entity…"
-                className="w-44"
+                className="w-[clamp(6rem,9vw,11rem)] h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.6875rem,0.8vw,0.875rem)]"
               />
             </div>
           )}
@@ -857,7 +873,7 @@ const Dashboard = () => {
                 onValueChange={setBuIds}
                 placeholder="All Business Units"
                 searchPlaceholder="Search business unit…"
-                className="w-48"
+                className="w-[clamp(6.5rem,9.5vw,12rem)] h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.6875rem,0.8vw,0.875rem)]"
                 showChips={false}
               />
             </div>
@@ -868,17 +884,20 @@ const Dashboard = () => {
             <FiscalYearPicker
               value={fiscalYear}
               onChange={setFiscalYear}
-              className="w-36 rounded-xl"
+              className="w-[clamp(5rem,7vw,9rem)] h-[clamp(1.875rem,2vw,2.25rem)] rounded-xl text-[clamp(0.6875rem,0.8vw,0.875rem)]"
             />
           ) : (
             <MonthYearPicker
               value={bottomMonthYear}
               onChange={(v) => { if (v) { setBottomMonthYear(v); setBillablePage(1); } }}
               clearable={false}
-              className="w-44 h-9 rounded-xl text-sm"
+              className="w-[clamp(6rem,8.5vw,11rem)] h-[clamp(1.875rem,2vw,2.25rem)] rounded-xl text-[clamp(0.6875rem,0.8vw,0.875rem)]"
             />
           )}
-          {/* View mode toggle */}
+          {/* View mode toggle — sizing uses `clamp(min, vw, max)`, tuned so the max is only
+              reached near a full-width desktop viewport (~1800px+) and the min floor sits around
+              a half-width laptop window (~1300px) — the shrink is visible across ordinary window
+              resizing, not just once the window drops below typical widths entirely. */}
           <div className="flex items-center gap-0.5 p-0.5 rounded-xl bg-muted border">
             {[
               { mode: 'quarterly', icon: BarChart2, label: 'Quarterly', active: 'bg-card shadow-sm text-blue-600 dark:text-blue-400' },
@@ -887,16 +906,16 @@ const Dashboard = () => {
               <button
                 key={mode}
                 onClick={() => setViewMode(mode)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 whitespace-nowrap ${
+                className={`flex items-center gap-1.5 rounded-lg font-semibold transition-all duration-150 whitespace-nowrap px-[clamp(0.3rem,0.6vw,0.75rem)] py-[clamp(0.15rem,0.35vw,0.375rem)] text-[clamp(0.5625rem,0.7vw,0.75rem)] ${
                   viewMode === mode ? active : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
-                <Icon className="h-3.5 w-3.5" /> {label}
+                <Icon className="shrink-0 h-[clamp(0.625rem,0.8vw,0.875rem)] w-[clamp(0.625rem,0.8vw,0.875rem)]" /> {label}
               </button>
             ))}
           </div>
 
-          {/* Hours source toggle */}
+          {/* Hours source toggle — same fluid clamp() sizing as the view mode toggle above. */}
           {canViewOriginal && (
             <div className="flex items-center gap-0.5 p-0.5 rounded-xl bg-muted border">
               {[
@@ -906,7 +925,7 @@ const Dashboard = () => {
                 <button
                   key={value}
                   onClick={() => setHoursSource(value)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 whitespace-nowrap ${
+                  className={`flex items-center gap-1.5 rounded-lg font-semibold transition-all duration-150 whitespace-nowrap px-[clamp(0.3rem,0.6vw,0.75rem)] py-[clamp(0.15rem,0.35vw,0.375rem)] text-[clamp(0.5625rem,0.7vw,0.75rem)] ${
                     hoursSource === value ? 'bg-card shadow-sm text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
@@ -920,7 +939,7 @@ const Dashboard = () => {
             isOpen={filtersOpen}
             onToggle={() => setFiltersOpen((p) => !p)}
             activeCount={hasFilters ? activeFilterCount : 0}
-            className="h-9"
+            className="h-[clamp(1.875rem,2vw,2.25rem)] px-[clamp(0.5rem,0.7vw,0.75rem)] text-[clamp(0.6875rem,0.8vw,0.875rem)]"
           />
 
           {canViewAIInsights && (
@@ -936,11 +955,11 @@ const Dashboard = () => {
                 ],
               }}
               transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
-              className="group h-9 pl-1.5 pr-1.5 hover:pr-3.5 rounded-xl inline-flex items-center gap-0 hover:gap-2 text-xs font-extrabold text-white border border-white/20 transition-all duration-300"
+              className="group h-[clamp(1.875rem,2vw,2.25rem)] pl-[clamp(0.25rem,0.5vw,0.375rem)] pr-[clamp(0.25rem,0.5vw,0.375rem)] hover:pr-3.5 rounded-xl inline-flex items-center gap-0 hover:gap-2 text-[clamp(0.5625rem,0.7vw,0.75rem)] font-extrabold text-white border border-white/20 transition-all duration-300"
               style={{ background: 'linear-gradient(135deg, #8b5cf6, #6d28d9 45%, #2563eb)' }}
             >
               {/* spinning gradient ring + pulsing sparkle — same mark as the AI Insights page */}
-              <span className="relative h-6 w-6 shrink-0">
+              <span className="relative h-[clamp(1.125rem,1.6vw,1.5rem)] w-[clamp(1.125rem,1.6vw,1.5rem)] shrink-0">
                 <motion.span
                   className="absolute inset-0 rounded-lg"
                   style={{ background: 'conic-gradient(from 0deg, #fff 0deg, transparent 100deg, transparent 260deg, #fff 360deg)' }}
@@ -953,7 +972,7 @@ const Dashboard = () => {
                     animate={{ scale: [1, 1.18, 1] }}
                     transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
                   >
-                    <Sparkles className="h-3.5 w-3.5 text-violet-600" />
+                    <Sparkles className="h-[clamp(0.625rem,0.8vw,0.875rem)] w-[clamp(0.625rem,0.8vw,0.875rem)] text-violet-600" />
                   </motion.span>
                 </span>
               </span>
@@ -961,8 +980,14 @@ const Dashboard = () => {
             </motion.button>
           )}
 
-          <Button variant="outline" size="toolbar" onClick={() => refetch()} disabled={isFetching} className="rounded-xl">
-            <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? 'animate-spin' : ''}`} />
+          <Button
+            variant="outline"
+            size="toolbar"
+            onClick={() => refetch()}
+            disabled={isFetching}
+            className="rounded-xl h-[clamp(1.875rem,2vw,2.25rem)] px-[clamp(0.5rem,0.7vw,0.75rem)]"
+          >
+            <RefreshCw className={`h-[clamp(0.625rem,0.8vw,0.875rem)] w-[clamp(0.625rem,0.8vw,0.875rem)] ${isFetching ? 'animate-spin' : ''}`} />
             {/* <span className="hidden sm:inline">Refresh</span> */}
           </Button>
         </div>
@@ -970,7 +995,7 @@ const Dashboard = () => {
 
       {/* Filter panel — available in both quarterly and monthly views */}
       <div className="pb-2">
-        <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[640px]" gridClassName="block rounded-lg border bg-muted/30 p-4">
+        <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[640px]" gridClassName="block rounded-lg border bg-muted/30 p-[clamp(0.5rem,0.8vw,0.75rem)]">
           <div className="flex flex-col gap-2.5">
 
             <div className="flex flex-wrap items-center gap-2">
@@ -983,12 +1008,12 @@ const Dashboard = () => {
                       <button
                         key={q.value}
                         onClick={() => setQuarter(quarter === q.value ? null : q.value)}
-                        className={`px-3 py-1 rounded-lg text-xs transition-all duration-150 whitespace-nowrap ${
+                        className={`px-[clamp(0.4rem,0.6vw,0.75rem)] py-[clamp(0.15rem,0.3vw,0.25rem)] rounded-lg text-[clamp(0.5625rem,0.7vw,0.75rem)] transition-all duration-150 whitespace-nowrap ${
                           quarter === q.value ? QUARTER_STYLES.active : QUARTER_STYLES.inactive
                         }`}
                       >
                         {q.label}
-                        <span className={`ml-1 text-[10px] ${quarter === q.value ? 'opacity-60' : 'opacity-50'}`}>{q.sub}</span>
+                        <span className={`ml-1 text-[clamp(0.5rem,0.6vw,0.625rem)] ${quarter === q.value ? 'opacity-60' : 'opacity-50'}`}>{q.sub}</span>
                       </button>
                     ))}
                   </div>
@@ -998,15 +1023,15 @@ const Dashboard = () => {
 
               <div className="flex items-center gap-1.5 min-w-[150px] flex-1">
                 <FilterIconBadge icon={Users} color="violet" />
-                <SearchableSelect options={employeeOptions} value={employeeId} onValueChange={setEmployeeId} placeholder="Employee" searchPlaceholder="Search employee…" className={`h-8 text-sm ${FILTER_FIELD_STYLES.violet}`} />
+                <SearchableSelect options={employeeOptions} value={employeeId} onValueChange={setEmployeeId} placeholder="Employee" searchPlaceholder="Search employee…" className={`h-[clamp(1.75rem,2vw,2rem)] text-[clamp(0.75rem,0.85vw,0.875rem)] ${FILTER_FIELD_STYLES.violet}`} />
               </div>
               <div className="flex items-center gap-1.5 min-w-[140px] flex-1">
                 <FilterIconBadge icon={Building2} color="sky" />
-                <SearchableSelect options={clientOptions} value={clientId} onValueChange={setClientId} placeholder="Client" searchPlaceholder="Search client…" className={`h-8 text-sm ${FILTER_FIELD_STYLES.sky}`} />
+                <SearchableSelect options={clientOptions} value={clientId} onValueChange={setClientId} placeholder="Client" searchPlaceholder="Search client…" className={`h-[clamp(1.75rem,2vw,2rem)] text-[clamp(0.75rem,0.85vw,0.875rem)] ${FILTER_FIELD_STYLES.sky}`} />
               </div>
               <div className="flex items-center gap-1.5 min-w-[150px] flex-1">
                 <FilterIconBadge icon={Briefcase} color="amber" />
-                <SearchableSelect options={servicePOOptions} value={servicePOId} onValueChange={setServicePOId} placeholder="Service PO" searchPlaceholder="Search PO…" className={`h-8 text-sm ${FILTER_FIELD_STYLES.amber}`} />
+                <SearchableSelect options={servicePOOptions} value={servicePOId} onValueChange={setServicePOId} placeholder="Service PO" searchPlaceholder="Search PO…" className={`h-[clamp(1.75rem,2vw,2rem)] text-[clamp(0.75rem,0.85vw,0.875rem)] ${FILTER_FIELD_STYLES.amber}`} />
               </div>
             </div>
 
@@ -1017,8 +1042,8 @@ const Dashboard = () => {
                   {employeeId && <Chip color="violet" icon={Users} label={employeeOptions.find((e) => e.value === employeeId)?.label ?? 'Employee'} onRemove={() => setEmployeeId('')} />}
                   {clientId && <Chip color="sky" icon={Building2} label={clientOptions.find((c) => c.value === clientId)?.label ?? 'Client'} onRemove={() => setClientId('')} />}
                   {servicePOId && <Chip color="amber" icon={Briefcase} label={servicePOOptions.find((p) => p.value === servicePOId)?.label ?? 'Service PO'} onRemove={() => setServicePOId('')} />}
-                  <button onClick={clearFilters} className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
-                    <X className="h-3 w-3" /> Clear
+                  <button onClick={clearFilters} className="inline-flex items-center gap-1 rounded-full border px-[clamp(0.5rem,0.7vw,0.625rem)] py-[clamp(0.15rem,0.3vw,0.25rem)] text-[clamp(0.625rem,0.75vw,0.75rem)] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+                    <X className="h-[clamp(0.625rem,0.7vw,0.75rem)] w-[clamp(0.625rem,0.7vw,0.75rem)]" /> Clear
                   </button>
                 </motion.div>
               )}
@@ -1549,20 +1574,23 @@ const FILTER_FIELD_STYLES = {
   emerald: 'border-emerald-200 bg-emerald-50 hover:bg-emerald-100/70 focus-visible:ring-emerald-400 dark:border-emerald-800 dark:bg-emerald-950/20 dark:hover:bg-emerald-950/30',
 };
 
+// Fluid clamp() sizing (not fixed h-7/w-7) so this shrinks smoothly alongside the rest of the
+// dashboard header's controls on narrower viewports instead of holding its full size until the
+// row runs out of room.
 const FilterIconBadge = ({ icon: Icon, color }) => (
-  <span className={`flex h-7 w-7 items-center justify-center rounded-lg shrink-0 text-white shadow-sm ${FILTER_ICON_STYLES[color] ?? FILTER_ICON_STYLES.primary}`}>
-    <Icon className="h-3.5 w-3.5" />
+  <span className={`flex h-[clamp(1.125rem,1.6vw,1.75rem)] w-[clamp(1.125rem,1.6vw,1.75rem)] items-center justify-center rounded-lg shrink-0 text-white shadow-sm ${FILTER_ICON_STYLES[color] ?? FILTER_ICON_STYLES.primary}`}>
+    <Icon className="h-[clamp(0.625rem,0.8vw,0.875rem)] w-[clamp(0.625rem,0.8vw,0.875rem)]" />
   </span>
 );
 const Chip = ({ icon: Icon, label, onRemove, color }) => (
   <motion.span
     initial={{ scale: 0.85, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold max-w-[220px] ${CHIP_STYLES[color] ?? CHIP_STYLES.primary}`}
+    className={`inline-flex items-center gap-1.5 rounded-full border px-[clamp(0.5rem,0.7vw,0.75rem)] py-[clamp(0.15rem,0.3vw,0.25rem)] text-[clamp(0.625rem,0.75vw,0.75rem)] font-semibold max-w-[220px] ${CHIP_STYLES[color] ?? CHIP_STYLES.primary}`}
   >
-    <Icon className="h-3 w-3 shrink-0" />
+    <Icon className="h-[clamp(0.625rem,0.7vw,0.75rem)] w-[clamp(0.625rem,0.7vw,0.75rem)] shrink-0" />
     <span className="truncate">{label}</span>
     <button onClick={onRemove} className="ml-0.5 shrink-0 rounded-full p-0.5 transition-colors">
-      <X className="h-2.5 w-2.5" />
+      <X className="h-[clamp(0.5rem,0.6vw,0.625rem)] w-[clamp(0.5rem,0.6vw,0.625rem)]" />
     </button>
   </motion.span>
 );

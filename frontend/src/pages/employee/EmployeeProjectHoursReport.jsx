@@ -217,13 +217,13 @@ const EmployeeProjectHoursReport = () => {
             for half its container's width against one sibling, with no breakpoint dependency. */}
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Report Type</Label>
-          <div className="grid grid-cols-2 rounded-md border overflow-hidden text-sm bg-white">
+          <div className="grid grid-cols-2 rounded-md border overflow-hidden text-[clamp(0.75rem,0.85vw,0.875rem)] bg-white">
             {REPORT_TYPES.map(({ label, value }, i) => (
               <button
                 key={value}
                 onClick={() => setReportType(value)}
                 className={cn(
-                  'h-9 px-2 min-w-0 font-medium text-center truncate transition-colors',
+                  'flex h-[clamp(1.375rem,1.6vw,1.625rem)] items-center justify-center px-[clamp(0.375rem,0.5vw,0.5rem)] min-w-0 font-medium text-center truncate transition-colors leading-none',
                   i % 2 === 0 && 'border-r',
                   i < 2 && 'border-b',
                   reportType === value
@@ -244,7 +244,7 @@ const EmployeeProjectHoursReport = () => {
               value={date}
               max={dayjs().format('YYYY-MM-DD')}
               onChange={setDate}
-              className="w-full bg-white text-sm"
+              className="w-full bg-white"
             />
           </div>
         )}
@@ -252,7 +252,7 @@ const EmployeeProjectHoursReport = () => {
         {reportType === 'monthly' && (
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs">Month</Label>
-            <MonthYearPicker value={monthYear} onChange={setMonthYear} className="h-9 w-full text-sm bg-white" />
+            <MonthYearPicker value={monthYear} onChange={setMonthYear} className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)] bg-white" />
           </div>
         )}
 
@@ -266,7 +266,7 @@ const EmployeeProjectHoursReport = () => {
         {reportType === 'range' && (
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs">Date Range</Label>
-            <DateRangePicker value={range} onChange={setRange} placeholder="Select a date range" className="h-9 w-full text-sm bg-white" clearable />
+            <DateRangePicker value={range} onChange={setRange} placeholder="Select a date range" className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)] bg-white" clearable />
           </div>
         )}
 
@@ -278,7 +278,7 @@ const EmployeeProjectHoursReport = () => {
             onValueChange={(v) => v && setFilterValue(v)}
             placeholder="All Projects & Service POs"
             searchPlaceholder="Search project or Service PO..."
-            className="h-9 w-full text-sm bg-white"
+            className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)] bg-white"
           />
         </div>
       </FilterPanel>

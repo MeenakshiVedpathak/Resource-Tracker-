@@ -41,12 +41,13 @@ export function FiscalYearPicker({ value, onChange, className }) {
           variant="outline"
           size="sm"
           className={cn(
-            'h-9 px-3 text-sm font-medium justify-start gap-1.5',
+            // Fluid clamp() sizing (see button.jsx's own comment) instead of a fixed h-9/text-sm.
+            'h-[clamp(1.875rem,2vw,2.25rem)] min-w-0 px-[clamp(0.5rem,0.7vw,0.75rem)] text-[clamp(0.75rem,0.85vw,0.875rem)] font-medium justify-start gap-1.5',
             className
           )}
         >
-          <CalendarDays className="h-4 w-4 shrink-0" />
-          {value != null ? fyLabel(value) : 'Select FY'}
+          <CalendarDays className="h-[1em] w-[1em] shrink-0" />
+          <span className="truncate">{value != null ? fyLabel(value) : 'Select FY'}</span>
         </Button>
       </PopoverTrigger>
 

@@ -214,7 +214,7 @@ const PmDashboard = () => {
                   onValueChange={setBuIds}
                   placeholder="All Business Units"
                   searchPlaceholder="Search business unit…"
-                  className="w-48 h-9 rounded-xl text-sm"
+                  className="w-48 h-[clamp(1.875rem,2vw,2.25rem)] rounded-xl text-[clamp(0.75rem,0.85vw,0.875rem)]"
                   showChips={false}
                 />
               </div>
@@ -225,7 +225,7 @@ const PmDashboard = () => {
                 value={monthYear}
                 onChange={(v) => v && setMonthYear(v)}
                 clearable={false}
-                className="h-9 w-auto rounded-xl"
+                className="h-[clamp(1.875rem,2vw,2.25rem)] w-auto rounded-xl"
               />
             </div>
           </div>

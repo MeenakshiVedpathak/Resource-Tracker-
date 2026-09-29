@@ -20,7 +20,8 @@ const EntityFilter = ({
   value,
   onChange,
   label = 'Entity',
-  className = 'h-9 w-full text-sm bg-white',
+  // Fluid clamp() sizing (see button.jsx's own comment) instead of a fixed h-9/text-sm.
+  className = 'h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)] bg-white',
   // Mirrors BusinessUnitFilter's own labelClassName escape hatch, for pages that restyle their
   // filter labels — kept in sync so Entity never reads as the odd one out next to Business Unit.
   labelClassName = 'text-xs',

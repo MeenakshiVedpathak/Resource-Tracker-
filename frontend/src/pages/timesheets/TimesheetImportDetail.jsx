@@ -688,7 +688,7 @@ const TimesheetImportDetail = () => {
               onValueChange={(v) => { setEmployeeFilter(v); setDetailPage(1); }}
               placeholder="All Employees"
               searchPlaceholder="Search employee..."
-              className="h-9 w-full text-sm bg-white"
+              className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)] bg-white"
             />
           </div>
 
@@ -703,7 +703,7 @@ const TimesheetImportDetail = () => {
               onValueChange={(v) => { setClientFilter(v); setDetailPage(1); }}
               placeholder="All Clients"
               searchPlaceholder="Search client..."
-              className="h-9 w-full text-sm bg-white"
+              className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)] bg-white"
             />
           </div>
 
@@ -721,7 +721,7 @@ const TimesheetImportDetail = () => {
               onValueChange={handleCategoryChange}
               placeholder="All Categories"
               searchPlaceholder="Search category..."
-              className="h-9 w-full text-sm bg-white"
+              className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)] bg-white"
             />
           </div>
 
@@ -739,7 +739,7 @@ const TimesheetImportDetail = () => {
               onValueChange={handleTypeChange}
               placeholder="All Types"
               searchPlaceholder="Search type..."
-              className="h-9 w-full text-sm bg-white"
+              className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)] bg-white"
             />
           </div>
 
@@ -754,7 +754,7 @@ const TimesheetImportDetail = () => {
               onValueChange={(v) => { setPoFilter(v); setDetailPage(1); }}
               placeholder="All Service POs"
               searchPlaceholder="Search PO..."
-              className="h-9 w-full text-sm bg-white"
+              className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)] bg-white"
             />
           </div>
         </div>
@@ -850,7 +850,7 @@ const TimesheetImportDetail = () => {
                 type="number"
                 step="0.25"
                 min="0"
-                className="h-9 text-sm"
+                className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)]"
                 value={addForm.hours_logged}
                 onChange={(e) => setAddForm((f) => ({ ...f, hours_logged: e.target.value }))}
               />

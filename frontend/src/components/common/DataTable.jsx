@@ -143,7 +143,7 @@ const DataTable = ({
         <div className="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           {onSearchChange && (
             <div className="relative w-full sm:w-72">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-[clamp(0.875rem,1vw,1rem)] w-[clamp(0.875rem,1vw,1rem)] text-muted-foreground" />
               <Input
                 placeholder={searchPlaceholder}
                 value={searchValue ?? ''}
@@ -376,15 +376,15 @@ const DataTable = ({
           has opted into `mobileCards` (so the mobile pagination below takes over instead). */}
       {pagination && (
         <div className={cn('flex shrink-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between text-sm', mobileCards && 'hidden md:flex')}>
-          <p className="text-muted-foreground text-xs">
+          <p className="text-muted-foreground text-[clamp(0.6875rem,0.75vw,0.75rem)]">
             Showing {((currentPage - 1) * pagination.limit) + 1}–{Math.min(currentPage * pagination.limit, pagination.total)} of {pagination.total} results
           </p>
           <div className="flex items-center gap-3">
             {onPageSizeChange && (
               <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground whitespace-nowrap">Rows per page</span>
+                <span className="text-[clamp(0.6875rem,0.75vw,0.75rem)] text-muted-foreground whitespace-nowrap">Rows per page</span>
                 <Select value={String(pagination.limit)} onValueChange={(v) => onPageSizeChange(Number(v))}>
-                  <SelectTrigger className="h-8 w-16 text-xs bg-white">
+                  <SelectTrigger className="h-[clamp(1.5rem,1.6vw,1.75rem)] w-[clamp(3.25rem,4vw,4rem)] text-[clamp(0.6875rem,0.75vw,0.75rem)] bg-white">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -404,7 +404,7 @@ const DataTable = ({
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              <span className="text-xs text-muted-foreground px-2">
+              <span className="text-[clamp(0.6875rem,0.75vw,0.75rem)] text-muted-foreground px-2">
                 {currentPage} / {totalPages}
               </span>
               <Button

@@ -42,7 +42,8 @@ const BusinessUnitFilter = ({
   // Narrows the options to that Entity's BUs; leave unset on a page with no EntityFilter.
   entityId,
   label = 'Business Unit',
-  className = 'h-9 w-full text-sm bg-white',
+  // Fluid clamp() sizing (see button.jsx's own comment) instead of a fixed h-9/text-sm.
+  className = 'h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)] bg-white',
   // Pages that restyle their filter labels (e.g. the uppercase micro-labels on Client Wise
   // Analytics) pass the same class here, so this cell's label doesn't read as the odd one out in
   // a row it shares. Omitted everywhere else, which keeps the plain text-xs label.

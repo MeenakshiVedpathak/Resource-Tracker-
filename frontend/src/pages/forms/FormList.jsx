@@ -402,7 +402,7 @@ const FormList = () => {
       <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[200px]" onClear={clearFilters} showClear={activeFilterCount > 0}>
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Status</Label>
-          <div className="flex items-center rounded-md border overflow-hidden h-9 text-sm bg-white">
+          <div className="flex items-center rounded-md border overflow-hidden h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)] bg-white">
             {[
               { label: 'All', value: 'all' },
               { label: 'Active', value: 'active' },

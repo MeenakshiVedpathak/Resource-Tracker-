@@ -9,7 +9,9 @@ import { cn } from '@/utils/cn';
 // `min-height` only matters once something is actually trying to constrain the box.
 const Table = forwardRef(({ className, containerClassName, ...props }, ref) => (
   <div ref={ref} className={cn("relative w-full overflow-auto min-h-0", containerClassName)}>
-    <table className={cn('w-full caption-bottom text-[13px]', className)} {...props} />
+    {/* Fluid clamp() sizing (see ui/button.jsx's own comment) instead of a fixed 13px, so every
+        table's own text shrinks smoothly with the viewport like the rest of the app now does. */}
+    <table className={cn('w-full caption-bottom text-[clamp(0.75rem,0.8vw,0.8125rem)]', className)} {...props} />
   </div>
 ));
 Table.displayName = 'Table';
@@ -41,7 +43,7 @@ TableRow.displayName = 'TableRow';
 const TableHead = forwardRef(({ className, ...props }, ref) => (
   <th
     ref={ref}
-    className={cn('h-9 px-4 text-left align-middle text-xs font-semibold uppercase tracking-wider text-muted-foreground [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]', className)} {...props}
+    className={cn('h-[clamp(1.875rem,2vw,2.25rem)] px-[clamp(0.75rem,1vw,1rem)] text-left align-middle text-[clamp(0.6875rem,0.75vw,0.75rem)] font-semibold uppercase tracking-wider text-muted-foreground [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]', className)} {...props}
   />
 ));
 TableHead.displayName = 'TableHead';
@@ -49,7 +51,7 @@ TableHead.displayName = 'TableHead';
 const TableCell = forwardRef(({ className, ...props }, ref) => (
   <td
     ref={ref}
-    className={cn('px-4 py-2 align-middle [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]', className)}
+    className={cn('px-[clamp(0.75rem,1vw,1rem)] py-[clamp(0.3rem,0.5vw,0.5rem)] align-middle [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]', className)}
     {...props}
   />
 ));

@@ -388,7 +388,7 @@ const MonthlyCostList = () => {
     <div className="flex h-full min-h-0 flex-col space-y-4">
       <PageHeader
         title="Monthly Costs"
-        description="Uploaded and calculated cost periods, grouped by month"
+        description=""
         actions={
           // Mobile: a deliberate stacked layout (search full-width, Filters/Download Sample paired
           // evenly, Upload Excel full-width below) instead of the plain flex-wrap row below wrapping

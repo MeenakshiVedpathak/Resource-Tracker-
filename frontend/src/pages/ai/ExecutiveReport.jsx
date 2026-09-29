@@ -144,7 +144,7 @@ const ExecutiveReport = () => {
             <select
               value={fiscalYear}
               onChange={(e) => setFiscalYear(Number(e.target.value))}
-              className="h-9 rounded-xl border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30 font-medium"
+              className="h-[clamp(1.875rem,2vw,2.25rem)] rounded-xl border border-input bg-background px-3 text-[clamp(0.75rem,0.85vw,0.875rem)] shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30 font-medium"
             >
               {FY_OPTIONS.map((fy) => (
                 <option key={fy} value={fy}>FY {fy}–{String(fy + 1).slice(-2)}</option>

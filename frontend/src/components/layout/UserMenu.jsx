@@ -132,7 +132,32 @@ const UserMenu = () => {
   const displayName = employee?.full_name ?? employee?.email ?? '';
   const email = employee?.email;
   const roleName = roleObjects[0]?.name ?? null;
-  const activeBuName = businessUnits.find((bu) => bu.id === activeBuId)?.name ?? null;
+  // Shows only when this login is mapped to exactly one *root* BU — not exactly one array entry.
+  // Confirmed live: a login mapped to a Sub-BU gets BOTH the Sub-BU's own row AND its parent BU's
+  // row back from the API (2 entries for what is really one BU scope, one level deep), so a plain
+  // `businessUnits.length === 1` check hid the BU/Sub-BU line entirely for exactly the accounts
+  // this feature was built for. Grouping by root name (a BU's own name if it has no parent, else
+  // its `parent_business_unit_name`) collapses that parent+child pair back into the one root it
+  // actually represents, while still correctly hiding this for a login mapped to several genuinely
+  // unrelated BUs (2+ distinct root names).
+  const rootBuNames = new Set(businessUnits.map((bu) => bu.parent_business_unit_name ?? bu.name));
+  const hasSingleBu = rootBuNames.size === 1;
+  // Prefers the Sub-BU row over its duplicate parent row when both are present, so the more
+  // specific (and more informative) level is what gets shown — falls back to whichever entry is
+  // actually active, then the first entry, for the plain single-root-BU case.
+  const activeBu = hasSingleBu
+    ? (businessUnits.find((bu) => bu.parent_business_unit_name)
+      ?? businessUnits.find((bu) => bu.id === activeBuId)
+      ?? businessUnits[0]
+      ?? null)
+    : null;
+  const activeBuName = activeBu?.name ?? null;
+  // Sub-BU mapping — same `parent_business_unit_name` field EmployeeList.jsx's own export already
+  // reads off a BU entry (see its "Business Units" column comment); present only once the backend
+  // response for this employee's BU actually carries it, so an Admin/employee mapped to a root BU
+  // (or on an API version that predates the hierarchy field) still shows unchanged.
+  const activeSubBuName = activeBu?.parent_business_unit_name ? activeBu.name : null;
+  const activeParentBuName = activeBu?.parent_business_unit_name ?? activeBuName;
 
   return (
     <>
@@ -172,8 +197,19 @@ const UserMenu = () => {
               dropdown-content copy of this same data already is below (see DropdownMenuLabel). */}
           <div className="hidden sm:block text-left min-w-0 max-w-[160px]">
             <p className="text-xs font-semibold leading-none text-foreground truncate">{displayName}</p>
-            {!showBuSwitcher && activeBuName && (
-              <p className="text-[10px] text-muted-foreground mt-0.5 font-medium truncate">{activeBuName}</p>
+            {/* Sub-BU mapping renders "Parent → Sub-BU" (same compact "arrow" convention
+                EmployeeList.jsx's own export already uses for this), so a Sub-BU-mapped account
+                still reads correctly in this single truncating line.
+                Was gated on `!showBuSwitcher` (businessUnits.length <= 1) — a leftover from when
+                that condition also decided whether to show the BU *switcher* dropdown above. That
+                switcher is commented out/disabled, so the guard just silently hid this line
+                entirely for anyone mapped to more than one BU (a BU Admin/BU Head with several
+                BUs), even though there's always exactly one *active* BU to name here regardless
+                of how many they're mapped to. */}
+            {activeBuName && (
+              <p className="text-[10px] text-muted-foreground mt-0.5 font-medium truncate">
+                {activeSubBuName ? `${activeParentBuName} → ${activeSubBuName}` : activeBuName}
+              </p>
             )}
             {roleName && <p className="text-[10px] text-muted-foreground mt-0.5 font-medium truncate">{roleName}</p>}
           </div>
@@ -191,8 +227,21 @@ const UserMenu = () => {
             <div className="min-w-0">
               <p className="text-sm font-semibold leading-tight truncate">{displayName}</p>
               {email && <p className="text-xs text-muted-foreground truncate mt-0.5">{email}</p>}
-              {!showBuSwitcher && activeBuName && (
-                <p className="text-xs text-muted-foreground truncate mt-0.5">{activeBuName}</p>
+              {/* Root BU as plain text, same as before; a mapped Sub-BU gets its own small pill
+                  right after it — this dropdown has the room the compact trigger button doesn't,
+                  so the Sub-BU reads as a distinct scope rather than folded into one arrow string.
+                  Same `showBuSwitcher` guard removed as in the trigger button above — see that
+                  comment for why. */}
+              {activeBuName && (
+                <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5">
+                  <span className="truncate text-xs text-muted-foreground">{activeParentBuName}</span>
+                  {activeSubBuName && (
+                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                      <Building2 className="h-2.5 w-2.5" />
+                      {activeSubBuName}
+                    </span>
+                  )}
+                </div>
               )}
             </div>
           </div>

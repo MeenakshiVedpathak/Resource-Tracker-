@@ -226,7 +226,6 @@ const ServicePoMonthlyBudgetPage = () => {
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((p) => !p)}
               activeCount={activeFilterCount}
-              className="h-9"
             />
 
             <Button
@@ -247,13 +246,13 @@ const ServicePoMonthlyBudgetPage = () => {
       <FilterPanel
         isOpen={filtersOpen}
         maxHeightClass="max-h-[460px]"
-        gridClassName="grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 w-full"
+        gridClassName="grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-[clamp(0.5rem,0.8vw,0.75rem)] w-full"
         onClear={clearFilters}
         showClear={activeFilterCount > 0}
       >
-        <EntityFilter multiple value={entityIds} onChange={handleEntityChange} className="h-9 w-full text-sm" />
+        <EntityFilter multiple value={entityIds} onChange={handleEntityChange} className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)]" />
 
-        <BusinessUnitFilter multiple value={buIds} entityId={entityIds} onChange={handleBuChange} className="h-9 w-full text-sm" />
+        <BusinessUnitFilter multiple value={buIds} entityId={entityIds} onChange={handleBuChange} className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)]" />
 
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Client</Label>
@@ -266,7 +265,7 @@ const ServicePoMonthlyBudgetPage = () => {
             onValueChange={setClientFilter}
             placeholder="All Clients"
             searchPlaceholder="Search client..."
-            className="h-9 w-full text-sm"
+            className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)]"
           />
         </div>
 
@@ -281,7 +280,7 @@ const ServicePoMonthlyBudgetPage = () => {
             value={categoryFilter}
             onValueChange={handleCategoryChange}
             placeholder="All Categories"
-            className="h-9 w-full text-sm"
+            className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)]"
           />
         </div>
 
@@ -296,7 +295,7 @@ const ServicePoMonthlyBudgetPage = () => {
             onValueChange={handleTypeChange}
             placeholder="All Service Types"
             searchPlaceholder="Search service type..."
-            className="h-9 w-full text-sm"
+            className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)]"
           />
         </div>
 
@@ -314,7 +313,7 @@ const ServicePoMonthlyBudgetPage = () => {
             onValueChange={setPoFilter}
             placeholder="All POs"
             searchPlaceholder="Search PO..."
-            className="h-9 w-full text-sm"
+            className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)]"
           />
         </div>
       </FilterPanel>

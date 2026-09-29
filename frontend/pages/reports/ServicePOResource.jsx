@@ -283,7 +283,7 @@ const ServicePOResource = () => {
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
         title="Service PO vs Resource"
-        description="Resources allocated per Service PO for a selected month"
+        description=""
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {canViewOriginal && (

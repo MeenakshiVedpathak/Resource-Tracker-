@@ -216,7 +216,7 @@ const CategoryList = () => {
       <div className="flex items-center gap-2 rounded-lg border bg-white px-3 py-2.5">
         <Label className="text-xs shrink-0">1. Choose a module</Label>
         <Select value={selectedModuleId != null ? String(selectedModuleId) : undefined} onValueChange={handleModuleChange} disabled={isLoadingModules}>
-          <SelectTrigger className="h-9 text-sm bg-white w-[240px]">
+          <SelectTrigger className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)] bg-white w-[240px]">
             <SelectValue placeholder="Select a module" />
           </SelectTrigger>
           <SelectContent>

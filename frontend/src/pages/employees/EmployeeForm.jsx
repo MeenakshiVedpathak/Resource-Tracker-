@@ -247,7 +247,7 @@ const EmployeeForm = () => {
                               {...field}
                               onChange={(e) => field.onChange(e.target.value.toUpperCase())}
                               disabled={isEdit}
-                              className="h-8 text-sm border-gray-200"
+                              className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)] border-gray-200"
                             />
                           </FormControl>
                           <FormMessage className="text-[10px]" />
@@ -266,7 +266,7 @@ const EmployeeForm = () => {
                               placeholder="e.g. John Smith"
                               {...field}
                               onChange={(e) => field.onChange(e.target.value.replace(/[^A-Za-z\s]/g, ''))}
-                              className="h-8 text-sm border-gray-200"
+                              className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)] border-gray-200"
                             />
                           </FormControl>
                           <FormMessage className="text-[10px]" />
@@ -281,7 +281,7 @@ const EmployeeForm = () => {
                         <FormItem className="space-y-1">
                           <FormLabel className="text-[11px] text-muted-foreground font-medium"><span className="text-destructive mr-0.5">*</span> Email</FormLabel>
                           <FormControl>
-                            <Input placeholder="e.g. john@example.com" type="email" {...field} className="h-8 text-sm border-gray-200" />
+                            <Input placeholder="e.g. john@example.com" type="email" {...field} className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)] border-gray-200" />
                           </FormControl>
                           <FormMessage className="text-[10px]" />
                         </FormItem>
@@ -295,7 +295,7 @@ const EmployeeForm = () => {
                         <FormItem className="space-y-1">
                           <FormLabel className="text-[11px] text-muted-foreground font-medium">Designation</FormLabel>
                           <FormControl>
-                            <Input placeholder="e.g. Senior Engineer" {...field} className="h-8 text-sm border-gray-200" />
+                            <Input placeholder="e.g. Senior Engineer" {...field} className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)] border-gray-200" />
                           </FormControl>
                           <FormMessage className="text-[10px]" />
                         </FormItem>
@@ -318,7 +318,7 @@ const EmployeeForm = () => {
                         <FormItem className="space-y-1">
                           <FormLabel className="flex h-4 items-center text-[11px] text-muted-foreground font-medium"><span className="text-destructive mr-0.5">*</span> Original Entity</FormLabel>
                           <FormControl>
-                            <Input placeholder="e.g. GTT Client Entity" maxLength={512} {...field} className="h-8 text-sm border-gray-200" />
+                            <Input placeholder="e.g. GTT Client Entity" maxLength={512} {...field} className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)] border-gray-200" />
                           </FormControl>
                           <FormMessage className="text-[10px]" />
                         </FormItem>
@@ -332,7 +332,7 @@ const EmployeeForm = () => {
                         <FormItem className="space-y-1">
                           <FormLabel className="flex h-4 items-center text-[11px] text-muted-foreground font-medium"><span className="text-destructive mr-0.5">*</span> Payroll Entity</FormLabel>
                           <FormControl>
-                            <Input placeholder="e.g. GTT India Pvt Ltd" maxLength={64} {...field} className="h-8 text-sm border-gray-200" />
+                            <Input placeholder="e.g. GTT India Pvt Ltd" maxLength={64} {...field} className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)] border-gray-200" />
                           </FormControl>
                           <FormMessage className="text-[10px]" />
                         </FormItem>
@@ -361,7 +361,7 @@ const EmployeeForm = () => {
                             </Tooltip>
                           </FormLabel>
                           <FormControl>
-                            <Input placeholder="e.g. Maharashtra" maxLength={256} {...field} className="h-8 text-sm border-gray-200" />
+                            <Input placeholder="e.g. Maharashtra" maxLength={256} {...field} className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)] border-gray-200" />
                           </FormControl>
                           <FormMessage className="text-[10px]" />
                         </FormItem>
@@ -375,7 +375,7 @@ const EmployeeForm = () => {
                         <FormItem className="space-y-1">
                           <FormLabel className="flex h-4 items-center text-[11px] text-muted-foreground font-medium"><span className="text-destructive mr-0.5">*</span> Sub Location</FormLabel>
                           <FormControl>
-                            <Input placeholder="e.g. Hinjewadi" maxLength={256} {...field} className="h-8 text-sm border-gray-200" />
+                            <Input placeholder="e.g. Hinjewadi" maxLength={256} {...field} className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)] border-gray-200" />
                           </FormControl>
                           <FormMessage className="text-[10px]" />
                         </FormItem>
@@ -476,7 +476,7 @@ const EmployeeForm = () => {
                             disabled={isLoadingTeamLeads}
                             placeholder="Select Team Lead"
                             searchPlaceholder="Search Team Leads…"
-                            className="h-8 text-sm border-gray-200"
+                            className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)] border-gray-200"
                           />
                           <FormMessage className="text-[10px]" />
                         </FormItem>
@@ -496,7 +496,7 @@ const EmployeeForm = () => {
                             disabled={isLoadingTeamLeads}
                             placeholder="Select Team Lead"
                             searchPlaceholder="Search Team Leads…"
-                            className="h-8 text-sm border-gray-200"
+                            className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)] border-gray-200"
                           />
                           <FormMessage className="text-[10px]" />
                         </FormItem>
@@ -522,7 +522,7 @@ const EmployeeForm = () => {
                               value={field.value || ''}
                               onChange={field.onChange}
                               max={todayIsoDate()}
-                              className="h-8 text-sm border-gray-200"
+                              className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)] border-gray-200"
                             />
                           </FormControl>
                           <FormMessage className="text-[10px]" />
@@ -551,7 +551,7 @@ const EmployeeForm = () => {
                               disabled={!dateOfJoining}
                               placeholder={dateOfJoining ? 'Not applicable' : 'Set joining date first'}
                               clearable
-                              className="h-8 text-sm border-gray-200"
+                              className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)] border-gray-200"
                             />
                           </FormControl>
                           <FormMessage className="text-[10px]" />
@@ -566,7 +566,7 @@ const EmployeeForm = () => {
                         <FormItem className="space-y-1">
                           <FormLabel className="text-[11px] text-muted-foreground font-medium">Total Experience (yrs)</FormLabel>
                           <FormControl>
-                            <Input type="number" step="0.1" min="0" max="60" placeholder="e.g. 7.5" {...field} className="h-8 text-sm border-gray-200" />
+                            <Input type="number" step="0.1" min="0" max="60" placeholder="e.g. 7.5" {...field} className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)] border-gray-200" />
                           </FormControl>
                           <FormMessage className="text-[10px]" />
                         </FormItem>

@@ -159,14 +159,12 @@ const ServiceLineBusinessMix = () => {
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
         title="Service Line Business Mix"
-        description="Hours, cost, and margin by Service Category/Type, with optional month-over-month comparison."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <FilterToggleButton
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((p) => !p)}
               activeCount={activeFilterCount}
-              className="h-9"
             />
             {records.length > 0 && (
               <Button variant="outline" size="toolbar" onClick={handleExport}>

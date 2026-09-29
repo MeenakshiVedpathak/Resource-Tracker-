@@ -153,6 +153,25 @@ apiClient.interceptors.response.use(
       return Promise.reject(error);
     }
 
+    // Startup race: right after login, MainLayout's useSyncBusinessUnits() (GET
+    // /employees/:id/business-units) hasn't resolved yet, so getStoredActiveBuId() is still null
+    // when a page's own queries (Entities, Forms, active Employees list, etc.) fire on the very
+    // same mount — those go out with no X-Company-Id header at all, which a BU-scoped login's
+    // backend rejects with this code. React Query's own default retry deliberately skips every
+    // 4xx (see lib/queryClient.js), so this never self-healed before — it just failed once and
+    // stayed failed until the page was left and re-entered. Retried here exactly once, waiting
+    // for the BU sync already in flight to land, rather than gating the whole app's initial
+    // render behind it (which would add a loading screen to every login, not just this race).
+    if (errorCode === 'COMPANY_HEADER_REQUIRED' && !original._companyRetry) {
+      original._companyRetry = true;
+      const activeBuId = await waitForActiveBuId();
+      if (activeBuId != null) {
+        original.headers['X-Company-Id'] = activeBuId;
+        return apiClient(original);
+      }
+      // Never resolved (e.g. this login genuinely has no BU) — surface the original error as-is.
+    }
+
     if (error.response?.status === 401 && !original._retry && !isMockSession && !isPublicAuthRequest) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
@@ -294,6 +313,30 @@ export const saveActiveBuId = (buId) => {
   } else {
     localStorage.removeItem(TOKEN_KEYS.ACTIVE_BU_ID);
   }
+};
+
+// Polls localStorage (not Redux — this module stays React-free, same reason
+// crossBuScopeForAdmin/canScopeAcrossBus above read from storage) for up to ~2s, waiting for
+// MainLayout's useSyncBusinessUnits() fetch (already in flight on every authenticated page load)
+// to land and write the active BU id. Resolves with whatever value shows up, or null once the
+// window runs out — a login that's genuinely cross-BU (no mapped BU at all) will always hit the
+// timeout here, which is expected and harmless: it just means the original error gets surfaced,
+// same as before this retry existed.
+const waitForActiveBuId = (timeoutMs = 2000, intervalMs = 150) => {
+  const existing = getStoredActiveBuId();
+  if (existing != null) return Promise.resolve(existing);
+  return new Promise((resolve) => {
+    const start = Date.now();
+    const check = () => {
+      const value = getStoredActiveBuId();
+      if (value != null || Date.now() - start >= timeoutMs) {
+        resolve(value);
+        return;
+      }
+      setTimeout(check, intervalMs);
+    };
+    check();
+  });
 };
 
 export const clearAuth = () => {

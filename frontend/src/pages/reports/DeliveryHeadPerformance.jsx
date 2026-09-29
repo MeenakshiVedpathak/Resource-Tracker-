@@ -175,7 +175,6 @@ const DeliveryHeadPerformance = () => {
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
         title="Delivery Head Performance"
-        description="Portfolio performance per Delivery Head — PO count, hours, and margin delivered."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <SearchInput
@@ -188,7 +187,6 @@ const DeliveryHeadPerformance = () => {
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((p) => !p)}
               activeCount={(entityIds.length > 0 ? 1 : 0) + (buIds.length > 0 ? 1 : 0)}
-              className="h-9"
             />
             {filteredRecords.length > 0 && (
               <Button variant="outline" size="toolbar" onClick={handleExport}>

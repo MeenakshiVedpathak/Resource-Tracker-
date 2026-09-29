@@ -99,7 +99,7 @@ const ParentRow = ({
         value={parent.name}
         onChange={(e) => onChangeName(e.target.value)}
         placeholder="Module name"
-        className="h-9 flex-1 text-sm font-medium bg-white"
+        className="h-[clamp(1.875rem,2vw,2.25rem)] flex-1 text-[clamp(0.75rem,0.85vw,0.875rem)] font-medium bg-white"
       />
       {isCollapsed && parent.children.length > 0 && (
         <span className="shrink-0 text-xs text-muted-foreground">
