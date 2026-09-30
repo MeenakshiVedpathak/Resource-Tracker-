@@ -120,6 +120,7 @@ const EmployeeForm = () => {
   const dateOfJoining = useWatch({ control: form.control, name: 'date_of_joining' });
   const formStatus = useWatch({ control: form.control, name: 'status' });
   const primaryTeamLeadId = useWatch({ control: form.control, name: 'primary_manager_employee_id' });
+  const secondaryTeamLeadId = useWatch({ control: form.control, name: 'secondary_manager_employee_id' });
   const timesheetApprovalRequired = useWatch({ control: form.control, name: 'is_timesheet_approval_required' });
 
   // Nobody can report to themselves, so the employee being edited is never a valid Team Lead for
@@ -130,8 +131,31 @@ const EmployeeForm = () => {
       label: m.full_name ?? m.email,
       value: String(m.id),
     }));
+
+  // eligible-managers now returns Team Leads only (backend change — PM/Project Admin/BU Admin no
+  // longer qualify). Existing employees whose Primary/Secondary Manager was set to one of those
+  // roles BEFORE that change still carry that id, but it no longer shows up in teamLeadOptions —
+  // without this, the SearchableSelect would find no matching option and silently render as
+  // blank, even though a real value is still stored (backend confirmed: an edit that resends this
+  // unchanged value is accepted and changes nothing, so the mapping is still very much there,
+  // just invisible here). Fetched by plain employee id (not gated to Team Leads) purely to get a
+  // name to display for a value the current options list no longer contains.
+  const isPrimaryLegacy = !!primaryTeamLeadId && !teamLeadOptions.some((o) => o.value === String(primaryTeamLeadId));
+  const isSecondaryLegacy = !!secondaryTeamLeadId && !teamLeadOptions.some((o) => o.value === String(secondaryTeamLeadId));
+  const { data: legacyPrimaryManager, isPending: isLoadingLegacyPrimary } = useEmployee(isPrimaryLegacy ? primaryTeamLeadId : undefined);
+  const { data: legacySecondaryManager, isPending: isLoadingLegacySecondary } = useEmployee(isSecondaryLegacy ? secondaryTeamLeadId : undefined);
+
+  const legacyOptionLabel = (person, isLoading) =>
+    `${isLoading ? 'Loading…' : (person?.full_name ?? person?.email ?? 'Unknown employee')} (not a Team Lead — reassign)`;
+
+  const primaryTeamLeadOptions = isPrimaryLegacy
+    ? [{ label: legacyOptionLabel(legacyPrimaryManager, isLoadingLegacyPrimary), value: String(primaryTeamLeadId) }, ...teamLeadOptions]
+    : teamLeadOptions;
   const secondaryTeamLeadOptions = [
     { label: 'None', value: 'none' },
+    ...(isSecondaryLegacy
+      ? [{ label: legacyOptionLabel(legacySecondaryManager, isLoadingLegacySecondary), value: String(secondaryTeamLeadId) }]
+      : []),
     ...teamLeadOptions.filter((o) => o.value !== String(primaryTeamLeadId)),
   ];
 
@@ -470,7 +494,7 @@ const EmployeeForm = () => {
                         <FormItem className="space-y-1">
                           <FormLabel className="text-[11px] text-muted-foreground font-medium">Primary Team Lead</FormLabel>
                           <SearchableSelect
-                            options={teamLeadOptions}
+                            options={primaryTeamLeadOptions}
                             value={field.value != null ? String(field.value) : ''}
                             onValueChange={(v) => field.onChange(v ? Number(v) : null)}
                             disabled={isLoadingTeamLeads}

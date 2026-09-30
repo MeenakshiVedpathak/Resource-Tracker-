@@ -16,6 +16,7 @@ import { useRoles } from '@/hooks/useRoles';
 import { useCompanies } from '@/hooks/useCompanies';
 import { useMasterBuFilter } from '@/hooks/useMasterBuFilter';
 import { useSelectableBusinessUnits } from '@/hooks/useSelectableBusinessUnits';
+import { useSelectableEntities } from '@/hooks/useSelectableEntities';
 import { employeesApi } from '@/api/employees.api';
 import { useCanWrite, useCanManageEmployeeRecords } from '@/hooks/usePermissions';
 import { useAuth } from '@/hooks/useAuth';
@@ -774,6 +775,51 @@ const EmployeeList = () => {
   const { units: selectableBuUnits, isCrossBu } = useSelectableBusinessUnits();
   const ownBuIds = useMemo(() => selectableBuUnits.map((u) => u.id), [selectableBuUnits]);
 
+  // Entity Name column below: a row's own `business_units[]` (per GET /employees) carries id/
+  // name/parent hierarchy but no entity info at all — resolved here instead via the same two
+  // selectable-* hooks the Entity/BU filters above already use, which handle the cross-BU vs
+  // BU-scoped actor split correctly (see useSelectableBusinessUnits' own doc comment) without a
+  // second company-master fetch of our own. A Sub-BU has no entityId of its own — it inherits its
+  // parent's, so this is looked up by root id, never the Sub-BU's own id.
+  const { entities: selectableEntities } = useSelectableEntities();
+  const entityNameById = useMemo(
+    () => new Map(selectableEntities.map((e) => [String(e.id), e.name])),
+    [selectableEntities]
+  );
+  const entityIdByBuId = useMemo(
+    () => new Map(selectableBuUnits.map((u) => [String(u.id), u.entityId])),
+    [selectableBuUnits]
+  );
+
+  // Distinct, comma-joined names across an employee's `business_units[]` — BU/Entity Name columns
+  // below. `getRootId` resolves a Sub-BU to its parent before the entityId lookup above, since
+  // that map is keyed by root BU id only.
+  const getEmployeeBuNames = (emp) => {
+    const units = emp.business_units ?? emp.businessUnits ?? [];
+    const names = new Set(units.map((bu) => bu.parent_business_unit_name ?? bu.name).filter(Boolean));
+    return Array.from(names).sort().join(', ');
+  };
+  const getEmployeeSubBuNames = (emp) => {
+    const units = emp.business_units ?? emp.businessUnits ?? [];
+    const names = new Set(
+      units.filter((bu) => bu.parent_business_unit_id != null).map((bu) => bu.name).filter(Boolean)
+    );
+    return Array.from(names).sort().join(', ');
+  };
+  const getEmployeeEntityNames = (emp) => {
+    const units = emp.business_units ?? emp.businessUnits ?? [];
+    const names = new Set(
+      units
+        .map((bu) => {
+          const rootId = bu.parent_business_unit_id ?? bu.id;
+          const entityId = entityIdByBuId.get(String(rootId));
+          return entityId != null ? entityNameById.get(String(entityId)) : null;
+        })
+        .filter(Boolean)
+    );
+    return Array.from(names).sort().join(', ');
+  };
+
   const params = {
     page,
     limit,
@@ -927,24 +973,27 @@ const EmployeeList = () => {
       size: 160,
       cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="140px" />,
     }),
-    // Business Units column hidden — kept here so it can be restored when needed.
-    // columnHelper.accessor('businessUnits', {
-    //   header: 'Business Units',
-    //   size: 180,
-    //   cell: (info) => {
-    //     const list = info.row.original.businessUnits ?? [];
-    //     if (!list.length) return <span className="text-sm text-muted-foreground">—</span>;
-    //     return (
-    //       <div className="flex flex-wrap gap-1">
-    //         {list.map((bu, i) => (
-    //           <Badge key={bu.id ?? i} variant="outline" className="text-xs">
-    //             {bu.name ?? bu.company_name}
-    //           </Badge>
-    //         ))}
-    //       </div>
-    //     );
-    //   },
-    // }),
+    // Comma-separated across every BU an employee is mapped to (not one badge per BU — a login
+    // mapped to a dozen BUs would otherwise blow out the row height) — TruncatedCell already
+    // gives the "…" truncation + full value on hover this needs, same as every other text column.
+    columnHelper.display({
+      id: 'entity_name',
+      header: 'Entity Name',
+      size: 160,
+      cell: ({ row }) => <TruncatedCell value={getEmployeeEntityNames(row.original)} maxWidth="140px" />,
+    }),
+    columnHelper.display({
+      id: 'bu_name',
+      header: 'BU Name',
+      size: 160,
+      cell: ({ row }) => <TruncatedCell value={getEmployeeBuNames(row.original)} maxWidth="140px" />,
+    }),
+    columnHelper.display({
+      id: 'sub_bu_name',
+      header: 'Sub BU Name',
+      size: 160,
+      cell: ({ row }) => <TruncatedCell value={getEmployeeSubBuNames(row.original)} maxWidth="140px" />,
+    }),
     columnHelper.accessor('total_experience', {
       header: 'Total Experience',
       size: 120,
@@ -993,7 +1042,7 @@ const EmployeeList = () => {
         );
       },
     }),
-  ], [navigate, isHR, canManageEmployees]);
+  ], [navigate, isHR, canManageEmployees, entityIdByBuId, entityNameById]);
 
   const handleSearch = (e) => {
     setSearch(e.target.value);

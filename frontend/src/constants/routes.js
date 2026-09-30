@@ -168,6 +168,8 @@ export const ROUTES = {
   REPORT_RESOURCE_WISE_BENCH: '/reports/resource-wise-bench',
   REPORT_RESOURCE_COST_UTILIZATION: '/reports/resource-cost-utilization',
   REPORT_PROJECT_TIMESHEET: '/reports/project-timesheet',
+  REPORT_EMPLOYEE_ROLE_BU_MAPPING: '/reports/employee-role-bu-mapping',
+  REPORT_TEAM_LEAD_EMPLOYEE_PROJECT_HOURS: '/reports/team-lead-employee-project-hours',
 
   // Team Mapping — Service PO Admin self-service (§7)
   TEAM_MAPPINGS: '/team-mappings',

@@ -142,6 +142,8 @@ const MonthWiseBenchReport = lazy(() => import('@/pages/reports/MonthWiseBenchRe
 const ResourceWiseBenchReport = lazy(() => import('@/pages/reports/ResourceWiseBenchReport'));
 const ResourceCostUtilizationReport = lazy(() => import('@/pages/reports/ResourceCostUtilizationReport'));
 const ProjectWiseTimesheetReport = lazy(() => import('@/pages/reports/ProjectWiseTimesheetReport'));
+const EmployeeRoleBuMappingReport = lazy(() => import('@/pages/reports/EmployeeRoleBuMappingReport'));
+const TeamLeadEmployeeProjectHours = lazy(() => import('@/pages/reports/TeamLeadEmployeeProjectHours'));
 
 // ── AI Copilot (new pages, launched from the floating AI Copilot widget) ──
 const RootCauseView = lazy(() => import('@/pages/ai/RootCauseView'));
@@ -454,6 +456,8 @@ const AppRoutes = () => {
           <Route path={ROUTES.REPORT_RESOURCE_COST_UTILIZATION} element={<ProtectedRoute formName={FORM_NAMES.REPORT_RESOURCE_COST_UTILIZATION}><ResourceCostUtilizationReport /></ProtectedRoute>} />
           <Route path={ROUTES.REPORT_EMPLOYEE_WORK_LOG_HOURS_SUMMARY} element={<ProtectedRoute formName={FORM_NAMES.REPORT_EMPLOYEE_WORK_LOG_HOURS_SUMMARY} allowIfNoFormsMapped><EmployeeWorkLogHoursSummaryReport /></ProtectedRoute>} />
           <Route path={ROUTES.REPORT_PROJECT_TIMESHEET} element={<ProtectedRoute formName={FORM_NAMES.REPORT_PROJECT_TIMESHEET} allowIfNoFormsMapped><ProjectWiseTimesheetReport /></ProtectedRoute>} />
+          <Route path={ROUTES.REPORT_EMPLOYEE_ROLE_BU_MAPPING} element={<ProtectedRoute formName={FORM_NAMES.REPORT_EMPLOYEE_ROLE_BU_MAPPING} allowIfNoFormsMapped><EmployeeRoleBuMappingReport /></ProtectedRoute>} />
+          <Route path={ROUTES.REPORT_TEAM_LEAD_EMPLOYEE_PROJECT_HOURS} element={<ProtectedRoute formName={FORM_NAMES.REPORT_TEAM_LEAD_EMPLOYEE_PROJECT_HOURS} allowIfNoFormsMapped><TeamLeadEmployeeProjectHours /></ProtectedRoute>} />
           {/* No formName gate — reachable by any authenticated login regardless of Role-Form
               Mapping, since Team Lead Timesheet Approval's "Check Pending & Remind" button links
               here directly and a Team Lead role may not have this form explicitly granted. */}

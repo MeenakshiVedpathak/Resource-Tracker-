@@ -183,4 +183,51 @@ export const reportsApi = {
     const filename = match?.[1] ?? `project-timesheet.${ext}`;
     return { blob: res.data, filename };
   },
+
+  // Employee Role & Organization Mapping (§ new report, 2026) — one row per employee with their
+  // roles/BUs/Sub-BUs already comma-separated by the backend. Routed through getReport like every
+  // other multi-select report so entityIds/buIds/subBuIds/roleIds narrow the result instead of the
+  // navbar's active BU (see getReport's own comment above for why `buId` always rides as 'all').
+  getEmployeeRoleBuMapping: (params) => getReport('/reports/employee-role-bu-mapping', params),
+  // Same URL, `format: 'excel'` appended and read back as a blob — same pattern as
+  // downloadProjectTimesheet above, not a separate /export path. The backend exports every
+  // matching row for the current filters, not just the current page, so page/limit are stripped
+  // by the caller before this is invoked (see the report page's handleExport).
+  exportEmployeeRoleBuMapping: async (params) => {
+    const { buId, ...query } = params;
+    const res = await apiClient.get('/reports/employee-role-bu-mapping', {
+      params: { ...query, format: 'excel' },
+      responseType: 'blob',
+      ...explicitBuScope(buId),
+    });
+    const match = /filename="?([^"]+)"?/i.exec(res.headers['content-disposition'] ?? '');
+    const filename = match?.[1] ?? 'Employee_Role_BU_Mapping_Report.xlsx';
+    return { blob: res.data, filename };
+  },
+  // Team Lead's own view of the work-log entries of every Employee mapped to them as
+  // Primary/Secondary manager — the backend resolves "which Team Lead" from the login itself,
+  // never from a param, so this never sends one. Real server-side pagination/sorting/filtering,
+  // same as every field `params` carries (see TeamLeadEmployeeProjectHours.jsx's own comment).
+  getTeamLeadEmployeeProjectHours: (params) => getReport('/reports/team-lead-employee-project-hours', params),
+  // Dropdown option lists (Employee/Client/Project/SPO/BU/Sub-BU) for the same report — scoped to
+  // the caller's own mapped Employees, same as the report itself. Only period params matter here;
+  // the rest of the report's filters don't narrow this call.
+  getTeamLeadEmployeeProjectHoursFilterOptions: (params) => getReport('/reports/team-lead-employee-project-hours/filter-options', params),
+  // Backend-generated export of every row matching the current filters, not just the current
+  // page — the report's own endpoint caps `limit` at 100, so a client-side "fetch everything with
+  // one huge limit" export (the trick some other reports use) isn't possible here; this needs its
+  // own endpoint. Same blob/Content-Disposition pattern as downloadProjectTimesheet above. `page`/
+  // `limit` are stripped by the caller before this is invoked (see the report page's handleExport),
+  // same convention exportEmployeeRoleBuMapping/downloadProjectTimesheet already use.
+  exportTeamLeadEmployeeProjectHours: async (params) => {
+    const { buId, ...query } = params;
+    const res = await apiClient.get('/reports/team-lead-employee-project-hours/export', {
+      params: { ...query, format: 'excel' },
+      responseType: 'blob',
+      ...explicitBuScope(buId),
+    });
+    const match = /filename="?([^"]+)"?/i.exec(res.headers['content-disposition'] ?? '');
+    const filename = match?.[1] ?? 'Team_Lead_Employee_Project_Hours.xlsx';
+    return { blob: res.data, filename };
+  },
 };

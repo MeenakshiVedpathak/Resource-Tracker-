@@ -518,7 +518,7 @@ const ServicePOList = () => {
     }),
     columnHelper.accessor('invoice_frequency', {
       header: 'Invoice Freq.',
-      size: 120,
+      size: 150,
       cell: (info) => info.getValue() || <span className="text-muted-foreground">—</span>,
     }),
     columnHelper.accessor('start_date', {

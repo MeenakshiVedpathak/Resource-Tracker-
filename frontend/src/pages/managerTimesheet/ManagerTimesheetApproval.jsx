@@ -1,11 +1,15 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import dayjs from 'dayjs';
-import { BellRing } from 'lucide-react';
+import { BellRing, Download } from 'lucide-react';
 import { useMyTeamEmployees, useMyTeamEmployeesAcrossBus, MAX_FANOUT_BUS } from '@/hooks/useMyTeam';
+import { myTeamApi } from '@/api/myTeam.api';
 import { useSelectableBusinessUnits } from '@/hooks/useSelectableBusinessUnits';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { useCanWrite } from '@/hooks/usePermissions';
+import { useNotification } from '@/hooks/useNotification';
+import { extractApiError } from '@/services/apiClient';
+import { downloadBlob } from '@/utils/download';
 import { ROUTES } from '@/constants/routes';
 import BusinessUnitFilter, { ALL_BUS } from '@/components/common/BusinessUnitFilter';
 import EntityFilter, { ALL_ENTITIES } from '@/components/common/EntityFilter';
@@ -67,6 +71,8 @@ const ManagerTimesheetApproval = () => {
   // "Check Pending & Remind" leads to the compliance report's reminder-sending flow, so it's a
   // write action for gating purposes — hidden for a read-only role.
   const canWrite = useCanWrite();
+  const { error: showError } = useNotification();
+  const [isExporting, setIsExporting] = useState(false);
   const [searchParams] = useSearchParams();
   // Read once on mount — changes to the query string after mount are intentionally ignored so
   // that the manager's manual dropdown selection is never overwritten mid-session.
@@ -226,14 +232,36 @@ const ManagerTimesheetApproval = () => {
   // week instead of two free clicks), so only Monthly needs a distinct branch here.
   const effectiveDateRange = logType === 'monthly' ? monthYearToRange(monthYear) : dateRange;
 
-  const employeesInScope = useMemo(() => {
-    const base = selectedEmployee ? [selectedEmployee] : employeeList;
-    const q = search.trim().toLowerCase();
-    if (!q) return base;
-    return base.filter((e) =>
-      (e.full_name || e.name || '').toLowerCase().includes(q)
-      || (e.employee_code || '').toLowerCase().includes(q));
-  }, [selectedEmployee, employeeList, search]);
+  // `search` is now a real backend filter passed straight to GET
+  // /my-team/timesheets/approval-summary/all (matches employee name, employee code, or Service PO
+  // name server-side) — it no longer needs to pre-narrow which Employees get fetched.
+  const employeesInScope = useMemo(
+    () => (selectedEmployee ? [selectedEmployee] : employeeList),
+    [selectedEmployee, employeeList],
+  );
+  const employeeIds = useMemo(() => employeesInScope.map((e) => e.id), [employeesInScope]);
+
+  // Same filters the table itself is showing, minus page/limit/sortBy/sortOrder (export always
+  // means "every matching row," not one page) — hits the dedicated export endpoint since the JSON
+  // listing endpoint is page/limit-capped and can't return everything in one call.
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      const result = await myTeamApi.exportApprovalSummaryAll({
+        log_type: logType,
+        ...(effectiveDateRange?.startDate ? { startDate: effectiveDateRange.startDate, endDate: effectiveDateRange.endDate } : {}),
+        ...(statusFilter !== 'all' ? { status: statusFilter } : {}),
+        ...(search.trim() ? { search: search.trim() } : {}),
+        employee_ids: employeeIds,
+        buId: effectiveBuId,
+      });
+      downloadBlob(result.blob, result.filename);
+    } catch (err) {
+      showError(extractApiError(err));
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   const timesheetActiveFilterCount =
     (entityId !== ALL_ENTITIES ? 1 : 0)
@@ -395,6 +423,12 @@ const ManagerTimesheetApproval = () => {
               onToggle={() => setFiltersOpen((prev) => !prev)}
               activeCount={activeFilterCount}
             />
+            {!isWeekendTab && employeeList.length > 0 && (
+              <Button variant="outline" size="toolbar" onClick={handleExport} disabled={isExporting}>
+                <Download className="mr-1.5 h-4 w-4" />
+                {isExporting ? 'Exporting…' : 'Export Excel'}
+              </Button>
+            )}
             {/* Checking who's pending and nudging them is a different job than approving what's
                 already logged — handing it off to the Work Log Compliance report (which already
                 owns per-employee/bulk "Remind" sending) instead of duplicating that flow here.
@@ -458,6 +492,12 @@ const ManagerTimesheetApproval = () => {
             onToggle={() => setFiltersOpen((prev) => !prev)}
             activeCount={activeFilterCount}
           />
+          {!isWeekendTab && employeeList.length > 0 && (
+            <Button variant="outline" size="toolbar" onClick={handleExport} disabled={isExporting}>
+              <Download className="mr-1.5 h-4 w-4" />
+              {isExporting ? 'Exporting…' : 'Export'}
+            </Button>
+          )}
           {canWrite && !isWeekendTab && (
           <Button
             size="toolbar"
@@ -521,14 +561,14 @@ const ManagerTimesheetApproval = () => {
         </div>
       ) : employeeList.length === 0 ? (
         <EmptyState title="No Employees reporting to you yet." />
-      ) : employeesInScope.length === 0 ? (
-        <EmptyState title="No employees match your search." />
       ) : (
         <ManagerAllEmployeesTimesheetView
-          employees={employeesInScope}
+          employeeIds={employeeIds}
+          buId={effectiveBuId}
           logType={logType}
           dateRange={effectiveDateRange}
           statusFilter={statusFilter}
+          search={search}
         />
       )}
     </div>

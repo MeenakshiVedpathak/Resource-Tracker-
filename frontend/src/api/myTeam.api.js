@@ -101,8 +101,54 @@ const mockRevokeServicePo = async (employeeId, servicePOId) => {
 const fetchApprovalSummaryPage = (params) =>
   apiClient.get('/my-team/timesheets/approval-summary', { params }).then((r) => r.data);
 
+// Real server-side-paginated "every mapped Employee at once" variant (GET
+// /my-team/timesheets/approval-summary/all) — resolves "my team" the same way `getEmployees`
+// above does (same role rules/BU selection), so the header handling mirrors it exactly: an
+// explicit `buId` scopes to that one Business Unit via `business_unit_id` + X-Company-Id, and
+// "all business units" unconditionally drops the header rather than trusting the navbar's
+// globally-active BU (same reasoning as `getEmployees`'s own comment). `employee_ids` (when the
+// caller passes it) narrows the resolved team further — it can only remove Employees from the
+// result, never add one outside the caller's own mapped team.
+const fetchApprovalSummaryAll = (params) => {
+  const { buId, employee_ids: employeeIds, ...restParams } = params || {};
+  const scope = buId && buId !== 'all' ? explicitBuScope(buId) : { skipCompanyHeader: true };
+  return apiClient.get('/my-team/timesheets/approval-summary/all', {
+    params: {
+      ...restParams,
+      ...(buId && buId !== 'all' ? { business_unit_id: buId } : {}),
+      // Comma-joined, same convention every other multi-value list param in this app already
+      // uses (entity_ids, business_unit_ids, etc.) — axios's own default array serialization
+      // (`employee_ids[]=4&employee_ids[]=5`) is a different wire format this endpoint doesn't
+      // parse, which silently resolved to an empty/invalid filter and returned no rows at all.
+      ...(Array.isArray(employeeIds) && employeeIds.length ? { employee_ids: employeeIds.join(',') } : {}),
+    },
+    ...scope,
+  }).then((r) => r.data);
+};
+
 // Team Lead self-service (§8). GET employees/service-pos existed pre-redesign; POST/DELETE
 // employees (claim/release the Secondary-Team-Lead slot) are net-new.
+// Export variant of fetchApprovalSummaryAll — same identity/scoping/employee_ids-join rules,
+// but hits the dedicated export endpoint (no page/limit/sortBy/sortOrder — export always means
+// "every matching row") and expects a blob response with a Content-Disposition filename, not JSON.
+const fetchApprovalSummaryAllExport = (params) => {
+  const { buId, employee_ids: employeeIds, page: _p, limit: _l, sortBy: _sb, sortOrder: _so, ...restParams } = params || {};
+  const scope = buId && buId !== 'all' ? explicitBuScope(buId) : { skipCompanyHeader: true };
+  return apiClient.get('/my-team/timesheets/approval-summary/all/export', {
+    params: {
+      ...restParams,
+      format: 'excel',
+      ...(buId && buId !== 'all' ? { business_unit_id: buId } : {}),
+      ...(Array.isArray(employeeIds) && employeeIds.length ? { employee_ids: employeeIds.join(',') } : {}),
+    },
+    responseType: 'blob',
+    ...scope,
+  }).then((res) => {
+    const match = /filename="?([^"]+)"?/i.exec(res.headers['content-disposition'] ?? '');
+    return { blob: res.data, filename: match?.[1] ?? 'Timesheet_Approval_Summary.xlsx' };
+  });
+};
+
 export const myTeamApi = {
   getEmployees: (params) => {
     if (RBAC_MOCK_ENABLED) return mockGetEmployees(params);
@@ -129,6 +175,12 @@ export const myTeamApi = {
   // mirrors the Employee's is_timesheet_approval_required (false there means status is always
   // 'approved'). Never reads `drafts` — an Employee's own unsynced entries are not approval-eligible.
   getApprovalSummary: (params) => fetchApprovalSummaryPage(params),
+  // See fetchApprovalSummaryAll's own comment — the paginated "every mapped Employee" endpoint
+  // that replaces the old per-Employee fan-out in useMyTeamAllEmployeesApprovalSummary.
+  getApprovalSummaryAll: (params) => fetchApprovalSummaryAll(params),
+  // See fetchApprovalSummaryAllExport's own comment — dedicated export endpoint since the JSON
+  // endpoint above is page/limit-capped and can't return "every matching row" in one call.
+  exportApprovalSummaryAll: (params) => fetchApprovalSummaryAllExport(params),
   // Single endpoint for single-row, bulk-daily, and monthly approval alike — pass exactly one of
   // `dates` (array) or `months` (array of {month,year}); a single-element array covers the
   // "approve this one date/month" case, so no separate single-approve call is needed.

@@ -181,6 +181,16 @@ export const FORM_NAMES = {
   // 2026-09-26, GET /reports/project-timesheet confirmed live). Confirm against the real
   // GET /roles/forms response once a Form Master row is seeded and mapped to roles.
   REPORT_PROJECT_TIMESHEET: 'Project-Wise Timesheet Report',
+  // Guessed name — brand new report (backend spec dated 2026, GET /reports/employee-role-bu-mapping
+  // confirmed ready). Confirm against the real GET /roles/forms response once a Form Master row
+  // is seeded — the route below uses allowIfNoFormsMapped so it still works by direct link before
+  // then, same as REPORT_PROJECT_TIMESHEET above.
+  REPORT_EMPLOYEE_ROLE_BU_MAPPING: 'Employee Role & Organization Mapping',
+  // Guessed name — brand new report (GET /reports/team-lead-employee-project-hours confirmed
+  // ready). Confirm against the real GET /roles/forms response once a Form Master row is seeded —
+  // the route below uses allowIfNoFormsMapped so it still works by direct link before then, same
+  // as REPORT_PROJECT_TIMESHEET above.
+  REPORT_TEAM_LEAD_EMPLOYEE_PROJECT_HOURS: 'Team Lead Employee Project Hours',
   // Project Manager Dashboard (net-new, backend spec 2026-09-11) — not formName-gated (see
   // ProtectedRoute's allowedRoles in routes/index.jsx, same as Team Mapping), so this entry
   // exists purely so the sidebar picks it up automatically the moment a real Form Master row
@@ -267,6 +277,8 @@ export const FORM_ROUTE_CONFIG = {
   [FORM_NAMES.REPORT_RESOURCE_WISE_BENCH]: { to: ROUTES.REPORT_RESOURCE_WISE_BENCH, icon: Users2, description: "Each resource's bench % by month across a range, sorted by average bench % by default." },
   [FORM_NAMES.REPORT_RESOURCE_COST_UTILIZATION]: { to: ROUTES.REPORT_RESOURCE_COST_UTILIZATION, icon: IndianRupee, description: 'Per-employee monthly cost contribution, projected vs. actual utilization, across a month range.' },
   [FORM_NAMES.REPORT_PROJECT_TIMESHEET]: { to: ROUTES.REPORT_PROJECT_TIMESHEET, icon: FileSpreadsheet, description: 'Employee-wise, day-wise timesheet entries with work description, Project Manager, leave and approval status.' },
+  [FORM_NAMES.REPORT_EMPLOYEE_ROLE_BU_MAPPING]: { to: ROUTES.REPORT_EMPLOYEE_ROLE_BU_MAPPING, icon: UserCog, description: "Each employee's assigned roles, Business Units, and Sub-BUs in one place." },
+  [FORM_NAMES.REPORT_TEAM_LEAD_EMPLOYEE_PROJECT_HOURS]: { to: ROUTES.REPORT_TEAM_LEAD_EMPLOYEE_PROJECT_HOURS, icon: Users, description: 'Work-log entries of the employees mapped to you as Primary or Secondary manager.' },
   // RBAC form name stays "Project Manager Dashboard" (must match the backend Form Master
   // record); `label` only shortens what the sidebar displays, same short "Dashboard" every
   // other role's landing page uses.

@@ -53,6 +53,9 @@ export const QUERY_KEYS = {
   MY_TEAM_EMPLOYEES: ['my-team', 'employees'],
   MY_TEAM_SERVICE_POS: ['my-team', 'service-pos'],
   MY_TEAM_APPROVAL_SUMMARY: (params) => ['my-team', 'approval-summary', params],
+  // Real server-side-paginated "all mapped Employees" variant (GET
+  // /my-team/timesheets/approval-summary/all) — replaces the old per-Employee fan-out.
+  MY_TEAM_APPROVAL_SUMMARY_ALL: (params) => ['my-team', 'approval-summary', 'all', params],
   // "Log Work for My Team" (net-new) — one Employee's one month, so month/year are part of the
   // key the same way every other server-side-filtered query embeds its params.
   MY_TEAM_EMPLOYEE_MONTHLY_WORKLOG: (employeeId, month, year) =>
@@ -189,6 +192,9 @@ export const QUERY_KEYS = {
   REPORT_RESOURCE_WISE_BENCH: (params) => ['reports', 'resource-wise-bench', params],
   REPORT_RESOURCE_COST_UTILIZATION: (params) => ['reports', 'resource-cost-utilization', params],
   REPORT_PROJECT_TIMESHEET: (params) => ['reports', 'project-timesheet', params],
+  REPORT_EMPLOYEE_ROLE_BU_MAPPING: (params) => ['reports', 'employee-role-bu-mapping', params],
+  REPORT_TEAM_LEAD_EMPLOYEE_PROJECT_HOURS: (params) => ['reports', 'team-lead-employee-project-hours', params],
+  REPORT_TEAM_LEAD_EMPLOYEE_PROJECT_HOURS_FILTER_OPTIONS: (params) => ['reports', 'team-lead-employee-project-hours', 'filter-options', params],
 
   // Notifications
   NOTIFICATIONS: (params) => ['notifications', params],

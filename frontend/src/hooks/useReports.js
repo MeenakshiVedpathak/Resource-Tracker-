@@ -523,3 +523,41 @@ export const useProjectTimesheet = (params) => {
   });
 };
 
+// Employee Role & Organization Mapping — no period gate (unlike most reports above): every
+// employee's current roles/BUs/Sub-BUs, filtered/searched/paginated server-side, no month/date
+// range involved at all.
+export const useEmployeeRoleBuMapping = (params) =>
+  useQuery({
+    queryKey: QUERY_KEYS.REPORT_EMPLOYEE_ROLE_BU_MAPPING(params),
+    queryFn: () => reportsApi.getEmployeeRoleBuMapping(params),
+    staleTime: 0,
+    placeholderData: (prev) => prev,
+  });
+
+// Team Lead Employee Project Hours — XOR-gated period, same as useClientServicePOHours above:
+// exactly one of {month, year} or {startDate, endDate}, never both.
+export const useTeamLeadEmployeeProjectHours = (params) => {
+  const hasMonthYear = !!(params?.month && params?.year);
+  const hasDateRange = !!(params?.startDate && params?.endDate);
+  return useQuery({
+    queryKey: QUERY_KEYS.REPORT_TEAM_LEAD_EMPLOYEE_PROJECT_HOURS(params),
+    queryFn: () => reportsApi.getTeamLeadEmployeeProjectHours(params),
+    enabled: hasMonthYear !== hasDateRange,
+    staleTime: 0,
+    placeholderData: (prev) => prev,
+  });
+};
+
+// Filter dropdown options for the same report — refetches whenever the period changes (the
+// caller passes the same month/year or startDate/endDate the report itself is using).
+export const useTeamLeadEmployeeProjectHoursFilterOptions = (params) => {
+  const hasMonthYear = !!(params?.month && params?.year);
+  const hasDateRange = !!(params?.startDate && params?.endDate);
+  return useQuery({
+    queryKey: QUERY_KEYS.REPORT_TEAM_LEAD_EMPLOYEE_PROJECT_HOURS_FILTER_OPTIONS(params),
+    queryFn: () => reportsApi.getTeamLeadEmployeeProjectHoursFilterOptions(params),
+    enabled: hasMonthYear !== hasDateRange,
+    staleTime: 0,
+  });
+};
+

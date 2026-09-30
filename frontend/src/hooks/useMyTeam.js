@@ -1,4 +1,5 @@
-import { useQuery, useQueries, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMemo } from 'react';
+import { useQuery, useQueries, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { myTeamApi } from '@/api/myTeam.api';
 import { canScopeAcrossBus } from '@/services/apiClient';
 import { QUERY_KEYS } from '@/constants/queryKeys';
@@ -109,46 +110,58 @@ export const useRevokeMyTeamServicePo = () => {
   });
 };
 
-// Team Lead Timesheet Approval's default landing table — every mapped Employee's approval-summary
-// buckets in one combined list, tagged with which Employee each row belongs to, so the Team Lead
-// never has to open an Employee individually just to see whether they have anything pending.
-// There's no "every Employee at once" backend endpoint, so this fans out one request per Employee
-// (useQueries) and flattens the results client-side. Each request is capped to the summary
-// endpoint's normal first page (100 buckets) rather than looping through every page — doing that
-// here would mean up to 50 sequential requests PER Employee just to render the default page. 100
-// daily/monthly buckets for one Employee within a single filtered range comfortably covers real
-// use; an Employee past that cap can still be drilled into via the Employee filter above the table.
-export const useMyTeamAllEmployeesApprovalSummary = (employees, filterParams) => {
-  const queries = useQueries({
-    queries: employees.map((emp) => {
-      const params = { ...filterParams, employee_id: emp.id, page: 1, limit: 100 };
-      return {
-        queryKey: QUERY_KEYS.MY_TEAM_APPROVAL_SUMMARY(params),
-        queryFn: () => myTeamApi.getApprovalSummary(params),
-        enabled: !!emp.id,
-      };
-    }),
+// Manager/Team Lead Timesheet Approval's default landing table — every mapped Employee's
+// approval-summary buckets in one combined list, tagged with which Employee each row belongs to,
+// so the Manager/Team Lead never has to open an Employee individually just to see whether they
+// have anything pending. Backed by GET /my-team/timesheets/approval-summary/all, which resolves
+// "my team" the same way GET /my-team/employees does (see myTeamApi.getEmployees's own comment)
+// and does real server-side grouping/filtering/sorting/pagination in one query — this replaced an
+// earlier version of this hook that fanned out one request per Employee, hardcoded to each
+// Employee's first 100 buckets: with a large team that meant up to N requests and N*100 rows
+// downloaded on every render regardless of which page was showing, plus a silent per-Employee cap
+// past 100 buckets. None of that applies here — `page`/`limit` are real pagination against the
+// database, and `employee_ids` (when the caller passes it — e.g. narrowed by this screen's own
+// BU/Entity filter, or a single deep-linked Employee) can only remove Employees from the result,
+// never add one outside the caller's own mapped team.
+//
+// `params` — everything GET /my-team/timesheets/approval-summary/all accepts: `log_type`,
+// `startDate`/`endDate`, `status`, `service_po_id`, `search` (matches employee name, employee
+// code, or Service PO name), `employee_ids`, `buId` (mapped to `business_unit_id` + the matching
+// X-Company-Id header by myTeamApi.getApprovalSummaryAll — never the navbar's globally-active BU),
+// `page`, `limit`, `sortBy` (`employee`/`period`/`hours`/`entries`/`status`), `sortOrder`. Omitting
+// `sortBy` gets the backend's own default (pending first, newest period, then name) — the same
+// fallback order this table's column-sort used to compute client-side.
+export const useMyTeamApprovalSummaryAll = (params, { enabled = true } = {}) => {
+  const query = useQuery({
+    queryKey: QUERY_KEYS.MY_TEAM_APPROVAL_SUMMARY_ALL(params),
+    queryFn: () => myTeamApi.getApprovalSummaryAll(params),
+    enabled,
+    // Keeps the previous page's rows on screen (instead of flashing to a loading/empty state)
+    // while the next page's request is in flight — same UX every other paginated table in this
+    // app already gets for free from DataTable's own server-pagination path.
+    placeholderData: keepPreviousData,
   });
 
-  const rows = queries.flatMap((q, i) => {
-    const emp = employees[i];
-    return (q.data?.data ?? []).map((row) => ({
-      ...row,
-      employeeId: emp.id,
-      employeeName: emp.full_name || emp.name || `Employee #${emp.id}`,
-      // Needed so a row-level search (name OR code OR Service PO) can match on code too — the
-      // parent page used to pre-filter by employee code before this hook ever ran, but a search
-      // that should also match Service PO names has to filter rows here instead, after they carry
-      // entries/servicePO data.
-      employeeCode: emp.employee_code,
-    }));
-  });
+  // Memoized on `query.data` itself (not recomputed into a fresh array identity on every render)
+  // — a caller's own effect that reacts to `rows` (e.g. merging pages into a lookup cache, see
+  // both AllEmployeesTimesheetView components) would otherwise re-fire on every render regardless
+  // of whether the underlying data actually changed, since a plain `.map()` here would hand back a
+  // new array reference every time even when `query.data` is unchanged — a real infinite-render
+  // loop confirmed live ("Maximum update depth exceeded") before this was memoized.
+  const rows = useMemo(() => (query.data?.data ?? []).map((row) => ({
+    ...row,
+    employeeId: row.employee_id ?? row.employee?.id,
+    employeeName: row.employee_name ?? row.employee?.full_name ?? row.employee?.name,
+    employeeCode: row.employee_code ?? row.employee?.employee_code,
+  })), [query.data]);
 
   return {
     rows,
-    isLoading: queries.some((q) => q.isLoading),
-    isError: queries.some((q) => q.isError),
-    error: queries.find((q) => q.isError)?.error,
+    meta: query.data?.meta ?? {},
+    isLoading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    error: query.error,
   };
 };
 
@@ -237,7 +250,8 @@ const sumWorkLogHours = (workLog) =>
     .reduce((sum, po) => sum + Number(po.hours ?? po.existing_hours ?? po.total_hours ?? 0), 0);
 
 // Employee list's "Total Hours" column — one GET .../monthly-worklog per Employee for the
-// selected Month/Year, fanned out the same way useMyTeamAllEmployeesApprovalSummary does. Shares
+// selected Month/Year, fanned out via useQueries (no combined "all Employees" endpoint for this
+// one). Shares
 // its cache entry (same MY_TEAM_EMPLOYEE_MONTHLY_WORKLOG key) with useEmployeeMonthlyWorkLog, so
 // opening the drawer for a row already warmed by this list re-uses it instead of re-fetching, and
 // vice versa.

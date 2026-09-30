@@ -96,6 +96,11 @@ const HourStepper = ({ value, onChange, disabled, hoursCap = DAILY_HOURS_CAP }) 
         onKeyDown={(e) => {
           if (e.key === 'Enter') e.currentTarget.blur();
         }}
+        // A focused number input treats page-scroll wheel events as +/- clicks by default —
+        // scrolling to reach another module's row while this one still has focus silently
+        // changed its value. Blurring on wheel hands the scroll back to the page and commits
+        // whatever was already typed (onBlur, above), same as pressing Enter or tabbing away.
+        onWheel={(e) => e.currentTarget.blur()}
         disabled={disabled}
         className="w-9 rounded border bg-transparent text-center text-xs font-medium tabular-nums [appearance:textfield] focus:outline-none focus:ring-1 focus:ring-primary [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
       />

@@ -351,7 +351,18 @@ const WorkLogEntryModal = ({ open, onOpenChange, date, task }) => {
                   <FormItem>
                     <FormLabel>Hours</FormLabel>
                     <FormControl>
-                      <Input type="number" step="0.5" min="0" max={DAILY_HOURS_CAP} placeholder="e.g. 4.5" disabled={isSaving} {...field} />
+                      <Input
+                        type="number"
+                        step="0.5"
+                        min="0"
+                        max={DAILY_HOURS_CAP}
+                        placeholder="e.g. 4.5"
+                        disabled={isSaving}
+                        // Same fix as WorkLogEntryTable's HourStepper — a focused number input
+                        // otherwise treats page-scroll wheel events as +/- clicks.
+                        onWheel={(e) => e.currentTarget.blur()}
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

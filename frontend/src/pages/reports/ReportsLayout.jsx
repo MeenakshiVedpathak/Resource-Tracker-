@@ -30,6 +30,8 @@ const NAV = [
   { label: 'Resource Utilization Trend', to: ROUTES.REPORT_RESOURCE_UTILIZATION_TREND },
   { label: 'PO Hours & Budget', to: ROUTES.REPORT_SERVICE_PO_HOURS_BUDGET },
   { label: 'Employee Work Log Hours Summary', to: ROUTES.REPORT_EMPLOYEE_WORK_LOG_HOURS_SUMMARY },
+  { label: 'Employee Role & Organization Mapping', to: ROUTES.REPORT_EMPLOYEE_ROLE_BU_MAPPING },
+  { label: 'Team Lead Employee Project Hours', to: ROUTES.REPORT_TEAM_LEAD_EMPLOYEE_PROJECT_HOURS },
 ];
 
 // Module-level so the context value keeps a stable identity across renders.

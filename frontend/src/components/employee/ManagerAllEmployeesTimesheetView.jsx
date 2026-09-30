@@ -3,7 +3,7 @@ import { useQueries, useQueryClient } from '@tanstack/react-query';
 import { createColumnHelper } from '@tanstack/react-table';
 import { Check, X, ChevronRight, Loader2, CheckCircle2 } from 'lucide-react';
 import {
-  useMyTeamAllEmployeesApprovalSummary, useApproveMyTeamTimesheets,
+  useMyTeamApprovalSummaryAll, useApproveMyTeamTimesheets,
   useRejectMyTeamTimesheetEntry, useApproveMyTeamTimesheetEntry,
 } from '@/hooks/useMyTeam';
 import { useAuth } from '@/hooks/useAuth';
@@ -67,12 +67,14 @@ const groupByEmployee = (targets) => {
 
 // Manager Timesheet Approval's default table — every mapped Employee's pending/approved buckets
 // in one view, tagged with the Employee's name, so the Manager sees everything at a glance instead
-// of clicking into one Employee at a time. `employees`/`logType`/`dateRange`/`statusFilter` are all
-// narrowed by the page's own FilterPanel before ever reaching here — `dateRange` is always a plain
-// {startDate, endDate}, computed by the page from either the Daily date-range picker or the
-// Monthly Month&Year picker — so this component owns no filter UI of its own, only the resulting
-// table, selection, and drill-down/approve/reject flow.
-const ManagerAllEmployeesTimesheetView = ({ employees, logType, dateRange, statusFilter }) => {
+// of clicking into one Employee at a time. `employeeIds`/`buId`/`logType`/`dateRange`/
+// `statusFilter`/`search` are all narrowed by the page's own FilterPanel/search box before ever
+// reaching here — `dateRange` is always a plain {startDate, endDate}, computed by the page from
+// either the Daily date-range picker or the Monthly Month&Year picker — so this component owns no
+// filter UI of its own, only the resulting table, selection, and drill-down/approve/reject flow.
+// Backed by GET /my-team/timesheets/approval-summary/all (useMyTeamApprovalSummaryAll) — real
+// server-side pagination/sorting/filtering, not a client-side slice of a fully-fetched dataset.
+const ManagerAllEmployeesTimesheetView = ({ employeeIds, buId, logType, dateRange, statusFilter, search = '' }) => {
   const { success, error: showError, info } = useNotification();
   const { employee: currentEmployee } = useAuth();
   const queryClient = useQueryClient();
@@ -93,23 +95,44 @@ const ManagerAllEmployeesTimesheetView = ({ employees, logType, dateRange, statu
   // Mobile-only full-screen confirmation after a bulk approve/reject (see runApprove/
   // handleRejectSelected) — desktop and single-row actions keep the plain toast instead.
   const [bulkResult, setBulkResult] = useState(null); // { approved, rejected, total } | null
+  // Every row object this component has actually seen (across every page visited this session),
+  // keyed by rowKeyOf — the drill-down Sheet and a cross-page bulk-reject both need the FULL row
+  // (with its embedded `entries`) for a selection that may no longer be on the current page, and
+  // with real server pagination the full dataset is no longer sitting in memory the way it was
+  // before this table talked to a real paginated endpoint.
+  const [rowsCache, setRowsCache] = useState(new Map());
 
   const resetSelection = () => setSelected(new Map());
 
-  const filterParams = useMemo(() => ({
+  const periodKey = (r) => (logType === 'daily' ? r.date : `${r.year}-${String(r.month).padStart(2, '0')}`);
+
+  const sortSpec = sorting[0];
+  const queryParams = useMemo(() => ({
     log_type: logType,
     ...(dateRange?.startDate ? { startDate: dateRange.startDate, endDate: dateRange.endDate } : {}),
-  }), [logType, dateRange]);
+    ...(statusFilter !== 'all' ? { status: statusFilter } : {}),
+    ...(search.trim() ? { search: search.trim() } : {}),
+    employee_ids: employeeIds,
+    buId,
+    page,
+    limit,
+    // Omitting sortBy entirely (no column explicitly clicked) gets the backend's own default —
+    // pending first, newest period, then name — the same fallback this table used to compute
+    // client-side.
+    ...(sortSpec ? { sortBy: sortSpec.id, sortOrder: sortSpec.desc ? 'desc' : 'asc' } : {}),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [logType, dateRange?.startDate, dateRange?.endDate, statusFilter, search, employeeIds, buId, page, limit, sortSpec?.id, sortSpec?.desc]);
 
-  const { rows, isLoading, isError, error } = useMyTeamAllEmployeesApprovalSummary(employees, filterParams);
+  const {
+    rows, meta, isLoading, isError, error,
+  } = useMyTeamApprovalSummaryAll(queryParams, { enabled: employeeIds.length > 0 });
   const approveMutation = useApproveMyTeamTimesheets();
   const rejectEntryMutation = useRejectMyTeamTimesheetEntry();
   const approveEntryMutation = useApproveMyTeamTimesheetEntry();
 
-  const periodKey = (r) => (logType === 'daily' ? r.date : `${r.year}-${String(r.month).padStart(2, '0')}`);
-
-  // A value per sortable column id, used both by the explicit column-header sort below and (via
-  // the same keys) by each accessor column's own accessorFn.
+  // A value per sortable column id, used both by the explicit column-header sort (via DataTable's
+  // `sorting`/`onSortingChange` below, which feeds `sortBy`/`sortOrder` into the query above) and
+  // by each accessor column's own accessorFn.
   const sortValueOf = (id, r) => {
     switch (id) {
       case 'employee': return r.employeeName;
@@ -121,40 +144,22 @@ const ManagerAllEmployeesTimesheetView = ({ employees, logType, dateRange, statu
     }
   };
 
-  // Clicking a column header (wired to DataTable's `sorting`/`onSortingChange` below) sorts the
-  // WHOLE filtered set, not just the rows on the current page — everything's already in memory, so
-  // there's no reason a sort should only reorder the 20 rows currently in view. With no column
-  // explicitly picked yet, falls back to Pending rows first (the ones that actually need this
-  // Manager's action, surfaced ahead of what's already Approved/Rejected), then most-recent-
-  // period-first within each group, ties broken by name so a given period's rows stay grouped
-  // together instead of shuffling on refetch.
-  const pendingFirstRank = (r) => (r.approval_status === 'pending' ? 0 : 1);
-  const sortedRows = useMemo(() => {
-    const filtered = statusFilter === 'all' ? rows : rows.filter((r) => r.approval_status === statusFilter);
-    const sortSpec = sorting[0];
-    if (!sortSpec) {
-      return [...filtered].sort((a, b) => {
-        const rankDiff = pendingFirstRank(a) - pendingFirstRank(b);
-        if (rankDiff !== 0) return rankDiff;
-        const diff = periodKey(b).localeCompare(periodKey(a));
-        return diff !== 0 ? diff : a.employeeName.localeCompare(b.employeeName);
-      });
-    }
-    const { id, desc } = sortSpec;
-    return [...filtered].sort((a, b) => {
-      const av = sortValueOf(id, a);
-      const bv = sortValueOf(id, b);
-      const cmp = typeof av === 'number' && typeof bv === 'number' ? av - bv : String(av).localeCompare(String(bv));
-      return desc ? -cmp : cmp;
+  const pageRows = rows;
+  const total = meta.total ?? 0;
+
+  // Merges every page's rows into the cross-page lookup cache as they arrive.
+  useEffect(() => {
+    if (rows.length === 0) return;
+    setRowsCache((prev) => {
+      const next = new Map(prev);
+      rows.forEach((r) => next.set(rowKeyOf(logType, r), r));
+      return next;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, logType, statusFilter, sorting]);
+  }, [rows]);
 
-  const total = sortedRows.length;
-  const pageRows = sortedRows.slice((page - 1) * limit, page * limit);
+  const rowFromCache = (key) => rowsCache.get(key);
 
-  // The whole filtered set already lives in memory (no server-side "select all" fetch needed here
-  // the way the single-Employee table required), so page-vs-whole-set bookkeeping is simple math.
   const anySelected = selected.size > 0;
   const pageSelectedCount = pageRows.filter((r) => isApprovable(r) && selected.has(rowKeyOf(logType, r))).length;
   const pagePendingCount = pageRows.filter(isApprovable).length;
@@ -162,14 +167,14 @@ const ManagerAllEmployeesTimesheetView = ({ employees, logType, dateRange, statu
   const offPageSelectedCount = selected.size - pageSelectedCount;
   const selectedPageCount = new Set(Array.from(selected.values(), (v) => Math.floor(v.index / limit) + 1)).size;
 
-  // Resets whenever the in-scope Employee set or period filter changes (all owned by the page's
-  // FilterPanel) — a stale selection/page referencing a now out-of-scope Employee or a different
-  // filter's rows can otherwise linger invisibly.
+  // Resets whenever the in-scope Employee set or any filter changes — a stale selection/page
+  // referencing a now out-of-scope Employee or a different filter's rows can otherwise linger
+  // invisibly.
   useEffect(() => {
     resetSelection();
     setPage(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [employees.map((e) => e.id).join(','), logType, dateRange?.startDate, dateRange?.endDate, statusFilter]);
+  }, [employeeIds.join(','), buId, logType, dateRange?.startDate, dateRange?.endDate, statusFilter, search]);
 
   const handlePageChange = (p) => setPage(p);
 
@@ -178,14 +183,23 @@ const ManagerAllEmployeesTimesheetView = ({ employees, logType, dateRange, statu
     setPage(1);
   };
 
+  // Selects every pending row on the CURRENT page only — with the full dataset no longer resident
+  // in memory (real server pagination), "select every pending row matching this filter across
+  // every page" would need a dedicated bulk endpoint of its own; this matches the header
+  // checkbox's usual per-page meaning elsewhere in the app instead. Cross-page selections already
+  // made are untouched (the `selected` Map isn't cleared), so a Manager can still page through and
+  // build up a selection spanning several pages one page at a time.
   const selectAllPending = () => {
-    const next = new Map();
-    sortedRows.forEach((row, index) => {
+    const next = new Map(selected);
+    let added = 0;
+    pageRows.forEach((row, index) => {
       if (!isApprovable(row)) return;
-      next.set(rowKeyOf(logType, row), selectionValueOf(logType, row, index));
+      const key = rowKeyOf(logType, row);
+      if (!next.has(key)) added += 1;
+      next.set(key, selectionValueOf(logType, row, ((page - 1) * limit) + index));
     });
-    if (next.size === 0) {
-      info(`No pending ${logType === 'daily' ? 'dates' : 'months'} to select in this range.`);
+    if (added === 0 && next.size === selected.size) {
+      info(`No pending ${logType === 'daily' ? 'dates' : 'months'} to select on this page.`);
       return;
     }
     setSelected(next);
@@ -266,7 +280,7 @@ const ManagerAllEmployeesTimesheetView = ({ employees, logType, dateRange, statu
     const targets = Array.from(selected.values());
     if (targets.length === 0) return;
     const allPendingEntries = targets
-      .map((t) => sortedRows.find((r) => rowKeyOf(logType, r) === rowKeyOf(logType, t)))
+      .map((t) => rowFromCache(rowKeyOf(logType, t)))
       .filter(Boolean)
       .flatMap((row) => (row.entries ?? []).filter(isEntryPending));
     if (allPendingEntries.length === 0) {
@@ -324,7 +338,7 @@ const ManagerAllEmployeesTimesheetView = ({ employees, logType, dateRange, statu
   };
 
   const resolvedDrillDownRow = drillDownRow
-    ? sortedRows.find((r) => rowKeyOf(logType, r) === rowKeyOf(logType, drillDownRow)) ?? drillDownRow
+    ? rowFromCache(rowKeyOf(logType, drillDownRow)) ?? drillDownRow
     : null;
   const detailRows = resolvedDrillDownRow?.entries ?? [];
 
@@ -394,8 +408,8 @@ const ManagerAllEmployeesTimesheetView = ({ employees, logType, dateRange, statu
         <Checkbox
           checked={pageFullySelected ? true : (anySelected ? 'indeterminate' : false)}
           onCheckedChange={toggleAll}
-          disabled={isLoading || (sortedRows.length === 0 && !anySelected)}
-          aria-label="Select all pending entries in the current filter"
+          disabled={isLoading || (pageRows.length === 0 && !anySelected)}
+          aria-label="Select all pending entries on this page"
         />
       ),
       size: 40,

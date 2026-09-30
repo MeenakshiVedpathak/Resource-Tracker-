@@ -13,7 +13,7 @@ import {
   KeyRound, LogOut, ChevronDown, ChevronRight, Loader2, Check,
   ShieldCheck, Building2, Briefcase, Users, User, HeartHandshake, FolderKanban,
 } from 'lucide-react';
-import { ROLE_NAMES } from '@/constants/roleHierarchy';
+import { ROLE_NAMES, NO_COMPANY_ROLES } from '@/constants/roleHierarchy';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -69,6 +69,25 @@ const UserMenu = () => {
   const handleBuChange = (value) => {
     setActiveBu(Number(value));
     queryClient.invalidateQueries();
+  };
+  // Which root BU groups are expanded in the "BU & Sub BU" accordion below — seeded (once,
+  // lazily) with EVERY root that has any Sub-BUs, so all of them start already open instead of
+  // making the actor click each one open individually. Still independently collapsible/
+  // re-expandable afterward via toggleRootExpanded below.
+  const [expandedRoots, setExpandedRoots] = useState(() => {
+    const rootsWithSubs = new Set();
+    businessUnits.forEach((bu) => {
+      if (bu.parent_business_unit_id) rootsWithSubs.add(bu.parent_business_unit_name);
+    });
+    return rootsWithSubs;
+  });
+  const toggleRootExpanded = (rootName) => {
+    setExpandedRoots((prev) => {
+      const next = new Set(prev);
+      if (next.has(rootName)) next.delete(rootName);
+      else next.add(rootName);
+      return next;
+    });
   };
 
   // Role switching keeps the session alive: no logout, no re-login, no password prompt, and
@@ -132,32 +151,30 @@ const UserMenu = () => {
   const displayName = employee?.full_name ?? employee?.email ?? '';
   const email = employee?.email;
   const roleName = roleObjects[0]?.name ?? null;
-  // Shows only when this login is mapped to exactly one *root* BU — not exactly one array entry.
-  // Confirmed live: a login mapped to a Sub-BU gets BOTH the Sub-BU's own row AND its parent BU's
-  // row back from the API (2 entries for what is really one BU scope, one level deep), so a plain
-  // `businessUnits.length === 1` check hid the BU/Sub-BU line entirely for exactly the accounts
-  // this feature was built for. Grouping by root name (a BU's own name if it has no parent, else
-  // its `parent_business_unit_name`) collapses that parent+child pair back into the one root it
-  // actually represents, while still correctly hiding this for a login mapped to several genuinely
-  // unrelated BUs (2+ distinct root names).
-  const rootBuNames = new Set(businessUnits.map((bu) => bu.parent_business_unit_name ?? bu.name));
-  const hasSingleBu = rootBuNames.size === 1;
-  // Prefers the Sub-BU row over its duplicate parent row when both are present, so the more
-  // specific (and more informative) level is what gets shown — falls back to whichever entry is
-  // actually active, then the first entry, for the plain single-root-BU case.
-  const activeBu = hasSingleBu
-    ? (businessUnits.find((bu) => bu.parent_business_unit_name)
-      ?? businessUnits.find((bu) => bu.id === activeBuId)
-      ?? businessUnits[0]
-      ?? null)
-    : null;
-  const activeBuName = activeBu?.name ?? null;
-  // Sub-BU mapping — same `parent_business_unit_name` field EmployeeList.jsx's own export already
-  // reads off a BU entry (see its "Business Units" column comment); present only once the backend
-  // response for this employee's BU actually carries it, so an Admin/employee mapped to a root BU
-  // (or on an API version that predates the hierarchy field) still shows unchanged.
-  const activeSubBuName = activeBu?.parent_business_unit_name ? activeBu.name : null;
-  const activeParentBuName = activeBu?.parent_business_unit_name ?? activeBuName;
+  // Platform Admin/Admin/Entity Admin are company-less by design (see NO_COMPANY_ROLES and
+  // ClientForm.jsx's identical check) — they're never really "mapped" to a BU the way a BU
+  // Admin/Employee is, so no BU/Sub-BU line should render for them at all, regardless of whatever
+  // (possibly stray) rows `businessUnits` happens to carry for that login. Confirmed live: the
+  // seed "superadmin" Admin account was showing one anyway before this check existed.
+  const isCompanyLessActor = roleObjects.some((r) => NO_COMPANY_ROLES.includes(r.name));
+  // One entry per DISTINCT root BU this login is mapped to, each carrying its own id (for the
+  // root row's click-to-switch below) and EVERY Sub-BU mapped under it (not just one — a login
+  // can be mapped to more than one Sub-BU of the same root, e.g. both "DAS" and "IBM" under
+  // "Data + AI"). A login mapped to several GENUINELY distinct root BUs (a BU Admin/BU Head with
+  // more than one) lists all of them, each independently expandable/switchable (see
+  // EmployeeList.jsx's getEmployeeBuNames/getEmployeeSubBuNames for the same grouping pattern
+  // applied per-employee in that table).
+  const buGroups = Array.from(
+    businessUnits.reduce((map, bu) => {
+      const isSub = !!bu.parent_business_unit_id;
+      const rootName = isSub ? bu.parent_business_unit_name : bu.name;
+      if (!map.has(rootName)) map.set(rootName, { rootId: null, rootName, subs: [] });
+      const group = map.get(rootName);
+      if (isSub) group.subs.push({ id: bu.id, name: bu.name });
+      else group.rootId = bu.id;
+      return map;
+    }, new Map())
+  ).map(([, group]) => group);
 
   return (
     <>
@@ -183,12 +200,20 @@ const UserMenu = () => {
       */}
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="flex items-center gap-2.5 rounded-xl border border-border/60 bg-muted/40 px-2.5 py-1.5 hover:bg-accent hover:border-border transition-all outline-none shadow-sm">
-          <Avatar className="h-7 w-7 ring-2 ring-primary/20">
-            <AvatarFallback className="bg-primary/15 text-primary text-xs font-bold">
-              {getInitials(displayName || 'U')}
-            </AvatarFallback>
-          </Avatar>
+        {/* clamp() sizing throughout this component, not fixed height/width/text/gap utilities —
+            same fluid convention Topbar.jsx and ui/button.jsx already use, so this card shrinks
+            and grows smoothly with the viewport instead of snapping at Tailwind's breakpoints. */}
+        <button className="flex items-center gap-[clamp(0.4rem,0.6vw,0.625rem)] rounded-xl border border-border/60 bg-muted/40 px-[clamp(0.5rem,0.9vw,0.625rem)] py-[clamp(0.3rem,0.5vw,0.375rem)] hover:bg-accent hover:border-border transition-all outline-none shadow-sm">
+          {/* Small "online" dot — always green here since this is always the CURRENT user's own
+              menu (there's no presence/offline tracking involved), matching the reference design. */}
+          <span className="relative shrink-0">
+            <Avatar className="h-[clamp(1.5rem,2.4vw,1.75rem)] w-[clamp(1.5rem,2.4vw,1.75rem)] ring-2 ring-primary/20">
+              <AvatarFallback className="bg-primary/15 text-primary text-[clamp(0.6875rem,0.85vw,0.75rem)] font-bold">
+                {getInitials(displayName || 'U')}
+              </AvatarFallback>
+            </Avatar>
+            <span className="absolute -bottom-0.5 -right-0.5 h-[clamp(0.375rem,0.5vw,0.5rem)] w-[clamp(0.375rem,0.5vw,0.5rem)] rounded-full bg-green-500 ring-2 ring-background" />
+          </span>
           {/* min-w-0 + max-w-[160px] + truncate on each line: without a bounded width, `truncate`
               alone does nothing (the box just grows to fit its content instead of clipping it),
               so a long employee name or long BU name had nowhere to go but wrap onto an extra
@@ -196,65 +221,125 @@ const UserMenu = () => {
               this card below the navbar's border on those accounts. Capped here the same way the
               dropdown-content copy of this same data already is below (see DropdownMenuLabel). */}
           <div className="hidden sm:block text-left min-w-0 max-w-[160px]">
-            <p className="text-xs font-semibold leading-none text-foreground truncate">{displayName}</p>
-            {/* Sub-BU mapping renders "Parent → Sub-BU" (same compact "arrow" convention
-                EmployeeList.jsx's own export already uses for this), so a Sub-BU-mapped account
-                still reads correctly in this single truncating line.
-                Was gated on `!showBuSwitcher` (businessUnits.length <= 1) — a leftover from when
-                that condition also decided whether to show the BU *switcher* dropdown above. That
-                switcher is commented out/disabled, so the guard just silently hid this line
-                entirely for anyone mapped to more than one BU (a BU Admin/BU Head with several
-                BUs), even though there's always exactly one *active* BU to name here regardless
-                of how many they're mapped to. */}
-            {activeBuName && (
-              <p className="text-[10px] text-muted-foreground mt-0.5 font-medium truncate">
-                {activeSubBuName ? `${activeParentBuName} → ${activeSubBuName}` : activeBuName}
+            <p className="text-[clamp(0.6875rem,0.85vw,0.75rem)] font-semibold leading-none text-foreground truncate">{displayName}</p>
+            {/* Role, not the BU/Sub-BU breadcrumb this used to show — the active BU/Sub-BU is
+                still fully visible as a chip pair right below in the dropdown header once opened,
+                so it isn't lost, just not duplicated up here as well. */}
+            {roleName && (
+              <p className="mt-0.5 truncate text-[clamp(0.5625rem,0.7vw,0.625rem)] font-medium text-muted-foreground">
+                {roleName}
               </p>
             )}
-            {roleName && <p className="text-[10px] text-muted-foreground mt-0.5 font-medium truncate">{roleName}</p>}
           </div>
-          <ChevronDown className="h-3 w-3 text-muted-foreground hidden sm:block ml-0.5" />
+          <ChevronDown className="h-[clamp(0.625rem,0.8vw,0.75rem)] w-[clamp(0.625rem,0.8vw,0.75rem)] text-muted-foreground hidden sm:block ml-0.5" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-72 p-0 overflow-hidden">
-        <DropdownMenuLabel className="font-normal px-4 py-3.5">
-          <div className="flex items-center gap-3">
-            <Avatar className="h-10 w-10 shrink-0">
-              <AvatarFallback className="bg-primary/15 text-primary text-sm font-bold">
-                {getInitials(displayName || 'U')}
-              </AvatarFallback>
-            </Avatar>
+      {/* max-h + overflow-y-auto bound to Radix's own `--radix-dropdown-menu-content-available-height`
+          (set automatically by the Popper positioner, no extra wiring needed) — with the profile
+          header, the BU/Sub-BU list, every assigned role, Change Password, and Sign out all
+          potentially stacked in one panel, a short viewport (or several expanded BU groups/roles)
+          could push Sign out below the visible page entirely. This makes the WHOLE panel scroll
+          internally once it would exceed the actual available space, instead of just overflowing
+          past it — overrides the shared component's own `overflow-hidden` (see dropdown-menu.jsx),
+          scoped to just this one heavy menu, not every dropdown in the app. */}
+      <DropdownMenuContent
+        align="end"
+        className="w-[clamp(15rem,85vw,17rem)] max-h-[var(--radix-dropdown-menu-content-available-height)] overflow-y-auto p-0"
+      >
+        <DropdownMenuLabel className="font-normal px-[clamp(0.75rem,1.1vw,0.875rem)] py-[clamp(0.5625rem,0.85vw,0.6875rem)]">
+          <div className="flex items-center gap-[clamp(0.5rem,0.8vw,0.625rem)]">
+            <span className="relative shrink-0">
+              <Avatar className="h-[clamp(1.875rem,2.6vw,2.125rem)] w-[clamp(1.875rem,2.6vw,2.125rem)]">
+                <AvatarFallback className="bg-primary/15 text-primary text-[clamp(0.8125rem,0.95vw,0.875rem)] font-bold">
+                  {getInitials(displayName || 'U')}
+                </AvatarFallback>
+              </Avatar>
+              <span className="absolute -bottom-0.5 -right-0.5 h-[clamp(0.625rem,0.8vw,0.75rem)] w-[clamp(0.625rem,0.8vw,0.75rem)] rounded-full bg-green-500 ring-2 ring-background" />
+            </span>
             <div className="min-w-0">
-              <p className="text-sm font-semibold leading-tight truncate">{displayName}</p>
-              {email && <p className="text-xs text-muted-foreground truncate mt-0.5">{email}</p>}
-              {/* Root BU as plain text, same as before; a mapped Sub-BU gets its own small pill
-                  right after it — this dropdown has the room the compact trigger button doesn't,
-                  so the Sub-BU reads as a distinct scope rather than folded into one arrow string.
-                  Same `showBuSwitcher` guard removed as in the trigger button above — see that
-                  comment for why. */}
-              {activeBuName && (
-                <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5">
-                  <span className="truncate text-xs text-muted-foreground">{activeParentBuName}</span>
-                  {activeSubBuName && (
-                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
-                      <Building2 className="h-2.5 w-2.5" />
-                      {activeSubBuName}
-                    </span>
-                  )}
-                </div>
-              )}
+              <p className="text-[clamp(0.8125rem,0.95vw,0.875rem)] font-semibold leading-tight truncate">{displayName}</p>
+              {email && <p className="text-[clamp(0.6875rem,0.85vw,0.75rem)] text-muted-foreground truncate mt-0.5">{email}</p>}
+              {/* No BU/Sub-BU chip pair here anymore — it duplicated the "BU & Sub BU" section
+                  right below this header, which already shows every mapped BU/Sub-BU. */}
             </div>
           </div>
         </DropdownMenuLabel>
+        {/* Switch Business Unit & Sub Unit — display only, NOT an actual BU switcher: every root
+            BU this login is mapped to, each an expandable group listing its own Sub-BUs (if it
+            has any), with the currently active one marked by a checkmark badge. Expanding/
+            collapsing a group is the only interaction here; clicking a BU/Sub-BU row itself does
+            nothing — it deliberately does NOT call setActiveBu/handleBuChange. (The commented-out
+            global Select above is the actual switcher, left disabled for the reason noted there;
+            this section is purely informational, so a row is a plain non-interactive <div>,
+            never a <button>, except the root row of a group that has Sub-BUs to expand.) */}
+        {!isCompanyLessActor && buGroups.length > 0 && (
+          <>
+            <DropdownMenuSeparator className="my-0" />
+            <div className="flex items-center justify-between gap-2 px-[clamp(0.75rem,1.1vw,0.875rem)] pt-2 pb-1">
+              <p className="text-[clamp(0.5625rem,0.7vw,0.625rem)] font-semibold uppercase tracking-wider text-muted-foreground">
+                BU &amp; Sub BU
+              </p>
+              {roleName && (
+                <p className="shrink-0 text-[clamp(0.5rem,0.65vw,0.5625rem)] text-muted-foreground">
+                  Current Role: <span className="font-medium text-primary">{roleName}</span>
+                </p>
+              )}
+            </div>
+            <div className="max-h-48 space-y-1 overflow-y-auto px-2 pb-1.5">
+              {buGroups.map((g) => {
+                const hasSubs = g.subs.length > 0;
+                const isExpanded = expandedRoots.has(g.rootName);
+                // No "active" highlight/checkmark on any row here — that's what the chip pair in
+                // the header right above already shows, and repeating it in this plain reference
+                // list read as if the list itself were still a switcher (it isn't; see the section
+                // comment above). Every row renders identically regardless of activeBuId.
+                const RootTag = hasSubs ? 'button' : 'div';
+                return (
+                  <div key={g.rootName} className="overflow-hidden rounded-lg border border-border/60">
+                    <RootTag
+                      type={hasSubs ? 'button' : undefined}
+                      onClick={hasSubs ? () => toggleRootExpanded(g.rootName) : undefined}
+                      className={cn(
+                        'flex w-full items-center gap-2 px-[clamp(0.4rem,0.75vw,0.5rem)] py-[clamp(0.3rem,0.55vw,0.375rem)] text-left text-[clamp(0.75rem,0.85vw,0.8125rem)] transition-colors',
+                        hasSubs && 'hover:bg-accent'
+                      )}
+                    >
+                      <Building2 className="h-[clamp(0.75rem,0.9vw,0.875rem)] w-[clamp(0.75rem,0.9vw,0.875rem)] shrink-0 text-muted-foreground" />
+                      <span className="min-w-0 flex-1 truncate">{g.rootName}</span>
+                      {hasSubs && (
+                        <ChevronDown
+                          className={cn(
+                            'h-[clamp(0.6875rem,0.85vw,0.8125rem)] w-[clamp(0.6875rem,0.85vw,0.8125rem)] shrink-0 text-muted-foreground transition-transform',
+                            isExpanded && 'rotate-180'
+                          )}
+                        />
+                      )}
+                    </RootTag>
+                    {hasSubs && isExpanded && (
+                      <div className="space-y-0.5 border-t border-border/60 bg-muted/20 p-1">
+                        {g.subs.map((sub) => (
+                          <div key={sub.id} className="flex w-full items-center gap-2 rounded-md px-[clamp(0.4rem,0.75vw,0.5rem)] py-[clamp(0.2rem,0.4vw,0.25rem)] text-[clamp(0.75rem,0.85vw,0.8125rem)]">
+                            <Building2 className="h-[clamp(0.6875rem,0.85vw,0.8125rem)] w-[clamp(0.6875rem,0.85vw,0.8125rem)] shrink-0 text-muted-foreground" />
+                            <span className="min-w-0 flex-1 truncate">{sub.name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
         {canSwitchRole && (
           <>
             <DropdownMenuSeparator className="my-0" />
-            <div className="px-4 pt-3 pb-1.5">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <div className="px-[clamp(0.75rem,1.1vw,0.875rem)] pt-2 pb-1">
+              <p className="text-[clamp(0.5625rem,0.7vw,0.625rem)] font-semibold uppercase tracking-wider text-muted-foreground">
                 Switch Role
               </p>
             </div>
-            <div className="px-2 pb-2 space-y-0.5">
+            <div className="px-2 pb-1.5 space-y-0.5">
               {assignedRoles.map((role) => {
                 const isActive = role.id === activeRoleId;
                 const isSwitching = switchingRoleId === role.id;
@@ -266,21 +351,27 @@ const UserMenu = () => {
                     onSelect={(e) => e.preventDefault()}
                     disabled={isActive || switchingRoleId != null}
                     className={cn(
-                      'gap-3 rounded-lg px-2.5 py-2 text-sm cursor-pointer',
+                      'gap-2 rounded-lg px-2 py-[clamp(0.3rem,0.5vw,0.375rem)] text-[clamp(0.8125rem,0.95vw,0.875rem)] cursor-pointer',
                       // The active row keeps full contrast despite being disabled — `disabled`
                       // here only blocks a redundant re-switch, it is not an unavailable option.
-                      isActive && 'bg-primary/10 text-primary font-medium opacity-100'
+                      // Needs BOTH `opacity-100` (plain) AND `data-[disabled]:opacity-100` (the
+                      // exact variant dropdown-menu.jsx's own `data-[disabled]:opacity-50` uses) —
+                      // a plain `opacity-100` alone doesn't beat a `data-[disabled]:` rule, since
+                      // they're different Tailwind variants and tailwind-merge only dedupes within
+                      // the same one; without the matching variant the row rendered faded despite
+                      // this override, which is exactly what was reported.
+                      isActive && 'bg-primary/10 text-primary font-medium opacity-100 data-[disabled]:opacity-100'
                     )}
                   >
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center">
+                    <span className="flex h-[clamp(1.25rem,1.6vw,1.5rem)] w-[clamp(1.25rem,1.6vw,1.5rem)] shrink-0 items-center justify-center">
                       {isSwitching ? (
-                        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                        <Loader2 className="h-[clamp(0.875rem,1vw,1rem)] w-[clamp(0.875rem,1vw,1rem)] animate-spin text-primary" />
                       ) : isActive ? (
-                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary">
-                          <Check className="h-3.5 w-3.5 text-primary-foreground" strokeWidth={3} />
+                        <span className="flex h-[clamp(1.25rem,1.6vw,1.5rem)] w-[clamp(1.25rem,1.6vw,1.5rem)] items-center justify-center rounded-full bg-primary">
+                          <Check className="h-[clamp(0.75rem,0.95vw,0.875rem)] w-[clamp(0.75rem,0.95vw,0.875rem)] text-primary-foreground" strokeWidth={3} />
                         </span>
                       ) : (
-                        <RoleIcon className="h-[18px] w-[18px] text-muted-foreground" />
+                        <RoleIcon className="h-[clamp(1rem,1.2vw,1.125rem)] w-[clamp(1rem,1.2vw,1.125rem)] text-muted-foreground" />
                       )}
                     </span>
                     <span className="leading-snug">{role.name}</span>
@@ -291,31 +382,31 @@ const UserMenu = () => {
           </>
         )}
         <DropdownMenuSeparator className="my-0" />
-        <div className="p-2">
+        <div className="p-1.5">
           <DropdownMenuItem
             onClick={() => setIsChangePasswordOpen(true)}
-            className="gap-3 rounded-lg px-2.5 py-2 text-sm cursor-pointer"
+            className="gap-2 rounded-lg px-2 py-[clamp(0.3rem,0.5vw,0.375rem)] text-[clamp(0.8125rem,0.95vw,0.875rem)] cursor-pointer"
           >
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center">
-              <KeyRound className="h-[18px] w-[18px] text-primary" />
+            <span className="flex h-[clamp(1.25rem,1.6vw,1.5rem)] w-[clamp(1.25rem,1.6vw,1.5rem)] shrink-0 items-center justify-center">
+              <KeyRound className="h-[clamp(1rem,1.2vw,1.125rem)] w-[clamp(1rem,1.2vw,1.125rem)] text-primary" />
             </span>
             Change Password
-            <ChevronRight className="ml-auto h-4 w-4 text-muted-foreground" />
+            <ChevronRight className="ml-auto h-[clamp(0.875rem,1vw,1rem)] w-[clamp(0.875rem,1vw,1rem)] text-muted-foreground" />
           </DropdownMenuItem>
         </div>
         <DropdownMenuSeparator className="my-0" />
-        <div className="p-2">
+        <div className="p-1.5">
           <DropdownMenuItem
             onClick={handleLogout}
             disabled={isLoggingOut}
             onSelect={(e) => e.preventDefault()}
-            className="gap-3 rounded-lg px-2.5 py-2 text-sm cursor-pointer text-destructive focus:text-destructive focus:bg-destructive/10"
+            className="gap-2 rounded-lg px-2 py-[clamp(0.3rem,0.5vw,0.375rem)] text-[clamp(0.8125rem,0.95vw,0.875rem)] cursor-pointer text-destructive focus:text-destructive focus:bg-destructive/10"
           >
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center">
+            <span className="flex h-[clamp(1.25rem,1.6vw,1.5rem)] w-[clamp(1.25rem,1.6vw,1.5rem)] shrink-0 items-center justify-center">
               {isLoggingOut ? (
-                <Loader2 className="h-[18px] w-[18px] animate-spin" />
+                <Loader2 className="h-[clamp(1rem,1.2vw,1.125rem)] w-[clamp(1rem,1.2vw,1.125rem)] animate-spin" />
               ) : (
-                <LogOut className="h-[18px] w-[18px]" />
+                <LogOut className="h-[clamp(1rem,1.2vw,1.125rem)] w-[clamp(1rem,1.2vw,1.125rem)]" />
               )}
             </span>
             {isLoggingOut ? 'Signing out…' : 'Sign out'}

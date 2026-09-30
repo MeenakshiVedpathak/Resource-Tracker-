@@ -5,11 +5,14 @@ import { useMyTeamEmployees, useMapMyTeamEmployee } from '@/hooks/useMyTeam';
 import { useActiveEmployees } from '@/hooks/useEmployees';
 import { useNotification } from '@/hooks/useNotification';
 import { useHasForm } from '@/hooks/usePermissions';
+import { useDebounce } from '@/hooks/useDebounce';
 import { extractApiError } from '@/services/apiClient';
 import { ROUTES } from '@/constants/routes';
 import { FORM_NAMES } from '@/constants/rbacForms';
 import PageHeader from '@/components/common/PageHeader';
 import StatusBadge from '@/components/common/StatusBadge';
+import SearchInput from '@/components/common/SearchInput';
+import EmptyState from '@/components/common/EmptyState';
 import { Button } from '@/components/ui/button';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -34,6 +37,8 @@ const MyTeamList = () => {
 
   const [addOpen, setAddOpen] = useState(false);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
+  const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 300);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(DEFAULT_PAGE_SIZE);
 
@@ -43,9 +48,20 @@ const MyTeamList = () => {
 
   const onMyTeamIds = useMemo(() => new Set(myEmployees.map((e) => e.id)), [myEmployees]);
 
-  const totalPages = Math.max(1, Math.ceil(myEmployees.length / limit));
+  // GET /my-team/employees already returns this Team Lead's whole mapped team in one unpaginated
+  // call (no `page`/`limit`/`search` param on it at all — the list below is already sliced from
+  // the full array client-side), so search needs no backend support: it's just another filter over
+  // the same in-memory array before that same pagination slice runs.
+  const filteredEmployees = useMemo(() => {
+    const q = debouncedSearch.trim().toLowerCase();
+    if (!q) return myEmployees;
+    return myEmployees.filter((e) => [e.full_name, e.employee_code, e.designation]
+      .some((v) => (v ?? '').toLowerCase().includes(q)));
+  }, [myEmployees, debouncedSearch]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredEmployees.length / limit));
   const safePage = Math.min(page, totalPages);
-  const pageEmployees = myEmployees.slice((safePage - 1) * limit, safePage * limit);
+  const pageEmployees = filteredEmployees.slice((safePage - 1) * limit, safePage * limit);
 
   const employeeOptions = useMemo(
     () =>
@@ -74,6 +90,12 @@ const MyTeamList = () => {
         description="Employees reporting to you"
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <SearchInput
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              placeholder="Search name, code, designation…"
+              className="w-full sm:w-64"
+            />
             {/* Visually distinct (emerald, not blue) from Map Employee — this creates
                 already-approved work log records for an Employee, not a team-membership change. */}
             {canFillWorkLog && (
@@ -115,6 +137,12 @@ const MyTeamList = () => {
                   No Employees reporting to you yet.
                 </TableCell>
               </TableRow>
+            ) : filteredEmployees.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={3} className="p-0">
+                  <EmptyState title="No employees match your search." />
+                </TableCell>
+              </TableRow>
             ) : (
               pageEmployees.map((employee) => (
                 <TableRow key={employee.id}>
@@ -126,12 +154,12 @@ const MyTeamList = () => {
             )}
           </TableBody>
         </Table>
-        {!isPending && myEmployees.length > 0 && (
+        {!isPending && filteredEmployees.length > 0 && (
           <div className="px-3">
             <ListPagination
               page={safePage}
               limit={limit}
-              total={myEmployees.length}
+              total={filteredEmployees.length}
               onPageChange={(p) => setPage(Math.max(1, Math.min(totalPages, p)))}
               onPageSizeChange={(l) => { setLimit(l); setPage(1); }}
             />

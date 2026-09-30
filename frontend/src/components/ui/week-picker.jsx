@@ -20,6 +20,53 @@ function getFirstDayOfWeek(year, month) {
   return new Date(year, month - 1, 1).getDay();
 }
 
+// Same "jump to a year" addition as DatePicker's own YearGrid (see date-picker.jsx's comment for
+// the full rationale) — duplicated locally like this file already does for MONTH_NAMES/DAY_NAMES/
+// getDaysInMonth/etc. rather than sharing them. `maxYear` disables any year past the current one,
+// mirroring the "no future week is selectable" rule the day grid and the ▶ arrow both already
+// enforce (see atOrPastThisWeek below) — there being no such thing as a valid future year here.
+const YEAR_GRID_SIZE = 12;
+const YearGrid = ({ rangeStart, currentYear, maxYear, onPrevRange, onNextRange, onPickYear }) => {
+  const years = Array.from({ length: YEAR_GRID_SIZE }, (_, i) => rangeStart + i);
+  return (
+    <>
+      <div className="mb-2 flex items-center justify-between">
+        <button type="button" onClick={onPrevRange} className="rounded p-1 transition-colors hover:bg-accent">
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <span className="select-none text-sm font-semibold">
+          {rangeStart} – {rangeStart + YEAR_GRID_SIZE - 1}
+        </span>
+        <button type="button" onClick={onNextRange} className="rounded p-1 transition-colors hover:bg-accent">
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
+      <div className="grid grid-cols-3 gap-1">
+        {years.map((year) => {
+          const selected = year === currentYear;
+          const yearDisabled = maxYear != null && year > maxYear;
+          return (
+            <button
+              key={year}
+              type="button"
+              disabled={yearDisabled}
+              onClick={() => onPickYear(year)}
+              className={cn(
+                'rounded-md px-2 py-1.5 text-xs transition-colors',
+                selected && 'bg-primary font-semibold text-primary-foreground',
+                !selected && !yearDisabled && 'hover:bg-accent',
+                yearDisabled && 'cursor-not-allowed text-muted-foreground/40'
+              )}
+            >
+              {year}
+            </button>
+          );
+        })}
+      </div>
+    </>
+  );
+};
+
 const PILL_BASE = 'flex-1 rounded-full px-3 py-1.5 text-xs font-semibold text-center transition-colors whitespace-nowrap';
 const STEP_BUTTON = 'flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-input bg-background text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-50';
 
@@ -46,6 +93,9 @@ export function WeekPicker({ value, onChange, placeholder = 'Select week', class
     const now = new Date();
     return { year: now.getFullYear(), month: now.getMonth() + 1 };
   });
+  // 'days' or 'years' — see DatePicker's identical state for the full rationale.
+  const [view, setView] = useState('days');
+  const [yearRangeStart, setYearRangeStart] = useState(() => Math.floor(navDate.year / YEAR_GRID_SIZE) * YEAR_GRID_SIZE);
 
   const startDate = value?.startDate || null;
   const endDate = value?.endDate || null;
@@ -127,6 +177,8 @@ export function WeekPicker({ value, onChange, placeholder = 'Select week', class
           onOpenChange={(o) => {
             setOpen(o);
             if (!o) setHoverDate(null);
+            // Always reopens on the day grid, not left mid-year-jump from last time.
+            if (o) setView('days');
           }}
         >
           <PopoverTrigger asChild>
@@ -135,62 +187,90 @@ export function WeekPicker({ value, onChange, placeholder = 'Select week', class
             </button>
           </PopoverTrigger>
 
-          <PopoverContent className="w-auto p-3" align="end">
-            <div className="flex items-center justify-between mb-2">
-              <button type="button" onClick={prevMonth} className="rounded p-1 hover:bg-accent transition-colors">
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-              <span className="text-sm font-semibold select-none">
-                {MONTH_NAMES[navDate.month - 1]} {navDate.year}
-              </span>
-              <button type="button" onClick={nextMonth} className="rounded p-1 hover:bg-accent transition-colors">
-                <ChevronRight className="h-4 w-4" />
-              </button>
-            </div>
-
-            <p className="text-[10px] text-center text-muted-foreground mb-2">
-              Click any day to select its full week
-            </p>
-
-            <div className="grid grid-cols-7 mb-1">
-              {DAY_NAMES.map((d) => (
-                <div key={d} className="text-center text-[10px] font-medium text-muted-foreground py-1">
-                  {d}
-                </div>
-              ))}
-            </div>
-
-            <div className="grid grid-cols-7">
-              {days.map((dateStr, i) => {
-                if (!dateStr) return <div key={`e-${i}`} className="h-8 w-8" />;
-
-                // Same cap as the ▶ arrow — a day past This Week's Saturday hasn't happened yet.
-                const dayDisabled = dateStr > thisWeek.endDate;
-                const status = dayStatus(dateStr);
-                const day = parseInt(dateStr.split('-')[2], 10);
-
-                return (
-                  <button
-                    key={dateStr}
-                    type="button"
-                    disabled={dayDisabled}
-                    onClick={() => selectWeekContaining(dateStr)}
-                    onMouseEnter={() => !dayDisabled && setHoverDate(dateStr)}
-                    onMouseLeave={() => setHoverDate(null)}
-                    className={cn(
-                      'h-8 w-8 text-xs flex items-center justify-center transition-colors relative',
-                      dayDisabled && 'cursor-not-allowed text-muted-foreground/40',
-                      !dayDisabled && status === 'none' && 'hover:bg-accent rounded-full',
-                      !dayDisabled && status !== 'none' && 'bg-primary/15 text-foreground font-medium',
-                      !dayDisabled && status === 'start' && 'rounded-l-full',
-                      !dayDisabled && status === 'end' && 'rounded-r-full'
-                    )}
-                  >
-                    {day}
+          {/* Fixed w-64 (not w-auto) so this doesn't visibly resize between the day grid and the
+              year grid — same fix and reasoning as DatePicker's identical PopoverContent. */}
+          <PopoverContent className="w-64 p-3" align="end">
+            {view === 'days' ? (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <button type="button" onClick={prevMonth} className="rounded p-1 hover:bg-accent transition-colors">
+                    <ChevronLeft className="h-4 w-4" />
                   </button>
-                );
-              })}
-            </div>
+                  {/* Click to jump into the year grid — same addition as DatePicker's. */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setYearRangeStart(Math.floor(navDate.year / YEAR_GRID_SIZE) * YEAR_GRID_SIZE);
+                      setView('years');
+                    }}
+                    className="select-none rounded px-2 py-0.5 text-sm font-semibold transition-colors hover:bg-accent"
+                  >
+                    {MONTH_NAMES[navDate.month - 1]} {navDate.year}
+                  </button>
+                  <button type="button" onClick={nextMonth} className="rounded p-1 hover:bg-accent transition-colors">
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <p className="text-[10px] text-center text-muted-foreground mb-2">
+                  Click any day to select its full week
+                </p>
+
+                <div className="grid grid-cols-7 mb-1">
+                  {DAY_NAMES.map((d) => (
+                    <div key={d} className="text-center text-[10px] font-medium text-muted-foreground py-1">
+                      {d}
+                    </div>
+                  ))}
+                </div>
+
+                {/* justify-items-center: see DatePicker's identical fix, same reason (grid-cols-7
+                    splits w-64 into columns wider than the 2rem day buttons need). */}
+                <div className="grid grid-cols-7 justify-items-center">
+                  {days.map((dateStr, i) => {
+                    if (!dateStr) return <div key={`e-${i}`} className="h-8 w-8" />;
+
+                    // Same cap as the ▶ arrow — a day past This Week's Saturday hasn't happened yet.
+                    const dayDisabled = dateStr > thisWeek.endDate;
+                    const status = dayStatus(dateStr);
+                    const day = parseInt(dateStr.split('-')[2], 10);
+
+                    return (
+                      <button
+                        key={dateStr}
+                        type="button"
+                        disabled={dayDisabled}
+                        onClick={() => selectWeekContaining(dateStr)}
+                        onMouseEnter={() => !dayDisabled && setHoverDate(dateStr)}
+                        onMouseLeave={() => setHoverDate(null)}
+                        className={cn(
+                          'h-8 w-8 text-xs flex items-center justify-center transition-colors relative',
+                          dayDisabled && 'cursor-not-allowed text-muted-foreground/40',
+                          !dayDisabled && status === 'none' && 'hover:bg-accent rounded-full',
+                          !dayDisabled && status !== 'none' && 'bg-primary/15 text-foreground font-medium',
+                          !dayDisabled && status === 'start' && 'rounded-l-full',
+                          !dayDisabled && status === 'end' && 'rounded-r-full'
+                        )}
+                      >
+                        {day}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            ) : (
+              <YearGrid
+                rangeStart={yearRangeStart}
+                currentYear={navDate.year}
+                maxYear={parseInt(thisWeek.startDate.slice(0, 4), 10)}
+                onPrevRange={() => setYearRangeStart((y) => y - YEAR_GRID_SIZE)}
+                onNextRange={() => setYearRangeStart((y) => y + YEAR_GRID_SIZE)}
+                onPickYear={(year) => {
+                  setNavDate((d) => ({ ...d, year }));
+                  setView('days');
+                }}
+              />
+            )}
           </PopoverContent>
         </Popover>
       </div>

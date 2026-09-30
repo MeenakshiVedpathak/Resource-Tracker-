@@ -1,11 +1,15 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import dayjs from 'dayjs';
-import { BellRing } from 'lucide-react';
-import { useMyTeamEmployees, useMyTeamEmployeesAcrossBus, useMyTeamAllEmployeesApprovalSummary, MAX_FANOUT_BUS } from '@/hooks/useMyTeam';
+import { BellRing, Download } from 'lucide-react';
+import { useMyTeamEmployees, useMyTeamEmployeesAcrossBus, useMyTeamApprovalSummaryAll, MAX_FANOUT_BUS } from '@/hooks/useMyTeam';
+import { myTeamApi } from '@/api/myTeam.api';
 import { useSelectableBusinessUnits } from '@/hooks/useSelectableBusinessUnits';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { useCanWrite } from '@/hooks/usePermissions';
+import { useNotification } from '@/hooks/useNotification';
+import { extractApiError } from '@/services/apiClient';
+import { downloadBlob } from '@/utils/download';
 import { ROUTES } from '@/constants/routes';
 import BusinessUnitFilter, { ALL_BUS } from '@/components/common/BusinessUnitFilter';
 import EntityFilter, { ALL_ENTITIES } from '@/components/common/EntityFilter';
@@ -67,6 +71,8 @@ const TeamLeadTimesheetApproval = () => {
   // "Check Pending & Remind" leads to the compliance report's reminder-sending flow, so it's a
   // write action for gating purposes — hidden for a read-only role.
   const canWrite = useCanWrite();
+  const { error: showError } = useNotification();
+  const [isExporting, setIsExporting] = useState(false);
   const [searchParams] = useSearchParams();
   // Read once on mount — changes to the query string after mount are intentionally ignored so
   // that the Team Lead's manual dropdown selection is never overwritten mid-session.
@@ -230,16 +236,9 @@ const TeamLeadTimesheetApproval = () => {
   // Now that PM approval is scoped by Service PO mapping rather than "my direct reports," two
   // different PMs can see overlapping Employee lists (same Employee, different POs) — this lets
   // either narrow the combined table down to just the buckets touching one of their own managed
-  // POs. Filtered CLIENT-SIDE in TeamLeadAllEmployeesTimesheetView (see its own comment) — GET
-  // /my-team/timesheets/approval-summary has no confirmed service_po_id query param of its own.
-  //
-  // GET /my-team/service-pos (useMyTeamServicePos) looked like the natural source for this
-  // dropdown's OPTIONS, but it predates this redesign and returned nothing for a PM whose access
-  // now comes from employee_servicepo_mapping rather than the old manager_service_po_grants table
-  // it was presumably still reading from — see the backend-request note further down. Deriving
-  // the option list from `rows` below instead (every Service PO actually appearing across the
-  // buckets already being fetched) is self-consistent by construction: it can never offer a PO
-  // that then filters the table to zero rows, and needs no separate endpoint at all.
+  // POs. `service_po_id` is now a real backend filter (see GET
+  // /my-team/timesheets/approval-summary/all) — TeamLeadAllEmployeesTimesheetView just passes it
+  // straight through as a query param, no client-side row filtering needed any more.
   const [servicePoId, setServicePoId] = useState('all');
 
   // The table always takes a single {startDate, endDate} range regardless of Daily/Weekly/Monthly
@@ -248,29 +247,61 @@ const TeamLeadTimesheetApproval = () => {
   // week instead of two free clicks), so only Monthly needs a distinct branch here.
   const effectiveDateRange = logType === 'monthly' ? monthYearToRange(monthYear) : dateRange;
 
-  // Deep-link narrowing to one specific Employee only — free-text `search` below is NOT applied
-  // here any more (unlike before this Service-PO-search change): it now has to match against
-  // Service PO names too, which only exist on the fetched buckets/entries, not on the Employee
-  // list itself, so narrowing which Employees get fetched by employee-name text alone would just
-  // as easily hide a match on the Service PO side. All mapped Employees are always fetched;
-  // `search` instead filters the resulting ROWS inside TeamLeadAllEmployeesTimesheetView.
+  // Deep-link narrowing to one specific Employee only — `search` is now a real backend filter
+  // (matches employee name, employee code, or Service PO name server-side), so it no longer needs
+  // to pre-narrow which Employees get fetched the way it used to.
   const employeesInScope = useMemo(
     () => (selectedEmployee ? [selectedEmployee] : employeeList),
     [selectedEmployee, employeeList],
   );
+  const employeeIds = useMemo(() => employeesInScope.map((e) => e.id), [employeesInScope]);
 
-  const summaryFilterParams = useMemo(() => ({
+  // Same filters the table itself is showing, minus page/limit/sortBy/sortOrder (export always
+  // means "every matching row," not one page) — hits the dedicated export endpoint since the JSON
+  // listing endpoint is page/limit-capped and can't return everything in one call.
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      const result = await myTeamApi.exportApprovalSummaryAll({
+        log_type: logType,
+        ...(effectiveDateRange?.startDate ? { startDate: effectiveDateRange.startDate, endDate: effectiveDateRange.endDate } : {}),
+        ...(statusFilter !== 'all' ? { status: statusFilter } : {}),
+        ...(servicePoId !== 'all' ? { service_po_id: servicePoId } : {}),
+        ...(search.trim() ? { search: search.trim() } : {}),
+        employee_ids: employeeIds,
+        buId: effectiveBuId,
+      });
+      downloadBlob(result.blob, result.filename);
+    } catch (err) {
+      showError(extractApiError(err));
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // GET /my-team/service-pos (useMyTeamServicePos) predates this redesign and returned nothing for
+  // a PM whose access comes from employee_servicepo_mapping rather than the old
+  // manager_service_po_grants table it was presumably still reading from — see the backend-request
+  // note this comment used to point to. Deriving the Service PO dropdown's OPTIONS from a small,
+  // bounded (limit=200 — the same per-request ceiling GET .../approval-summary/all itself enforces)
+  // unfiltered call to the real paginated endpoint instead: self-consistent by construction (it can
+  // never offer a PO that then filters the table to zero rows) and needs no separate endpoint.
+  // Deliberately NOT the same query the table itself uses below (that one is scoped to the current
+  // page/status/servicePoId/search) — this one always asks for every PO across the whole team/
+  // period regardless of those, so picking a PO doesn't shrink its own option list.
+  const servicePoOptionsParams = useMemo(() => ({
     log_type: logType,
     ...(effectiveDateRange?.startDate ? { startDate: effectiveDateRange.startDate, endDate: effectiveDateRange.endDate } : {}),
-  }), [logType, effectiveDateRange]);
-
-  const {
-    rows, isLoading: isRowsLoading, isError: isRowsError, error: rowsError,
-  } = useMyTeamAllEmployeesApprovalSummary(employeesInScope, summaryFilterParams);
+    employee_ids: employeeIds,
+    buId: effectiveBuId,
+    page: 1,
+    limit: 200,
+  }), [logType, effectiveDateRange, employeeIds, effectiveBuId]);
+  const { rows: optionRows } = useMyTeamApprovalSummaryAll(servicePoOptionsParams, { enabled: employeeIds.length > 0 });
 
   const servicePoOptions = useMemo(() => {
     const seen = new Map();
-    rows.forEach((r) => (r.entries ?? []).forEach((e) => {
+    optionRows.forEach((r) => (r.entries ?? []).forEach((e) => {
       const id = e.service_po_id ?? e.servicePO?.id;
       const name = e.servicePO?.service_po_name ?? e.servicePO?.service_po_code;
       if (id != null && name && !seen.has(String(id))) seen.set(String(id), name);
@@ -281,7 +312,7 @@ const TeamLeadTimesheetApproval = () => {
         .sort(([, a], [, b]) => a.localeCompare(b))
         .map(([id, name]) => ({ label: name, value: id })),
     ];
-  }, [rows]);
+  }, [optionRows]);
 
   const timesheetActiveFilterCount =
     (entityId !== ALL_ENTITIES ? 1 : 0)
@@ -457,6 +488,12 @@ const TeamLeadTimesheetApproval = () => {
               onToggle={() => setFiltersOpen((prev) => !prev)}
               activeCount={activeFilterCount}
             />
+            {!isWeekendTab && employeeList.length > 0 && (
+              <Button variant="outline" size="toolbar" onClick={handleExport} disabled={isExporting}>
+                <Download className="mr-1.5 h-4 w-4" />
+                {isExporting ? 'Exporting…' : 'Export Excel'}
+              </Button>
+            )}
             {/* Checking who's pending and nudging them is a different job than approving what's
                 already logged — handing it off to the Work Log Compliance report (which already
                 owns per-employee/bulk "Remind" sending) instead of duplicating that flow here.
@@ -520,6 +557,12 @@ const TeamLeadTimesheetApproval = () => {
             onToggle={() => setFiltersOpen((prev) => !prev)}
             activeCount={activeFilterCount}
           />
+          {!isWeekendTab && employeeList.length > 0 && (
+            <Button variant="outline" size="toolbar" onClick={handleExport} disabled={isExporting}>
+              <Download className="mr-1.5 h-4 w-4" />
+              {isExporting ? 'Exporting…' : 'Export'}
+            </Button>
+          )}
           {canWrite && !isWeekendTab && (
           <Button
             size="toolbar"
@@ -585,10 +628,8 @@ const TeamLeadTimesheetApproval = () => {
         <EmptyState title="No Employees reporting to you yet." />
       ) : (
         <TeamLeadAllEmployeesTimesheetView
-          rows={rows}
-          isLoading={isRowsLoading}
-          isError={isRowsError}
-          error={rowsError}
+          employeeIds={employeeIds}
+          buId={effectiveBuId}
           logType={logType}
           dateRange={effectiveDateRange}
           statusFilter={statusFilter}
