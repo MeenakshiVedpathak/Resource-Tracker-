@@ -114,11 +114,6 @@ const PmDashboard = () => {
   // anything (same fix already applied to pages/Dashboard.jsx).
   const dedupedBuIds = useMemo(() => dedupeBusinessUnitIds(buIds, buOptions), [buIds, buOptions]);
   const buScope = dedupedBuIds.length > 0 ? { buId: 'all', businessUnitIds: dedupedBuIds.join(',') } : { buId: '' };
-  // Bumped only when the Overallocated Employees KPI is clicked, forcing TeamCapacityTable to
-  // remount with a fresh `initialStatusFilter` (see its own key prop below) — the component only
-  // reads that prop once on mount, so a plain re-render wouldn't re-seed it a second time.
-  const [teamFilterNonce, setTeamFilterNonce] = useState(0);
-  const [teamInitialFilter, setTeamInitialFilter] = useState('all');
 
   const projectHealthRef = useRef(null);
   const teamCapacityRef = useRef(null);
@@ -134,11 +129,6 @@ const PmDashboard = () => {
   }, []);
   const scrollToProjectHealth = useCallback(() => scrollTo(projectHealthRef), [scrollTo]);
   const scrollToTeamCapacity = useCallback(() => scrollTo(teamCapacityRef), [scrollTo]);
-  const jumpToOverallocated = useCallback(() => {
-    setTeamInitialFilter('overallocated');
-    setTeamFilterNonce((n) => n + 1);
-    scrollToTeamCapacity();
-  }, [scrollToTeamCapacity]);
 
   const params = { ...buScope, month: monthYear.month, year: monthYear.year };
 
@@ -153,41 +143,31 @@ const PmDashboard = () => {
   // Same rows ActionRequiredFeed itself sums to decide its own empty state — kept as a light
   // duplication here rather than a shared export, purely to drive the SectionLabel's count pill.
   const actionRequiredCount = actionRequired
-    ? (actionRequired.missing_work_logs?.length ?? 0)
-      + (actionRequired.pending_approvals?.length ?? 0)
-      + (actionRequired.at_risk_projects?.length ?? 0)
-      + (actionRequired.overallocated_employees?.length ?? 0)
-      + (actionRequired.bench_employees?.length ?? 0)
+    ? ['missing_work_logs', 'pending_approvals', 'at_risk_projects', 'overallocated_employees', 'bench_employees']
+      .reduce((sum, key) => sum + (actionRequired.counts?.[key] ?? actionRequired[key]?.length ?? 0), 0)
     : 0;
 
   const workLogComplianceRoute = `${ROUTES.REPORT_EMPLOYEE_WORK_LOG_COMPLIANCE}?month=${monthYear.month}&year=${monthYear.year}`;
   const timesheetApprovalRoute = `${ROUTES.TEAM_LEAD_TIMESHEET_APPROVAL}?month=${monthYear.month}&year=${monthYear.year}`;
 
-  // Priority order per spec, each card a drill-down: the first four are the "something needs
-  // attention" set (external report/screen for 1/2, in-page scroll to the section below for 3/4
-  // since those are just a filtered view of tables already on this page); the last four are
-  // informational counts, each opening the existing full screen for that data (this page's own
-  // tables are PM-specific rollups, not a replacement for those masters/reports). Only Active
-  // Projects and Budget vs Billed carry a `subtext` — real data the summary response already
-  // carries (a Service PO count, an invoiced amount), not decorative filler, and not a trend/delta:
-  // GET /pm-dashboard/summary returns only the current period's flat counts, with nothing to
-  // compare against, so there's no honest "+3 vs last month" figure to show on any of these.
+  // Static summary cards (not clickable). Only Active Projects and Budget vs Billed carry a
+  // `subtext` - real data the summary response already carries, not a trend/delta.
   const kpiCards = [
-    { icon: CalendarOff, title: 'Missing Work Logs', value: formatNumber(summary?.missing_work_logs), tone: 'red', to: workLogComplianceRoute },
-    { icon: ClipboardCheck, title: 'Pending Approvals', value: formatNumber(summary?.pending_approvals), tone: 'amber', to: timesheetApprovalRoute },
-    { icon: AlertTriangle, title: 'At-Risk Projects', value: formatNumber(summary?.at_risk_projects), tone: 'red', onClick: scrollToProjectHealth },
-    { icon: BatteryCharging, title: 'Overallocated Employees', value: formatNumber(summary?.overallocated_employees), tone: 'amber', onClick: jumpToOverallocated },
-    { icon: Users, title: 'Team Size', value: formatNumber(summary?.team_size), tone: 'violet', to: ROUTES.EMPLOYEES },
-    { icon: Clock, title: 'Logged Hours', value: formatHours(summary?.logged_hours_mtd), tone: 'blue', to: ROUTES.TIMESHEETS },
+    { icon: CalendarOff, title: 'Missing Work Logs', value: formatNumber(summary?.missing_work_logs), tone: 'red' },
+    { icon: ClipboardCheck, title: 'Pending Approvals', value: formatNumber(summary?.pending_approvals), tone: 'amber' },
+    { icon: AlertTriangle, title: 'At-Risk Projects', value: formatNumber(summary?.at_risk_projects), tone: 'red' },
+    { icon: BatteryCharging, title: 'Overallocated Employees', value: formatNumber(summary?.overallocated_employees), tone: 'amber' },
+    { icon: Users, title: 'Team Size', value: formatNumber(summary?.team_size), tone: 'violet' },
+    { icon: Clock, title: 'Logged Hours', value: formatHours(summary?.logged_hours_mtd), tone: 'blue' },
     {
-      icon: FolderKanban, title: 'Active Projects', value: formatNumber(summary?.active_projects),
-      subtext: `${formatNumber(summary?.active_service_pos)} / ${formatNumber(summary?.total_service_pos)} Service POs active`,
-      tone: 'emerald', to: ROUTES.PROJECTS,
+      icon: FolderKanban, title: 'Projects Managed', value: formatNumber(summary?.total_projects),
+      subtext: `${formatNumber(summary?.active_service_pos)}/${formatNumber(summary?.total_service_pos)} POs active`,
+      tone: 'emerald',
     },
     {
       icon: IndianRupee, title: 'Budget vs Billed', value: formatCurrency(summary?.budget?.variance, 'INR', 0),
       subtext: `Invoiced ${formatCurrency(summary?.budget?.invoiced_amount, 'INR', 0)}`,
-      tone: 'indigo', to: ROUTES.REPORT_BUDGET_VS_BILLED,
+      tone: 'indigo',
     },
   ];
 
@@ -237,9 +217,9 @@ const PmDashboard = () => {
       <div className="flex flex-col gap-3">
         <SectionLabel icon={Activity} title="Key Performance Indicators" />
         {isSummaryPending ? (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-8">
+          <div className="grid grid-cols-2 gap-2.5 md:grid-cols-4 2xl:grid-cols-8">
             {Array.from({ length: 8 }).map((_, i) => (
-              <Skeleton key={i} className="h-[140px] rounded-2xl" />
+              <Skeleton key={i} className="h-[68px] rounded-xl" />
             ))}
           </div>
         ) : (
@@ -247,7 +227,7 @@ const PmDashboard = () => {
             variants={kpiContainerVariants}
             initial="hidden"
             animate="show"
-            className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-8"
+            className="grid grid-cols-2 gap-2.5 md:grid-cols-4 2xl:grid-cols-8"
           >
             {kpiCards.map((card) => (
               <motion.div key={card.title} variants={kpiItemVariants} className="h-full">
@@ -346,7 +326,7 @@ const PmDashboard = () => {
 
           {/* Section 4 — Work Log / Effort (missing/shortfall list). */}
           <div className="flex flex-col gap-3">
-            <SectionLabel icon={Clock} title="Work Log / Effort" subtitle="Employee work log summary" />
+            <SectionLabel icon={Clock} title="Work Log Shortfall" subtitle="Employees who logged fewer hours than required this month" />
             <SectionBox>
               <WorkLogComplianceTable monthYear={monthYear} buScope={buScope} />
             </SectionBox>
@@ -362,10 +342,8 @@ const PmDashboard = () => {
             <SectionBox>
               <div ref={teamCapacityRef}>
                 <TeamCapacityTable
-                  key={teamFilterNonce}
                   monthYear={monthYear}
                   buScope={buScope}
-                  initialStatusFilter={teamInitialFilter}
                 />
               </div>
             </SectionBox>

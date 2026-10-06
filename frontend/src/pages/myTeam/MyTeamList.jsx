@@ -107,9 +107,11 @@ const MyTeamList = () => {
                 <CalendarPlus className="mr-1.5 h-4 w-4" /> Log Work for Team
               </Button>
             )}
+            {/* Map Employee button hidden for now (kept commented so it can be restored):
             <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => setAddOpen(true)}>
               <Plus className="mr-1.5 h-4 w-4" /> Map Employee
             </Button>
+            */}
           </div>
         }
       />

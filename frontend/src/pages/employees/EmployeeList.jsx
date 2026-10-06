@@ -105,6 +105,16 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
   const updateMutation = useUpdateEmployee(employee?.id);
   const saveServicePoMutation = useSaveEmployeeServicePOMapping(employee?.id);
   const { data: mappings, isLoading: mappingsLoading } = useEmployeeMappings(employee?.id);
+  const { employee: currentEmployee } = useAuth();
+  // A BU Admin editing THEIR OWN record, who holds NO other role, can't unmap a BU (nothing else to
+  // fall back on — it would strip their own BU Admin access; the backend refuses it too). When they
+  // also hold another role (e.g. Project Manager), unmapping a BU only removes it for those OTHER
+  // roles — the BU Admin role keeps it — so nothing is locked.
+  const hasNonBuAdminRole = (mappings?.roles ?? []).some((r) => r.name !== ROLE_NAMES.BU_ADMIN);
+  const lockedBuIds =
+    actorRoleName === ROLE_NAMES.BU_ADMIN && currentEmployee?.id != null && currentEmployee.id === employee?.id && !hasNonBuAdminRole
+      ? (mappings?.business_unit_ids ?? [])
+      : [];
   const [selectedRoleIds, setSelectedRoleIds] = useState([]);
   const [selectedBuIds, setSelectedBuIds] = useState([]);
   const [selectedPoIds, setSelectedPoIds] = useState([]);
@@ -259,7 +269,16 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
     return map;
   }, [businessUnits]);
 
+  const parentIdByBuId = useMemo(() => {
+    const map = new Map();
+    businessUnits.forEach((bu) => {
+      if (bu.parent_business_unit_id != null) map.set(bu.id, bu.parent_business_unit_id);
+    });
+    return map;
+  }, [businessUnits]);
+
   const toggleBu = (buId) => {
+    if (lockedBuIds.includes(buId)) return;
     setSelectedBuIds((prev) => {
       const childIds = childBuIdsByParentId.get(String(buId)) ?? [];
       if (prev.includes(buId)) {
@@ -270,6 +289,10 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
         return prev.filter((id) => !toRemove.has(id));
       }
       const next = [...prev, buId];
+      // Checking a Sub-BU also maps its Parent BU — a Sub-BU is part of its Parent (the backend
+      // does the same on save, so this only makes it visible up front).
+      const parentId = parentIdByBuId.get(buId);
+      if (parentId != null && !next.includes(parentId)) next.push(parentId);
       // Checking a Parent with exactly one Sub-BU auto-selects that Sub-BU too — with only one
       // possible choice under it, there's nothing for the user to actually pick between.
       if (childIds.length === 1 && !next.includes(childIds[0])) next.push(childIds[0]);
@@ -297,10 +320,23 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
 
   // Full active PO list (company-wide) — Service PO Admin needs no BU-eligibility filtering, so
   // this doesn't call the employee-scoped options endpoint at all here.
-  const { data: activePOs, isLoading: activePOsLoading } = useActiveServicePOs(showServicePoSection);
-  // Still needed to seed which POs come pre-checked (existing mapping), separate from the list
-  // of options itself.
-  const { data: existingMapping } = useEmployeeServicePOMappingOptions(showServicePoSection ? employee?.id : null);
+  const { data: fallbackActivePOs, isLoading: fallbackPOsLoading } = useActiveServicePOs(showServicePoSection);
+  // Seeds which POs come pre-checked (existing mapping) AND supplies the PO list itself: its
+  // `eligible_service_pos` is not tied to the BU currently active in the navbar, whereas
+  // /service-pos/active/list is — which left POs of this employee's OTHER BUs (including ones
+  // already mapped to them) out of the panel. The active list is only a fallback while this loads.
+  const { data: existingMapping, isLoading: optionsLoading } = useEmployeeServicePOMappingOptions(showServicePoSection ? employee?.id : null);
+  const allEligiblePOs = existingMapping?.eligible_service_pos ?? fallbackActivePOs;
+  // Only the Service POs of the Business Units / Sub-BUs ticked in the BU panel (a Centralised PO
+  // belongs to no single BU, so it stays). Unticking a BU therefore also drops its POs from the
+  // panel — and from what gets saved below.
+  const activePOs = useMemo(
+    () => (allEligiblePOs ?? []).filter(
+      (po) => po.is_centralised || po.company_id == null || selectedBuIds.includes(po.company_id)
+    ),
+    [allEligiblePOs, selectedBuIds]
+  );
+  const activePOsLoading = optionsLoading || (!existingMapping && fallbackPOsLoading);
 
   useEffect(() => {
     if (existingMapping) {
@@ -324,12 +360,19 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
         return poSortDir === 'asc' ? cmp : -cmp;
       });
     }
-    if (!sortSelectedFirst) return matched;
+    // Centralised POs (not tied to any BU) always sit BELOW the POs of the ticked BUs/Sub-BUs.
+    // Stable partition, so each group keeps its relative order.
+    const isCentralisedPo = (po) => !!(po.is_centralised || po.company_id == null);
+    const centralisedLast = (list) => [
+      ...list.filter((po) => !isCentralisedPo(po)),
+      ...list.filter(isCentralisedPo),
+    ];
+    if (!sortSelectedFirst) return centralisedLast(matched);
     // Stable partition, not a re-sort of the whole list, so rows keep their (now sorted) relative
     // order within each of the two groups.
     const selected = matched.filter((po) => selectedPoIds.includes(po.id));
     const rest = matched.filter((po) => !selectedPoIds.includes(po.id));
-    return [...selected, ...rest];
+    return [...centralisedLast(selected), ...centralisedLast(rest)];
   }, [activePOs, poSearch, sortSelectedFirst, selectedPoIds, poSortKey, poSortDir]);
 
   const filteredPoIds = useMemo(() => filteredPOs.map((po) => po.id), [filteredPOs]);
@@ -394,7 +437,9 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
         const centralisedPoIds = new Set(
           (activePOs ?? []).filter((po) => (po.is_centralised ?? po.company_id == null)).map((po) => po.id)
         );
-        const servicePoIds = selectedPoIds.map((poId) =>
+        // Only POs still in scope of the ticked BUs (see activePOs above) are kept mapped.
+        const inScopePoIds = new Set(activePOs.map((po) => po.id));
+        const servicePoIds = selectedPoIds.filter((poId) => inScopePoIds.has(poId)).map((poId) =>
           selectedPmPoIds.includes(poId) && !centralisedPoIds.has(poId)
             ? { service_po_id: poId, is_project_manager: true }
             : poId
@@ -493,7 +538,7 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
                 collapsed by default behind a chevron toggle — same UX as the BU Master list.
                 Checking a Parent BU row selects the Parent BU itself as a valid assignment — it
                 does NOT auto-select its Sub-BUs; each is checked individually to map to it
-                specifically. */}
+                specifically. Checking a Sub-BU DOES also map its Parent BU. */}
             <Table containerClassName="border rounded-md max-h-[240px]">
               <TableHeader>
                 <TableRow>
@@ -512,7 +557,11 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
                   buRows.map((bu) => (
                     <TableRow key={bu.id}>
                       <TableCell>
-                        <Checkbox checked={selectedBuIds.includes(bu.id)} onCheckedChange={() => toggleBu(bu.id)} />
+                        <Checkbox
+                          checked={selectedBuIds.includes(bu.id)}
+                          disabled={lockedBuIds.includes(bu.id)}
+                          onCheckedChange={() => toggleBu(bu.id)}
+                        />
                       </TableCell>
                       <TableCell>
                         <div className={cn('flex items-center gap-1', bu.depth > 0 && 'pl-3')}>
@@ -1216,7 +1265,8 @@ const EmployeeList = () => {
       total = res?.meta?.total ?? all.length;
       page += 1;
     }
-    return all;
+    // Page boundaries can return the same employee twice — keep each one once.
+    return [...new Map(all.map((emp) => [emp.id ?? emp.employee_code, emp])).values()];
   };
 
   // Excel export rows for one employee's Business Units, as { businessUnit, subBu }:
@@ -1251,9 +1301,18 @@ const EmployeeList = () => {
         showError("No data to export");
         return;
       }
-      // One row per Business Unit mapping (never a comma-separated cell), with the BU and its
-      // Sub-BU in separate columns — an employee in 3 BUs gets 3 rows, every other column repeated.
-      const exportData = data.flatMap((emp) => buExportRows(emp).map((bu) => ({
+      // One row per employee — their BUs and Sub-BUs are joined into the two columns (never
+      // repeated rows). The paged fetch is also de-duplicated by id in case a page boundary
+      // returns the same employee twice.
+      const uniqueData = [...new Map(data.map((emp) => [emp.id ?? emp.employee_code, emp])).values()];
+      const joinUnique = (values) => [...new Set(values.filter(Boolean))].join(', ');
+      const exportData = uniqueData.map((emp) => {
+        const rows = buExportRows(emp);
+        const bu = {
+          businessUnit: joinUnique(rows.map((r) => r.businessUnit)),
+          subBu: joinUnique(rows.map((r) => r.subBu)),
+        };
+        return {
         'Employee ID': emp.employee_code,
         'Name': emp.full_name,
         'Email ID': emp.email,
@@ -1269,7 +1328,8 @@ const EmployeeList = () => {
         'Joined Date': formatDate(emp.date_of_joining),
         'Status': emp.status,
         'Timesheet Approval': (emp.is_timesheet_approval_required ?? true) ? 'Required' : 'Not Required'
-      })));
+        };
+      });
       const ws = XLSX.utils.json_to_sheet(exportData);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Employees");

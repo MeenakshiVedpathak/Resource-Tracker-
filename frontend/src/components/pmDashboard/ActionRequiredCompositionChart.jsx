@@ -34,10 +34,13 @@ const ActionRequiredCompositionChart = ({ data, isPending }) => {
     return <Skeleton className="h-[220px] w-full rounded-xl" />;
   }
 
-  const total = SLICES.reduce((sum, s) => sum + (data?.[s.key]?.length ?? 0), 0);
+  // `data.counts` holds the TRUE totals; the row arrays are capped (20) for the feed lists, so
+  // counting their length would under-report anything over 20 (e.g. 28 bench shown as 20).
+  const countOf = (key) => data?.counts?.[key] ?? data?.[key]?.length ?? 0;
+  const total = SLICES.reduce((sum, s) => sum + countOf(s.key), 0);
   const chartData = SLICES
     .map((s) => {
-      const value = data?.[s.key]?.length ?? 0;
+      const value = countOf(s.key);
       return { name: s.name, value, fill: s.color, pct: total > 0 ? ((value / total) * 100).toFixed(0) : '0' };
     })
     .filter((d) => d.value > 0);

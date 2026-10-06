@@ -9,6 +9,7 @@ import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import { buildPath, ROUTES } from '@/constants/routes';
 import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
+import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
 import { formatCurrency, formatDate, formatHours, formatPercentage } from '@/utils/formatters';
 import PageHeader from '@/components/common/PageHeader';
 import StatusBadge from '@/components/common/StatusBadge';
@@ -51,7 +52,14 @@ const ServicePODetail = () => {
   const { data: po, isPending: isLoadingPO } = useServicePO(id);
   const { data: utilisation } = useServicePOUtilisation(id);
   const { data: serviceCategories = [] } = useActiveServiceCategories();
-  const serviceTypeMap = Object.fromEntries(serviceCategories.map((c) => [c.id, c.name]));
+  const { data: serviceTypes = [] } = useActiveServiceTypes();
+  // A PO stores only service_type_id; the category is reached through the type.
+  const serviceType = serviceTypes.find((t) => String(t.id) === String(po?.service_type_id ?? po?.serviceType?.id));
+  const serviceTypeName = po?.serviceType?.service_type_name ?? serviceType?.service_type_name;
+  const serviceCategoryId = serviceType?.service_category_id ?? po?.serviceType?.service_category_id;
+  const serviceCategoryName =
+    po?.serviceType?.serviceCategory?.name ??
+    serviceCategories.find((c) => String(c.id) === String(serviceCategoryId))?.name;
 
   const closeMutation = useCloseServicePO();
 
@@ -185,7 +193,8 @@ const ServicePODetail = () => {
           <div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3 lg:grid-cols-4">
             <InfoRow label="Client" value={po.client_name ?? po.client?.client_name} />
             <InfoRow label="Project" value={po.project_name ?? po.project?.project_name} />
-            <InfoRow label="Service Type" value={serviceTypeMap[po.service_type_id] ?? '—'} />
+            <InfoRow label="Service Category" value={serviceCategoryName ?? '—'} />
+            <InfoRow label="Service Type" value={serviceTypeName ?? '—'} />
             <InfoRow label="PO Value" value={po.po_value != null ? formatCurrency(po.po_value) : '—'} />
             <InfoRow label="Expected Hours" value={po.expected_man_hours != null ? formatHours(po.expected_man_hours) : '—'} />
             <InfoRow label="Start Date" value={formatDate(po.start_date)} />

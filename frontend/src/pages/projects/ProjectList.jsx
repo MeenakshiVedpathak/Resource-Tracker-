@@ -49,7 +49,7 @@ const TruncatedCell = ({ value, maxWidth = '150px', className }) => {
 };
  
 // `canManage` is required, not optional: this toggle PATCHes project status, so a read-only role
-// (e.g. Delivery Operation Team Members, documented as strictly view-only in roleHierarchy.js)
+// (e.g. Delivery Ops, documented as strictly view-only in roleHierarchy.js)
 // must see the state but not be able to flip it.
 const StatusToggle = ({ project, canManage }) => {
   const { mutate, isPending } = useToggleProjectStatus();

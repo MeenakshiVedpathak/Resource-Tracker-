@@ -335,7 +335,9 @@ const ServicePOForm = () => {
   // unscoped list, since it was never assigned to the PO's own BU and so won't appear in
   // scopedClients below.
   const { data: allClientsForMyClients, isPending: isLoadingMyClients } = useClients(
-    { status: 'active', limit: 200 },
+    // no_business_unit: the backend returns only THIS actor's BU-less clients — filtering them out
+    // of a 200-row page client-side dropped newly created ones once there were many clients.
+    { status: 'active', limit: 200, no_business_unit: true },
     { enabled: isCompanyLessActor && (myClientsOnly || poClientIsBuLess) }
   );
   const myClients = (allClientsForMyClients?.data ?? []).filter((c) => !c.company_id);

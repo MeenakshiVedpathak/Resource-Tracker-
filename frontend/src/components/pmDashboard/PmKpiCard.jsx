@@ -1,13 +1,9 @@
-import { Link } from 'react-router-dom';
 import { cn } from '@/utils/cn';
 
-// Same visual language as pages/Dashboard.jsx's own KpiCard (rounded-xl card, left color bar,
-// icon in a tinted box, bold value, muted label) — kept as a separate component rather than
-// reusing that one directly since these are clickable drill-downs (`to` or `onClick`) and
-// Dashboard's isn't. `tone` picks a semantic accent (red/amber/blue/violet/emerald/indigo) rather
-// than the app's single brand accent color, so an at-a-glance KPI row can read "this one needs
-// attention" before the user even reads the number — same intent as the semantic Badge variants
-// (success/warning/destructive) used on the Team & Work Log tables below.
+// Compact, static summary tile: tinted icon on the left, value + label stacked on the right.
+// Deliberately not interactive (no link/button) - it only reports a number. `tone` picks a
+// semantic accent (red/amber/blue/violet/emerald/indigo) so an at-a-glance row can read "this
+// one needs attention" before the number is read.
 const TONE_STYLES = {
   red: { bar: 'bg-red-500', iconBg: 'bg-red-50 dark:bg-red-950/40', iconColor: 'text-red-600 dark:text-red-400' },
   amber: { bar: 'bg-amber-500', iconBg: 'bg-amber-50 dark:bg-amber-950/40', iconColor: 'text-amber-600 dark:text-amber-400' },
@@ -17,38 +13,25 @@ const TONE_STYLES = {
   indigo: { bar: 'bg-indigo-500', iconBg: 'bg-indigo-50 dark:bg-indigo-950/40', iconColor: 'text-indigo-600 dark:text-indigo-400' },
 };
 
-// No trend/delta indicator: the backend's GET /pm-dashboard/summary returns only the current
-// period's flat counts, nothing to compare against, so showing a "+3 vs last month" figure would
-// be fabricated on a dashboard that's otherwise all real numbers.
-const PmKpiCard = ({ icon: Icon, title, value, subtext, tone = 'violet', to, onClick }) => {
+const PmKpiCard = ({ icon: Icon, title, value, subtext, tone = 'violet' }) => {
   const styles = TONE_STYLES[tone] ?? TONE_STYLES.violet;
-  const Wrapper = to ? Link : 'button';
-  const wrapperProps = to ? { to } : { type: 'button', onClick };
 
   return (
-    <Wrapper
-      {...wrapperProps}
-      className="group block h-full w-full text-left cursor-pointer"
-    >
-      <div className="relative flex h-full flex-col gap-2 rounded-xl border border-border bg-card pl-4 pr-3 py-3.5 shadow-sm overflow-hidden transition-all duration-200 group-hover:shadow-md group-hover:-translate-y-0.5">
-        <div className={cn('absolute left-0 top-0 h-full w-[3px]', styles.bar)} />
+    <div className="relative flex h-full items-center gap-2.5 overflow-hidden rounded-xl border border-border bg-card py-2.5 pl-3.5 pr-2.5 shadow-sm">
+      <div className={cn('absolute left-0 top-0 h-full w-[3px]', styles.bar)} />
 
-        <div className={cn('flex h-7 w-7 items-center justify-center rounded-md shrink-0', styles.iconBg)}>
-          <Icon className={cn('h-3.5 w-3.5', styles.iconColor)} />
-        </div>
+      <div className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-lg', styles.iconBg)}>
+        <Icon className={cn('h-4 w-4', styles.iconColor)} />
+      </div>
 
-        <p className="text-[17px] font-extrabold text-foreground leading-tight tabular-nums whitespace-nowrap overflow-hidden text-ellipsis">
-          {value}
-        </p>
-
-        <p className="text-[11px] font-semibold text-muted-foreground leading-tight">
-          {title}
-        </p>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-base font-extrabold leading-tight tabular-nums text-foreground">{value}</p>
+        <p className="text-[11px] font-semibold leading-tight text-muted-foreground" title={title}>{title}</p>
         {subtext && (
-          <p className="text-[10px] text-muted-foreground/80 leading-tight -mt-1">{subtext}</p>
+          <p className="truncate text-[10px] leading-tight text-muted-foreground/80" title={subtext}>{subtext}</p>
         )}
       </div>
-    </Wrapper>
+    </div>
   );
 };
 

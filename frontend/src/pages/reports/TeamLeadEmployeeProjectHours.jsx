@@ -97,7 +97,7 @@ const columns = [
   }),
   columnHelper.accessor('hours_name', {
     id: 'hours_name',
-    header: 'Hours Name',
+    header: 'Module / Task',
     enableSorting: false,
     size: 160,
     cell: (info) => <div className="truncate text-xs max-w-[150px] text-muted-foreground" title={info.getValue() || ''}>{info.getValue() || '—'}</div>,

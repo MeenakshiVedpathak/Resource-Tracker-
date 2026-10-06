@@ -1,13 +1,12 @@
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams, Outlet } from 'react-router-dom';
-import { Plus, Pencil, Power, PowerOff, MoreVertical, ChevronDown, ChevronRight, Network } from 'lucide-react';
+import { Plus, Pencil, Power, PowerOff, MoreVertical, ChevronDown, ChevronRight, Network, ArrowUpDown, Check, ChevronLeft } from 'lucide-react';
 import { useCompanies, useUpdateCompany } from '@/hooks/useCompanies';
 import { useNotification } from '@/hooks/useNotification';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useCanManageBusinessUnits } from '@/hooks/usePermissions';
 import { extractApiError } from '@/services/apiClient';
 import { buildPath, ROUTES } from '@/constants/routes';
-import { getInitials } from '@/utils/formatters';
 import PageHeader from '@/components/common/PageHeader';
 import StatusBadge from '@/components/common/StatusBadge';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
@@ -16,20 +15,35 @@ import FilterPanel from '@/components/common/FilterPanel';
 import EntityFilter from '@/components/common/EntityFilter';
 import SearchInput from '@/components/common/SearchInput';
 import EmptyState from '@/components/common/EmptyState';
+import MobilePagination from '@/components/common/MobilePagination';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/utils/cn';
 
 const ALL = 'all';
+
+// Mobile-only client-side re-ordering of the already-fetched/filtered root list — the desktop
+// table has no sort control of its own (just the backend's default company_name ASC), so this
+// doesn't change or need to match anything server-side; it only reorders `roots`, never
+// `children` (each Sub-BU stays under its own Parent, in its existing order).
+const SORT_OPTIONS = [
+  { value: 'newest', label: 'Newest first' },
+  { value: 'name_asc', label: 'BU Name (A–Z)' },
+  { value: 'name_desc', label: 'BU Name (Z–A)' },
+  { value: 'status_active_first', label: 'Status — Active first' },
+  { value: 'status_inactive_first', label: 'Status — Inactive first' },
+];
 
 const TruncatedCell = ({ value, maxWidth = '150px', className }) => {
   if (!value) return <span className="text-sm text-muted-foreground">—</span>;
@@ -61,6 +75,13 @@ const CompanyList = () => {
   const [entityFilters, setEntityFilters] = useState([]);
   // Sub-BUs collapsed under their Parent by default — expanding is an explicit per-row choice.
   const [expandedIds, setExpandedIds] = useState(() => new Set());
+  // Mobile card list only (see SORT_OPTIONS above) — desktop's table order is untouched.
+  const [sortOption, setSortOption] = useState('newest');
+
+  // Client-side pagination over the top-level (Parent) BUs — each Parent always renders with its
+  // own Sub-BUs on the same page, so the tree is never split across pages.
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
 
   const debouncedSearch = useDebounce(search, 400);
 
@@ -78,7 +99,7 @@ const CompanyList = () => {
     status: ALL,
   };
 
-  const { data, isPending } = useCompanies(params);
+  const { data, isPending, isError, refetch } = useCompanies(params);
   const updateMutation = useUpdateCompany(statusTarget?.company?.id);
 
   const activeFilterCount = [!entityIdParam && entityFilters.length > 0, statusFilter !== ALL].filter(Boolean).length;
@@ -107,7 +128,10 @@ const CompanyList = () => {
       byParent.get(key).push(c);
     });
 
-    const rootList = allCompanies.filter((c) => c.parent_business_unit_id == null);
+    // Newest first (ids are sequential) — a just-created BU/Sub-BU lands at the top of page 1.
+    const newestFirst = (a, b) => Number(b.id) - Number(a.id);
+    byParent.forEach((list) => list.sort(newestFirst));
+    const rootList = allCompanies.filter((c) => c.parent_business_unit_id == null).sort(newestFirst);
     let matchedCount = 0;
     const visibleRoots = rootList
       .map((root) => {
@@ -116,7 +140,7 @@ const CompanyList = () => {
         const rootMatches = passesOwn(root);
         if (!rootMatches && matchedChildren.length === 0) return null;
         matchedCount += (rootMatches ? 1 : 0) + matchedChildren.length;
-        return { root, children: rootMatches ? children : matchedChildren, childMatched: !rootMatches && matchedChildren.length > 0 };
+        return { root, children: matchedChildren, childMatched: !rootMatches && matchedChildren.length > 0 };
       })
       .filter(Boolean);
 
@@ -133,6 +157,30 @@ const CompanyList = () => {
     });
   };
   const isExpanded = (id, childMatched) => expandedIds.has(String(id)) || (debouncedSearch.trim().length > 0 && childMatched);
+
+  // Mobile-only reorder of `roots` per `sortOption` — see SORT_OPTIONS' own comment.
+  const mobileRoots = useMemo(() => {
+    const byName = (a, b) => (a.root.company_name ?? '').localeCompare(b.root.company_name ?? '');
+    const sorted = [...roots];
+    if (sortOption === 'newest') return sorted; // `roots` is already newest-first
+    if (sortOption === 'name_desc') sorted.sort((a, b) => byName(b, a));
+    else if (sortOption === 'status_active_first') sorted.sort((a, b) => Number(b.root.status === 'active') - Number(a.root.status === 'active') || byName(a, b));
+    else if (sortOption === 'status_inactive_first') sorted.sort((a, b) => Number(a.root.status === 'active') - Number(b.root.status === 'active') || byName(a, b));
+    else sorted.sort(byName); // 'name_asc' (default)
+    return sorted;
+  }, [roots, sortOption]);
+
+  const totalRoots = roots.length;
+  const totalPages = Math.max(1, Math.ceil(totalRoots / limit));
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * limit;
+  const pagedRoots = useMemo(() => roots.slice(pageStart, pageStart + limit), [roots, pageStart, limit]);
+  const pagedMobileRoots = useMemo(() => mobileRoots.slice(pageStart, pageStart + limit), [mobileRoots, pageStart, limit]);
+
+  // Back to page 1 whenever what's being listed changes.
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, statusFilter, entityFilters, entityIdParam, sortOption, limit]);
 
   const goToAddBu = () => navigate(entityIdParam ? `${ROUTES.COMPANY_NEW}?entity_id=${entityIdParam}` : ROUTES.COMPANY_NEW);
   const goToAddSubBu = (parentId) => navigate(`${ROUTES.COMPANY_NEW}?parent_business_unit_id=${parentId}`);
@@ -207,7 +255,9 @@ const CompanyList = () => {
     return (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" aria-label="Actions" onClick={(e) => e.stopPropagation()}>
+          {/* h-10 w-10 (40px) — minimum comfortable touch target, not the h-8 (32px) icon-button
+              size used elsewhere in this app for denser desktop UI. */}
+          <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0" aria-label="Actions" onClick={(e) => e.stopPropagation()}>
             <MoreVertical className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
@@ -271,19 +321,56 @@ const CompanyList = () => {
         }
       />
 
+      {/* A failed fetch previously showed nothing distinguishable from an empty or still-loading
+          list (no isError was even read from useCompanies) — surfaced explicitly here, same
+          convention as EmployeeRejectedEntries.jsx, with a Retry since this is a full master list
+          rather than a small scoped widget. */}
+      {isError && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+          <span>Unable to load Business Units. Please try again.</span>
+          <Button size="sm" variant="outline" onClick={() => refetch()}>Retry</Button>
+        </div>
+      )}
+
       <div className="flex flex-col gap-2 md:hidden">
         <p className="text-sm text-muted-foreground">
-          {totalMatched} business unit{totalMatched === 1 ? '' : 's'}
+          {totalMatched} Business Unit{totalMatched === 1 ? '' : 's'}
         </p>
         <SearchInput
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search BUs…"
+          placeholder="Search Business Units…"
           className="w-full"
           inputClassName="h-10 bg-white"
         />
-        <div className="flex items-center justify-between gap-2">
-          <FilterToggleButton isOpen={filtersOpen} onToggle={() => setFiltersOpen((prev) => !prev)} activeCount={activeFilterCount} />
+        {/* Filters opens FilterPanel's own mobile bottom sheet (unchanged, see FilterPanel.jsx) —
+            Sort is purely client-side (SORT_OPTIONS/mobileRoots above), so it's a plain dropdown,
+            not a second sheet. Equal-width side by side, matching the reference layout. */}
+        <div className="flex items-center gap-2">
+          <FilterToggleButton
+            isOpen={filtersOpen}
+            onToggle={() => setFiltersOpen((prev) => !prev)}
+            activeCount={activeFilterCount}
+            className="flex-1 justify-center"
+          />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="toolbar" variant="default" className="flex-1 justify-center">
+                <ArrowUpDown />
+                Sort
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Sort by</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {SORT_OPTIONS.map((option) => (
+                <DropdownMenuItem key={option.value} onClick={() => setSortOption(option.value)}>
+                  <Check className={cn('h-4 w-4', sortOption !== option.value && 'invisible')} />
+                  {option.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -319,8 +406,8 @@ const CompanyList = () => {
 
       {/* Desktop — Parent BU rows with their Sub-BUs indented directly beneath, expand/collapse
           per Parent. Plain table (not the shared DataTable) since this is a grouped tree, not a
-          flat paginated grid — see the comment on `params` above for why pagination was dropped
-          in favor of one full fetch. */}
+          flat grid — see the comment on `params` above; it is fetched whole and paginated
+          client-side by Parent BU. */}
       <div className="hidden min-h-0 flex-1 flex-col overflow-hidden rounded-lg border md:flex">
         <div className="flex-1 min-h-0 overflow-auto">
           <table className="w-full text-sm">
@@ -348,8 +435,8 @@ const CompanyList = () => {
                   </td>
                 </tr>
               ) : (
-                roots.map(({ root, children, childMatched }) => {
-                  const hasChildren = (childrenByParent.get(String(root.id))?.length ?? 0) > 0;
+                pagedRoots.map(({ root, children, childMatched }) => {
+                  const hasChildren = children.length > 0;
                   const expanded = isExpanded(root.id, childMatched);
                   return (
                     <Fragment key={root.id}>
@@ -408,74 +495,132 @@ const CompanyList = () => {
         </div>
       </div>
 
-      {/* Mobile — same Parent -> Sub-BU grouping, cards instead of table rows. */}
-      <div className="flex min-h-0 flex-1 flex-col gap-3 md:hidden">
+      {/* Desktop pagination footer — same look as DataTable's. Counts top-level BUs (each with its
+          Sub-BUs) since pagination is by Parent. */}
+      {!isPending && totalRoots > 0 && (
+        <div className="hidden shrink-0 flex-col gap-3 text-sm sm:flex-row sm:items-center sm:justify-between md:flex">
+          <p className="text-[clamp(0.6875rem,0.75vw,0.75rem)] text-muted-foreground">
+            Showing {pageStart + 1}–{Math.min(pageStart + limit, totalRoots)} of {totalRoots} Business Units
+          </p>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <span className="whitespace-nowrap text-[clamp(0.6875rem,0.75vw,0.75rem)] text-muted-foreground">Rows per page</span>
+              <Select value={String(limit)} onValueChange={(v) => setLimit(Number(v))}>
+                <SelectTrigger className="h-[clamp(1.5rem,1.6vw,1.75rem)] w-[clamp(3.25rem,4vw,4rem)] bg-white text-[clamp(0.6875rem,0.75vw,0.75rem)]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[10, 20, 50, 100].map((size) => (
+                    <SelectItem key={size} value={String(size)}>{size}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-1">
+              <Button variant="outline" size="icon-sm" onClick={() => setPage(currentPage - 1)} disabled={currentPage <= 1}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="px-2 text-[clamp(0.6875rem,0.75vw,0.75rem)] text-muted-foreground">
+                {currentPage} / {totalPages}
+              </span>
+              <Button variant="outline" size="icon-sm" onClick={() => setPage(currentPage + 1)} disabled={currentPage >= totalPages}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mobile — same Parent -> Sub-BU grouping and the same underlying data (`roots`/
+          `childrenByParent`/`isExpanded`/`toggleExpanded`/`RowActionsMenu` are all shared with
+          the desktop table above), presented as its own purpose-built card list rather than a
+          shrunk table — see mobileRoots for the one mobile-only addition (client-side Sort).
+          Parent/Sub-BU distinction is indentation + a left accent bar + lighter name weight on
+          the Sub-BU card, not an icon on every row. The "⋮" menu sits on the name row by default;
+          a Parent WITH Sub-BUs needs that spot for its expand/collapse chevron instead, so its
+          "⋮" moves down next to the status badge — same rule both reference examples use. */}
+      <div className="flex min-h-0 flex-1 flex-col gap-2 md:hidden">
+        <p className="shrink-0 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Business Units
+        </p>
         <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
           {isPending ? (
             Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-3 rounded-xl border bg-white p-3 shadow-sm">
-                <Skeleton className="h-10 w-10 shrink-0 rounded-full" />
-                <div className="flex-1 space-y-2">
+              <div key={i} className="flex flex-col gap-2 rounded-xl border bg-white p-3.5 shadow-sm">
+                <div className="flex items-center justify-between gap-2">
                   <Skeleton className="h-4 w-2/3" />
-                  <Skeleton className="h-3 w-1/3" />
+                  <Skeleton className="h-5 w-5 shrink-0 rounded" />
                 </div>
+                <Skeleton className="h-3 w-2/5" />
+                <Skeleton className="h-5 w-16 rounded-full" />
               </div>
             ))
           ) : roots.length === 0 ? (
             <EmptyState title="No records found" description="Try adjusting your search or filters." />
           ) : (
-            roots.map(({ root, children, childMatched }) => {
-              const hasChildren = (childrenByParent.get(String(root.id))?.length ?? 0) > 0;
+            pagedMobileRoots.map(({ root, children, childMatched }) => {
+              const hasChildren = children.length > 0;
               const expanded = isExpanded(root.id, childMatched);
-              const isActive = root.status === 'active';
               return (
-                <div key={root.id} className="overflow-hidden rounded-xl border bg-white shadow-sm">
+                <div key={root.id} className="flex flex-col gap-2">
                   <div
-                    className={cn('flex items-center gap-3 p-3', canManage && 'active:bg-slate-50')}
+                    className={cn('rounded-xl border bg-white p-3.5 shadow-sm', canManage && 'active:bg-slate-50')}
                     onClick={canManage ? () => goToEdit(root.id) : undefined}
                   >
-                    {hasChildren && (
-                      <button type="button" onClick={(e) => { e.stopPropagation(); toggleExpanded(root.id); }} className="flex h-8 w-8 shrink-0 items-center justify-center rounded hover:bg-muted">
-                        {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                      </button>
-                    )}
-                    <Avatar className="h-10 w-10 shrink-0">
-                      <AvatarFallback>{getInitials(root.company_name)}</AvatarFallback>
-                    </Avatar>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-slate-900">{root.company_name}</p>
-                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                        {root.company_code}
-                        {root.entity?.entity_name ? ` · ${root.entity.entity_name}` : ''}
-                        {' · '}
-                        <span className={isActive ? 'text-green-600' : 'text-slate-400'}>{isActive ? 'Active' : 'Inactive'}</span>
+                    <div className="flex items-center justify-between gap-2">
+                      {/* Fallback text so a record with incomplete data never renders as a
+                          blank-looking card — silent empty content reads as a bug, not as "no
+                          name on file". */}
+                      <p className="min-w-0 truncate text-[15px] font-semibold text-slate-900">
+                        {root.company_name || 'Unnamed BU'}
                       </p>
+                      {hasChildren ? (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); toggleExpanded(root.id); }}
+                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md hover:bg-muted"
+                          aria-label={expanded ? 'Collapse Sub-BUs' : 'Expand Sub-BUs'}
+                        >
+                          {expanded ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                        </button>
+                      ) : (
+                        canManage && <RowActionsMenu company={root} isTopLevel />
+                      )}
                     </div>
-                    {canManage && <RowActionsMenu company={root} isTopLevel />}
+                    <p className="mt-1 truncate text-xs text-muted-foreground">
+                      {root.entity?.entity_name || '—'} · {root.company_code || '—'}
+                    </p>
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      <StatusBadge status={root.status} />
+                      {hasChildren && canManage && <RowActionsMenu company={root} isTopLevel />}
+                    </div>
                   </div>
+
                   {hasChildren && expanded && (
-                    <div className="divide-y border-t bg-muted/10">
-                      {children.map((child) => {
-                        const childActive = child.status === 'active';
-                        return (
-                          <div
-                            key={child.id}
-                            className={cn('flex items-center gap-3 p-3 pl-8', canManage && 'active:bg-slate-50')}
-                            onClick={canManage ? () => goToEdit(child.id) : undefined}
-                          >
-                            <Network className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm font-medium text-slate-900">{child.company_name}</p>
-                              <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                                {child.company_code}
-                                {' · '}
-                                <span className={childActive ? 'text-green-600' : 'text-slate-400'}>{childActive ? 'Active' : 'Inactive'}</span>
-                              </p>
-                            </div>
+                    <div className="flex flex-col gap-2 pl-4">
+                      {children.map((child) => (
+                        <div
+                          key={child.id}
+                          className={cn(
+                            'rounded-xl border border-l-[3px] border-l-slate-300 bg-slate-50/70 p-3',
+                            canManage && 'active:bg-slate-100'
+                          )}
+                          onClick={canManage ? () => goToEdit(child.id) : undefined}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="min-w-0 truncate text-sm font-medium text-slate-800">
+                              {child.company_name || 'Unnamed BU'}
+                            </p>
                             {canManage && <RowActionsMenu company={child} isTopLevel={false} />}
                           </div>
-                        );
-                      })}
+                          <p className="mt-1 truncate text-xs text-muted-foreground">
+                            {child.entity?.entity_name || '—'} · {child.company_code || '—'}
+                          </p>
+                          <div className="mt-2">
+                            <StatusBadge status={child.status} />
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -483,6 +628,18 @@ const CompanyList = () => {
             })
           )}
         </div>
+        {!isPending && totalRoots > 0 && (
+          <MobilePagination
+            className="shrink-0"
+            page={currentPage}
+            totalPages={totalPages}
+            total={totalRoots}
+            limit={limit}
+            itemLabel="Business Unit"
+            onPrev={() => setPage(currentPage - 1)}
+            onNext={() => setPage(currentPage + 1)}
+          />
+        )}
       </div>
 
       <ConfirmDialog

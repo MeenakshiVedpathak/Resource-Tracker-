@@ -17,7 +17,8 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 
-// options: [{ label, value }]. value: array of selected values (as strings).
+// options: [{ label, value, depth? }] — `depth` (e.g. 1 for a Sub-BU) indents the row under its
+// parent. value: array of selected values (as strings).
 // lockedValues: values that are always selected and can't be toggled off or cleared — the
 // checkbox renders checked-but-disabled for these (e.g. a role every record must carry).
 export function MultiSelect({
@@ -32,6 +33,41 @@ export function MultiSelect({
   className,
 }) {
   const [open, setOpen] = React.useState(false)
+  const [search, setSearch] = React.useState("")
+  // Parents (depth 0 followed by depth > 0 rows) start collapsed; this tracks the expanded ones.
+  const [expanded, setExpanded] = React.useState(() => new Set())
+
+  // Each row's parent value (the nearest preceding depth-0 option), and which parents have children.
+  const { parentOf, parentsWithChildren } = React.useMemo(() => {
+    const parentOf = new Map()
+    const parentsWithChildren = new Set()
+    let currentParent = null
+    options.forEach((opt) => {
+      if (!opt.depth) {
+        currentParent = String(opt.value)
+      } else if (currentParent != null) {
+        parentOf.set(String(opt.value), currentParent)
+        parentsWithChildren.add(currentParent)
+      }
+    })
+    return { parentOf, parentsWithChildren }
+  }, [options])
+
+  const toggleExpanded = (key) =>
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+
+  // While searching, show every row so a match inside a collapsed parent is still findable.
+  const visibleOptions = React.useMemo(
+    () => (search.trim()
+      ? options
+      : options.filter((opt) => !opt.depth || expanded.has(parentOf.get(String(opt.value))))),
+    [options, expanded, parentOf, search]
+  )
 
   const locked = React.useMemo(() => new Set(lockedValues.map(String)), [lockedValues])
   const selected = React.useMemo(() => new Set(value.map(String)), [value])
@@ -86,7 +122,7 @@ export function MultiSelect({
         </PopoverTrigger>
         <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
           <Command>
-            <CommandInput placeholder={searchPlaceholder} />
+            <CommandInput placeholder={searchPlaceholder} value={search} onValueChange={setSearch} />
             <div className="flex items-center justify-between border-b px-2 py-1.5">
               <button
                 type="button"
@@ -108,8 +144,9 @@ export function MultiSelect({
             <CommandEmpty>{emptyMessage}</CommandEmpty>
             <CommandList>
               <CommandGroup>
-                {options.map((option) => {
+                {visibleOptions.map((option) => {
                   const isSelected = selected.has(String(option.value))
+                  const hasChildren = parentsWithChildren.has(String(option.value))
                   const isLocked = locked.has(String(option.value))
                   return (
                     <CommandItem
@@ -119,8 +156,30 @@ export function MultiSelect({
                       disabled={isLocked}
                       className="gap-2"
                     >
+                      {/* Fixed-width slot on every row (when the list has any hierarchy) so all
+                          checkboxes stay in one vertical line; only parents render a chevron. */}
+                      {parentsWithChildren.size > 0 && (
+                        <span className="-ml-1 flex h-5 w-5 shrink-0 items-center justify-center">
+                          {hasChildren && (
+                            <button
+                              type="button"
+                              aria-label={expanded.has(String(option.value)) ? "Collapse" : "Expand"}
+                              className="rounded p-0.5 text-muted-foreground hover:bg-muted"
+                              onPointerDown={(e) => e.stopPropagation()}
+                              onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleExpanded(String(option.value)) }}
+                            >
+                              <ChevronDown
+                                className={cn("h-3.5 w-3.5 transition-transform", !expanded.has(String(option.value)) && "-rotate-90")}
+                              />
+                            </button>
+                          )}
+                        </span>
+                      )}
                       <Checkbox checked={isSelected} disabled={isLocked} className="pointer-events-none" />
-                      <span className="truncate">{option.label}</span>
+                      <span className="truncate">
+                        {option.depth ? <span className="mr-1 text-muted-foreground">↳</span> : null}
+                        {option.label}
+                      </span>
                     </CommandItem>
                   )
                 })}

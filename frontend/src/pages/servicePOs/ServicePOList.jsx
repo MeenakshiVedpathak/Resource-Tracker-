@@ -27,6 +27,7 @@ import FilterToggleButton from '@/components/common/FilterToggleButton';
 import FilterPanel from '@/components/common/FilterPanel';
 import SearchInput from '@/components/common/SearchInput';
 import BusinessUnitFilter from '@/components/common/BusinessUnitFilter';
+import { toHierarchicalBuOptions } from '@/utils/buHierarchy';
 import EntityFilter from '@/components/common/EntityFilter';
 import ServicePOHierarchyDrawer from './ServicePOHierarchyDrawer';
 import { Button } from '@/components/ui/button';
@@ -195,7 +196,7 @@ const ServicePOList = () => {
     [companiesData, adminEntityFilters]
   );
   const buOptions = useMemo(
-    () => companiesForAdminEntity.map((c) => ({ label: c.company_name, value: String(c.id) })),
+    () => toHierarchicalBuOptions(companiesForAdminEntity),
     [companiesForAdminEntity]
   );
   const [searchParams] = useSearchParams();

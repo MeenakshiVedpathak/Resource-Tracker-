@@ -74,6 +74,19 @@ const buildMonthRange = (startMonth, startYear, endMonth, endYear) => {
 
 const monthKey = (monthNumber, year) => `${year}-${monthNumber}`;
 
+// Light pastel per CALENDAR month (index 0 = January) - the same month always gets the same
+// colour whatever range is picked, and a range wider than 12 months repeats it. Identical to the
+// backend's utils/monthColors.js list so the screen and the Excel export match.
+const MONTH_FILL_HEX = [
+  'DBEAFE', 'FCE7F3', 'DCFCE7', 'FEF3C7', 'EDE9FE', 'CFFAFE',
+  'FFEDD5', 'ECFCCB', 'FFE4E6', 'E0E7FF', 'CCFBF1', 'E2E8F0',
+];
+const monthFillHex = (month) => MONTH_FILL_HEX[(((month - 1) % 12) + 12) % 12];
+// Header cells: the solid pastel with fixed dark text (readable in dark mode too). Body cells: the
+// same colour at ~45% alpha so the page's own light/dark background still shows through.
+const monthHeaderStyle = (month) => ({ backgroundColor: `#${monthFillHex(month)}`, color: '#1e293b' });
+const monthBodyStyle = (month) => ({ backgroundColor: `#${monthFillHex(month)}73` });
+
 const formatHours2dp = (value) => {
   if (value == null || value === '') return '—';
   const n = Number(value);
@@ -376,7 +389,8 @@ const ResourceCostUtilizationReport = () => {
                       <th
                         key={m.key}
                         colSpan={5}
-                        className="border-r border-border bg-primary/10 px-3 py-1.5 text-center text-xs font-semibold text-primary"
+                        style={monthHeaderStyle(m.month)}
+                        className="border-r border-border px-3 py-1.5 text-center text-xs font-semibold"
                       >
                         {m.label}
                       </th>
@@ -411,11 +425,11 @@ const ResourceCostUtilizationReport = () => {
                     </th>
                     {months.map((m) => (
                       <Fragment key={m.key}>
-                        <th className={th('w-[75px] text-right')}>Hours</th>
-                        <th className={th('w-[90px] text-right')}>Logged Hrs</th>
-                        <th className={th('w-[100px] text-right')}>Projection %</th>
-                        <th className={th('w-[100px] text-right')}>Actual %</th>
-                        <th className={th('w-[110px] text-right')}>Contribution</th>
+                        <th style={monthHeaderStyle(m.month)} className={th('w-[75px] text-right')}>Hours</th>
+                        <th style={monthHeaderStyle(m.month)} className={th('w-[90px] text-right')}>Logged Hrs</th>
+                        <th style={monthHeaderStyle(m.month)} className={th('w-[100px] text-right')}>Projection %</th>
+                        <th style={monthHeaderStyle(m.month)} className={th('w-[100px] text-right')}>Actual %</th>
+                        <th style={monthHeaderStyle(m.month)} className={th('w-[110px] text-right')}>Contribution</th>
                       </Fragment>
                     ))}
                   </tr>
@@ -468,11 +482,11 @@ const ResourceCostUtilizationReport = () => {
                           const cell = monthsByKey.get(m.key);
                           return (
                             <Fragment key={m.key}>
-                              <td className={td('text-right tabular-nums')}>{formatHours2dp(cell?.cappedHours)}</td>
-                              <td className={td('text-right tabular-nums')}>{formatHours2dp(cell?.loggedHours)}</td>
-                              <td className={td('text-right tabular-nums')}>{formatPercent2dp(cell?.projectionPercentage)}</td>
-                              <td className={td('text-right tabular-nums')}>{formatPercent2dp(cell?.actualPercentage)}</td>
-                              <td className={td('text-right tabular-nums font-medium')}>
+                              <td style={monthBodyStyle(m.month)} className={td('text-right tabular-nums')}>{formatHours2dp(cell?.cappedHours)}</td>
+                              <td style={monthBodyStyle(m.month)} className={td('text-right tabular-nums')}>{formatHours2dp(cell?.loggedHours)}</td>
+                              <td style={monthBodyStyle(m.month)} className={td('text-right tabular-nums')}>{formatPercent2dp(cell?.projectionPercentage)}</td>
+                              <td style={monthBodyStyle(m.month)} className={td('text-right tabular-nums')}>{formatPercent2dp(cell?.actualPercentage)}</td>
+                              <td style={monthBodyStyle(m.month)} className={td('text-right tabular-nums font-medium')}>
                                 {cell?.contribution != null ? formatCurrency(cell.contribution) : <span className="text-muted-foreground">—</span>}
                               </td>
                             </Fragment>

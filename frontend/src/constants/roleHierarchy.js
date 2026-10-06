@@ -79,7 +79,12 @@ export const getAssignableRoleNames = (actorRoleName) => ROLE_CREATION_MATRIX[ac
 // Team Lead are, but meant to be strictly view-only. That's governed by its own `permission` field
 // on the Role Master (see RoleForm.jsx), the same "Read" mechanism the baseline Employee role
 // above already relies on — not anything hardcoded here.
-export const DELIVERY_OPERATION_TEAM_MEMBERS_ROLE_NAME = 'Delivery Operation Team Members';
+// Renamed via Role Master from "Delivery Operation Team Members" to "Delivery Ops" (2026-10) —
+// same precedent as SERVICE_PO_ADMIN above: every place that needs this role (just
+// ADDITIONAL_ROLE_NAMES below) reads it through this one constant rather than a literal string,
+// so this is the only line that had to change — but the value here must always match GET /roles'
+// current `role_name` verbatim, or that comparison silently stops matching again.
+export const DELIVERY_OPS_ROLE_NAME = 'Delivery Ops';
 
 // Multi-role support: a user's primary role (drives hierarchy tier/scoping) can carry these
 // additional operational roles on top, purely additive permissions. Senior tiers (Platform
@@ -87,7 +92,7 @@ export const DELIVERY_OPERATION_TEAM_MEMBERS_ROLE_NAME = 'Delivery Operation Tea
 // backend 400s if one is sent as an additional role, so this list must stay in sync with it.
 export const ADDITIONAL_ROLE_NAMES = [
   ROLE_NAMES.PROJECT_ADMIN, ROLE_NAMES.SERVICE_PO_ADMIN, ROLE_NAMES.TEAM_LEAD,
-  ROLE_NAMES.HR, ROLE_NAMES.EMPLOYEE, DELIVERY_OPERATION_TEAM_MEMBERS_ROLE_NAME,
+  ROLE_NAMES.HR, ROLE_NAMES.EMPLOYEE, DELIVERY_OPS_ROLE_NAME,
 ];
 
 // The tiers that can only ever be a primary role, never additional — a user can hold at most

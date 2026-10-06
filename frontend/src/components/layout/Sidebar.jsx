@@ -84,8 +84,8 @@ const buildNavGroups = (accessibleForms, { isSuperAdmin, canWrite, canManageBus,
             return null;
           }
           // The quick-add "+" has to obey whatever permission its destination route does.
-          // Baseline: a role whose own permission is Read-only (e.g. Delivery Operation Team
-          // Members, which only gets Client Master for visibility) must never get a create
+          // Baseline: a role whose own permission is Read-only (e.g. Delivery Ops, which only
+          // gets Client Master for visibility) must never get a create
           // shortcut, no matter which form it is — the list page's own "Add" button already
           // hides itself the same way (useCanWrite), the sidebar just wasn't checking it.
           // On top of that, three forms differ by role beyond plain read/write: BU Master
