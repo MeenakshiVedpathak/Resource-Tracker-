@@ -17,6 +17,7 @@ import { NO_COMPANY_ROLES, ROLE_NAMES } from '@/constants/roleHierarchy';
 import { downloadServicePoSample } from '@/utils/servicePoSample';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useMasterBuFilter } from '@/hooks/useMasterBuFilter';
+import { dedupeBusinessUnitIds } from '@/components/common/HierarchicalBuSelector';
 import { buildPath, ROUTES } from '@/constants/routes';
 import { formatCurrency, formatDate, getInitials } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
@@ -212,6 +213,19 @@ const ServicePOList = () => {
   const [typeFilter, setTypeFilter] = useState('all');
   const [poFilter, setPoFilter] = useState(servicePoIdParam || 'all');
   const [buFilters, setBuFilters] = useState([]);
+  // Sending a Parent BU id together with one of its own Sub-BU ids makes the backend resolve the
+  // Parent back to "itself + every child", silently re-widening the result right back to the whole
+  // Parent (confirmed live: checking "DATA + AI" + its "DASS" Sub-BU still returned other Sub-BUs
+  // like "NON IBM"). The admin-only picker above is a plain flat MultiSelect with no parent/child
+  // exclusivity of its own (unlike BusinessUnitFilter's non-Admin path, which already strips this),
+  // so the same dedupe every other hierarchical BU picker in this app applies (see
+  // HierarchicalBuSelector.jsx) is applied here too, right at the boundary where the raw selection
+  // becomes the `businessUnitIds` request param — never on `buFilters` itself, so the checkboxes
+  // still show both rows checked exactly as picked.
+  const dedupedBuFilters = useMemo(
+    () => dedupeBusinessUnitIds(buFilters, buOptions),
+    [buFilters, buOptions]
+  );
   const [filtersOpen, setFiltersOpen] = useState(!!categoryIdParam || !!servicePoIdParam);
   const [exporting, setExporting] = useState(false);
   const [hierarchyTarget, setHierarchyTarget] = useState(null);
@@ -252,7 +266,7 @@ const ServicePOList = () => {
     // just above via useMasterBuFilter — GET /service-pos already supports both independently, so
     // Entity alone now filters across every BU under it instead of requiring a BU pick too.
     ...(isAdminActor && adminEntityFilters.length > 0 && { entityIds: adminEntityFilters.join(',') }),
-    ...(isAdminActor && buFilters.length > 0 && { businessUnitIds: buFilters.join(',') }),
+    ...(isAdminActor && dedupedBuFilters.length > 0 && { businessUnitIds: dedupedBuFilters.join(',') }),
     ...(sorting[0] && { sortBy: sorting[0].id, sortOrder: sorting[0].desc ? 'desc' : 'asc' }),
   };
 

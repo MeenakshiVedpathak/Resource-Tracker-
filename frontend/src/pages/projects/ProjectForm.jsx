@@ -75,6 +75,12 @@ const ProjectForm = () => {
   //       pick is authoritative and the Client lookup below is skipped entirely.
   const { isCrossBu, canFilter, units } = useSelectableBusinessUnits();
   const showBuSelector = !isCrossBu && canFilter;
+  // A cross-BU login (Admin/Entity Admin/Platform Admin) never picks a BU on create — their own
+  // Projects are always BU-less — but an EXISTING Project they're now editing can already carry a
+  // BU (assigned by whoever actually created it, a BU-scoped Admin/PM). That BU shouldn't become
+  // invisible/unreassignable just because this login type isn't normally asked for one — so the
+  // field reappears, pre-filled, whenever the record being edited already has one.
+  const showBuField = showBuSelector || (isCrossBu && isEdit && project?.company_id != null);
   const { childrenOf } = useBuHierarchy(units);
 
   const form = useForm({
@@ -103,18 +109,18 @@ const ProjectForm = () => {
   const effectiveBuId = selectedSubBuId || selectedBuId;
   const { data: scopedClients, isPending: isLoadingScopedClients } = useClients(
     { buId: effectiveBuId, status: 'active', limit: 200 },
-    { enabled: showBuSelector && !!effectiveBuId }
+    { enabled: showBuField && !!effectiveBuId }
   );
 
-  const clientOptions = (showBuSelector ? (scopedClients?.data ?? []) : activeClients)
+  const clientOptions = (showBuField ? (scopedClients?.data ?? []) : activeClients)
     .map((c) => ({ value: String(c.id), label: c.client_name }));
-  const clientsLoading = showBuSelector ? isLoadingScopedClients : isLoadingClients;
-  const clientDisabled = showBuSelector ? (!effectiveBuId || clientsLoading) : clientsLoading;
+  const clientsLoading = showBuField ? isLoadingScopedClients : isLoadingClients;
+  const clientDisabled = showBuField ? (!effectiveBuId || clientsLoading) : clientsLoading;
 
   // The selected root BU's own Sub-BUs — recomputed live, never off a snapshot, so switching
   // roots immediately shows (or hides) the right Sub-BU list.
   const subBuOptions = childrenOf(selectedBuId).map((u) => ({ value: String(u.id), label: u.name }));
-  const showSubBuField = showBuSelector && subBuOptions.length > 0;
+  const showSubBuField = showBuField && subBuOptions.length > 0;
 
   useEffect(() => {
     if (project && isEdit) {
@@ -145,7 +151,7 @@ const ProjectForm = () => {
   // globally-active X-Company-Id — for a multi-BU login that is a coin flip between their BUs,
   // which is why they are now asked outright.
   const onSubmit = async (values) => {
-    if (showBuSelector && !values.company_id) {
+    if (showBuField && !values.company_id) {
       form.setError('company_id', { message: 'Business Unit is required.' });
       return;
     }
@@ -159,7 +165,7 @@ const ProjectForm = () => {
       Object.entries(values).filter(([, v]) => v !== '' && v != null)
     );
 
-    if (showBuSelector) {
+    if (showBuField) {
       // A chosen Sub-BU overrides the root — the backend only ever sees ONE BU id, whichever is
       // the most specific one actually picked.
       clean.company_id = Number(clean.sub_business_unit_id || clean.company_id);
@@ -225,7 +231,7 @@ const ProjectForm = () => {
                   <div className="grid grid-cols-1 gap-4">
                     {/* Only for BU-scoped logins with more than one BU. Everyone else inherits
                         the BU from the selected Client (see onSubmit). */}
-                    {showBuSelector && (
+                    {showBuField && (
                       <FormField
                         control={form.control}
                         name="company_id"
@@ -303,7 +309,7 @@ const ProjectForm = () => {
                             value={field.value}
                             onValueChange={(val) => field.onChange(val ? parseInt(val, 10) : undefined)}
                             disabled={clientDisabled}
-                            placeholder={showBuSelector && !effectiveBuId ? 'Select a business unit first' : 'Select client'}
+                            placeholder={showBuField && !effectiveBuId ? 'Select a business unit first' : 'Select client'}
                             searchPlaceholder="Search client..."
                             className="h-8 text-sm"
                           />

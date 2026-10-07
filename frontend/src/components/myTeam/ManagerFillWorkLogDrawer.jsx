@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import dayjs from 'dayjs';
 import { Save, Trash2, X } from 'lucide-react';
 import { useEmployeeMonthlyWorkLog, useSaveEmployeeMonthlyWorkLog, useDeleteEmployeeMonthlyWorkLog } from '@/hooks/useMyTeam';
+import { useEmployeeMappedProjects } from '@/hooks/useEmployeeProjects';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import { QUERY_KEYS } from '@/constants/queryKeys';
@@ -81,9 +82,20 @@ const ManagerFillWorkLogDrawer = ({ employee, monthYear: initialMonthYear, open,
     error: workLogError,
   } = useEmployeeMonthlyWorkLog(employeeId, monthYear, { enabled: open && !!employeeId && !!monthYear });
 
+  // `workLog.service_pos` is the Employee's own full mapped list — a PM mapped to only some of an
+  // Employee's Service POs must still only be able to log hours against the ones THEY are also
+  // mapped to (the overlap), not every Service PO the Employee happens to be on. The backend has
+  // no such intersection endpoint, so it's resolved here against the actor's own mapped projects
+  // (same "my mapped Service POs" source WorkLogEntryModal uses for an Employee's own entries).
+  const { data: myProjects = [] } = useEmployeeMappedProjects();
+  const myProjectIds = useMemo(() => new Set(myProjects.map((p) => String(p.id))), [myProjects]);
+
   const availablePOs = useMemo(
-    () => (workLog?.service_pos ?? []).filter(isTopLevelServicePO).map(normalizePO),
-    [workLog],
+    () => (workLog?.service_pos ?? [])
+      .filter(isTopLevelServicePO)
+      .map(normalizePO)
+      .filter((po) => myProjectIds.has(po.id)),
+    [workLog, myProjectIds],
   );
 
   const hadExistingEntries = availablePOs.some((po) => po.existingHours > 0 || po.existingDescription);

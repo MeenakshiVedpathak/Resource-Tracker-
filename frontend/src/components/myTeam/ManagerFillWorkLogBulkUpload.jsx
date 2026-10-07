@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import * as XLSX from 'xlsx';
-import { UploadCloud, FileSpreadsheet, X, CheckCircle2, AlertCircle, AlertTriangle, XCircle, BadgeCheck } from 'lucide-react';
+import { UploadCloud, FileSpreadsheet, X, CheckCircle2, AlertCircle, AlertTriangle, XCircle, BadgeCheck, Download } from 'lucide-react';
 import { useImportMyTeamMonthlyWorkLog } from '@/hooks/useMyTeam';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
@@ -23,7 +23,7 @@ const REQUIRED_COLUMNS = ['Employee Code', 'Employee Name', 'Service PO Name', '
 // even reaches the ownership/service_po checks.
 const PHASE_HEADING = {
   format: 'Fix these formatting issues and re-upload',
-  ownership: 'You are not the Primary Manager for these employees',
+  ownership: 'Some employees could not be validated',
   service_po: "These Service POs aren't mapped to the employee in that row",
 };
 
@@ -41,12 +41,30 @@ export const downloadTemplate = () => {
   XLSX.writeFile(wb, 'log_work_for_my_team_template.xlsx');
 };
 
+// Local to this component's own result screen — one-off export of the backend's `skipped[]` rows,
+// not reused anywhere else.
+const downloadSkippedRows = (skipped) => {
+  const header = ['Row', 'Employee Code', 'Employee Name', 'Service PO', 'Reason'];
+  const rows = skipped.map((row, idx) => [
+    row.row ?? idx + 1,
+    row.employee_code ?? '',
+    row.employee_name ?? '',
+    row.service_po_name ?? row.service_po ?? '',
+    row.reason ?? '',
+  ]);
+  const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
+  ws['!cols'] = [{ wch: 8 }, { wch: 16 }, { wch: 22 }, { wch: 28 }, { wch: 40 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Skipped Rows');
+  XLSX.writeFile(wb, 'skipped_rows.xlsx');
+};
+
 // Bulk Upload mode of "Log Work for My Team" — one file covering many Employees at once, as an
 // alternative to the per-Employee drawer (Manual Entry mode). Month/Year is NOT picked here; it's
 // the same value selected at the top of the screen (see ManagerFillWorkLog.jsx), passed down as
 // props so both modes always act on the same period.
 const ManagerFillWorkLogBulkUpload = ({ monthYear, monthLabel }) => {
-  const { error: showError } = useNotification();
+  const { error: showError, success: showSuccess, warning: showWarning } = useNotification();
   const [selectedFile, setSelectedFile] = useState(null);
   const [result, setResult] = useState(null);
 
@@ -88,7 +106,15 @@ const ManagerFillWorkLogBulkUpload = ({ monthYear, monthLabel }) => {
     importMutation.mutate(
       { file: selectedFile, month: monthYear.month, year: monthYear.year },
       {
-        onSuccess: (data) => setResult({ type: 'success', data: data?.data ?? data }),
+        onSuccess: (data) => {
+          const payload = data?.data ?? data;
+          setResult({ type: 'success', data: payload });
+          if (payload?.warning) {
+            showWarning(payload?.message ?? 'Imported with warnings — some rows were skipped.');
+          } else {
+            showSuccess(payload?.message ?? 'Work log imported successfully.');
+          }
+        },
         onError: (err) => {
           const body = err.response?.data;
           if (err.response?.status === 422 && body?.success === false && Array.isArray(body?.errors)) {
@@ -131,10 +157,14 @@ const ManagerFillWorkLogBulkUpload = ({ monthYear, monthLabel }) => {
             ))}{' '}<strong>Description</strong> is optional.
           </p>
           <p className="mt-2 text-xs text-muted-foreground">
-            Every <strong>Employee Code</strong> must belong to an Employee you are the{' '}
-            <strong>Primary</strong> Manager of — Secondary-mapped Employees aren&apos;t accepted here.
-            Every <strong>Service PO Name</strong> must be one that Employee is actively mapped to
-            (the Service PO itself, not a Parent/Child hierarchy node under it).
+            You can upload for employees you are the <strong>Primary Manager</strong> of, and for
+            employees mapped to Service POs where you are the <strong>Project Manager</strong>{' '}
+            (only those POs&apos; rows are imported; other rows are skipped with a warning).{' '}
+            <strong>BU Admins</strong> can upload for any employee in their Business Unit(s).
+          </p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            For Project Manager imports, only rows for their own POs are replaced; hours from the
+            employee&apos;s other POs remain safe.
           </p>
           <p className="mt-2 text-xs text-muted-foreground">
             A single invalid row rejects the entire file — nothing is saved partially. Entries that
@@ -205,12 +235,28 @@ const ManagerFillWorkLogBulkUpload = ({ monthYear, monthLabel }) => {
         const employeesProcessed = result.data?.employees_processed ?? 0;
         const failures = Array.isArray(result.data?.failures) ? result.data.failures : [];
         const hasFailures = employeesFailed > 0;
+        // New fields (rows_skipped/skipped[]/warning) cover a different axis than
+        // employees_failed/failures above: a Project Manager's upload can partially succeed per
+        // ROW (only that PM's own Service PO rows are imported; everyone else's rows in the same
+        // file are skipped with a reason) rather than failing a whole Employee outright.
+        const rowsSkipped = result.data?.rows_skipped ?? 0;
+        const skipped = Array.isArray(result.data?.skipped) ? result.data.skipped : [];
+        const hasRowsSkipped = rowsSkipped > 0;
+        const totalRows = result.data?.total_rows ?? 0;
+        // Every row in the file got skipped — nothing was actually saved, so the normal
+        // success/failure badge (which talks about employees updated) would be misleading here.
+        const allRowsSkipped = hasRowsSkipped && employeesProcessed === 0;
 
         return (
           <>
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex flex-wrap items-center gap-3">
-                {hasFailures ? (
+                {allRowsSkipped ? (
+                  <Badge variant="warning" className="gap-1.5">
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    No rows were imported
+                  </Badge>
+                ) : hasFailures ? (
                   <Badge variant="warning" className="gap-1.5">
                     <AlertTriangle className="h-3.5 w-3.5" />
                     {employeesProcessed} of {employeesProcessed + employeesFailed} employees imported successfully, {employeesFailed} failed
@@ -218,7 +264,13 @@ const ManagerFillWorkLogBulkUpload = ({ monthYear, monthLabel }) => {
                 ) : (
                   <Badge className="gap-1.5 bg-green-100 text-green-700 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400">
                     <CheckCircle2 className="h-3.5 w-3.5" />
-                    {employeesProcessed} employees updated, {result.data?.total_rows ?? 0} entries saved and approved
+                    {employeesProcessed} employees updated, {totalRows} entries saved and approved
+                  </Badge>
+                )}
+                {!allRowsSkipped && hasRowsSkipped && (
+                  <Badge variant="warning" className="gap-1.5">
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    Imported with warnings
                   </Badge>
                 )}
               </div>
@@ -227,10 +279,70 @@ const ManagerFillWorkLogBulkUpload = ({ monthYear, monthLabel }) => {
               </Button>
             </div>
 
-            <div className="flex items-center gap-2 rounded-md border border-success/30 bg-success/10 px-3 py-2 text-xs font-medium text-success">
-              <BadgeCheck className="h-3.5 w-3.5 shrink-0" />
-              Every entry from this file is approved immediately — no employee approval needed.
-            </div>
+            {!allRowsSkipped && hasRowsSkipped && (
+              <p className="text-xs text-muted-foreground">
+                {totalRows} entries saved, {rowsSkipped} rows skipped.
+              </p>
+            )}
+
+            {!allRowsSkipped && (
+              <div className="flex items-center gap-2 rounded-md border border-success/30 bg-success/10 px-3 py-2 text-xs font-medium text-success">
+                <BadgeCheck className="h-3.5 w-3.5 shrink-0" />
+                Every entry from this file is approved immediately — no employee approval needed.
+              </div>
+            )}
+
+            {hasRowsSkipped && (
+              <Card className="border-warning/40">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-sm text-warning">
+                    <AlertTriangle className="h-4 w-4" />
+                    {rowsSkipped} row(s) skipped
+                  </CardTitle>
+                  <CardDescription>
+                    These rows weren&apos;t imported — see the reason for each below. Everything
+                    else in this file was saved and approved.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="overflow-auto max-h-[400px]">
+                    <Table>
+                      <TableHeader className="sticky top-0 z-10 bg-slate-50 dark:bg-slate-900 shadow-sm">
+                        <TableRow className="bg-warning/5">
+                          <TableHead className="w-20">Row</TableHead>
+                          <TableHead>Employee</TableHead>
+                          <TableHead>Service PO</TableHead>
+                          <TableHead>Reason</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {skipped.map((row, idx) => (
+                          <TableRow key={idx} className="hover:bg-warning/5 align-top">
+                            <TableCell className="font-mono text-xs text-muted-foreground">{row.row ?? idx + 1}</TableCell>
+                            <TableCell className="text-sm">
+                              <div className="font-medium">{row.employee_code ?? '—'}</div>
+                              <div className="text-xs text-muted-foreground">{row.employee_name ?? ''}</div>
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">{row.service_po_name ?? row.service_po ?? '—'}</TableCell>
+                            <TableCell className="text-sm text-warning">
+                              <span className="flex items-start gap-1.5">
+                                <XCircle className="mt-0.5 h-3 w-3 shrink-0" />
+                                <span>{row.reason ?? 'Unknown reason'}</span>
+                              </span>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+                <CardContent className="flex justify-end pt-0">
+                  <Button variant="outline" size="sm" onClick={() => downloadSkippedRows(skipped)}>
+                    <Download className="mr-1.5 h-3.5 w-3.5" /> Download skipped rows
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
 
             {hasFailures && (
               <Card className="border-warning/40">

@@ -73,6 +73,12 @@ const ClientForm = () => {
   const { childrenOf } = useBuHierarchy(units);
 
   const { data: client, isPending: isLoadingClient } = useClient(id);
+  // A cross-BU login (Admin/Entity Admin/Platform Admin) never picks a BU on create — their own
+  // Clients are always BU-less — but an EXISTING Client they're now editing can already carry a BU
+  // (assigned by whoever actually created it, a BU-scoped BU Admin/BU Head). That BU shouldn't
+  // become invisible/unreassignable just because this login type isn't normally asked for one — so
+  // the field reappears, pre-filled, whenever the record being edited already has one.
+  const showBuField = showBuSelector || (isCrossBu && isEdit && client?.company_id != null);
   const createMutation = useCreateClient();
   const updateMutation = useUpdateClient(id);
 
@@ -116,7 +122,7 @@ const ClientForm = () => {
 
   const onSubmit = (values) => {
     // Multi-BU BU Admin/BU Head must pick a BU before saving.
-    if (showBuSelector && !values.company_id) {
+    if (showBuField && !values.company_id) {
       form.setError('company_id', { message: 'Business Unit is required.' });
       return;
     }
@@ -201,7 +207,7 @@ const ClientForm = () => {
                     {/* BU selector — only for BU-scoped logins with more than one BU.
                         Admin/Entity Admin always create BU-less clients (no field sent);
                         single-BU logins rely on the X-Company-Id header the interceptor sends. */}
-                    {showBuSelector && (
+                    {showBuField && (
                       <FormField
                         control={form.control}
                         name="company_id"
@@ -235,7 +241,7 @@ const ClientForm = () => {
                     {/* Mandatory, not optional, once the picked BU actually has Sub-BUs — its own
                         sibling field (not nested inside the BU field above) so it renders in its
                         own slot rather than stretching the BU field's own layout. */}
-                    {showBuSelector && showSubBuField && (
+                    {showBuField && showSubBuField && (
                       <FormField
                         control={form.control}
                         name="sub_business_unit_id"

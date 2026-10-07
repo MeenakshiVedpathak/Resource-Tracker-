@@ -15,9 +15,13 @@ export const toHierarchicalBuOptions = (companies = []) => {
       roots.push(c);
     }
   });
-  const toOption = (c, depth) => ({ label: c.company_name, value: String(c.id), depth });
+  // `id`/`parentId` (alongside the `value`/`label`/`depth` MultiSelect itself reads) let this same
+  // options array double as the `options` argument to dedupeBusinessUnitIds (see
+  // HierarchicalBuSelector.jsx) — the Parent-vs-Sub-BU dedup every other hierarchical BU picker in
+  // this app already applies at its own request-param boundary.
+  const toOption = (c, depth, parentId) => ({ label: c.company_name, value: String(c.id), id: String(c.id), parentId, depth });
   return roots.flatMap((root) => [
-    toOption(root, 0),
-    ...(childrenByParent.get(String(root.id)) ?? []).map((child) => toOption(child, 1)),
+    toOption(root, 0, null),
+    ...(childrenByParent.get(String(root.id)) ?? []).map((child) => toOption(child, 1, String(root.id))),
   ]);
 };
