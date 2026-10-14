@@ -1,4 +1,4 @@
-﻿import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import * as XLSX from 'xlsx';
 import { createColumnHelper } from '@tanstack/react-table';
 import { ChevronDown, ChevronUp, ChevronsUpDown, Download } from 'lucide-react';
@@ -85,7 +85,7 @@ const SortableHeader = ({ label, column, sortBy, sortOrder, onSort, align }) => 
   );
 };
 
-const getColumns = (sortBy, sortOrder, onSort) => [
+const getColumns = (sortBy, sortOrder, onSort, { hasOrigBenchHours, hasOrigTotalHours, hasOrigBenchPct } = {}) => [
   columnHelper.accessor('employee_code', {
     header: 'Employee Code',
     size: 150,
@@ -111,6 +111,19 @@ const getColumns = (sortBy, sortOrder, onSort) => [
     enableSorting: false,
     cell: (info) => <span className="tabular-nums">{formatHours(info.getValue())}</span>,
   }),
+  ...(hasOrigBenchHours ? [
+    columnHelper.accessor('original_bench_hours', {
+      header: 'Original Bench Hours',
+      size: 160,
+      meta: { align: 'right' },
+      enableSorting: false,
+      cell: (info) => {
+        const value = info.getValue();
+        if (value == null || value === '') return <span className="text-muted-foreground">—</span>;
+        return <span className="tabular-nums text-muted-foreground">{formatHours(value)}</span>;
+      },
+    }),
+  ] : []),
   columnHelper.accessor('total_hours', {
     header: () => (
       <SortableHeader label="Total Hours" column="total_hours" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} align="right" />
@@ -120,6 +133,19 @@ const getColumns = (sortBy, sortOrder, onSort) => [
     enableSorting: false,
     cell: (info) => <span className="tabular-nums">{formatHours(info.getValue())}</span>,
   }),
+  ...(hasOrigTotalHours ? [
+    columnHelper.accessor('original_total_hours', {
+      header: 'Original Total Hours',
+      size: 160,
+      meta: { align: 'right' },
+      enableSorting: false,
+      cell: (info) => {
+        const value = info.getValue();
+        if (value == null || value === '') return <span className="text-muted-foreground">—</span>;
+        return <span className="tabular-nums text-muted-foreground">{formatHours(value)}</span>;
+      },
+    }),
+  ] : []),
   columnHelper.accessor('bench_pct', {
     header: () => (
       <SortableHeader label="Bench %" column="bench_pct" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} align="right" />
@@ -129,16 +155,45 @@ const getColumns = (sortBy, sortOrder, onSort) => [
     enableSorting: false,
     cell: (info) => <BenchPctBadge value={info.getValue()} />,
   }),
+  ...(hasOrigBenchPct ? [
+    columnHelper.accessor('original_bench_pct', {
+      header: 'Original Bench %',
+      size: 150,
+      meta: { align: 'right' },
+      enableSorting: false,
+      cell: (info) => {
+        const value = info.getValue();
+        if (value == null || value === '') return <span className="text-muted-foreground">—</span>;
+        return <BenchPctBadge value={value} />;
+      },
+    }),
+  ] : []),
 ];
 
 const exportToExcel = (rows) => {
-  const header = ['Employee Code', 'Full Name', 'Bench Hours', 'Total Hours', 'Bench %'];
+  const hasOrigBenchHours = rows.some((r) => r.original_bench_hours != null);
+  const hasOrigTotalHours = rows.some((r) => r.original_total_hours != null);
+  const hasOrigBenchPct = rows.some((r) => r.original_bench_pct != null);
+
+  const header = [
+    'Employee Code',
+    'Full Name',
+    'Bench Hours',
+    ...(hasOrigBenchHours ? ['Original Bench Hours'] : []),
+    'Total Hours',
+    ...(hasOrigTotalHours ? ['Original Total Hours'] : []),
+    'Bench %',
+    ...(hasOrigBenchPct ? ['Original Bench %'] : []),
+  ];
   const dataRows = rows.map((r) => [
     r.employee_code ?? '',
     r.full_name ?? '',
     r.bench_hours != null ? Number(r.bench_hours) : '',
+    ...(hasOrigBenchHours ? [r.original_bench_hours != null ? Number(r.original_bench_hours) : ''] : []),
     r.total_hours != null ? Number(r.total_hours) : '',
+    ...(hasOrigTotalHours ? [r.original_total_hours != null ? Number(r.original_total_hours) : ''] : []),
     r.bench_pct != null ? Number(r.bench_pct) : '',
+    ...(hasOrigBenchPct ? [r.original_bench_pct != null ? Number(r.original_bench_pct) : ''] : []),
   ]);
   const ws = XLSX.utils.aoa_to_sheet([header, ...dataRows]);
   const wb = XLSX.utils.book_new();
@@ -214,9 +269,18 @@ const EmployeeBenchPercentage = () => {
   const pagedRecords = filteredRecords.slice((page - 1) * limit, page * limit);
   const showLoading = periodReady && isPending;
 
+  const hasOrigBenchHours = useMemo(() => records.some((r) => r.original_bench_hours != null), [records]);
+  const hasOrigTotalHours = useMemo(() => records.some((r) => r.original_total_hours != null), [records]);
+  const hasOrigBenchPct = useMemo(() => records.some((r) => r.original_bench_pct != null), [records]);
+
   const avgBenchPct =
     filteredRecords.length > 0
       ? filteredRecords.reduce((sum, r) => sum + (Number(r.bench_pct) || 0), 0) / filteredRecords.length
+      : null;
+
+  const avgOrigBenchPct =
+    hasOrigBenchPct && filteredRecords.length > 0
+      ? filteredRecords.reduce((sum, r) => sum + (Number(r.original_bench_pct) || 0), 0) / filteredRecords.length
       : null;
 
   const activeFilterCount = [
@@ -254,7 +318,13 @@ const EmployeeBenchPercentage = () => {
   // Already have the full matching set in memory — no need for a second network round-trip.
   const handleExport = () => exportToExcel(filteredRecords);
 
-  const columns = getColumns(sortBy, sortOrder, handleSort);
+  const columns = useMemo(() => {
+    return getColumns(sortBy, sortOrder, handleSort, {
+      hasOrigBenchHours,
+      hasOrigTotalHours,
+      hasOrigBenchPct,
+    });
+  }, [sortBy, sortOrder, hasOrigBenchHours, hasOrigTotalHours, hasOrigBenchPct]);
 
   return (
     <div className="flex h-full min-h-0 flex-col">

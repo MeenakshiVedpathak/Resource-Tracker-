@@ -24,7 +24,7 @@ import MonthSelector from '@/components/employee/MonthSelector';
 import WorkLogDaySummary from '@/components/employee/WorkLogDaySummary';
 import WorkLogEntryTable from '@/components/employee/WorkLogEntryTable';
 import OffDayRequestPanel from '@/components/employee/OffDayRequestPanel';
-import { DAILY_HOURS_CAP, MONTHLY_HOURS_CAP } from '@/components/employee/WorkLogEntryModal';
+import { DAILY_HOURS_CAP, getMonthlyHourCap } from '@/components/employee/WorkLogEntryModal';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { SearchableSelect } from '@/components/ui/searchable-select';
@@ -541,7 +541,7 @@ const EmployeeTimesheet = () => {
                 isPastOrToday={!isMonthlyIneligible}
                 edits={monthlyEdits}
                 onCellChange={handleMonthlyCellChange}
-                hoursCap={MONTHLY_HOURS_CAP}
+                hoursCap={getMonthlyHourCap(selectedMonth, monthlyYear)}
                 emptyMessage="No Service POs mapped."
                 descriptions={monthlyDescriptions}
                 onDescriptionChange={handleMonthlyDescriptionChange}

@@ -67,6 +67,16 @@ const columns = [
     meta: { align: 'right' },
     cell: (info) => <span className="tabular-nums">{formatHours(info.getValue())}</span>,
   }),
+  columnHelper.accessor('original_total_bench_hours', {
+    header: 'Original Total Bench Hrs',
+    size: 190,
+    meta: { align: 'right' },
+    cell: (info) => {
+      const value = info.getValue();
+      if (value == null || value === '') return null;
+      return <span className="tabular-nums text-muted-foreground">{formatHours(value)}</span>;
+    },
+  }),
   columnHelper.accessor('total_available_hours', {
     header: 'Total Available Hrs (Org)',
     size: 190,
@@ -91,8 +101,10 @@ const exportToExcel = (rows) => {
     shortMonthLabel(r.month, r.year),
     r.resources_on_bench != null ? Number(r.resources_on_bench) : '',
     r.total_bench_hours != null ? Number(r.total_bench_hours) : '',
+    r.original_total_bench_hours != null ? Number(r.original_total_bench_hours) : '',
     r.total_available_hours != null ? Number(r.total_available_hours) : '',
     r.bench_pct != null ? Number(r.bench_pct) : '',
+    r.original_bench_pct != null ? Number(r.original_bench_pct) : '',
   ]);
   const ws = XLSX.utils.aoa_to_sheet([header, ...dataRows]);
   ws['!cols'] = [{ wch: 14 }, { wch: 24 }, { wch: 18 }, { wch: 24 }, { wch: 12 }];

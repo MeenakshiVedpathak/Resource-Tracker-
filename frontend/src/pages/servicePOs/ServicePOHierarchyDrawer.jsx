@@ -47,6 +47,20 @@ const ServicePOHierarchyDrawer = ({ servicePO, open, onOpenChange }) => {
     originalNodeIdsRef.current = new Set(editorTree.flatMap((p) => [p.id, ...p.children.map((c) => c.id)]));
   }, [open, tree]);
 
+  // Swap a just-created node's temp id for its real id (and mark it not-new) the moment the server
+  // confirms it, so a Save that fails further down and is retried doesn't re-create it as a duplicate.
+  const markSaved = (tempId, realId, isParent) => {
+    if (realId == null) return;
+    originalNodeIdsRef.current.add(realId);
+    if (isParent) originalParentIdsRef.current.add(realId);
+    setParents((prev) =>
+      prev.map((p) => {
+        if (isParent) return p.id === tempId ? { ...p, id: realId, isNew: false } : p;
+        return { ...p, children: p.children.map((c) => (c.id === tempId ? { ...c, id: realId, isNew: false } : c)) };
+      })
+    );
+  };
+
   const handleSave = async () => {
     setIsSaving(true);
     try {
@@ -60,7 +74,17 @@ const ServicePOHierarchyDrawer = ({ servicePO, open, onOpenChange }) => {
       const removedChildren = removed.filter((rid) => !originalParentIdsRef.current.has(rid));
       const removedParents = removed.filter((rid) => originalParentIdsRef.current.has(rid));
       for (const nodeId of [...removedChildren, ...removedParents]) {
-        await servicePOHierarchyApi.deleteNode(nodeId);
+        try {
+          await servicePOHierarchyApi.deleteNode(nodeId);
+        } catch (err) {
+          // Already gone (e.g. an earlier Save attempt deleted it before a later step failed) — the
+          // desired end state is reached, so don't abort the whole Save over it.
+          if (err?.response?.status !== 404) throw err;
+        }
+        // Forget it as soon as it's gone server-side, so a retry after a mid-Save failure never
+        // tries to delete the same node twice (which 404s as "Hierarchy node not found").
+        originalNodeIdsRef.current.delete(nodeId);
+        originalParentIdsRef.current.delete(nodeId);
       }
 
       for (const parent of parents) {
@@ -71,6 +95,7 @@ const ServicePOHierarchyDrawer = ({ servicePO, open, onOpenChange }) => {
         if (parent.isNew) {
           const created = await servicePOHierarchyApi.createParent(servicePOId, { name });
           parentRealId = created?.id;
+          markSaved(parent.id, parentRealId, true);
         } else {
           await servicePOHierarchyApi.renameNode(parent.id, { name });
         }
@@ -79,7 +104,8 @@ const ServicePOHierarchyDrawer = ({ servicePO, open, onOpenChange }) => {
           const childName = child.name.trim();
           if (!childName) continue;
           if (child.isNew) {
-            await servicePOHierarchyApi.createChild(servicePOId, parentRealId, { name: childName });
+            const createdChild = await servicePOHierarchyApi.createChild(servicePOId, parentRealId, { name: childName });
+            markSaved(child.id, createdChild?.id, false);
           } else {
             await servicePOHierarchyApi.renameNode(child.id, { name: childName });
           }

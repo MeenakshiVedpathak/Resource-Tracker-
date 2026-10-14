@@ -1,8 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Fragment } from 'react';
 import * as XLSX from 'xlsx';
 import { Download, Search, ChevronDown, ChevronRight } from 'lucide-react';
 import { useMonthlyResourceUtilization } from '@/hooks/useReports';
-import { useCanViewOriginalData } from '@/hooks/usePermissions';
 import { reportsApi } from '@/api/reports.api';
 import { useActiveEmployees } from '@/hooks/useEmployees';
 import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
@@ -58,8 +57,22 @@ const ContributedPercentCell = ({ value }) => {
   return <span className="tabular-nums">{value}%</span>;
 };
 
-const exportToExcel = (records, columns, month, year) => {
+const exportToExcel = (records, columns, month, year, mode = 'M') => {
   const monthLabel = MONTH_NAMES[(month - 1)] ?? month;
+
+  // In Original mode the API already returns original values in the normal fields,
+  // so no separate "Original ..." columns are needed — they'd duplicate the same numbers.
+  const hasOriginal = mode !== 'O' && records.some(
+    (r) =>
+      r.original_billable_total != null ||
+      r.original_non_billable_total != null ||
+      r.original_total_hours != null ||
+      r.original_leaves_hours != null ||
+      r.original_total_utilization != null ||
+      r.original_utilization_percentage != null ||
+      r.original_contributed_percentage != null ||
+      (r.original_hours && Object.keys(r.original_hours).length > 0)
+  );
 
   const headerRow1 = [
     '', '', '', '', '', '', '', '', '', // 9 Fixed cols empty
@@ -71,12 +84,39 @@ const exportToExcel = (records, columns, month, year) => {
 
   columns.forEach(cat => {
     headerRow1.push(cat.category_name);
-    for (let i = 1; i < cat.service_types.length; i++) headerRow1.push(''); // span
-    cat.service_types.forEach(st => headerRow2.push(st.name));
+    const span = cat.service_types.length * (hasOriginal ? 2 : 1);
+    for (let i = 1; i < span; i++) headerRow1.push(''); // span
+    cat.service_types.forEach(st => {
+      headerRow2.push(st.name);
+      if (hasOriginal) headerRow2.push(`Original ${st.name}`);
+    });
   });
 
-  headerRow1.push('Summary', '', '', '', '');
-  headerRow2.push('Billable Total (hrs)', 'Non-Billable Total (hrs)', 'Total Utilization (hrs)', 'Utilization %', 'Contributed %');
+  const summaryLen = hasOriginal ? 10 : 5;
+  headerRow1.push('Summary');
+  for (let i = 1; i < summaryLen; i++) headerRow1.push('');
+  if (hasOriginal) {
+    headerRow2.push(
+      'Billable Total (hrs)',
+      'Original Billable Total (hrs)',
+      'Non-Billable Total (hrs)',
+      'Original Non-Billable Total (hrs)',
+      'Total Utilization (hrs)',
+      'Original Total Utilization (hrs)',
+      'Utilization %',
+      'Original Utilization %',
+      'Contributed %',
+      'Original Contributed %'
+    );
+  } else {
+    headerRow2.push(
+      'Billable Total (hrs)',
+      'Non-Billable Total (hrs)',
+      'Total Utilization (hrs)',
+      'Utilization %',
+      'Contributed %'
+    );
+  }
 
   const dataRows = records.map((r, i) => {
     const row = [
@@ -94,16 +134,34 @@ const exportToExcel = (records, columns, month, year) => {
     columns.forEach(cat => {
       cat.service_types.forEach(st => {
         row.push(r.hours?.[st.id] ?? 0);
+        if (hasOriginal) {
+          row.push(r.original_hours?.[st.id] ?? 0);
+        }
       });
     });
 
-    row.push(
-      r.billable_total ?? 0,
-      r.non_billable_total ?? 0,
-      r.total_utilization ?? 0,
-      r.utilization_percentage != null ? `${r.utilization_percentage}%` : '',
-      r.contributed_percentage != null ? `${r.contributed_percentage}%` : ''
-    );
+    if (hasOriginal) {
+      row.push(
+        r.billable_total ?? 0,
+        r.original_billable_total ?? 0,
+        r.non_billable_total ?? 0,
+        r.original_non_billable_total ?? 0,
+        r.total_utilization ?? 0,
+        r.original_total_utilization ?? 0,
+        r.utilization_percentage != null ? `${r.utilization_percentage}%` : '',
+        r.original_utilization_percentage != null ? `${r.original_utilization_percentage}%` : '',
+        r.contributed_percentage != null ? `${r.contributed_percentage}%` : '',
+        r.original_contributed_percentage != null ? `${r.original_contributed_percentage}%` : ''
+      );
+    } else {
+      row.push(
+        r.billable_total ?? 0,
+        r.non_billable_total ?? 0,
+        r.total_utilization ?? 0,
+        r.utilization_percentage != null ? `${r.utilization_percentage}%` : '',
+        r.contributed_percentage != null ? `${r.contributed_percentage}%` : ''
+      );
+    }
     return row;
   });
 
@@ -113,13 +171,13 @@ const exportToExcel = (records, columns, month, year) => {
   const merges = [];
   let colIndex = 9;
   columns.forEach(cat => {
-    const len = cat.service_types.length;
+    const len = cat.service_types.length * (hasOriginal ? 2 : 1);
     if (len > 1) {
       merges.push({ s: { r: 0, c: colIndex }, e: { r: 0, c: colIndex + len - 1 } });
     }
     colIndex += len;
   });
-  merges.push({ s: { r: 0, c: colIndex }, e: { r: 0, c: colIndex + 4 } });
+  merges.push({ s: { r: 0, c: colIndex }, e: { r: 0, c: colIndex + summaryLen - 1 } });
   ws['!merges'] = merges;
 
   const wb = XLSX.utils.book_new();
@@ -143,12 +201,9 @@ const MonthlyResourceUtilization = () => {
   const [employeeId, setEmployeeId] = useState('all');
   const [serviceTypeId, setServiceTypeId] = useState('all');
   const [serviceCategoryId, setServiceCategoryId] = useState('all');
-  const canViewOriginal = useCanViewOriginalData();
+  // Hours basis: 'M' = Adjusted (after sync), 'O' = Original (as logged, before the monthly cap).
+  // Available to everyone on this page — not gated on the login's is_original_data_visible flag.
   const [hoursSource, setHoursSource] = useState('M');
-
-  useEffect(() => {
-    if (!canViewOriginal) setHoursSource('M');
-  }, [canViewOriginal]);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
@@ -256,6 +311,18 @@ const MonthlyResourceUtilization = () => {
   const records = Array.isArray(data?.data?.records) ? data.data.records : [];
   const meta    = data?.meta    ?? {};
 
+  const hasOriginal = records.some(
+    (r) =>
+      r.original_billable_total != null ||
+      r.original_non_billable_total != null ||
+      r.original_total_hours != null ||
+      r.original_leaves_hours != null ||
+      r.original_total_utilization != null ||
+      r.original_utilization_percentage != null ||
+      r.original_contributed_percentage != null ||
+      (r.original_hours && Object.keys(r.original_hours).length > 0)
+  );
+
   // The backend folds "Customer Non-Billable" hours into non_billable_total and
   // doesn't expose them separately, so derive that figure on the frontend from
   // each row's per-service-type hours map instead.
@@ -265,6 +332,11 @@ const MonthlyResourceUtilization = () => {
 
   const sumCustomerNonBillable = (r) =>
     customerNonBillableServiceTypeIds.reduce((sum, id) => sum + (Number(r.hours?.[id]) || 0), 0);
+
+  const sumCustomerNonBillableOriginal = (r) =>
+    customerNonBillableServiceTypeIds.reduce((sum, id) => sum + (Number(r.original_hours?.[id]) || 0), 0);
+
+  const apiSummary = allData?.data?.summary ?? data?.data?.summary ?? {};
 
   // Prefer totals computed over the full filtered dataset; fall back to the
   // (page-scoped) API summary only until the full-dataset fetch resolves.
@@ -276,19 +348,62 @@ const MonthlyResourceUtilization = () => {
           acc.leaves_hours                += Number(r.leaves_hours)       || 0;
           acc.total_utilization           += Number(r.total_utilization)  || 0;
           acc.customer_non_billable_total += sumCustomerNonBillable(r);
+
+          if (r.total_hours != null) {
+            acc.total_hours = (acc.total_hours ?? 0) + (Number(r.total_hours) || 0);
+          }
+          if (r.original_billable_total != null) {
+            acc.original_billable_total = (acc.original_billable_total ?? 0) + (Number(r.original_billable_total) || 0);
+          }
+          if (r.original_non_billable_total != null) {
+            acc.original_non_billable_total = (acc.original_non_billable_total ?? 0) + (Number(r.original_non_billable_total) || 0);
+          }
+          if (r.original_leaves_hours != null) {
+            acc.original_leaves_hours = (acc.original_leaves_hours ?? 0) + (Number(r.original_leaves_hours) || 0);
+          }
+          if (r.original_total_utilization != null) {
+            acc.original_total_utilization = (acc.original_total_utilization ?? 0) + (Number(r.original_total_utilization) || 0);
+          }
+          if (r.original_total_hours != null || r.original_total_logged_hours != null) {
+            acc.original_total_hours = (acc.original_total_hours ?? 0) + (Number(r.original_total_hours ?? r.original_total_logged_hours) || 0);
+          }
+          if (hasOriginal) {
+            acc.original_customer_non_billable_total = (acc.original_customer_non_billable_total ?? 0) + sumCustomerNonBillableOriginal(r);
+          }
           return acc;
         },
-        { billable_total: 0, non_billable_total: 0, leaves_hours: 0, total_utilization: 0, customer_non_billable_total: 0 }
+        {
+          billable_total: 0,
+          non_billable_total: 0,
+          leaves_hours: 0,
+          total_utilization: 0,
+          customer_non_billable_total: 0,
+          // All original_* fields and total_hours start at null and are filled only from rows.
+          // They must NOT be seeded from apiSummary — the reducer adds every row on top of the
+          // initial value, so a non-zero seed doubles every total (apiSummary + all rows = 2×).
+          total_hours: null,
+          original_billable_total: null,
+          original_non_billable_total: null,
+          original_leaves_hours: null,
+          original_total_utilization: null,
+          original_total_hours: null,
+          original_customer_non_billable_total: null,
+        }
       )
     : {
-        ...(data?.data?.summary ?? {}),
+        ...apiSummary,
         customer_non_billable_total: records.reduce((sum, r) => sum + sumCustomerNonBillable(r), 0),
+        original_customer_non_billable_total: hasOriginal ? records.reduce((sum, r) => sum + sumCustomerNonBillableOriginal(r), 0) : null,
+        original_total_hours: apiSummary.original_total_hours ?? apiSummary.original_total_logged_hours ?? (hasOriginal ? records.reduce((sum, r) => sum + (Number(r.original_total_hours ?? r.original_total_logged_hours) || 0), 0) : null),
       };
 
   // contributed_percentage is a ratio (billable/total hours), not additive — it must come
   // straight from the API's own full-dataset summary, never reduced/averaged from per-row
   // values the way the other summary fields above are.
-  const contributedPercentage = data?.data?.summary?.contributed_percentage;
+  const contributedPercentage = data?.data?.summary?.contributed_percentage ?? allData?.data?.summary?.contributed_percentage;
+  const originalContributedPercentage = data?.data?.summary?.original_contributed_percentage ?? allData?.data?.summary?.original_contributed_percentage;
+  const utilizationPercentage = data?.data?.summary?.utilization_percentage ?? allData?.data?.summary?.utilization_percentage;
+  const originalUtilizationPercentage = data?.data?.summary?.original_utilization_percentage ?? allData?.data?.summary?.original_utilization_percentage;
 
   const monthLabel = monthYear ? formatMonthYear(monthYear.month, monthYear.year) : '';
 
@@ -301,7 +416,7 @@ const MonthlyResourceUtilization = () => {
       const total = meta.total > 0 ? meta.total : 1000;
       const res = await reportsApi.getMonthlyResourceUtilization({ ...params, page: 1, limit: total });
       const allRecords = Array.isArray(res?.data?.records) ? res.data.records : [];
-      exportToExcel(allRecords, filteredColumns, monthYear?.month, monthYear?.year);
+      exportToExcel(allRecords, filteredColumns, monthYear?.month, monthYear?.year, hoursSource);
     } finally {
       setExporting(false);
     }
@@ -331,9 +446,12 @@ const MonthlyResourceUtilization = () => {
     serviceTypeId !== 'all' ? 1 : 0,
     entityIds.length > 0 ? 1 : 0,
     buIds.length > 0 ? 1 : 0,
+    // "Original" is a non-default choice, so the Filters badge counts it too.
+    hoursSource === 'O' ? 1 : 0,
   ].reduce((a, b) => a + b, 0);
 
   const clearFilters = () => {
+    setHoursSource('M');
     setEntityIds([]);
     setBuIds([]);
     setEmployeeId('all');
@@ -358,25 +476,6 @@ const MonthlyResourceUtilization = () => {
                 disabled={!enabled}
               />
             </div>
-            {canViewOriginal && (
-              <div className="flex items-center gap-0.5 p-0.5 rounded-xl bg-muted border shrink-0">
-                {[
-                  { value: 'O', label: 'Original' },
-                  { value: 'M', label: 'Published' },
-                ].map(({ value, label }) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => { setHoursSource(value); setPage(1); }}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 whitespace-nowrap ${
-                      hoursSource === value ? 'bg-card shadow-sm text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            )}
             <FilterToggleButton
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((prev) => !prev)}
@@ -406,6 +505,29 @@ const MonthlyResourceUtilization = () => {
         <EntityFilter multiple value={entityIds} onChange={(v) => { setEntityIds(v); setBuIds([]); }} />
 
         <BusinessUnitFilter multiple value={buIds} entityId={entityIds} onChange={setBuIds} />
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs font-medium">Hours basis</Label>
+          <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-muted border w-fit">
+            {[
+              { value: 'M', label: 'Adjusted' },
+              { value: 'O', label: 'Original' },
+            ].map(({ value, label }) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => { setHoursSource(value); setPage(1); }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all duration-150 whitespace-nowrap ${
+                  hoursSource === value ? 'bg-card shadow-sm text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <span className="text-[10px] text-muted-foreground">
+            {hoursSource === 'O' ? 'Original (as logged, before the monthly cap)' : 'Adjusted (after sync)'}
+          </span>
+        </div>
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs font-medium">Month &amp; Year <span className="text-destructive">*</span></Label>
             <MonthYearPicker
@@ -502,10 +624,28 @@ const MonthlyResourceUtilization = () => {
                 <span className="font-semibold tabular-nums">{Number(summary.total_utilization).toFixed(1)} hrs</span>
               </div>
             )}
+            {summary.total_hours != null && hoursSource === 'O' && (
+              <div className="rounded-md border bg-slate-500/10 px-[clamp(0.5rem,0.7vw,0.75rem)] py-[clamp(0.25rem,0.4vw,0.375rem)] text-[clamp(0.6875rem,0.75vw,0.75rem)] text-slate-700 dark:text-slate-400 whitespace-nowrap">
+                Total Hours&nbsp;
+                <span className="font-semibold tabular-nums">{Number(summary.total_hours).toFixed(1)} hrs</span>
+              </div>
+            )}
+            {summary.original_total_hours != null && hoursSource === 'O' && (
+              <div className="rounded-md border bg-blue-500/10 px-[clamp(0.5rem,0.7vw,0.75rem)] py-[clamp(0.25rem,0.4vw,0.375rem)] text-[clamp(0.6875rem,0.75vw,0.75rem)] text-blue-700 dark:text-blue-400 whitespace-nowrap">
+                Total Original Hours&nbsp;
+                <span className="font-semibold tabular-nums">{Number(summary.original_total_hours).toFixed(1)} hrs</span>
+              </div>
+            )}
             {summary.leaves_hours != null && (
               <div className="rounded-md border bg-amber-500/10 px-[clamp(0.5rem,0.7vw,0.75rem)] py-[clamp(0.25rem,0.4vw,0.375rem)] text-[clamp(0.6875rem,0.75vw,0.75rem)] text-amber-700 dark:text-amber-400 whitespace-nowrap">
                 Leaves&nbsp;
                 <span className="font-semibold tabular-nums">{Number(summary.leaves_hours).toFixed(1)} hrs</span>
+              </div>
+            )}
+            {(utilizationPercentage != null || summary.utilization_percentage != null) && (
+              <div className="rounded-md border bg-indigo-500/10 px-[clamp(0.5rem,0.7vw,0.75rem)] py-[clamp(0.25rem,0.4vw,0.375rem)] text-[clamp(0.6875rem,0.75vw,0.75rem)] text-indigo-700 dark:text-indigo-400 whitespace-nowrap">
+                Utilization %&nbsp;
+                <span className="font-semibold tabular-nums">{utilizationPercentage ?? summary.utilization_percentage}%</span>
               </div>
             )}
             {contributedPercentage != null && (
@@ -536,6 +676,18 @@ const MonthlyResourceUtilization = () => {
                 <p className="text-sm font-semibold tabular-nums">{Number(summary.customer_non_billable_total).toFixed(1)} hrs</p>
               </div>
             )}
+            {summary.total_hours != null && hoursSource === 'O' && (
+              <div className="rounded-lg border bg-slate-500/10 px-3 py-2 text-slate-700 dark:text-slate-400">
+                <p className="text-xs">Total Hours</p>
+                <p className="text-sm font-semibold tabular-nums">{Number(summary.total_hours).toFixed(1)} hrs</p>
+              </div>
+            )}
+            {summary.original_total_hours != null && hoursSource === 'O' && (
+              <div className="rounded-lg border bg-blue-500/10 px-3 py-2 text-blue-700 dark:text-blue-400">
+                <p className="text-xs">Total Original Hours</p>
+                <p className="text-sm font-semibold tabular-nums">{Number(summary.original_total_hours).toFixed(1)} hrs</p>
+              </div>
+            )}
             {summary.leaves_hours != null && (
               <div className="rounded-lg border bg-amber-500/10 px-3 py-2 text-amber-700 dark:text-amber-400">
                 <p className="text-xs">Leaves</p>
@@ -546,6 +698,12 @@ const MonthlyResourceUtilization = () => {
               <div className="col-span-2 rounded-lg border bg-blue-500/10 px-3 py-2 text-blue-700 dark:text-blue-400">
                 <p className="text-xs">Total Utilization</p>
                 <p className="text-sm font-semibold tabular-nums">{Number(summary.total_utilization).toFixed(1)} hrs</p>
+              </div>
+            )}
+            {(utilizationPercentage != null || summary.utilization_percentage != null) && (
+              <div className="col-span-2 rounded-lg border bg-indigo-500/10 px-3 py-2 text-indigo-700 dark:text-indigo-400">
+                <p className="text-xs">Utilization %</p>
+                <p className="text-sm font-semibold tabular-nums">{utilizationPercentage ?? summary.utilization_percentage}%</p>
               </div>
             )}
             {contributedPercentage != null && (
@@ -579,6 +737,9 @@ const MonthlyResourceUtilization = () => {
                     ))}
                     <th colSpan={5} className="px-3 py-1.5 text-center text-xs font-semibold bg-primary/10 text-primary">
                       Summary
+                      <span className="ml-1.5 text-[10px] font-normal opacity-70">
+                        ({hoursSource === 'O' ? 'Original' : 'Adjusted'})
+                      </span>
                     </th>
                   </tr>
 

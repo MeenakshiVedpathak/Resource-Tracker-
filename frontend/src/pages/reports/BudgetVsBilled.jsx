@@ -406,7 +406,11 @@ const BudgetVsBilled = () => {
           <SearchableSelect
             options={[
               { label: 'All Clients', value: 'all' },
-              ...activeClients.map((c) => ({ label: c.client_name, value: String(c.id) })),
+              ...activeClients.map((c) => ({ label: c.client_name, value: String(c.id) , 
+            ...(c.original_total_hours != null ? {'Original Total Hours': c.original_total_hours} : {}),
+            ...(c.original_billable_hours != null ? {'Original Billable Hours': c.original_billable_hours} : {}),
+            ...(c.original_hours != null ? {'Original Hours': c.original_hours} : {})
+          })),
             ]}
             value={clientId}
             onValueChange={(v) => { setClientId(v); setPage(1); }}
@@ -421,7 +425,11 @@ const BudgetVsBilled = () => {
           <SearchableSelect
             options={[
               { label: 'All Service Types', value: 'all' },
-              ...activeServiceTypes.map((st) => ({ label: st.service_type_name, value: String(st.id) })),
+              ...activeServiceTypes.map((st) => ({ label: st.service_type_name, value: String(st.id) , 
+            ...(st.original_total_hours != null ? {'Original Total Hours': st.original_total_hours} : {}),
+            ...(st.original_billable_hours != null ? {'Original Billable Hours': st.original_billable_hours} : {}),
+            ...(st.original_hours != null ? {'Original Hours': st.original_hours} : {})
+          })),
             ]}
             value={serviceTypeId}
             onValueChange={handleServiceTypeChange}
@@ -439,7 +447,10 @@ const BudgetVsBilled = () => {
               ...filteredPOs.map((po) => ({
                 label: po.service_po_name || po.service_po_code || String(po.id),
                 value: String(po.id),
-              })),
+                  ...(po.original_total_hours != null ? {'Original Total Hours': po.original_total_hours} : {}),
+            ...(po.original_billable_hours != null ? {'Original Billable Hours': po.original_billable_hours} : {}),
+            ...(po.original_hours != null ? {'Original Hours': po.original_hours} : {})
+          })),
             ]}
             value={poId}
             onValueChange={(v) => { setPoId(v); setPage(1); }}

@@ -108,6 +108,17 @@ const getColumns = (sortBy, sortOrder, onSort) => [
     enableSorting: false,
     cell: (info) => <span className="tabular-nums">{formatHours(info.getValue())}</span>,
   }),
+  columnHelper.accessor('original_total_logged_hours', {
+    header: 'Original Total Logged Hrs',
+    size: 180,
+    meta: { align: 'right' },
+    enableSorting: false,
+    cell: (info) => {
+      const value = info.getValue();
+      if (value == null || value === '') return null;
+      return <span className="tabular-nums text-muted-foreground">{formatHours(value)}</span>;
+    },
+  }),
   columnHelper.accessor('total_available_hours', {
     header: () => <SortableHeader label="Total Available Hrs" column={SORTABLE.AVAILABLE_HOURS} sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} align="right" />,
     size: 170,
@@ -131,6 +142,17 @@ const getColumns = (sortBy, sortOrder, onSort) => [
       );
     },
   }),
+  columnHelper.accessor('original_utilization_pct', {
+    header: 'Original Utilization %',
+    size: 170,
+    meta: { align: 'right' },
+    enableSorting: false,
+    cell: (info) => {
+      const value = info.getValue();
+      if (value == null || value === '') return null;
+      return <span className="tabular-nums text-muted-foreground">{Number(value).toFixed(2)}%</span>;
+    },
+  }),
 ];
 
 const SummaryItem = ({ label, value }) => (
@@ -151,8 +173,10 @@ const exportToExcel = (rows) => {
     r.service_po_name ?? '',
     r.resource_count != null ? Number(r.resource_count) : '',
     r.total_logged_hours != null ? Number(r.total_logged_hours) : '',
+    r.original_total_logged_hours != null ? Number(r.original_total_logged_hours) : '',
     r.total_available_hours != null ? Number(r.total_available_hours) : '',
     r.utilization_pct != null ? Number(r.utilization_pct) : '',
+    r.original_utilization_pct != null ? Number(r.original_utilization_pct) : '',
   ]);
   const ws = XLSX.utils.aoa_to_sheet([header, ...dataRows]);
   const wb = XLSX.utils.book_new();
@@ -328,6 +352,7 @@ const ProjectWiseUtilizationReport = () => {
           <div className="flex flex-wrap gap-x-6 gap-y-2">
             <SummaryItem label="No. of Resources" value={formatNumber(summary.total_resource_count)} />
             <SummaryItem label="Total Logged Hrs" value={formatHours(summary.total_logged_hours)} />
+            {summary.original_total_logged_hours != null && <SummaryItem label="Original Total Logged Hrs" value={formatHours(summary.original_total_logged_hours)} />}
             <SummaryItem label="Total Available Hrs" value={formatHours(summary.total_available_hours)} />
             <SummaryItem
               label="Utilization %"
@@ -339,6 +364,14 @@ const ProjectWiseUtilizationReport = () => {
                 />
               )}
             />
+            {summary.original_utilization_pct != null && (
+              <SummaryItem
+                label="Original Utilization %"
+                value={(
+                  <span className="tabular-nums">{Number(summary.original_utilization_pct).toFixed(2)}%</span>
+                )}
+              />
+            )}
           </div>
         </div>
       )}

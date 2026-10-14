@@ -71,6 +71,7 @@ export const ROUTES = {
   // Admin management (Platform Admin only, §6.1)
   ADMINS: '/admins',
   ADMIN_NEW: '/admins/new',
+  AUDIT_LOGS: '/audit-logs',
 
   // Organization Overview — Platform Admin only, single read-only screen (Entity/BU/Project/
   // Service PO/User overview across the whole platform, tabbed — see pages/organizationOverview)
@@ -160,6 +161,8 @@ export const ROUTES = {
   REPORT_EMPLOYEE_BENCH_PERCENTAGE: '/reports/employee-bench-percentage',
   REPORT_RESOURCE_UTILIZATION_TREND: '/reports/resource-utilization-trend',
   REPORT_SERVICE_PO_HOURS_BUDGET: '/reports/service-po-hours-budget',
+  REPORT_BU_WISE_UTILISATION: '/reports/bu-wise-utilisation',
+  REPORT_EMPLOYEE_PROJECT_UTILISATION: '/reports/employee-project-utilisation',
   REPORT_EMPLOYEE_WORK_LOG_HOURS_SUMMARY: '/reports/employee-work-log-hours-summary',
   REPORT_EMPLOYEE_WORK_LOG_COMPLIANCE: '/reports/employee-work-log-compliance',
   REPORT_PM_WISE_UTILIZATION: '/reports/pm-wise-utilization',
@@ -168,6 +171,7 @@ export const ROUTES = {
   REPORT_RESOURCE_WISE_BENCH: '/reports/resource-wise-bench',
   REPORT_RESOURCE_COST_UTILIZATION: '/reports/resource-cost-utilization',
   REPORT_PROJECT_TIMESHEET: '/reports/project-timesheet',
+  REPORT_CROSS_BU_EMPLOYEE_PO_HOURS: '/reports/cross-bu-employee-po-hours',
   REPORT_EMPLOYEE_ROLE_BU_MAPPING: '/reports/employee-role-bu-mapping',
   REPORT_TEAM_LEAD_EMPLOYEE_PROJECT_HOURS: '/reports/team-lead-employee-project-hours',
 
@@ -197,6 +201,8 @@ export const ROUTES = {
   // Settings
   NOTIFICATIONS: '/notifications',
   SETTINGS: '/settings',
+  // Admin / Platform Admin only — system-wide monthly cap hours (GET/PUT /system-settings/monthly-cap)
+  SETTINGS_MONTHLY_CAP: '/settings/monthly-cap',
 
   // Error
   NOT_FOUND: '*',

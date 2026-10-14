@@ -28,7 +28,7 @@ const MAX_RECORDS_FETCH = 5000;
 const exportToExcel = (rows) => {
   const header = [
     'PO Code', 'PO Name', 'Client', 'Service Type', 'Category', 'Status',
-    'Hours Delivered', 'Invoiced Amount', 'Delivery Cost', 'Margin', 'Shortfall',
+    'Hours Delivered', 'Original Hrs Delivered', 'Invoiced Amount', 'Delivery Cost', 'Margin', 'Shortfall',
   ];
   const dataRows = rows.map((r) => [
     r.service_po_code ?? '',
@@ -38,6 +38,7 @@ const exportToExcel = (rows) => {
     r.service_category_name ?? '',
     r.status ?? '',
     r.hours_delivered != null ? Number(r.hours_delivered) : '',
+    r.original_hours_delivered != null ? Number(r.original_hours_delivered) : '',
     r.invoiced_amount != null ? Number(r.invoiced_amount) : '',
     r.delivery_cost != null ? Number(r.delivery_cost) : '',
     r.margin != null ? Number(r.margin) : '',
@@ -93,6 +94,14 @@ const columns = [
     header: 'Hours Delivered',
     size: 150,
     cell: (info) => <span className="tabular-nums">{formatHours(info.getValue())}</span>,
+  }),
+  columnHelper.accessor('original_hours_delivered', {
+    header: 'Original Hrs Delivered',
+    size: 160,
+    cell: (info) => {
+      const value = info.getValue();
+      return <span className="tabular-nums text-muted-foreground">{value != null ? formatHours(value) : '—'}</span>;
+    },
   }),
   columnHelper.accessor('invoiced_amount', {
     header: 'Invoiced Amount',
@@ -214,10 +223,14 @@ const ServicePOProfitability = () => {
     const total_invoiced_amount = filteredRecords.reduce((sum, r) => sum + (Number(r.invoiced_amount) || 0), 0);
     const total_delivery_cost = filteredRecords.reduce((sum, r) => sum + (Number(r.delivery_cost) || 0), 0);
     const total_margin = filteredRecords.reduce((sum, r) => sum + (Number(r.margin) || 0), 0);
+    const total_hours_delivered = filteredRecords.reduce((sum, r) => sum + (Number(r.hours_delivered) || 0), 0);
+    const original_total_hours_delivered = filteredRecords.reduce((sum, r) => sum + (Number(r.original_hours_delivered) || 0), 0);
     return {
       total_invoiced_amount,
       total_delivery_cost,
       total_margin,
+      total_hours_delivered,
+      original_total_hours_delivered,
       // Derived ratio, not a per-row average — recomputed from the summed totals.
       overall_margin_pct: total_invoiced_amount !== 0 ? (total_margin / total_invoiced_amount) * 100 : null,
     };
@@ -363,6 +376,8 @@ const ServicePOProfitability = () => {
         <div className="mt-4 rounded-lg border bg-muted/40 px-4 py-3">
           <p className="mb-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Totals</p>
           <div className="flex flex-wrap gap-x-6 gap-y-2">
+            <SummaryItem label="Total Hours Delivered" value={formatHours(summary.total_hours_delivered)} />
+            <SummaryItem label="Original Total Hrs Delivered" value={formatHours(summary.original_total_hours_delivered)} />
             <SummaryItem label="Total Invoiced" value={formatCurrency(summary.total_invoiced_amount)} />
             <SummaryItem label="Total Delivery Cost" value={formatCurrency(summary.total_delivery_cost)} />
             <SummaryItem

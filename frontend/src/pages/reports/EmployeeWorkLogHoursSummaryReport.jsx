@@ -1,4 +1,4 @@
-﻿import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { createColumnHelper } from '@tanstack/react-table';
 import dayjs from 'dayjs';
 import * as XLSX from 'xlsx';
@@ -50,7 +50,15 @@ const formatClock = (value) => {
 };
 
 const exportToExcel = (records, periodLabel) => {
-  const header = ['Employee Name', 'Employee Code', 'Period', 'Total Hours (Decimal)', 'Total Hours (Formatted)'];
+  const hasOriginal = records.some((r) => r.original_hours_logged != null || r.original_total_hours != null);
+  const header = [
+    'Employee Name',
+    'Employee Code',
+    'Period',
+    'Total Hours (Decimal)',
+    'Total Hours (Formatted)',
+    ...(hasOriginal ? ['Original Total Hours (Decimal)', 'Original Total Hours (Formatted)'] : []),
+  ];
   const aoa = [
     ['Employee Work Log Hours Summary Report'],
     [periodLabel ? `Period: ${periodLabel}` : ''],
@@ -59,20 +67,35 @@ const exportToExcel = (records, periodLabel) => {
   ];
 
   records.forEach((emp) => {
+    const orig = emp.original_hours_logged ?? emp.original_total_hours;
     aoa.push([
       emp.employee_name ?? '—',
       emp.employee_code ?? '—',
       periodLabel,
       Number(emp.total_hours) || 0,
       formatHoursMinutes(emp.total_hours),
+      ...(hasOriginal
+        ? [
+            orig != null ? Number(orig) : '',
+            orig != null ? formatHoursMinutes(orig) : '',
+          ]
+        : []),
     ]);
   });
 
   const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols'] = [{ wch: 28 }, { wch: 18 }, { wch: 22 }, { wch: 22 }, { wch: 24 }];
+  ws['!cols'] = [
+    { wch: 28 },
+    { wch: 18 },
+    { wch: 22 },
+    { wch: 22 },
+    { wch: 24 },
+    ...(hasOriginal ? [{ wch: 24 }, { wch: 24 }] : []),
+  ];
+  const mergeEndCol = hasOriginal ? 6 : 4;
   ws['!merges'] = [
-    { s: { r: 0, c: 0 }, e: { r: 0, c: 4 } },
-    { s: { r: 1, c: 0 }, e: { r: 1, c: 4 } },
+    { s: { r: 0, c: 0 }, e: { r: 0, c: mergeEndCol } },
+    { s: { r: 1, c: 0 }, e: { r: 1, c: mergeEndCol } },
   ];
 
   const wb = XLSX.utils.book_new();
@@ -177,104 +200,128 @@ const EmployeeDetailModal = ({
             <EmptyState title="No work log entries found for this period." />
           ) : (
             <>
-              <Table className="hidden md:table">
-                <TableHeader className="bg-slate-50 sticky top-0 z-10 shadow-[0_1px_3px_0_rgb(0,0,0,0.1)]">
-                  <TableRow className="hover:bg-transparent border-b bg-slate-50">
-                    <TableHead className="text-xs font-semibold uppercase tracking-wider">Date</TableHead>
-                    <TableHead className="text-xs font-semibold uppercase tracking-wider">Service PO</TableHead>
-                    <TableHead className="text-xs font-semibold uppercase tracking-wider">Project</TableHead>
-                    <TableHead className="text-xs font-semibold uppercase tracking-wider">Module / Task</TableHead>
-                    <TableHead className="text-xs font-semibold uppercase tracking-wider">Time Slot</TableHead>
-                    <TableHead className="text-xs font-semibold uppercase tracking-wider text-right">Hours</TableHead>
-                    <TableHead className="text-xs font-semibold uppercase tracking-wider">Type</TableHead>
-                    <TableHead className="text-xs font-semibold uppercase tracking-wider">Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {entries.map((entry, idx) => {
-                    const hasTimes = entry.start_time && entry.end_time;
-                    const timeSlot = hasTimes
-                      ? `${formatClock(entry.start_time)} - ${formatClock(entry.end_time)}`
-                      : '—';
-                    const hierarchy = [entry.module, entry.hierarchy_task].filter(Boolean).join(' > ');
-                    const poLabel = [entry.service_po_code, entry.service_po_name].filter(Boolean).join(' - ');
-                    const projLabel = [entry.project_code, entry.project_name].filter(Boolean).join(' - ');
-
-                    return (
-                      <TableRow key={entry.work_log_id || idx} className="hover:bg-muted/30">
-                        <TableCell className="text-xs font-medium whitespace-nowrap">
-                          {formatDate(entry.date)}
-                        </TableCell>
-                        <TableCell className="text-xs max-w-[140px] truncate" title={poLabel}>
-                          {poLabel || '—'}
-                        </TableCell>
-                        <TableCell className="text-xs max-w-[140px] truncate" title={projLabel}>
-                          {projLabel || '—'}
-                        </TableCell>
-                        <TableCell className="text-xs max-w-[130px] truncate" title={hierarchy}>
-                          {hierarchy || '—'}
-                        </TableCell>
-                        <TableCell className="text-xs whitespace-nowrap text-muted-foreground">
-                          {timeSlot}
-                        </TableCell>
-                        <TableCell className="text-xs font-semibold text-right tabular-nums">
-                          {formatHourMinuteValue(entry.hours)}
-                        </TableCell>
-                        <TableCell className="text-xs">
-                          <Badge variant="outline" className="text-[10px] uppercase tracking-wider">
-                            {entry.entry_type || 'HOURLY'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-xs">
-                          {entry.status ? (
-                            <Badge variant={getStatusColor(entry.status)} className="text-[10px]">
-                              {entry.status}
-                            </Badge>
-                          ) : (
-                            '—'
+              {(() => {
+                const hasOriginalEntry = entries.some((e) => e.original_hours != null || e.original_hours_logged != null);
+                return (
+                  <>
+                    <Table className="hidden md:table">
+                      <TableHeader className="bg-slate-50 sticky top-0 z-10 shadow-[0_1px_3px_0_rgb(0,0,0,0.1)]">
+                        <TableRow className="hover:bg-transparent border-b bg-slate-50">
+                          <TableHead className="text-xs font-semibold uppercase tracking-wider">Date</TableHead>
+                          <TableHead className="text-xs font-semibold uppercase tracking-wider">Service PO</TableHead>
+                          <TableHead className="text-xs font-semibold uppercase tracking-wider">Project</TableHead>
+                          <TableHead className="text-xs font-semibold uppercase tracking-wider">Module / Task</TableHead>
+                          <TableHead className="text-xs font-semibold uppercase tracking-wider">Time Slot</TableHead>
+                          <TableHead className="text-xs font-semibold uppercase tracking-wider text-right">Hours</TableHead>
+                          {hasOriginalEntry && (
+                            <TableHead className="text-xs font-semibold uppercase tracking-wider text-right">Original Hours</TableHead>
                           )}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+                          <TableHead className="text-xs font-semibold uppercase tracking-wider">Type</TableHead>
+                          <TableHead className="text-xs font-semibold uppercase tracking-wider">Status</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {entries.map((entry, idx) => {
+                          const hasTimes = entry.start_time && entry.end_time;
+                          const timeSlot = hasTimes
+                            ? `${formatClock(entry.start_time)} - ${formatClock(entry.end_time)}`
+                            : '—';
+                          const hierarchy = [entry.module, entry.hierarchy_task].filter(Boolean).join(' > ');
+                          const poLabel = [entry.service_po_code, entry.service_po_name].filter(Boolean).join(' - ');
+                          const projLabel = [entry.project_code, entry.project_name].filter(Boolean).join(' - ');
+                          const origHours = entry.original_hours ?? entry.original_hours_logged;
 
-              {/* Mobile: same `entries` data as the desktop table above, as a card list. */}
-              <div className="space-y-2 p-3 md:hidden">
-                {entries.map((entry, idx) => {
-                  const hasTimes = entry.start_time && entry.end_time;
-                  const timeSlot = hasTimes
-                    ? `${formatClock(entry.start_time)} - ${formatClock(entry.end_time)}`
-                    : '—';
-                  const hierarchy = [entry.module, entry.hierarchy_task].filter(Boolean).join(' > ');
-                  const poLabel = [entry.service_po_code, entry.service_po_name].filter(Boolean).join(' - ');
-                  const projLabel = [entry.project_code, entry.project_name].filter(Boolean).join(' - ');
+                          return (
+                            <TableRow key={entry.work_log_id || idx} className="hover:bg-muted/30">
+                              <TableCell className="text-xs font-medium whitespace-nowrap">
+                                {formatDate(entry.date)}
+                              </TableCell>
+                              <TableCell className="text-xs max-w-[140px] truncate" title={poLabel}>
+                                {poLabel || '—'}
+                              </TableCell>
+                              <TableCell className="text-xs max-w-[140px] truncate" title={projLabel}>
+                                {projLabel || '—'}
+                              </TableCell>
+                              <TableCell className="text-xs max-w-[130px] truncate" title={hierarchy}>
+                                {hierarchy || '—'}
+                              </TableCell>
+                              <TableCell className="text-xs whitespace-nowrap text-muted-foreground">
+                                {timeSlot}
+                              </TableCell>
+                              <TableCell className="text-xs font-semibold text-right tabular-nums">
+                                {formatHourMinuteValue(entry.hours)}
+                              </TableCell>
+                              {hasOriginalEntry && (
+                                <TableCell className="text-xs font-semibold text-right tabular-nums text-muted-foreground">
+                                  {origHours != null ? formatHourMinuteValue(origHours) : '—'}
+                                </TableCell>
+                              )}
+                              <TableCell className="text-xs">
+                                <Badge variant="outline" className="text-[10px] uppercase tracking-wider">
+                                  {entry.entry_type || 'HOURLY'}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-xs">
+                                {entry.status ? (
+                                  <Badge variant={getStatusColor(entry.status)} className="text-[10px]">
+                                    {entry.status}
+                                  </Badge>
+                                ) : (
+                                  '—'
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
 
-                  return (
-                    <div key={entry.work_log_id || idx} className="rounded-lg border bg-white p-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="text-xs font-medium">{formatDate(entry.date)}</p>
-                        <p className="text-xs font-semibold tabular-nums">{formatHourMinuteValue(entry.hours)}h</p>
-                      </div>
-                      <p className="mt-1 truncate text-xs text-muted-foreground" title={poLabel}>{poLabel || '—'}</p>
-                      <p className="truncate text-xs text-muted-foreground" title={projLabel}>{projLabel || '—'}</p>
-                      {hierarchy && <p className="truncate text-xs text-muted-foreground" title={hierarchy}>{hierarchy}</p>}
-                      <p className="text-xs text-muted-foreground">{timeSlot}</p>
-                      <div className="mt-1.5 flex items-center gap-1.5">
-                        <Badge variant="outline" className="text-[10px] uppercase tracking-wider">
-                          {entry.entry_type || 'HOURLY'}
-                        </Badge>
-                        {entry.status && (
-                          <Badge variant={getStatusColor(entry.status)} className="text-[10px]">
-                            {entry.status}
-                          </Badge>
-                        )}
-                      </div>
+                    {/* Mobile: same `entries` data as the desktop table above, as a card list. */}
+                    <div className="space-y-2 p-3 md:hidden">
+                      {entries.map((entry, idx) => {
+                        const hasTimes = entry.start_time && entry.end_time;
+                        const timeSlot = hasTimes
+                          ? `${formatClock(entry.start_time)} - ${formatClock(entry.end_time)}`
+                          : '—';
+                        const hierarchy = [entry.module, entry.hierarchy_task].filter(Boolean).join(' > ');
+                        const poLabel = [entry.service_po_code, entry.service_po_name].filter(Boolean).join(' - ');
+                        const projLabel = [entry.project_code, entry.project_name].filter(Boolean).join(' - ');
+                        const origHours = entry.original_hours ?? entry.original_hours_logged;
+
+                        return (
+                          <div key={entry.work_log_id || idx} className="rounded-lg border bg-white p-3">
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="text-xs font-medium">{formatDate(entry.date)}</p>
+                              <p className="text-xs font-semibold tabular-nums">
+                                {formatHourMinuteValue(entry.hours)}h
+                                {origHours != null && (
+                                  <span className="text-muted-foreground text-[10px] ml-1">
+                                    (orig: {formatHourMinuteValue(origHours)}h)
+                                  </span>
+                                )}
+                              </p>
+                            </div>
+                            <p className="mt-1 truncate text-xs text-muted-foreground" title={poLabel}>{poLabel || '—'}</p>
+                            <p className="truncate text-xs text-muted-foreground" title={projLabel}>{projLabel || '—'}</p>
+                            {hierarchy && <p className="truncate text-xs text-muted-foreground" title={hierarchy}>{hierarchy}</p>}
+                            <p className="text-xs text-muted-foreground">{timeSlot}</p>
+                            <div className="mt-1.5 flex items-center gap-1.5">
+                              <Badge variant="outline" className="text-[10px] uppercase tracking-wider">
+                                {entry.entry_type || 'HOURLY'}
+                              </Badge>
+                              {entry.status && (
+                                <Badge variant={getStatusColor(entry.status)} className="text-[10px]">
+                                  {entry.status}
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                  );
-                })}
-              </div>
+                  </>
+                );
+              })()}
             </>
           )}
         </div>
@@ -514,8 +561,32 @@ const EmployeeWorkLogHoursSummaryReport = () => {
           </span>
         ),
       }),
+      ...(records.some((r) => r.original_hours_logged != null || r.original_total_hours != null)
+        ? [
+            columnHelper.accessor(
+              (row) => row.original_hours_logged ?? row.original_total_hours,
+              {
+                id: 'original_total_hours',
+                header: 'Original Total Hours',
+                meta: { align: 'right' },
+                size: 150,
+                cell: (info) => {
+                  const val = info.getValue();
+                  if (val == null || val === '') {
+                    return <span className="text-right text-xs text-muted-foreground block">—</span>;
+                  }
+                  return (
+                    <span className="text-right text-xs font-semibold tabular-nums block text-muted-foreground">
+                      {formatHoursMinutes(val)}
+                    </span>
+                  );
+                },
+              }
+            ),
+          ]
+        : []),
     ],
-    [periodMode, periodLabel]
+    [periodMode, periodLabel, records]
   );
 
   return (

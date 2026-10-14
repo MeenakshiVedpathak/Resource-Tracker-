@@ -60,7 +60,7 @@ const blankDefaults = (date) => ({
 
 // Cap-aware color for the running Total Hours readout — matches the semantics of
 // [[feedback_negative_available_hours]]-style "warn before the server has to" badges used
-// elsewhere in the app: green while comfortably under, amber approaching the 12h cap, red once
+// elsewhere in the app: green while comfortably under, amber approaching the 24h cap, red once
 // over (the server always has the final say — this is just earlier, friendlier feedback).
 const totalHoursTone = (hours) => {
   if (hours > DAILY_HOURS_CAP) return { badge: 'destructive', bar: 'bg-destructive', text: 'text-destructive' };

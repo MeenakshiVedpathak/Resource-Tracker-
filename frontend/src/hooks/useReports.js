@@ -399,6 +399,36 @@ export const useServicePOHoursBudget = (params) => {
   });
 };
 
+// BU-wise Utilisation / Employee x Project Utilisation — same XOR month/year-vs-date-range gate as
+// useResourceUtilizationTrend above; the backend's own `summary` already covers every matching
+// page (not just the one on screen), so neither needs the client-side "walk every page" totals
+// workaround useEmployeeUtilizationSummaryTotals uses further up this file.
+export const useBuWiseUtilisation = (params) => {
+  const hasMonthYear = !!(params?.month && params?.year);
+  const hasDateRange = !!(params?.startDate && params?.endDate);
+  return useQuery({
+    queryKey: QUERY_KEYS.REPORT_BU_WISE_UTILISATION(params),
+    queryFn: () => reportsApi.getBuWiseUtilisation(params),
+    enabled: hasMonthYear !== hasDateRange,
+    staleTime: 0,
+    placeholderData: (prev) => prev,
+    retry: false,
+  });
+};
+
+export const useEmployeeProjectUtilisation = (params) => {
+  const hasMonthYear = !!(params?.month && params?.year);
+  const hasDateRange = !!(params?.startDate && params?.endDate);
+  return useQuery({
+    queryKey: QUERY_KEYS.REPORT_EMPLOYEE_PROJECT_UTILISATION(params),
+    queryFn: () => reportsApi.getEmployeeProjectUtilisation(params),
+    enabled: hasMonthYear !== hasDateRange,
+    staleTime: 0,
+    placeholderData: (prev) => prev,
+    retry: false,
+  });
+};
+
 // Accepts either the single-month shorthand {month, year} or a range {startMonth, startYear,
 // endMonth, endYear} — same "OR" contract as useInvoiceRealizationTrend, matching this
 // endpoint's own 422 ("Provide either (month & year) or (startMonth, startYear, endMonth,
@@ -520,6 +550,20 @@ export const useProjectTimesheet = (params) => {
     enabled: hasMonthYear !== hasDateRange,
     staleTime: 0,
     placeholderData: (prev) => prev,
+  });
+};
+
+// Same XOR month/year-vs-date-range contract as useProjectTimesheet above.
+export const useCrossBuEmployeePoHours = (params) => {
+  const hasMonthYear = !!(params?.month && params?.year);
+  const hasDateRange = !!(params?.start_date && params?.end_date);
+  return useQuery({
+    queryKey: QUERY_KEYS.REPORT_CROSS_BU_EMPLOYEE_PO_HOURS(params),
+    queryFn: () => reportsApi.getCrossBuEmployeePoHours(params),
+    enabled: hasMonthYear !== hasDateRange,
+    staleTime: 0,
+    placeholderData: (prev) => prev,
+    retry: false,
   });
 };
 

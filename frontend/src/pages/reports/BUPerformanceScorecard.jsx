@@ -26,7 +26,7 @@ const MAX_RECORDS_FETCH = 5000;
 const exportToExcel = (rows) => {
   const header = [
     'Company Code', 'Company Name', 'Entity ID', 'Active Employees', 'Active POs',
-    'Total Invoiced', 'Total Delivery Cost', 'Total Margin', 'Avg Utilization %',
+    'Total Invoiced', 'Total Delivery Cost', 'Total Margin', 'Avg Utilization %', 'Original Avg Utilization %',
   ];
   const dataRows = rows.map((r) => [
     r.company_code ?? '',
@@ -38,6 +38,7 @@ const exportToExcel = (rows) => {
     r.total_delivery_cost != null ? Number(r.total_delivery_cost) : '',
     r.total_margin != null ? Number(r.total_margin) : '',
     r.avg_utilization_pct != null ? Number(r.avg_utilization_pct) : '',
+    r.original_avg_utilization_pct != null ? Number(r.original_avg_utilization_pct) : '',
   ]);
   const ws = XLSX.utils.aoa_to_sheet([header, ...dataRows]);
   const wb = XLSX.utils.book_new();
@@ -106,14 +107,19 @@ const columns = [
   columnHelper.accessor('avg_utilization_pct', {
     header: 'Avg Utilization %',
     size: 150,
-    // The API returns this already on a 0–100 scale (6.12 means 6.12%), verified against the
-    // live endpoint. It was previously scaled by 100 here on the strength of sample data that
-    // looked like a 0–1 ratio, which rendered 6.12% as "612.0%". formatPercentage only appends
-    // the sign — it does no scaling of its own — so the raw value goes in as-is.
     cell: (info) => {
       const value = info.getValue();
       if (value == null || value === '') return <span className="text-muted-foreground">—</span>;
       return <span className="tabular-nums">{formatPercentage(Number(value))}</span>;
+    },
+  }),
+  columnHelper.accessor('original_avg_utilization_pct', {
+    header: 'Original Avg Utilization %',
+    size: 170,
+    cell: (info) => {
+      const value = info.getValue();
+      if (value == null || value === '') return null;
+      return <span className="tabular-nums text-muted-foreground">{formatPercentage(Number(value))}</span>;
     },
   }),
 ];

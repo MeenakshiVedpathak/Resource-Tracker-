@@ -240,7 +240,7 @@ const DataTable = ({
                 </TableCell>
               </TableRow>
             ) : (
-              table.getRowModel().rows.map((row, idx) => (
+              table.getRowModel().rows.map((row, idx, allRows) => (
                 <motion.tr
                   key={row.id}
                   initial={{ opacity: 0 }}
@@ -258,6 +258,37 @@ const DataTable = ({
                     const left = cell.column.columnDef.meta?.left || 0;
                     const align = cell.column.columnDef.meta?.align;
                     const w = (cell.column.columnDef.size !== undefined || isSticky) ? cell.column.getSize() : undefined;
+
+                    // Opt-in true `rowSpan` merge for a column whose value repeats across
+                    // consecutive rows (e.g. several project rows under the same employee) —
+                    // `mergeGroup(rowData)` returns the group key; a row whose key matches the
+                    // row directly above it renders no `<td>` of its own at all (not just a blank
+                    // one), while the group's first row gets `rowSpan` covering every row below it
+                    // that shares the key. Rows are assumed already sorted by that key.
+                    const mergeGroup = cell.column.columnDef.meta?.mergeGroup;
+                    if (mergeGroup) {
+                      const key = mergeGroup(row.original);
+                      const prevKey = idx > 0 ? mergeGroup(allRows[idx - 1].original) : undefined;
+                      if (idx > 0 && key === prevKey) return null;
+                      let rowSpan = 1;
+                      while (idx + rowSpan < allRows.length && mergeGroup(allRows[idx + rowSpan].original) === key) {
+                        rowSpan += 1;
+                      }
+                      return (
+                        <TableCell
+                          key={cell.id}
+                          rowSpan={rowSpan}
+                          className={cn('overflow-hidden align-middle', isSticky && 'sticky-col', align === 'right' && 'text-right')}
+                          style={{
+                            ...(w ? { width: w, minWidth: w, maxWidth: w } : {}),
+                            ...(isSticky ? { left } : {})
+                          }}
+                        >
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </TableCell>
+                      );
+                    }
+
                     return (
                       <TableCell
                         key={cell.id}

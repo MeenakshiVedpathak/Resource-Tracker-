@@ -155,9 +155,10 @@ const ResourceWiseBenchReport = () => {
   }, [rows]);
 
   const pivotedRows = useMemo(() => rows.map((r) => {
-    const row = { employee_id: r.employee_id, full_name: r.full_name, project_manager_name: r.project_manager_name, avg_bench_pct: r.avg_bench_pct };
+    const row = { employee_id: r.employee_id, full_name: r.full_name, project_manager_name: r.project_manager_name, avg_bench_pct: r.avg_bench_pct, original_avg_bench_pct: r.original_avg_bench_pct };
     (r.months ?? []).forEach((m) => {
       row[`${m.year}-${String(m.month).padStart(2, '0')}`] = m.bench_pct;
+      row[`original_${m.year}-${String(m.month).padStart(2, '0')}`] = m.original_bench_pct;
     });
     return row;
   }), [rows]);
@@ -166,17 +167,18 @@ const ResourceWiseBenchReport = () => {
   // in memory from the wide fetch), or just the current server page otherwise, same tradeoff
   // ResourceUtilizationTrend documents for its own export.
   const handleExport = () => {
-    const header = ['Employee Name', 'PM', ...monthColumnDefs.map((m) => m.label), 'Avg Bench %'];
+    const header = ['Employee Name', 'PM', ...monthColumnDefs.flatMap((m) => [m.label, `Orig ${m.label}`]), 'Avg Bench %', 'Original Avg Bench %'];
     const exportRows = (hasClientSearch ? filteredRows : rawRows).map((r) => {
-      const byMonth = new Map((r.months ?? []).map((m) => [`${m.year}-${String(m.month).padStart(2, '0')}`, m.bench_pct]));
+      const byMonth = new Map((r.months ?? []).map((m) => [`${m.year}-${String(m.month).padStart(2, '0')}`, m]));
       return [
         r.full_name ?? '',
         r.project_manager_name ?? '',
-        ...monthColumnDefs.map(({ key }) => {
-          const v = byMonth.get(key);
-          return v != null ? Number(v) : '';
+        ...monthColumnDefs.flatMap(({ key }) => {
+          const m = byMonth.get(key);
+          return [m?.bench_pct != null ? Number(m.bench_pct) : '', m?.original_bench_pct != null ? Number(m.original_bench_pct) : ''];
         }),
         r.avg_bench_pct != null ? Number(r.avg_bench_pct) : '',
+        r.original_avg_bench_pct != null ? Number(r.original_avg_bench_pct) : '',
       ];
     });
     const ws = XLSX.utils.aoa_to_sheet([header, ...exportRows]);
@@ -211,7 +213,8 @@ const ResourceWiseBenchReport = () => {
       enableSorting: false,
       cell: (info) => <div className="truncate max-w-[140px]" title={info.getValue()}>{info.getValue() || '—'}</div>,
     }),
-    ...monthColumnDefs.map(({ key, label }) => columnHelper.accessor((row) => row[key], {
+    ...monthColumnDefs.flatMap(({ key, label }) => [
+      columnHelper.accessor((row) => row[key], {
       id: key,
       header: label,
       size: 100,
@@ -222,7 +225,20 @@ const ResourceWiseBenchReport = () => {
         if (value == null || value === '') return <span className="text-muted-foreground">—</span>;
         return <span className={cn('tabular-nums', benchColorClass(value))}>{formatPercentage(value, 1)}</span>;
       },
-    })),
+    }),
+      columnHelper.accessor((row) => row[`original_${key}`], {
+        id: `original_${key}`,
+        header: `Orig ${label}`,
+        size: 110,
+        meta: { align: 'right' },
+        enableSorting: false,
+        cell: (info) => {
+          const value = info.getValue();
+          if (value == null || value === '') return null;
+          return <span className="tabular-nums text-muted-foreground">{formatPercentage(value, 1)}</span>;
+        },
+      })
+    ]),
     columnHelper.accessor('avg_bench_pct', {
       header: () => <SortableHeader label="Avg Bench %" column={SORTABLE.AVG_BENCH} sortBy={sortBy} sortOrder={sortOrder} onSort={handleSort} align="right" />,
       size: 140,
@@ -232,6 +248,17 @@ const ResourceWiseBenchReport = () => {
         const value = info.getValue();
         if (value == null || value === '') return <span className="text-muted-foreground">—</span>;
         return <span className={cn('tabular-nums font-semibold', benchColorClass(value))}>{formatPercentage(value, 1)}</span>;
+      },
+    }),
+    columnHelper.accessor('original_avg_bench_pct', {
+      header: 'Original Avg Bench %',
+      size: 160,
+      meta: { align: 'right' },
+      enableSorting: false,
+      cell: (info) => {
+        const value = info.getValue();
+        if (value == null || value === '') return null;
+        return <span className="tabular-nums text-muted-foreground">{formatPercentage(value, 1)}</span>;
       },
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps

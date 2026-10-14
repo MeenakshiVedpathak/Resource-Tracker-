@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { createColumnHelper } from '@tanstack/react-table';
 import { ChevronDown, ChevronUp, ChevronsUpDown, Download } from 'lucide-react';
@@ -36,11 +36,21 @@ const now = new Date();
 const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
 
 const exportToExcel = (rows) => {
-  const header = ['Client', 'Total Cost', 'Total Hours', 'Avg Cost/Hour', 'Total Projects', '% of Total Cost'];
+  const hasOriginal = rows.some((r) => r.original_total_hours != null);
+  const header = [
+    'Client',
+    'Total Cost',
+    'Total Hours',
+    ...(hasOriginal ? ['Original Total Hours'] : []),
+    'Avg Cost/Hour',
+    'Total Projects',
+    '% of Total Cost',
+  ];
   const dataRows = rows.map((r) => [
     r.client_name ?? '',
     r.total_cost != null ? Number(r.total_cost) : '',
     r.total_hours != null ? Number(r.total_hours) : '',
+    ...(hasOriginal ? [r.original_total_hours != null ? Number(r.original_total_hours) : ''] : []),
     r.average_cost_per_hour != null ? Number(r.average_cost_per_hour) : '',
     r.total_projects != null ? Number(r.total_projects) : '',
     r.percentage_of_total_cost != null ? Number(r.percentage_of_total_cost) : '',
@@ -181,7 +191,11 @@ const ClientWiseAnalytics = () => {
     }
   };
 
-  const columns = [
+  const hasOriginal = useMemo(() => {
+    return records.some((r) => r.original_total_hours != null);
+  }, [records]);
+
+  const columns = useMemo(() => [
     columnHelper.accessor('client_name', {
       header: 'Client',
       size: 220,
@@ -204,6 +218,16 @@ const ClientWiseAnalytics = () => {
       enableSorting: false,
       cell: (info) => <span className="tabular-nums">{formatHours(info.getValue())}</span>,
     }),
+    ...(hasOriginal ? [
+      columnHelper.accessor('original_total_hours', {
+        header: () => (
+          <SortableHeader label="Original Total Hours" column="original_total_hours" sortBy={sortBy} sortOrder={sortOrder} onSort={handleSort} />
+        ),
+        size: 150,
+        enableSorting: false,
+        cell: (info) => <span className="tabular-nums text-muted-foreground">{info.getValue() != null ? formatHours(info.getValue()) : '—'}</span>,
+      }),
+    ] : []),
     columnHelper.accessor('average_cost_per_hour', {
       header: () => (
         <SortableHeader label="Avg Cost/Hour" column="average_cost_per_hour" sortBy={sortBy} sortOrder={sortOrder} onSort={handleSort} />
@@ -236,7 +260,7 @@ const ClientWiseAnalytics = () => {
         );
       },
     }),
-  ];
+  ], [sortBy, sortOrder, hasOriginal]);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -335,7 +359,11 @@ const ClientWiseAnalytics = () => {
           <SearchableSelect
             options={[
               { label: 'All Employees', value: 'all' },
-              ...activeEmployees.map((e) => ({ label: e.full_name, value: String(e.id) })),
+              ...activeEmployees.map((e) => ({ label: e.full_name, value: String(e.id) , 
+            ...(e.original_total_hours != null ? {'Original Total Hours': e.original_total_hours} : {}),
+            ...(e.original_billable_hours != null ? {'Original Billable Hours': e.original_billable_hours} : {}),
+            ...(e.original_hours != null ? {'Original Hours': e.original_hours} : {})
+          })),
             ]}
             value={employeeId}
             onValueChange={(v) => { setEmployeeId(v); setPage(1); }}
@@ -350,7 +378,11 @@ const ClientWiseAnalytics = () => {
           <SearchableSelect
             options={[
               { label: 'All Clients', value: 'all' },
-              ...activeClients.map((c) => ({ label: c.client_name, value: String(c.id) })),
+              ...activeClients.map((c) => ({ label: c.client_name, value: String(c.id) , 
+            ...(c.original_total_hours != null ? {'Original Total Hours': c.original_total_hours} : {}),
+            ...(c.original_billable_hours != null ? {'Original Billable Hours': c.original_billable_hours} : {}),
+            ...(c.original_hours != null ? {'Original Hours': c.original_hours} : {})
+          })),
             ]}
             value={clientId}
             onValueChange={(v) => { setClientId(v); setPage(1); }}
@@ -365,7 +397,11 @@ const ClientWiseAnalytics = () => {
           <SearchableSelect
             options={[
               { label: 'All Service Types', value: 'all' },
-              ...activeServiceTypes.map((st) => ({ label: st.service_type_name, value: String(st.id) })),
+              ...activeServiceTypes.map((st) => ({ label: st.service_type_name, value: String(st.id) , 
+            ...(st.original_total_hours != null ? {'Original Total Hours': st.original_total_hours} : {}),
+            ...(st.original_billable_hours != null ? {'Original Billable Hours': st.original_billable_hours} : {}),
+            ...(st.original_hours != null ? {'Original Hours': st.original_hours} : {})
+          })),
             ]}
             value={serviceTypeId}
             onValueChange={handleServiceTypeChange}
@@ -383,7 +419,10 @@ const ClientWiseAnalytics = () => {
               ...filteredPOs.map((po) => ({
                 label: po.service_po_name || po.service_po_code || String(po.id),
                 value: String(po.id),
-              })),
+                  ...(po.original_total_hours != null ? {'Original Total Hours': po.original_total_hours} : {}),
+            ...(po.original_billable_hours != null ? {'Original Billable Hours': po.original_billable_hours} : {}),
+            ...(po.original_hours != null ? {'Original Hours': po.original_hours} : {})
+          })),
             ]}
             value={poId}
             onValueChange={(v) => { setPoId(v); setPage(1); }}

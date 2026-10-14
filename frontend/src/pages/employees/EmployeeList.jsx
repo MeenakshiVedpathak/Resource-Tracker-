@@ -5,7 +5,7 @@ import { useIsMutating } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus, Pencil, UserCog, Search, Download, Upload, CheckCircle2, AlertCircle, FileDown, FileText, Printer, FileSpreadsheet, ChevronDown, ChevronUp, ChevronsUpDown, MoreVertical, ChevronLeft, ChevronRight, CornerDownRight } from 'lucide-react';
+import { Plus, Pencil, UserCog, Eye, Search, Download, Upload, CheckCircle2, AlertCircle, FileDown, FileText, Printer, FileSpreadsheet, ChevronDown, ChevronUp, ChevronsUpDown, MoreVertical, ChevronLeft, ChevronRight, CornerDownRight, Building2, FolderKanban } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -41,6 +41,8 @@ import EmptyState from '@/components/common/EmptyState';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import ListPagination from '@/components/pmDashboard/ListPagination';
 import {
   Form, FormField, FormItem, FormLabel, FormControl, FormMessage,
 } from '@/components/ui/form';
@@ -764,14 +766,293 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
   );
 };
 
-const StatusToggle = ({ employee }) => {
+const SERVICE_PO_PAGE_SIZE = 5;
+
+// Read-only "View" drawer for an Employee Master row — Business Unit/Sub-BU mapping and every
+// currently-mapped Service PO, each in its own section. Opened via the row's own "View" action in
+// the Actions column, separate from "Edit" (profile fields) and "Map Roles & Business Units"
+// (RoleBuMappingDialog above, which edits the mapping this drawer only displays).
+const EmployeeViewDrawer = ({ employeeId, employeeName, open, onOpenChange }) => {
+  const [poPage, setPoPage] = useState(1);
+  const [poLimit, setPoLimit] = useState(SERVICE_PO_PAGE_SIZE);
+  const [poSearch, setPoSearch] = useState('');
+  // Which root BUs (by id) have their Sub-BU pills expanded — starts collapsed for every root, so
+  // a BU with several Sub-BUs doesn't blow out the 3-per-row grid below by default.
+  const [expandedBuIds, setExpandedBuIds] = useState(() => new Set());
+  const toggleBuExpanded = (id) => {
+    setExpandedBuIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  // Reset pagination/search/expand-state whenever a different row is opened — otherwise opening
+  // Employee B right after viewing Employee A's page 3 / search text / expanded BUs would silently
+  // carry all of that over.
+  useEffect(() => {
+    setPoPage(1);
+    setPoLimit(SERVICE_PO_PAGE_SIZE);
+    setPoSearch('');
+    setExpandedBuIds(new Set());
+  }, [employeeId]);
+
+  const { data: mappings, isPending: isLoadingMappings } = useEmployeeMappings(open ? employeeId : undefined);
+  // Same source RoleBuMappingDialog itself seeds its Service PO checkboxes from — `mapped_service_po_ids`
+  // is the authoritative full mapped set, but `eligible_service_pos` (the only place this endpoint
+  // carries name/client/project detail) is scoped to what's currently eligible to ADD, which isn't
+  // guaranteed to be a superset of every already-mapped id (e.g. a mapped PO whose own BU eligibility
+  // has since changed) — see BACKEND_EMPLOYEE_MAPPED_SERVICE_POS_VIEW_PROMPT.md for the gap this
+  // leaves and the dedicated read endpoint requested to close it. Until that exists, an unresolvable
+  // mapped id still gets its own row below, just without a name to show.
+  const { data: poOptions, isPending: isLoadingPOs } = useEmployeeServicePOMappingOptions(open ? employeeId : undefined);
+
+  const mappedServicePOs = useMemo(() => {
+    const mappedIds = poOptions?.mapped_service_po_ids ?? [];
+    const pmIds = new Set(poOptions?.project_manager_service_po_ids ?? []);
+    const byId = new Map((poOptions?.eligible_service_pos ?? []).map((po) => [po.id, po]));
+    return mappedIds.map((id) => {
+      const po = byId.get(id);
+      return {
+        id,
+        service_po_code: po?.service_po_code,
+        service_po_name: po?.service_po_name,
+        client_name: po?.client?.client_name,
+        project_name: po?.project?.project_name,
+        is_project_manager: pmIds.has(id),
+        is_centralised: po?.is_centralised ?? false,
+        unresolved: !po,
+      };
+    });
+  }, [poOptions]);
+
+  // Client-side — the full mapped set is already in memory (see mappedServicePOs above), so
+  // there's no round trip to debounce here, unlike every other search box in this app.
+  const filteredServicePOs = useMemo(() => {
+    const q = poSearch.trim().toLowerCase();
+    if (!q) return mappedServicePOs;
+    return mappedServicePOs.filter((po) =>
+      [po.service_po_name, po.service_po_code, po.client_name, po.project_name]
+        .some((v) => (v ?? '').toLowerCase().includes(q)));
+  }, [mappedServicePOs, poSearch]);
+
+  const poTotalPages = Math.max(1, Math.ceil(filteredServicePOs.length / poLimit));
+  const safePoPage = Math.min(poPage, poTotalPages);
+  const pagedServicePOs = filteredServicePOs.slice((safePoPage - 1) * poLimit, safePoPage * poLimit);
+
+  const isLoading = isLoadingMappings || isLoadingPOs;
+
+  // Every root BU this Employee is mapped to, each carrying its own Sub-BUs (if any were also
+  // mapped) — same "Parent -> Child" grouping convention UserMenu.jsx's own BU display uses, so a
+  // Sub-BU never reads as an unrelated, unexplained extra entry next to its Parent.
+  const buGroups = useMemo(() => {
+    const units = mappings?.business_units ?? [];
+    const roots = units.filter((u) => u.parent_business_unit_id == null);
+    const orphanSubs = units.filter((u) =>
+      u.parent_business_unit_id != null && !units.some((r) => r.id === u.parent_business_unit_id));
+    return [
+      ...roots.map((root) => ({
+        ...root,
+        subUnits: units.filter((u) => u.parent_business_unit_id === root.id),
+      })),
+      ...orphanSubs.map((sub) => ({ ...sub, subUnits: [] })),
+    ];
+  }, [mappings]);
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-3xl">
+        <SheetHeader className="shrink-0 border-b bg-gradient-to-r from-blue-50/80 via-white to-white px-5 py-4 text-left">
+          <div className="flex items-center gap-3">
+            <Avatar className="h-10 w-10 shrink-0 border border-blue-100">
+              <AvatarFallback className="bg-blue-100 font-semibold text-blue-700">{getInitials(employeeName)}</AvatarFallback>
+            </Avatar>
+            <div className="min-w-0">
+              <SheetTitle className="truncate text-base font-semibold text-slate-800">
+                {employeeName ?? 'Employee Details'}
+              </SheetTitle>
+              <p className="text-xs text-muted-foreground">Business Units &amp; Service PO mapping</p>
+            </div>
+          </div>
+        </SheetHeader>
+
+        <div className="flex-1 overflow-y-auto bg-slate-50/40">
+          {isLoading ? (
+            <div className="space-y-4 p-5">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="h-14 animate-pulse rounded-md bg-muted" />
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-6 p-5">
+              {/* Business Units */}
+              <div className="space-y-2.5">
+                <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                    <Building2 className="h-3.5 w-3.5" />
+                  </span>
+                  Business Units
+                </h3>
+                {buGroups.length === 0 ? (
+                  <p className="pl-9 text-sm text-muted-foreground">No Business Units mapped.</p>
+                ) : (
+                  // 3 per row, full width — a prior "full-width card per root" version left every
+                  // leaf BU (the common case) as a mostly-empty box, which was the actual white
+                  // space complaint. A root with Sub-BUs starts collapsed (just a chevron) rather
+                  // than always expanding, so one busy BU can't blow out the 3-column grid for
+                  // every row it shares with simpler, sub-less BUs.
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    {buGroups.map((root) => {
+                      const hasSubs = root.subUnits.length > 0;
+                      const isExpanded = expandedBuIds.has(root.id);
+                      return (
+                        <div key={root.id} className="rounded-lg border border-slate-200 bg-white p-2.5 shadow-sm">
+                          <button
+                            type="button"
+                            onClick={() => hasSubs && toggleBuExpanded(root.id)}
+                            className={cn(
+                              'flex w-full items-center justify-between gap-1 text-left text-sm font-semibold text-slate-800',
+                              hasSubs && 'cursor-pointer'
+                            )}
+                          >
+                            <span className="truncate" title={root.name}>{root.name}</span>
+                            {hasSubs && (
+                              isExpanded
+                                ? <ChevronUp className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                : <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                            )}
+                          </button>
+                          {hasSubs && isExpanded && (
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              {root.subUnits.map((sub) => (
+                                <span
+                                  key={sub.id}
+                                  className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2.5 py-1 text-xs font-medium text-violet-700"
+                                >
+                                  <CornerDownRight className="h-3 w-3" /> {sub.name}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Mapped Service POs */}
+              <div className="space-y-2.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+                      <FolderKanban className="h-3.5 w-3.5" />
+                    </span>
+                    Mapped Service POs
+                    <Badge variant="secondary" className="font-normal text-muted-foreground">
+                      {mappedServicePOs.length}
+                    </Badge>
+                  </h3>
+                  {mappedServicePOs.length > 0 && (
+                    <SearchInput
+                      value={poSearch}
+                      onChange={(e) => { setPoSearch(e.target.value); setPoPage(1); }}
+                      placeholder="Search Service PO, client, project…"
+                      className="ml-auto w-full sm:w-64"
+                    />
+                  )}
+                </div>
+                {mappedServicePOs.length === 0 ? (
+                  <p className="pl-9 text-sm text-muted-foreground">No Service POs mapped.</p>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                      {filteredServicePOs.length === 0 ? (
+                        <p className="p-4 text-sm text-muted-foreground">No Service POs match your search.</p>
+                      ) : (
+                        <>
+                          {/* Bounded + its own scroll (sticky header) — same convention every other
+                              in-card table in this app uses for a page size that can run long, so a
+                              bigger "Rows per page" pick scrolls inside this table, not by growing the
+                              whole drawer (which only scrolls the page around it, not this specifically).
+                              `containerClassName` sets the cap on Table's OWN built-in scroll wrapper
+                              (ui/table.jsx) rather than adding a second `overflow-auto` div around it —
+                              two nested auto-scroll containers fought over the horizontal drag/scroll
+                              here, which is why it looked unresponsive despite the scrollbar rendering. */}
+                          <Table containerClassName="max-h-[400px]">
+                              <TableHeader className="sticky top-0 z-10 bg-slate-50 shadow-sm">
+                                <TableRow className="bg-slate-50 hover:bg-slate-50">
+                                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Service PO</TableHead>
+                                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Client</TableHead>
+                                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Project</TableHead>
+                                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Centralised</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {pagedServicePOs.map((po) => (
+                                  <TableRow key={po.id} className="hover:bg-slate-50/80">
+                                    <TableCell>
+                                      {po.unresolved ? (
+                                        <span className="whitespace-nowrap text-sm text-muted-foreground">Service PO #{po.id}</span>
+                                      ) : (
+                                        <div className="flex items-center gap-1.5">
+                                          <div className="min-w-0">
+                                            <p className="whitespace-nowrap text-sm font-semibold text-slate-800">{po.service_po_name}</p>
+                                            <p className="whitespace-nowrap font-mono text-xs text-muted-foreground">{po.service_po_code}</p>
+                                          </div>
+                                          {po.is_project_manager && (
+                                            <Badge className="shrink-0 bg-amber-100 text-[10px] text-amber-700 hover:bg-amber-100">PM</Badge>
+                                          )}
+                                        </div>
+                                      )}
+                                    </TableCell>
+                                    <TableCell className="whitespace-nowrap text-sm text-slate-600">{po.client_name ?? '—'}</TableCell>
+                                    <TableCell className="whitespace-nowrap text-sm text-slate-600">{po.project_name ?? '—'}</TableCell>
+                                    <TableCell>
+                                      {po.unresolved ? (
+                                        <span className="text-sm text-muted-foreground">—</span>
+                                      ) : po.is_centralised ? (
+                                        <Badge className="bg-violet-100 text-[10px] text-violet-700 hover:bg-violet-100">Yes</Badge>
+                                      ) : (
+                                        <span className="text-sm text-muted-foreground">No</span>
+                                      )}
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                          </Table>
+                          <div className="border-t px-3 pb-1">
+                            <ListPagination
+                              page={safePoPage}
+                              limit={poLimit}
+                              total={filteredServicePOs.length}
+                              onPageChange={setPoPage}
+                              onPageSizeChange={(l) => { setPoLimit(l); setPoPage(1); }}
+                            />
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+};
+
+const StatusToggle = ({ employee, disabled = false }) => {
   const { mutate, isPending } = useToggleEmployeeStatus();
   const isActive = employee.status === 'active';
   return (
     <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
       <Switch
         checked={isActive}
-        disabled={isPending}
+        disabled={isPending || disabled}
         onCheckedChange={(checked) =>
           mutate({ id: employee.id, status: checked ? 'active' : 'inactive' })
         }
@@ -806,6 +1087,7 @@ const EmployeeList = () => {
     buId: buIds, setBuId: setBuIds, showBuFilter, isBuFiltered, resetBuId,
   } = useMasterBuFilter({ multiple: true });
   const [mappingTarget, setMappingTarget] = useState(null);
+  const [viewTarget, setViewTarget] = useState(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const debouncedSearch = useDebounce(search, 400);
@@ -931,6 +1213,13 @@ const EmployeeList = () => {
   // EMPLOYEE_NEW / EMPLOYEE_EDIT.
   const canManageEmployees = useCanManageEmployeeRecords();
 
+  // The seed "superadmin" account (confirmed live: superadmin@trackio.com) backs this whole
+  // system's own Admin access — editing its fields or remapping its roles/Business Units from
+  // here risks locking everyone out of Admin access entirely. Protected by email rather than role
+  // (Admin/Platform Admin) since plenty of real, legitimately-editable accounts also hold those
+  // roles; this specific seed login is the one that must never be touched from the UI.
+  const isProtectedSuperAdmin = (emp) => (emp?.email ?? '').toLowerCase() === 'superadmin@trackio.com';
+
   const activeFilterCount =
     (statusFilter !== 'all' ? 1 : 0)
     + (roleFilter !== 'all' ? 1 : 0)
@@ -945,43 +1234,57 @@ const EmployeeList = () => {
     setPage(1);
   };
 
-  // The whole actions column is dropped for a login with no actions in it, rather than rendering
-  // a header over empty cells (its only contents are Edit and Map Roles, both `isHR`-only). The
-  // two sticky columns after it then shift into the freed space — `meta.left` offsets are
-  // hand-maintained against the columns actually present, so they follow the same condition.
+  // Always present now — View (read-only, no write access needed) lives here for every login that
+  // can open this list at all; Edit and Map Roles are added into the same column only for `isHR`
+  // (and dropped outright for the protected superadmin row — see isProtectedSuperAdmin). Since the
+  // column itself is never conditionally absent any more, the sticky offsets below are fixed
+  // numbers, not branched on `isHR` the way they used to be.
   const columns = useMemo(() => [
-    ...(isHR ? [columnHelper.display({
+    columnHelper.display({
       id: 'actions',
       header: 'Actions',
       size: 150,
       meta: { sticky: true, left: 0 },
-      cell: ({ row }) => (
-        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-          {canManageEmployees && (
+      cell: ({ row }) => {
+        const protectedRow = isProtectedSuperAdmin(row.original);
+        return (
+          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
             <Button
               size="sm"
-              title="Edit"
-              onClick={() => navigate(buildPath(ROUTES.EMPLOYEE_EDIT, { id: row.original.id }))}
-              className="h-6 w-6 p-0 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
+              title="View Details"
+              onClick={() => setViewTarget(row.original)}
+              className="h-6 w-6 p-0 bg-slate-600 hover:bg-slate-700 text-white rounded transition-colors"
             >
-              <Pencil className="h-3 w-3" />
+              <Eye className="h-3 w-3" />
             </Button>
-          )}
-          <Button
-            size="sm"
-            className="h-6 w-6 p-0 bg-teal-600 hover:bg-teal-700 text-white rounded transition-colors"
-            title="Map Roles & Business Units"
-            onClick={() => setMappingTarget(row.original)}
-          >
-            <UserCog className="h-3 w-3" />
-          </Button>
-        </div>
-      ),
-    })] : []),
+            {canManageEmployees && !protectedRow && (
+              <Button
+                size="sm"
+                title="Edit"
+                onClick={() => navigate(buildPath(ROUTES.EMPLOYEE_EDIT, { id: row.original.id }))}
+                className="h-6 w-6 p-0 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
+              >
+                <Pencil className="h-3 w-3" />
+              </Button>
+            )}
+            {isHR && !protectedRow && (
+              <Button
+                size="sm"
+                className="h-6 w-6 p-0 bg-teal-600 hover:bg-teal-700 text-white rounded transition-colors"
+                title="Map Roles & Business Units"
+                onClick={() => setMappingTarget(row.original)}
+              >
+                <UserCog className="h-3 w-3" />
+              </Button>
+            )}
+          </div>
+        );
+      },
+    }),
     columnHelper.accessor('employee_code', {
       header: 'Employee ID',
       size: 130,
-      meta: { sticky: true, left: isHR ? 120 : 0 },
+      meta: { sticky: true, left: 150 },
       cell: (info) => (
         <TruncatedCell value={info.getValue()} maxWidth="100px" className="font-medium" />
       ),
@@ -989,7 +1292,7 @@ const EmployeeList = () => {
     columnHelper.accessor('full_name', {
       header: 'Name',
       size: 200,
-      meta: { sticky: true, left: isHR ? 250 : 130 },
+      meta: { sticky: true, left: 280 },
       cell: (info) => <TruncatedCell value={info.getValue()} maxWidth="160px" />,
     }),
     columnHelper.accessor('email', {
@@ -1074,7 +1377,7 @@ const EmployeeList = () => {
       // Activating/deactivating an employee is a change to the RECORD, not a mapping — read-only
       // badge for a login that can't manage records, same data either way.
       cell: (info) => (canManageEmployees
-        ? <StatusToggle employee={info.row.original} />
+        ? <StatusToggle employee={info.row.original} disabled={isProtectedSuperAdmin(info.row.original)} />
         : <StatusBadge status={info.getValue()} />),
     }),
     columnHelper.accessor('is_timesheet_approval_required', {
@@ -1808,7 +2111,7 @@ const EmployeeList = () => {
             onSortingChange={(s) => { setSorting(s); setPage(1); }}
             onPageChange={setPage}
             onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
-            onRowClick={canManageEmployees ? (row) => navigate(buildPath(ROUTES.EMPLOYEE_EDIT, { id: row.id })) : undefined}
+            onRowClick={canManageEmployees ? (row) => { if (!isProtectedSuperAdmin(row)) navigate(buildPath(ROUTES.EMPLOYEE_EDIT, { id: row.id })); } : undefined}
           />
 
           {/* Mobile — compact card list instead of the frozen-column table, same data/handlers. */}
@@ -1832,9 +2135,9 @@ const EmployeeList = () => {
                     key={emp.id}
                     className={cn(
                       'flex items-center gap-3 rounded-xl border bg-white p-3 shadow-sm transition-colors',
-                      canManageEmployees && 'active:bg-slate-50'
+                      canManageEmployees && !isProtectedSuperAdmin(emp) && 'active:bg-slate-50'
                     )}
-                    onClick={canManageEmployees ? () => navigate(buildPath(ROUTES.EMPLOYEE_EDIT, { id: emp.id })) : undefined}
+                    onClick={canManageEmployees && !isProtectedSuperAdmin(emp) ? () => navigate(buildPath(ROUTES.EMPLOYEE_EDIT, { id: emp.id })) : undefined}
                   >
                     <Avatar className="h-10 w-10 shrink-0">
                       <AvatarFallback>{getInitials(emp.full_name)}</AvatarFallback>
@@ -1849,31 +2152,34 @@ const EmployeeList = () => {
                         </span>
                       </p>
                     </div>
-                    {isHR && (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-10 w-10 shrink-0"
-                            aria-label="Employee actions"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <MoreVertical className="h-5 w-5" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                          {canManageEmployees && (
-                            <DropdownMenuItem onClick={() => navigate(buildPath(ROUTES.EMPLOYEE_EDIT, { id: emp.id }))}>
-                              <Pencil className="h-4 w-4" /> Edit Employee
-                            </DropdownMenuItem>
-                          )}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-10 w-10 shrink-0"
+                          aria-label="Employee actions"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <MoreVertical className="h-5 w-5" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                        <DropdownMenuItem onClick={() => setViewTarget(emp)}>
+                          <Eye className="h-4 w-4" /> View Details
+                        </DropdownMenuItem>
+                        {isHR && !isProtectedSuperAdmin(emp) && canManageEmployees && (
+                          <DropdownMenuItem onClick={() => navigate(buildPath(ROUTES.EMPLOYEE_EDIT, { id: emp.id }))}>
+                            <Pencil className="h-4 w-4" /> Edit Employee
+                          </DropdownMenuItem>
+                        )}
+                        {isHR && !isProtectedSuperAdmin(emp) && (
                           <DropdownMenuItem onClick={() => setMappingTarget(emp)}>
                             <UserCog className="h-4 w-4" /> Manage Roles / Permissions
                           </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    )}
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 ))
               )}
@@ -1924,6 +2230,13 @@ const EmployeeList = () => {
         allRoles={rolesData?.data ?? []}
         businessUnits={mappingDialogBusinessUnits}
         onOpenChange={(open) => !open && setMappingTarget(null)}
+      />
+
+      <EmployeeViewDrawer
+        employeeId={viewTarget?.id}
+        employeeName={viewTarget?.full_name}
+        open={!!viewTarget}
+        onOpenChange={(open) => !open && setViewTarget(null)}
       />
 
       <Outlet />

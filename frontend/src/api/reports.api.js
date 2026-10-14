@@ -71,6 +71,34 @@ export const reportsApi = {
   // page/limit/sortBy/sortOrder go straight through, and the response's `meta` drives the footer.
   getResourceUtilizationTrend: (params) => getReport('/reports/resource-utilization-trend', params),
   getServicePOHoursBudget: (params) => getReport('/reports/service-po-hours-budget', params),
+  // BU-wise Utilisation / Employee x Project Utilisation — same envelope/period/multi-select-id
+  // conventions as every other report above, via the shared getReport helper.
+  getBuWiseUtilisation: (params) => getReport('/reports/bu-wise-utilisation', params),
+  getEmployeeProjectUtilisation: (params) => getReport('/reports/employee-project-utilisation', params),
+  // Backend-generated Excel of EVERY row matching the current filters (not just the current page) —
+  // same blob/Content-Disposition pattern as exportEmployeeRoleBuMapping. The caller strips page/limit.
+  exportBuWiseUtilisation: async (params) => {
+    const { buId, ...query } = params;
+    const res = await apiClient.get('/reports/bu-wise-utilisation', {
+      params: { ...query, format: 'excel' },
+      responseType: 'blob',
+      ...explicitBuScope(buId),
+    });
+    const match = /filename="?([^"]+)"?/i.exec(res.headers['content-disposition'] ?? '');
+    return { blob: res.data, filename: match?.[1] ?? 'BU_wise_Utilisation.xlsx' };
+  },
+  // Backend-generated Excel of EVERY row matching the current filters (not just the current page) —
+  // same blob/Content-Disposition pattern as exportEmployeeRoleBuMapping. The caller strips page/limit.
+  exportEmployeeProjectUtilisation: async (params) => {
+    const { buId, ...query } = params;
+    const res = await apiClient.get('/reports/employee-project-utilisation', {
+      params: { ...query, format: 'excel' },
+      responseType: 'blob',
+      ...explicitBuScope(buId),
+    });
+    const match = /filename="?([^"]+)"?/i.exec(res.headers['content-disposition'] ?? '');
+    return { blob: res.data, filename: match?.[1] ?? 'Employee_Project_Utilisation.xlsx' };
+  },
   // This pair predates `getReport` and names its BU filter `company_id` rather than `buId` — it
   // sends the chosen BU as BOTH a query param and the request's BU scope, because unlike the rest
   // of /reports/* this endpoint filters on the param server-side.
@@ -166,6 +194,25 @@ export const reportsApi = {
   // going through a bare apiClient.get() here inherited the active BU header instead and silently
   // scoped every result down to just that one BU (0 rows instead of the full filtered set).
   getProjectTimesheet: (params) => getReport('/reports/project-timesheet', params),
+  // Cross-BU Employee & PO Hours — one row per Employee + Service PO + Activity + month. `buId`
+  // rides the same pseudo-param convention as every report above (dropped from the query string,
+  // turned into BU scope instead); the two REAL BU axes here (employee_bu_ids/employee_sub_bu_ids
+  // and po_bu_ids) are independent filters the page sends as plain query params, never merged.
+  getCrossBuEmployeePoHours: (params) => getReport('/reports/cross-bu-employee-po-hours', params),
+  // Same endpoint, `?format=excel` — not a separate `/export` path, same convention as
+  // downloadProjectTimesheet below (the backend returns every matching row for the current
+  // filters, not just the current page, so the caller strips page/limit first).
+  downloadCrossBuEmployeePoHours: async (params) => {
+    const { buId, ...query } = params;
+    const res = await apiClient.get('/reports/cross-bu-employee-po-hours', {
+      params: { ...query, format: 'excel' },
+      responseType: 'blob',
+      ...explicitBuScope(buId),
+    });
+    const match = /filename="?([^"]+)"?/i.exec(res.headers['content-disposition'] ?? '');
+    const filename = match?.[1] ?? 'Cross_BU_Employee_PO_Hours.xlsx';
+    return { blob: res.data, filename };
+  },
   // `format` always overrides to 'excel'/'csv' and reads back a real file, same
   // Content-Disposition filename pattern as exportResourceCostUtilization above. Manual header
   // handling (not getReport, which only returns `.data` for JSON) but the same BU-scope pseudo-

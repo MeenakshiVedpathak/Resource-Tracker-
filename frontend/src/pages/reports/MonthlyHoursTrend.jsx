@@ -1,7 +1,7 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Download } from 'lucide-react';
+import { Download, Info } from 'lucide-react';
 import { useMonthlyHoursTrend } from '@/hooks/useReports';
 import { useActiveClients } from '@/hooks/useClients';
 import { useActiveServicePOs } from '@/hooks/useServicePOs';
@@ -19,6 +19,7 @@ import EntityFilter, { ALL_ENTITIES } from '@/components/common/EntityFilter';
 import EmptyState from '@/components/common/EmptyState';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
@@ -38,18 +39,20 @@ const now = new Date();
 const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
 
 // The page renders four separate tables (Hours by Category, Cost by Category, Utilization,
-// Leave/No-Work Hours) — the export used to only ever cover the first one. Every table now gets
-// its own sheet in the same workbook, so nothing visible on screen is missing from the export.
-const exportToExcel = ({ hoursByCategory, costRows, costCategoryNames, utilization, leaveNoWorkRows }) => {
+// Leave/No-Work Hours) — every table gets its own sheet in the same workbook. In Original mode
+// the export uses original_* fields under the same column names (no "Original" prefix needed
+// since the whole export is in that mode) and appends "_Original" to the filename.
+const exportToExcel = ({ hoursByCategory, costRows, costCategoryNames, utilization, leaveNoWorkRows, hoursSource = 'M' }) => {
+  const isOriginal = hoursSource === 'O';
   const wb = XLSX.utils.book_new();
 
   const hoursHeader = ['Month', 'Billable', 'Non-Billable', 'Customer Non-Billable', 'Other'];
   const hoursDataRows = hoursByCategory.map((r) => [
     r.month ?? '',
-    r.Billable != null ? Number(r.Billable) : '',
-    r['Non-Billable'] != null ? Number(r['Non-Billable']) : '',
-    r['Customer Non-Billable'] != null ? Number(r['Customer Non-Billable']) : '',
-    r.Other != null ? Number(r.Other) : '',
+    isOriginal ? (r.original_Billable != null ? Number(r.original_Billable) : '') : (r.Billable != null ? Number(r.Billable) : ''),
+    isOriginal ? (r['original_Non-Billable'] != null ? Number(r['original_Non-Billable']) : '') : (r['Non-Billable'] != null ? Number(r['Non-Billable']) : ''),
+    isOriginal ? (r['original_Customer Non-Billable'] != null ? Number(r['original_Customer Non-Billable']) : '') : (r['Customer Non-Billable'] != null ? Number(r['Customer Non-Billable']) : ''),
+    isOriginal ? (r.original_Other != null ? Number(r.original_Other) : '') : (r.Other != null ? Number(r.Other) : ''),
   ]);
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([hoursHeader, ...hoursDataRows]), 'Hours by Category');
 
@@ -60,51 +63,54 @@ const exportToExcel = ({ hoursByCategory, costRows, costCategoryNames, utilizati
   ]);
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([costHeader, ...costDataRows]), 'Cost by Category');
 
-  const utilizationHeader = ['Month', 'Total Hours', 'Billable Hours', 'Utilization %'];
+  const utilizationHeader = ['Month', 'Total Hours', 'Billable Hours', 'Billable Mix %', 'Employees', 'Capacity Hrs', 'Billable % of Capacity'];
   const utilizationDataRows = utilization.map((r) => [
     r.month ?? '',
-    r.total_hours != null ? Number(r.total_hours) : '',
-    r.billable_hours != null ? Number(r.billable_hours) : '',
-    r.utilization_percentage != null ? Number(r.utilization_percentage) : '',
+    isOriginal ? (r.original_total_hours != null ? Number(r.original_total_hours) : '') : (r.total_hours != null ? Number(r.total_hours) : ''),
+    isOriginal ? (r.original_billable_hours != null ? Number(r.original_billable_hours) : '') : (r.billable_hours != null ? Number(r.billable_hours) : ''),
+    isOriginal ? (r.original_utilization_percentage != null ? Number(r.original_utilization_percentage) : '') : (r.utilization_percentage != null ? Number(r.utilization_percentage) : ''),
+    r.employee_count ?? '',
+    r.capacity_hours != null ? Number(r.capacity_hours) : '',
+    isOriginal ? (r.original_billable_vs_capacity_percentage != null ? Number(r.original_billable_vs_capacity_percentage) : '') : (r.billable_vs_capacity_percentage != null ? Number(r.billable_vs_capacity_percentage) : ''),
   ]);
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([utilizationHeader, ...utilizationDataRows]), 'Utilization');
 
   const leaveHeader = ['Month', 'Leave Hours', 'No-Work Hours'];
   const leaveDataRows = leaveNoWorkRows.map((r) => [
     r.month ?? '',
-    r.leave_hours != null ? Number(r.leave_hours) : '',
-    r.no_work_hours != null ? Number(r.no_work_hours) : '',
+    isOriginal ? (r.original_leave_hours != null ? Number(r.original_leave_hours) : '') : (r.leave_hours != null ? Number(r.leave_hours) : ''),
+    isOriginal ? (r.original_no_work_hours != null ? Number(r.original_no_work_hours) : '') : (r.no_work_hours != null ? Number(r.no_work_hours) : ''),
   ]);
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([leaveHeader, ...leaveDataRows]), 'Leave-No-Work Hours');
 
-  XLSX.writeFile(wb, 'Monthly_Hours_Trend.xlsx');
+  XLSX.writeFile(wb, `Monthly_Hours_Trend${isOriginal ? '_Original' : ''}.xlsx`);
 };
 
-const hoursColumns = [
+const getHoursColumns = ({ isOriginal = false } = {}) => [
   hoursColumnHelper.accessor('month', {
     header: 'Month',
     size: 120,
     cell: (info) => <span className="font-medium">{info.getValue() || '—'}</span>,
   }),
-  hoursColumnHelper.accessor((row) => row.Billable, {
+  hoursColumnHelper.accessor((row) => (isOriginal ? row.original_Billable : row.Billable), {
     id: 'billable',
     header: 'Billable',
     size: 140,
     cell: (info) => <span className="tabular-nums">{formatHours(info.getValue())}</span>,
   }),
-  hoursColumnHelper.accessor((row) => row['Non-Billable'], {
+  hoursColumnHelper.accessor((row) => (isOriginal ? row['original_Non-Billable'] : row['Non-Billable']), {
     id: 'nonBillable',
     header: 'Non-Billable',
     size: 140,
     cell: (info) => <span className="tabular-nums">{formatHours(info.getValue())}</span>,
   }),
-  hoursColumnHelper.accessor((row) => row['Customer Non-Billable'], {
+  hoursColumnHelper.accessor((row) => (isOriginal ? row['original_Customer Non-Billable'] : row['Customer Non-Billable']), {
     id: 'customerNonBillable',
     header: 'Customer Non-Billable',
     size: 210,
     cell: (info) => <span className="tabular-nums">{formatHours(info.getValue())}</span>,
   }),
-  hoursColumnHelper.accessor((row) => row.Other, {
+  hoursColumnHelper.accessor((row) => (isOriginal ? row.original_Other : row.Other), {
     id: 'other',
     header: 'Other',
     size: 130,
@@ -122,45 +128,105 @@ const utilizationColorClass = (value) => {
   return 'text-destructive';
 };
 
-const utilizationColumns = [
+// Capacity-based percentages are allowed to exceed 100% (original hours logged beyond the cap) —
+// never clamped, just flagged amber above 100% rather than colored by the billable-mix healthy/
+// borderline/bad scale above, which doesn't apply to a capacity comparison.
+const capacityColorClass = (value) => {
+  if (value == null) return 'text-muted-foreground';
+  return Number(value) > 100 ? 'text-amber-600 dark:text-amber-400' : '';
+};
+
+// DataTable makes every sortable column header a <button> (toggles sorting on click) — the info
+// trigger here is a focusable <span>, not a nested <button>, so it never ends up inside another
+// interactive button element, which browsers handle unpredictably.
+const HeaderWithInfo = ({ label, tooltip }) => (
+  <span className="inline-flex items-center gap-1">
+    {label}
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          role="button"
+          tabIndex={0}
+          onClick={(e) => e.stopPropagation()}
+          className="text-muted-foreground hover:text-foreground"
+          aria-label={`What is ${label}?`}
+        >
+          <Info className="h-3.5 w-3.5" />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="max-w-xs leading-relaxed">
+        {tooltip}
+      </TooltipContent>
+    </Tooltip>
+  </span>
+);
+
+const BILLABLE_MIX_TOOLTIP = 'Billable hours / total logged hours. 100% means everything logged was billable. It does not compare against capacity.';
+const BILLABLE_VS_CAPACITY_TOOLTIP = "Billable hours / (people who logged that month x that month's Monthly Cap Hours). Original hours above the cap can exceed 100%.";
+
+const getUtilizationColumns = ({ isOriginal = false } = {}) => [
   utilizationColumnHelper.accessor('month', {
     header: 'Month',
     size: 120,
     cell: (info) => <span className="font-medium">{info.getValue() || '—'}</span>,
   }),
-  utilizationColumnHelper.accessor('total_hours', {
+  utilizationColumnHelper.accessor(isOriginal ? 'original_total_hours' : 'total_hours', {
+    id: 'totalHours',
     header: 'Total Hours',
     size: 150,
     cell: (info) => <span className="tabular-nums">{formatHours(info.getValue())}</span>,
   }),
-  utilizationColumnHelper.accessor('billable_hours', {
+  utilizationColumnHelper.accessor(isOriginal ? 'original_billable_hours' : 'billable_hours', {
+    id: 'billableHours',
     header: 'Billable Hours',
     size: 150,
     cell: (info) => <span className="tabular-nums">{formatHours(info.getValue())}</span>,
   }),
-  utilizationColumnHelper.accessor('utilization_percentage', {
-    header: 'Utilization %',
-    size: 150,
+  utilizationColumnHelper.accessor(isOriginal ? 'original_utilization_percentage' : 'utilization_percentage', {
+    id: 'utilizationPct',
+    header: () => <HeaderWithInfo label="Billable Mix %" tooltip={BILLABLE_MIX_TOOLTIP} />,
+    size: 160,
     cell: (info) => (
       <span className={cn('tabular-nums font-medium', utilizationColorClass(info.getValue()))}>
         {formatPercentage(info.getValue())}
       </span>
     ),
   }),
+  utilizationColumnHelper.accessor('employee_count', {
+    header: 'Employees',
+    size: 120,
+    cell: (info) => <span className="tabular-nums">{info.getValue() ?? '—'}</span>,
+  }),
+  utilizationColumnHelper.accessor('capacity_hours', {
+    header: 'Capacity Hrs',
+    size: 150,
+    cell: (info) => <span className="tabular-nums">{info.getValue() != null ? formatHours(info.getValue()) : '—'}</span>,
+  }),
+  utilizationColumnHelper.accessor(isOriginal ? 'original_billable_vs_capacity_percentage' : 'billable_vs_capacity_percentage', {
+    id: 'billableVsCapacity',
+    header: () => <HeaderWithInfo label="Billable % of Capacity" tooltip={BILLABLE_VS_CAPACITY_TOOLTIP} />,
+    size: 200,
+    cell: (info) => {
+      const val = info.getValue();
+      return <span className={cn('tabular-nums font-medium', capacityColorClass(val))}>{val != null ? formatPercentage(val, 2) : '—'}</span>;
+    },
+  }),
 ];
 
-const leaveNoWorkColumns = [
+const getLeaveNoWorkColumns = ({ isOriginal = false } = {}) => [
   leaveColumnHelper.accessor('month', {
     header: 'Month',
     size: 120,
     cell: (info) => <span className="font-medium">{info.getValue() || '—'}</span>,
   }),
-  leaveColumnHelper.accessor('leave_hours', {
+  leaveColumnHelper.accessor(isOriginal ? 'original_leave_hours' : 'leave_hours', {
+    id: 'leaveHours',
     header: 'Leave Hours',
     size: 150,
     cell: (info) => <span className="tabular-nums">{formatHours(info.getValue())}</span>,
   }),
-  leaveColumnHelper.accessor('no_work_hours', {
+  leaveColumnHelper.accessor(isOriginal ? 'original_no_work_hours' : 'no_work_hours', {
+    id: 'noWorkHours',
     header: 'No-Work Hours',
     size: 150,
     cell: (info) => <span className="tabular-nums">{formatHours(info.getValue())}</span>,
@@ -275,8 +341,16 @@ const MonthlyHoursTrend = () => {
   const leaveNoWorkRows = useMemo(() => leaveTrend.map((l, i) => ({
     month: l.month,
     leave_hours: l.leave_hours,
+    original_leave_hours: l.original_leave_hours,
     no_work_hours: noWorkTrend[i]?.no_work_hours,
+    original_no_work_hours: noWorkTrend[i]?.original_no_work_hours,
   })), [leaveTrend, noWorkTrend]);
+
+  const isOriginal = hoursSource === 'O';
+
+  const hoursColumns = useMemo(() => getHoursColumns({ isOriginal }), [isOriginal]);
+  const utilizationColumns = useMemo(() => getUtilizationColumns({ isOriginal }), [isOriginal]);
+  const leaveNoWorkColumns = useMemo(() => getLeaveNoWorkColumns({ isOriginal }), [isOriginal]);
 
   const activeFilterCount = [
     entityIds.length > 0,
@@ -297,7 +371,7 @@ const MonthlyHoursTrend = () => {
   };
 
   const hasAnyData = hoursByCategory.length > 0 || costRows.length > 0 || utilization.length > 0 || leaveNoWorkRows.length > 0;
-  const handleExport = () => exportToExcel({ hoursByCategory, costRows, costCategoryNames, utilization, leaveNoWorkRows });
+  const handleExport = () => exportToExcel({ hoursByCategory, costRows, costCategoryNames, utilization, leaveNoWorkRows, hoursSource });
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -306,22 +380,27 @@ const MonthlyHoursTrend = () => {
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {canViewOriginal && (
-              <div className="flex items-center gap-0.5 p-0.5 rounded-xl bg-muted border shrink-0">
-                {[
-                  { value: 'O', label: 'Original' },
-                  { value: 'M', label: 'Published' },
-                ].map(({ value, label }) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setHoursSource(value)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 whitespace-nowrap ${
-                      hoursSource === value ? 'bg-card shadow-sm text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
+              <div className="flex flex-col items-end gap-0.5">
+                <div className="flex items-center gap-0.5 p-0.5 rounded-xl bg-muted border shrink-0">
+                  {[
+                    { value: 'O', label: 'Original' },
+                    { value: 'M', label: 'Adjusted' },
+                  ].map(({ value, label }) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setHoursSource(value)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 whitespace-nowrap ${
+                        hoursSource === value ? 'bg-card shadow-sm text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <span className="text-[10px] text-muted-foreground">
+                  {hoursSource === 'O' ? 'Original (as logged, before the monthly cap)' : 'Adjusted (after sync)'}
+                </span>
               </div>
             )}
             <FilterToggleButton

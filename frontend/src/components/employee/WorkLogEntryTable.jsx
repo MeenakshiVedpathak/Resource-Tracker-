@@ -57,7 +57,7 @@ export const AutoResizeTextarea = ({ value, className, ...props }) => {
   );
 };
 
-// `hoursCap` defaults to the Daily 12-hr cap so existing Daily callers (which don't pass it)
+// `hoursCap` defaults to the Daily 24-hr cap so existing Daily callers (which don't pass it)
 // are unaffected; Monthly mode passes a much larger cap since a node's hours there is a
 // whole month's total, not one day's.
 const HourStepper = ({ value, onChange, disabled, hoursCap = DAILY_HOURS_CAP }) => {
@@ -73,6 +73,22 @@ const HourStepper = ({ value, onChange, disabled, hoursCap = DAILY_HOURS_CAP }) 
     const next = Number.isFinite(parsed) ? clampHours(Math.round(parsed * 60) / 60, hoursCap) : num;
     setInputValue(formatHourMinuteValue(next));
     if (next !== num) onChange(next);
+  };
+
+  // Propagates to the parent (and so to whatever "unsaved change"/Save-button dirty-tracking it
+  // drives) on every keystroke that parses to a real, in-range value — not just on blur/Enter via
+  // commit() above. Typing a value and saving immediately without first clicking elsewhere used to
+  // leave Save disabled since nothing had "committed" yet. Deliberately NOT clamping an
+  // out-of-range in-progress value here (e.g. typing "15" toward a smaller in-range number) — that
+  // would round-trip through the `value` prop and the [num] effect below, resetting `inputValue`
+  // mid-keystroke; out-of-range values still only get clamped at commit() time.
+  const handleInputChange = (e) => {
+    const raw = e.target.value;
+    setInputValue(raw);
+    const parsed = parseHourMinuteInput(raw);
+    if (Number.isFinite(parsed) && parsed >= 0 && parsed <= hoursCap && parsed !== num) {
+      onChange(parsed);
+    }
   };
 
   return (
@@ -91,7 +107,7 @@ const HourStepper = ({ value, onChange, disabled, hoursCap = DAILY_HOURS_CAP }) 
         min="0"
         max={hoursCap}
         value={inputValue}
-        onChange={(e) => setInputValue(e.target.value)}
+        onChange={handleInputChange}
         onBlur={commit}
         onKeyDown={(e) => {
           if (e.key === 'Enter') e.currentTarget.blur();

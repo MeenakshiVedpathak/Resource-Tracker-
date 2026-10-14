@@ -1,24 +1,21 @@
 import { useMemo } from 'react';
 import { formatHoursMinutes } from '@/utils/formatters';
+import { useEmployeeMonthlyCap } from '@/hooks/useSystemSettings';
 
 const RADIUS = 22;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
-// Fixed standard monthly hours target (22 working days x 8 hrs) — not derived from the actual
-// number of weekdays in the given month, since the backend has no monthly-target concept.
-// Exported so other employee-facing views (e.g. the dashboard) share this one target instead of
-// redefining the same magic number.
-export const STANDARD_MONTHLY_HOURS = 176;
-
 // Sums the same per-day `totalHours` the calendar heatmap reads (GET /employee-timesheets/
-// calendar) against the fixed standard monthly target above.
-const MonthlyHoursCard = ({ calendarDays }) => {
+// calendar) against the cap THIS employee's own synced timesheet used for that month — GET
+// /system-settings/monthly-cap?month=&year= → `cap_for_employee_month` (falls back to the latest
+// Admin-set cap if nothing has synced for them yet for that month).
+const MonthlyHoursCard = ({ month, year, calendarDays }) => {
   const workedHours = useMemo(
     () => calendarDays.reduce((sum, d) => sum + Number(d.totalHours || 0), 0),
     [calendarDays]
   );
 
-  const targetHours = STANDARD_MONTHLY_HOURS;
+  const targetHours = useEmployeeMonthlyCap(month && year ? { month, year } : undefined);
 
   const pct = targetHours ? Math.min(100, Math.round((workedHours / targetHours) * 100)) : 0;
   const dashOffset = CIRCUMFERENCE * (1 - pct / 100);

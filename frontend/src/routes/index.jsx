@@ -65,6 +65,7 @@ const RoleFormMappingForm = lazy(() => import('@/pages/roleFormMapping/RoleFormM
 // ── Platform Admin / Admin tier ──
 const AdminList = lazy(() => import('@/pages/admins/AdminList'));
 const AdminCreate = lazy(() => import('@/pages/admins/AdminCreate'));
+const AuditLogs = lazy(() => import('@/pages/auditLogs/AuditLogs'));
 const OrganizationOverview = lazy(() => import('@/pages/organizationOverview/OrganizationOverview'));
 
 // ── Entity Admin tier (also reachable by Admin, platform-wide) ──
@@ -134,6 +135,8 @@ const MonthlyHoursTrend = lazy(() => import('@/pages/reports/MonthlyHoursTrend')
 const EmployeeBenchPercentage = lazy(() => import('@/pages/reports/EmployeeBenchPercentage'));
 const ResourceUtilizationTrend = lazy(() => import('@/pages/reports/ResourceUtilizationTrend'));
 const ServicePOHoursBudget = lazy(() => import('@/pages/reports/ServicePOHoursBudget'));
+const BuWiseUtilisation = lazy(() => import('@/pages/reports/BuWiseUtilisation'));
+const EmployeeProjectUtilisation = lazy(() => import('@/pages/reports/EmployeeProjectUtilisation'));
 const EmployeeWorkLogHoursSummaryReport = lazy(() => import('@/pages/reports/EmployeeWorkLogHoursSummaryReport'));
 const EmployeeWorkLogComplianceReport = lazy(() => import('@/pages/reports/EmployeeWorkLogComplianceReport'));
 const PmWiseUtilizationReport = lazy(() => import('@/pages/reports/PmWiseUtilizationReport'));
@@ -142,6 +145,7 @@ const MonthWiseBenchReport = lazy(() => import('@/pages/reports/MonthWiseBenchRe
 const ResourceWiseBenchReport = lazy(() => import('@/pages/reports/ResourceWiseBenchReport'));
 const ResourceCostUtilizationReport = lazy(() => import('@/pages/reports/ResourceCostUtilizationReport'));
 const ProjectWiseTimesheetReport = lazy(() => import('@/pages/reports/ProjectWiseTimesheetReport'));
+const CrossBuEmployeePoHoursReport = lazy(() => import('@/pages/reports/CrossBuEmployeePoHoursReport'));
 const EmployeeRoleBuMappingReport = lazy(() => import('@/pages/reports/EmployeeRoleBuMappingReport'));
 const TeamLeadEmployeeProjectHours = lazy(() => import('@/pages/reports/TeamLeadEmployeeProjectHours'));
 
@@ -181,6 +185,7 @@ const ResourceBudgetPage = lazy(() => import('@/pages/resourceBudgets/ResourceBu
 
 // ── Settings ──
 const Notifications = lazy(() => import('@/pages/Notifications'));
+const MonthlyCapSettings = lazy(() => import('@/pages/settings/MonthlyCapSettings'));
 
 // ── Errors ──
 const NotFound = lazy(() => import('@/pages/NotFound'));
@@ -329,6 +334,16 @@ const AppRoutes = () => {
           <Route path="new" element={<AdminCreate />} />
         </Route>
 
+        {/* Audit Logs — access controlled by Role-Form Mapping */}
+        <Route
+          path={ROUTES.AUDIT_LOGS}
+          element={
+            <ProtectedRoute formName={FORM_NAMES.AUDIT_LOGS} allowIfNoFormsMapped>
+              <AuditLogs />
+            </ProtectedRoute>
+          }
+        />
+
         {/* Organization Overview — Platform Admin's read-only, whole-platform screen. One route,
             one form, tabs inside (Overview/Business Units/Projects & POs/Users/Total Admins/
             Employee Work Log) — see pages/organizationOverview/OrganizationOverview.jsx. */}
@@ -449,6 +464,8 @@ const AppRoutes = () => {
           <Route path={ROUTES.REPORT_EMPLOYEE_BENCH_PERCENTAGE} element={<ProtectedRoute formName={FORM_NAMES.REPORT_EMPLOYEE_BENCH_PERCENTAGE}><EmployeeBenchPercentage /></ProtectedRoute>} />
           <Route path={ROUTES.REPORT_RESOURCE_UTILIZATION_TREND} element={<ProtectedRoute formName={FORM_NAMES.REPORT_RESOURCE_UTILIZATION_TREND}><ResourceUtilizationTrend /></ProtectedRoute>} />
           <Route path={ROUTES.REPORT_SERVICE_PO_HOURS_BUDGET} element={<ProtectedRoute formName={FORM_NAMES.REPORT_SERVICE_PO_HOURS_BUDGET}><ServicePOHoursBudget /></ProtectedRoute>} />
+          <Route path={ROUTES.REPORT_BU_WISE_UTILISATION} element={<ProtectedRoute formName={FORM_NAMES.REPORT_BU_WISE_UTILISATION}><BuWiseUtilisation /></ProtectedRoute>} />
+          <Route path={ROUTES.REPORT_EMPLOYEE_PROJECT_UTILISATION} element={<ProtectedRoute formName={FORM_NAMES.REPORT_EMPLOYEE_PROJECT_UTILISATION}><EmployeeProjectUtilisation /></ProtectedRoute>} />
           <Route path={ROUTES.REPORT_PM_WISE_UTILIZATION} element={<ProtectedRoute formName={FORM_NAMES.REPORT_PM_WISE_UTILIZATION}><PmWiseUtilizationReport /></ProtectedRoute>} />
           <Route path={ROUTES.REPORT_PROJECT_WISE_UTILIZATION} element={<ProtectedRoute formName={FORM_NAMES.REPORT_PROJECT_WISE_UTILIZATION}><ProjectWiseUtilizationReport /></ProtectedRoute>} />
           <Route path={ROUTES.REPORT_MONTH_WISE_BENCH} element={<ProtectedRoute formName={FORM_NAMES.REPORT_MONTH_WISE_BENCH}><MonthWiseBenchReport /></ProtectedRoute>} />
@@ -456,6 +473,7 @@ const AppRoutes = () => {
           <Route path={ROUTES.REPORT_RESOURCE_COST_UTILIZATION} element={<ProtectedRoute formName={FORM_NAMES.REPORT_RESOURCE_COST_UTILIZATION}><ResourceCostUtilizationReport /></ProtectedRoute>} />
           <Route path={ROUTES.REPORT_EMPLOYEE_WORK_LOG_HOURS_SUMMARY} element={<ProtectedRoute formName={FORM_NAMES.REPORT_EMPLOYEE_WORK_LOG_HOURS_SUMMARY} allowIfNoFormsMapped><EmployeeWorkLogHoursSummaryReport /></ProtectedRoute>} />
           <Route path={ROUTES.REPORT_PROJECT_TIMESHEET} element={<ProtectedRoute formName={FORM_NAMES.REPORT_PROJECT_TIMESHEET} allowIfNoFormsMapped><ProjectWiseTimesheetReport /></ProtectedRoute>} />
+          <Route path={ROUTES.REPORT_CROSS_BU_EMPLOYEE_PO_HOURS} element={<ProtectedRoute formName={FORM_NAMES.REPORT_CROSS_BU_EMPLOYEE_PO_HOURS} allowIfNoFormsMapped><CrossBuEmployeePoHoursReport /></ProtectedRoute>} />
           <Route path={ROUTES.REPORT_EMPLOYEE_ROLE_BU_MAPPING} element={<ProtectedRoute formName={FORM_NAMES.REPORT_EMPLOYEE_ROLE_BU_MAPPING} allowIfNoFormsMapped><EmployeeRoleBuMappingReport /></ProtectedRoute>} />
           <Route path={ROUTES.REPORT_TEAM_LEAD_EMPLOYEE_PROJECT_HOURS} element={<ProtectedRoute formName={FORM_NAMES.REPORT_TEAM_LEAD_EMPLOYEE_PROJECT_HOURS} allowIfNoFormsMapped><TeamLeadEmployeeProjectHours /></ProtectedRoute>} />
           {/* No formName gate — reachable by any authenticated login regardless of Role-Form
@@ -530,6 +548,10 @@ const AppRoutes = () => {
             Change Password used to live at ROUTES.PROFILE as a full page — it's now a modal
             (ChangePasswordDialog) opened from UserMenu instead, so that route is gone. */}
         <Route path={ROUTES.NOTIFICATIONS} element={<Notifications />} />
+
+        {/* Monthly Cap Hours — system-wide setting, Admin / Platform Admin only (backend PUT also
+            403s anyone else). No Form Master row, so gated by allowedRoles, not formName. */}
+        <Route path={ROUTES.SETTINGS_MONTHLY_CAP} element={<ProtectedRoute allowedRoles={[ROLE_NAMES.ADMIN, ROLE_NAMES.PLATFORM_ADMIN]}><MonthlyCapSettings /></ProtectedRoute>} />
 
         {/* Employee self-service, rendered here (same shell, same formName gating as every
             other screen above) for any account that ISN'T employee-only — a Team Lead who also

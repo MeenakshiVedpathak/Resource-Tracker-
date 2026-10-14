@@ -86,7 +86,7 @@ const timeToMinutes = (t) => {
 };
 
 // Client-side mirror of the server-computed `hours` (sum of every segment's duration), for
-// display and for the 12-hours/day cap pre-check only — never sent to the backend, which always
+// display and for the 24-hours/day cap pre-check only — never sent to the backend, which always
 // recomputes it from time_entries itself.
 export const sumSegmentHours = (segments) =>
   Math.round(

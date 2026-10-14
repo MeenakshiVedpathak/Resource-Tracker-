@@ -4,10 +4,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Clock, DollarSign, TrendingUp, TrendingDown, Users, Building2, Briefcase,
   BarChart2, RefreshCw, X, ChevronLeft, ChevronRight, CalendarDays, AlertCircle,
-  Activity, Zap, Award, Calendar, IndianRupee, Table2, CalendarOff, Sparkles, ShieldAlert,
+  Activity, Zap, Award, Calendar, IndianRupee, CalendarOff, Sparkles, ShieldAlert,
   Landmark,
 } from 'lucide-react';
 import { ROUTES } from '@/constants/routes';
+import { ROLE_NAMES } from '@/constants/roleHierarchy';
 import { useDashboardAnalytics, useDashboardAnalytics2 } from '@/hooks/useDashboard';
 import { useCanViewOriginalData, useHasForm } from '@/hooks/usePermissions';
 import { FORM_NAMES } from '@/constants/rbacForms';
@@ -21,17 +22,13 @@ import MonthlyHoursTrendChart from '@/components/charts/MonthlyHoursTrendChart';
 import MonthlyUtilizationTrendChart from '@/components/charts/MonthlyUtilizationTrendChart';
 import CostTrendChart from '@/components/charts/CostTrendChart';
 import CostByTypeDonut from '@/components/charts/CostByTypeDonut';
-import ClientCostChart from '@/components/charts/ClientCostChart';
-import TopClientsByCostPanel from '@/components/charts/TopClientsByCostPanel';
-import ClientCategoryCostMatrix from '@/components/charts/ClientCategoryCostMatrix';
-import ClientWiseAnalyticsTable from '@/components/charts/ClientWiseAnalyticsTable';
-import ProjectWiseAnalyticsTable from '@/components/charts/ProjectWiseAnalyticsTable';
 import LeaveHoursTrendChart from '@/components/charts/LeaveHoursTrendChart';
 import NoWorkTrendChart from '@/components/charts/NoWorkTrendChart';
 import HoursByClientChart from '@/components/charts/HoursByClientChart';
 import HoursByEmployeeChart from '@/components/charts/HoursByEmployeeChart';
 import ClientPOMatrixChart from '@/components/charts/ClientPOMatrixChart';
 import EmployeeBenchChart from '@/components/charts/EmployeeBenchChart';
+import BuWiseUtilizationChart from '@/components/charts/BuWiseUtilizationChart';
 import ResourceInsightPanel from '@/components/charts/ResourceInsightPanel';
 import BillableAnalyticsPanel from '@/components/charts/BillableAnalyticsPanel';
 import TopEmployeesByPOPanel from '@/components/charts/TopEmployeesByPOPanel';
@@ -293,7 +290,8 @@ const SectionLabel = ({ icon: Icon, title, action }) => (
 /* ─── Dashboard ──────────────────────────────────────────────────────────── */
 const Dashboard = () => {
   const navigate = useNavigate();
-  const { roleObjects, accessibleForms, accessibleFormsLoaded, isPlatformAdmin } = useAuth();
+  const { roleObjects, accessibleForms, accessibleFormsLoaded, isPlatformAdmin, hasRole } = useAuth();
+  const isBuAdmin = hasRole(ROLE_NAMES.BU_ADMIN);
   const [fiscalYear, setFiscalYear]           = useState(currentFY);
   const [bottomMonthYear, setBottomMonthYear] = useState({ month: prevMonth.getMonth() + 1, year: prevMonth.getFullYear() });
   const [quarter, setQuarter]                 = useState(null);
@@ -1092,6 +1090,21 @@ const Dashboard = () => {
         </motion.div>
       </section>
 
+      {/* ══ BU-WISE UTILIZATION (quarterly) — hidden for BU Admin ══════════ */}
+      {!isBuAdmin && (
+        <section>
+          <SectionLabel icon={Landmark} title="BU-wise Utilization" />
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
+            <BuWiseUtilizationChart
+              data={analytics2Data?.bu_wise_utilization?.records ?? []}
+              summary={analytics2Data?.bu_wise_utilization?.summary}
+              isLoading={isAnalyticsPending}
+              periodLabel={quarter ? `Q${quarter} · FY ${fiscalYear}` : fyLabel}
+            />
+          </motion.div>
+        </section>
+      )}
+
       {/* ══ MONTHLY TREND ════════════════════════════════════════════════════ */}
       <section>
         <SectionLabel icon={TrendingUp} title="Monthly Hours Trend" />
@@ -1101,19 +1114,6 @@ const Dashboard = () => {
           </motion.div>
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.15 }}>
             <MonthlyUtilizationTrendChart data={analytics2Data?.monthly_resource_utilization ?? []} isLoading={isAnalyticsPending} />
-          </motion.div>
-        </div>
-      </section>
-
-      {/* ══ COST TREND BY TYPE ══════════════════════════════════════════════ */}
-      <section>
-        <SectionLabel icon={IndianRupee} title="Cost Trend by Type" />
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
-            <CostTrendChart data={costTrendData} isLoading={isAnalyticsPending} periodLabel={quarter ? `Q${quarter} · FY ${fiscalYear}` : `FY ${fiscalYear}`} />
-          </motion.div>
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.15 }}>
-            <CostByTypeDonut data={costTrendData} isLoading={isAnalyticsPending} periodLabel={quarter ? `Q${quarter} · FY ${fiscalYear}` : `FY ${fiscalYear}`} />
           </motion.div>
         </div>
       </section>
@@ -1182,43 +1182,6 @@ const Dashboard = () => {
             <ClientPOMatrixChart data={charts.client_x_service_po ?? []} isLoading={isAnalyticsPending} fiscalYear={fiscalYear} />
           </motion.div>
         </div>
-      </section>
-
-      {/* ══ CLIENT COST ANALYTICS ═══════════════════════════════════════════ */}
-      <section>
-        <SectionLabel icon={Building2} title="Client Cost Analytics" />
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
-            <ClientCostChart data={analytics2Data?.client_wise_cost_analytics ?? []} isLoading={isAnalyticsPending} periodLabel={quarter ? `Q${quarter} · FY ${fiscalYear}` : `FY ${fiscalYear}`} />
-          </motion.div>
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.15 }}>
-            <TopClientsByCostPanel data={analytics2Data?.top_clients_by_cost?.data ?? []} isLoading={isAnalyticsPending} periodLabel={quarter ? `Q${quarter} · FY ${fiscalYear}` : `FY ${fiscalYear}`} />
-          </motion.div>
-        </div>
-      </section>
-
-      {/* ══ CLIENT × CATEGORY COST MATRIX ════════════════════════════════════ */}
-      <section>
-        <SectionLabel icon={Table2} title="Client × Category Cost Matrix" />
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
-          <ClientCategoryCostMatrix data={analytics2Data?.client_category_cost_matrix ?? []} isLoading={isAnalyticsPending} periodLabel={quarter ? `Q${quarter} · FY ${fiscalYear}` : `FY ${fiscalYear}`} />
-        </motion.div>
-      </section>
-
-      {/* ══ CLIENT-WISE ANALYTICS ════════════════════════════════════════════ */}
-      <section>
-        <SectionLabel icon={Table2} title="Client-wise Analytics" />
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
-          <ClientWiseAnalyticsTable data={analytics2Data?.client_wise_analytics ?? []} isLoading={isAnalyticsPending} periodLabel={quarter ? `Q${quarter} · FY ${fiscalYear}` : `FY ${fiscalYear}`} />
-        </motion.div>
-      </section>
-
-      {/* ══ PROJECT-WISE ANALYTICS ═══════════════════════════════════════════ */}
-      <section>
-        <SectionLabel icon={Briefcase} title="Project-wise Analytics" />
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
-          <ProjectWiseAnalyticsTable data={analytics2Data?.project_wise_analytics ?? []} isLoading={isAnalyticsPending} periodLabel={quarter ? `Q${quarter} · FY ${fiscalYear}` : `FY ${fiscalYear}`} />
-        </motion.div>
       </section>
 
       {/* ══ TOP EMPLOYEES BY SERVICE PO (quarterly) ══════════════════════════ */}
@@ -1321,6 +1284,21 @@ const Dashboard = () => {
             </motion.div>
           </section>
 
+          {/* ── BU-wise Utilization — hidden for BU Admin ────────────────── */}
+          {!isBuAdmin && (
+            <section>
+              <SectionLabel icon={Landmark} title="BU-wise Utilization" />
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
+                <BuWiseUtilizationChart
+                  data={monthlyAnalytics2Raw?.bu_wise_utilization?.records ?? []}
+                  summary={monthlyAnalytics2Raw?.bu_wise_utilization?.summary}
+                  isLoading={isMonthlyAnalyticsPending}
+                  periodLabel={new Date(bottomMonthYear.year, bottomMonthYear.month - 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' })}
+                />
+              </motion.div>
+            </section>
+          )}
+
           {/* ── Monthly Hours Trend ──────────────────────────────────────── */}
           <section>
             <SectionLabel icon={TrendingUp} title="Monthly Hours Trend" />
@@ -1411,43 +1389,6 @@ const Dashboard = () => {
                 <ClientPOMatrixChart data={monthlyAnalyticsCharts.client_x_service_po ?? []} isLoading={isMonthlyAnalyticsPending} fiscalYear={monthFiscalYear} />
               </motion.div>
             </div>
-          </section>
-
-          {/* ── Client Cost Analytics ────────────────────────────────────── */}
-          <section>
-            <SectionLabel icon={Building2} title="Client Cost Analytics" />
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
-                <ClientCostChart data={monthlyAnalytics2Raw?.client_wise_cost_analytics ?? []} isLoading={isMonthlyAnalyticsPending} periodLabel={new Date(bottomMonthYear.year, bottomMonthYear.month - 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' })} />
-              </motion.div>
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.15 }}>
-                <TopClientsByCostPanel data={monthlyAnalytics2Raw?.top_clients_by_cost?.data ?? []} isLoading={isMonthlyAnalyticsPending} periodLabel={new Date(bottomMonthYear.year, bottomMonthYear.month - 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' })} />
-              </motion.div>
-            </div>
-          </section>
-
-          {/* ── Client × Category Cost Matrix ─────────────────────────────── */}
-          <section>
-            <SectionLabel icon={Table2} title="Client × Category Cost Matrix" />
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
-              <ClientCategoryCostMatrix data={monthlyAnalytics2Raw?.client_category_cost_matrix ?? []} isLoading={isMonthlyAnalyticsPending} periodLabel={new Date(bottomMonthYear.year, bottomMonthYear.month - 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' })} />
-            </motion.div>
-          </section>
-
-          {/* ── Client-wise Analytics ─────────────────────────────────────── */}
-          <section>
-            <SectionLabel icon={Table2} title="Client-wise Analytics" />
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
-              <ClientWiseAnalyticsTable data={monthlyAnalytics2Raw?.client_wise_analytics ?? []} isLoading={isMonthlyAnalyticsPending} periodLabel={new Date(bottomMonthYear.year, bottomMonthYear.month - 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' })} />
-            </motion.div>
-          </section>
-
-          {/* ── Project-wise Analytics ────────────────────────────────────── */}
-          <section>
-            <SectionLabel icon={Briefcase} title="Project-wise Analytics" />
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
-              <ProjectWiseAnalyticsTable data={monthlyAnalytics2Raw?.project_wise_analytics ?? []} isLoading={isMonthlyAnalyticsPending} periodLabel={new Date(bottomMonthYear.year, bottomMonthYear.month - 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' })} />
-            </motion.div>
           </section>
 
           {/* ── Top Employees by Service PO ──────────────────────────────── */}

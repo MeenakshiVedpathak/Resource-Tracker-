@@ -20,6 +20,7 @@ import {
   TrendingUp, LineChart, Target, Percent, Award, BatteryCharging, AlertTriangle, Crown,
   ReceiptText, GitCompare, Scale, BarChart3, Building, Activity, Armchair, Users2,
   ClipboardCheck, XCircle, UserCog, CalendarPlus, Briefcase, FileSpreadsheet,
+  Gauge, UsersRound, ArrowLeftRight, History,
 } from 'lucide-react';
 import { ROUTES } from '@/constants/routes';
 
@@ -29,6 +30,7 @@ export const FORM_NAMES = {
   EMPLOYEES: 'Employee Master',
   ROLES: 'Roles',
   FORMS: 'Forms',
+  AUDIT_LOGS: 'Audit Logs',
   // Not in FORM_ROUTE_CONFIG on purpose — it's a per-row "Manage Forms" action on the Roles
   // page, not its own sidebar item. Kept here only so useHasForm() can gate that action.
   ROLE_FORM_MAPPING: 'Role Form Mapping',
@@ -165,6 +167,10 @@ export const FORM_NAMES = {
   // Same caveat as the block above — guessed names pending real Form Master rows.
   REPORT_RESOURCE_UTILIZATION_TREND: 'Resource Utilization Trend',
   REPORT_SERVICE_PO_HOURS_BUDGET: 'PO Hours & Budget',
+  // Net-new reports — these two Form Master rows don't exist yet; the names below are a guess
+  // pending the backend seeding them (see this file's own header comment on the convention).
+  REPORT_BU_WISE_UTILISATION: 'BU-wise Utilisation',
+  REPORT_EMPLOYEE_PROJECT_UTILISATION: 'Employee Project Utilisation',
   // Confirmed against the real GET /roles/forms response (ids 104-107, 2026-09-18) — exact
   // strings, not guesses.
   REPORT_PM_WISE_UTILIZATION: 'Project Manager-wise Report',
@@ -181,6 +187,9 @@ export const FORM_NAMES = {
   // 2026-09-26, GET /reports/project-timesheet confirmed live). Confirm against the real
   // GET /roles/forms response once a Form Master row is seeded and mapped to roles.
   REPORT_PROJECT_TIMESHEET: 'Project-Wise Timesheet Report',
+  // Net-new report — no Form Master row exists yet; guessed name pending backend seeding (see
+  // this file's own header comment).
+  REPORT_CROSS_BU_EMPLOYEE_PO_HOURS: 'Cross-BU Employee & PO Hours',
   // Guessed name — brand new report (backend spec dated 2026, GET /reports/employee-role-bu-mapping
   // confirmed ready). Confirm against the real GET /roles/forms response once a Form Master row
   // is seeded — the route below uses allowIfNoFormsMapped so it still works by direct link before
@@ -209,6 +218,7 @@ export const FORM_ROUTE_CONFIG = {
   [FORM_NAMES.EMPLOYEES]: { to: ROUTES.EMPLOYEES, icon: Users, addTo: ROUTES.EMPLOYEE_NEW, addLabel: 'Add Employee' },
   [FORM_NAMES.ROLES]: { to: ROUTES.ROLES, icon: Shield, addTo: ROUTES.ROLE_NEW, addLabel: 'Add Role' },
   [FORM_NAMES.FORMS]: { to: ROUTES.FORMS, icon: ClipboardList, addTo: `${ROUTES.FORM_NEW}?type=form`, addLabel: 'Add Form' },
+  [FORM_NAMES.AUDIT_LOGS]: { to: ROUTES.AUDIT_LOGS, icon: History, description: 'View audit logs of user actions and system changes' },
   [FORM_NAMES.ENTITY_MASTER]: { to: ROUTES.ENTITIES, icon: Landmark, addTo: ROUTES.ENTITY_NEW, addLabel: 'Add Entity' },
   [FORM_NAMES.ENTITY_ADMINS]: { to: ROUTES.ENTITY_ADMINS, icon: Landmark, addTo: ROUTES.ENTITY_ADMIN_NEW, addLabel: 'Add Entity Admin' },
   // Points at the Companies screen, not a dedicated BU Admin Master page — see routes/index.jsx.
@@ -273,10 +283,13 @@ export const FORM_ROUTE_CONFIG = {
   [FORM_NAMES.REPORT_SERVICE_PO_HOURS_BUDGET]: { to: ROUTES.REPORT_SERVICE_PO_HOURS_BUDGET, icon: Wallet, description: "Hours delivered against each Service PO's month-specific cost budget." },
   [FORM_NAMES.REPORT_PM_WISE_UTILIZATION]: { to: ROUTES.REPORT_PM_WISE_UTILIZATION, icon: UserCog, description: 'Resources, projects, and utilization rolled up per Project Manager across a month range.' },
   [FORM_NAMES.REPORT_PROJECT_WISE_UTILIZATION]: { to: ROUTES.REPORT_PROJECT_WISE_UTILIZATION, icon: FolderKanban, description: 'Resources and utilization per project across a month range.' },
+  [FORM_NAMES.REPORT_BU_WISE_UTILISATION]: { to: ROUTES.REPORT_BU_WISE_UTILISATION, icon: Gauge, description: 'Expected vs billable vs non-billable hours per Business Unit, with overall utilisation %.' },
+  [FORM_NAMES.REPORT_EMPLOYEE_PROJECT_UTILISATION]: { to: ROUTES.REPORT_EMPLOYEE_PROJECT_UTILISATION, icon: UsersRound, description: "Each employee's logged/adjusted hours per project, alongside their whole-period utilisation %." },
   [FORM_NAMES.REPORT_MONTH_WISE_BENCH]: { to: ROUTES.REPORT_MONTH_WISE_BENCH, icon: Hourglass, description: 'Org-wide bench trend by month — resources on bench, bench hours, and bench % across a range.' },
   [FORM_NAMES.REPORT_RESOURCE_WISE_BENCH]: { to: ROUTES.REPORT_RESOURCE_WISE_BENCH, icon: Users2, description: "Each resource's bench % by month across a range, sorted by average bench % by default." },
   [FORM_NAMES.REPORT_RESOURCE_COST_UTILIZATION]: { to: ROUTES.REPORT_RESOURCE_COST_UTILIZATION, icon: IndianRupee, description: 'Per-employee monthly cost contribution, projected vs. actual utilization, across a month range.' },
   [FORM_NAMES.REPORT_PROJECT_TIMESHEET]: { to: ROUTES.REPORT_PROJECT_TIMESHEET, icon: FileSpreadsheet, description: 'Employee-wise, day-wise timesheet entries with work description, Project Manager, leave and approval status.' },
+  [FORM_NAMES.REPORT_CROSS_BU_EMPLOYEE_PO_HOURS]: { to: ROUTES.REPORT_CROSS_BU_EMPLOYEE_PO_HOURS, icon: ArrowLeftRight, description: 'Employees logging hours on Service POs outside their own Business Unit, and how much of each BU’s work is covered cross-BU.' },
   [FORM_NAMES.REPORT_EMPLOYEE_ROLE_BU_MAPPING]: { to: ROUTES.REPORT_EMPLOYEE_ROLE_BU_MAPPING, icon: UserCog, description: "Each employee's assigned roles, Business Units, and Sub-BUs in one place." },
   [FORM_NAMES.REPORT_TEAM_LEAD_EMPLOYEE_PROJECT_HOURS]: { to: ROUTES.REPORT_TEAM_LEAD_EMPLOYEE_PROJECT_HOURS, icon: Users, description: 'Work-log entries of the employees mapped to you as Primary or Secondary manager.' },
   // RBAC form name stays "Project Manager Dashboard" (must match the backend Form Master

@@ -11,7 +11,7 @@ import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import { useAuth } from '@/hooks/useAuth';
 import { useSaturdayOffRule } from '@/hooks/useSaturdayOffRule';
 import { useEmployeeCalendar, useEmployeeMonthlySummary, useEmployeeEntries } from '@/hooks/useEmployeeWorkLog';
-import { STANDARD_MONTHLY_HOURS } from '@/components/employee/MonthlyHoursCard';
+import { useEmployeeMonthlyCap } from '@/hooks/useSystemSettings';
 import WeatherHeroBanner from '@/components/employee/dashboard/WeatherHeroBanner';
 import HoursTrendCard from '@/components/employee/dashboard/HoursTrendCard';
 import WorkLogStatusCard from '@/components/employee/dashboard/WorkLogStatusCard';
@@ -64,6 +64,10 @@ const EmployeeDashboard = () => {
   const { month: selectedMonth, year: selectedYear } = selectedMonthYear;
   const isCurrentMonthSelected = selectedMonth === today.month() + 1 && selectedYear === today.year();
   const selectedMonthStart = dayjs(new Date(selectedYear, selectedMonth - 1, 1));
+  // Monthly target = the cap THIS employee's own synced timesheet used for the selected month
+  // (GET /system-settings/monthly-cap?month=&year= → cap_for_employee_month), falling back to the
+  // latest Admin-set cap when nothing has synced for them yet for that month.
+  const monthlyTargetHours = useEmployeeMonthlyCap({ month: selectedMonth, year: selectedYear });
 
   const {
     data: currentMonthDays = [], isLoading, isError,
@@ -149,8 +153,8 @@ const EmployeeDashboard = () => {
   const daysElapsedInSelectedMonth = isCurrentMonthSelected ? today.date() : selectedMonthStart.daysInMonth();
   const daysLogged = selectedMonthDays
     .filter((d) => (!isCurrentMonthSelected || d.date <= todayKey) && d.hasEntries).length;
-  const monthPct = Math.min(100, Math.round((monthHours / STANDARD_MONTHLY_HOURS) * 100));
-  const remainingHours = Math.max(STANDARD_MONTHLY_HOURS - monthHours, 0);
+  const monthPct = monthlyTargetHours > 0 ? Math.min(100, Math.round((monthHours / monthlyTargetHours) * 100)) : 0;
+  const remainingHours = Math.max(monthlyTargetHours - monthHours, 0);
   const dayProgressPct = daysElapsedInSelectedMonth ? Math.round((daysLogged / daysElapsedInSelectedMonth) * 100) : 0;
 
   // Current month: Today, Yesterday, then weekday names, counting back from today. Past month:
@@ -216,14 +220,14 @@ const EmployeeDashboard = () => {
       extra: (
         <>
           <Progress value={monthPct} className="mt-3 h-1.5" />
-          <p className="mt-2 text-xs text-muted-foreground">{monthPct}% of {STANDARD_MONTHLY_HOURS}h target</p>
+          <p className="mt-2 text-xs text-muted-foreground">{monthPct}% of {monthlyTargetHours}h target</p>
         </>
       ),
     },
     {
       key: 'target', title: 'Monthly Target', icon: Target,
       bar: 'bg-violet-500', iconBg: 'bg-violet-50 dark:bg-violet-950/40', iconColor: 'text-violet-500',
-      value: formatHoursMinutes(STANDARD_MONTHLY_HOURS),
+      value: formatHoursMinutes(monthlyTargetHours),
       loading: isSelectedMonthLoading,
       extra: <p className="mt-2 text-xs text-muted-foreground">{formatHoursMinutes(remainingHours)} remaining</p>,
     },
@@ -328,7 +332,7 @@ const EmployeeDashboard = () => {
           pct={monthPct}
           monthHours={monthHours}
           remainingHours={remainingHours}
-          targetHours={STANDARD_MONTHLY_HOURS}
+          targetHours={monthlyTargetHours}
           isLoading={isSelectedMonthLoading}
         />
       </div>

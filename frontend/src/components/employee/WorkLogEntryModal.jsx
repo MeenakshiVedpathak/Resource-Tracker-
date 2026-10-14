@@ -25,17 +25,20 @@ import { flattenHierarchyTree } from '@/utils/servicePOHierarchy';
 import { validateSegments, sumSegmentHours } from '@/utils/employeeTimeEntry';
 import { ROUTES } from '@/constants/routes';
 
-export const DAILY_HOURS_CAP = 12;
+export const DAILY_HOURS_CAP = 24;
 // A standard workday, used only client-side to color the calendar heatmap and the daily
 // progress bar (Completed / Partial / No Entry) — the backend has no such target field.
 export const EXPECTED_DAILY_HOURS = 8;
-// Client-side input sanity bound for Monthly mode's per-node hour field (max hours in a
-// 31-day month) — not a business rule, the backend owns actual monthly validation.
-export const MONTHLY_HOURS_CAP = 31 * 24;
+// Client-side input sanity bound for Monthly mode's per-node hour field — mirrors the backend's
+// own monthly cap (every calendar day in that month counted at the 24h daily cap), not a flat
+// number, since the cap itself is now month-length-dependent (Feb vs a 31-day month, etc.).
+// `month` is 1-12; `new Date(year, month, 0)` is the standard JS trick for "the last day of
+// `month`" since Date's own month argument is 0-indexed one lower than this function's.
+export const getMonthlyHourCap = (month, year) => new Date(year, month, 0).getDate() * 24;
 
 // Client-side messages match the backend's Joi wording exactly, so an error looks the same
 // whether it's caught here or comes back from the server. The cross-entry daily-total cap
-// (this entry + everything else already logged that day > 12h) is deliberately NOT checked
+// (this entry + everything else already logged that day > 24h) is deliberately NOT checked
 // here — that's a server-owned rule (400, with an exact "current total would be N hours"
 // message) surfaced as a toast via extractApiError instead of approximated client-side.
 // Hours-wise entries (and new/create mode, which is always hours-wise) require a real Hours
@@ -47,7 +50,7 @@ const hoursTaskSchema = z.object({
   hours: z.coerce
     .number({ invalid_type_error: 'Hours is required.' })
     .gt(0, 'Hours must be greater than 0.')
-    .max(DAILY_HOURS_CAP, 'Hours cannot exceed 12 per day'),
+    .max(DAILY_HOURS_CAP, 'Hours cannot exceed 24 per day'),
   description: z.string().min(1, 'Description is required').max(500),
   timesheet_date: z.string().min(1, 'Date is required'),
 });

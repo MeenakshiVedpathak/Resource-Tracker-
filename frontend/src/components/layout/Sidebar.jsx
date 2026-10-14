@@ -11,7 +11,8 @@ import { useFormCategories } from '@/hooks/useFormCategories';
 import { resolveFormRoute, FORM_NAMES } from '@/constants/rbacForms';
 import { useCanManageBusinessUnits, useCanManageEmployeeRecords, useCanManageClientProjectPO, useCanWrite } from '@/hooks/usePermissions';
 import { ROUTES } from '@/constants/routes';
-import { ChevronLeft, ChevronRight, ChevronDown, UserPlus, Shield, ClipboardList, Network, Folder, Plus, Layers } from 'lucide-react';
+import { ROLE_NAMES } from '@/constants/roleHierarchy';
+import { ChevronLeft, ChevronRight, ChevronDown, UserPlus, Shield, ClipboardList, Network, Folder, Plus, Layers, Gauge, History } from 'lucide-react';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import ScrollOnHoverText from '@/components/common/ScrollOnHoverText';
 
@@ -26,10 +27,22 @@ const SUPER_ADMIN_NAV_GROUPS = [
       { label: 'Role Master', icon: Shield, to: ROUTES.ROLES, exact: false, addTo: ROUTES.ROLE_NEW, addLabel: 'Add Role' },
       { label: 'Forms Master', icon: ClipboardList, to: ROUTES.FORMS, exact: false, addTo: `${ROUTES.FORM_NEW}?type=form`, addLabel: 'Add Form' },
       { label: 'Organization Overview', icon: Network, to: ROUTES.ORGANIZATION_OVERVIEW, exact: true },
+      { label: 'Audit Logs', icon: History, to: ROUTES.AUDIT_LOGS, exact: true },
       { label: 'Service Types', icon: Layers, to: ROUTES.SERVICE_TYPES, exact: false, addTo: ROUTES.SERVICE_TYPE_NEW, addLabel: 'Add Service Type' },
+      { label: 'Monthly Cap Hours', icon: Gauge, to: ROUTES.SETTINGS_MONTHLY_CAP, exact: true },
     ],
   },
 ];
+
+// Admin-only system settings — not an RBAC form (no Form Master row), so it's appended as a
+// fixed group at the bottom of the RBAC-driven nav for the Admin role only. Platform Admin gets
+// the same screen inside its own Administration group above instead.
+const ADMIN_SETTINGS_NAV_GROUP = {
+  label: 'Settings',
+  items: [
+    { label: 'Monthly Cap Hours', icon: Gauge, to: ROUTES.SETTINGS_MONTHLY_CAP, exact: true },
+  ],
+};
 
 // Modules hidden from the sidebar for everyone except users with the BU Admin role (the RBAC
 // redesign's per-company "first admin", renamed from the old "Company Admin"), regardless of
@@ -67,10 +80,10 @@ const normalizeName = (s) => (s ?? '').trim().toLowerCase();
 // accessibleForms itself (POST /roles/forms) doesn't carry category_id, so the category
 // assignment is looked up from the separate GET /forms data useMenuRank already fetches
 // for sequencing (categoryOf/categoryInfo) — see below.
-const buildNavGroups = (accessibleForms, { isSuperAdmin, canWrite, canManageBus, canManageEmployees, canManageClientProjectPO, moduleRank, formRank, categoryOf, categoryInfo }) =>
+const buildNavGroups = (accessibleForms, { isSuperAdmin, isAdmin, isEntityAdmin, canWrite, canManageBus, canManageEmployees, canManageClientProjectPO, moduleRank, formRank, categoryOf, categoryInfo }) =>
   Object.entries(accessibleForms ?? {})
     .filter(
-      ([moduleName]) => isSuperAdmin || !RESTRICTED_MODULES.includes(moduleName.trim().toLowerCase())
+      ([moduleName]) => isSuperAdmin || isAdmin || isEntityAdmin || !RESTRICTED_MODULES.includes(moduleName.trim().toLowerCase())
     )
     .map(([moduleName, forms]) => {
       const resolved = (forms ?? [])
@@ -359,6 +372,7 @@ const Sidebar = () => {
   // BU Head is an additive peer of BU Admin with identical form/permission access — extends the
   // same bypass BU Admin already gets, never a standalone concept.
   const isSuperAdmin = hasRole('BU Admin', 'BU Head');
+  const isAdmin = hasRole(ROLE_NAMES.ADMIN);
   // canWrite is the baseline gate for every quick-add "+"; the other three only narrow it
   // further for BU Master / Employee Master / Client & Project & Service PO Master specifically
   // — the screens themselves are still listed for anyone the RBAC mapping grants them to.
@@ -372,8 +386,10 @@ const Sidebar = () => {
   // accessibleForms (the Forms API) — no role-name-based injection on top of it.
   const navGroups = useMemo(() => {
     if (isPlatformAdmin) return SUPER_ADMIN_NAV_GROUPS;
-    return buildNavGroups(accessibleForms, { isSuperAdmin, canWrite, canManageBus, canManageEmployees, canManageClientProjectPO, moduleRank, formRank, categoryOf, categoryInfo });
-  }, [accessibleForms, isSuperAdmin, canWrite, canManageBus, canManageEmployees, canManageClientProjectPO, isPlatformAdmin, moduleRank, formRank, categoryOf, categoryInfo]);
+    const isEntityAdmin = hasRole(ROLE_NAMES.ENTITY_ADMIN);
+    const groups = buildNavGroups(accessibleForms, { isSuperAdmin, isAdmin, isEntityAdmin, canWrite, canManageBus, canManageEmployees, canManageClientProjectPO, moduleRank, formRank, categoryOf, categoryInfo });
+    return isAdmin ? [...groups, ADMIN_SETTINGS_NAV_GROUP] : groups;
+  }, [accessibleForms, isSuperAdmin, isAdmin, canWrite, canManageBus, canManageEmployees, canManageClientProjectPO, isPlatformAdmin, moduleRank, formRank, categoryOf, categoryInfo, hasRole]);
 
   // Guards navigation away from a page with unsaved changes (e.g. Timesheet
   // Import Detail's Modified Hours edits) — any page can opt in via the

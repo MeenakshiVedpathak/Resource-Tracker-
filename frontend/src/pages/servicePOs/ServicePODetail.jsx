@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Pencil, Users, XCircle, CheckCircle2 } from 'lucide-react';
+import {
+  ArrowLeft, Pencil, Users, XCircle, CheckCircle2, Building2, FolderKanban, Tag, Layers,
+  IndianRupee, Clock, CalendarDays, Gauge, ChevronRight,
+} from 'lucide-react';
 import { useServicePO, useServicePOUtilisation, useCloseServicePO } from '@/hooks/useServicePOs';
 import { useCanWrite } from '@/hooks/usePermissions';
 import { useAuth } from '@/hooks/useAuth';
@@ -11,6 +14,7 @@ import { buildPath, ROUTES } from '@/constants/routes';
 import { useActiveServiceCategories } from '@/hooks/useServiceCategories';
 import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
 import { formatCurrency, formatDate, formatHours, formatPercentage } from '@/utils/formatters';
+import { cn } from '@/utils/cn';
 import PageHeader from '@/components/common/PageHeader';
 import StatusBadge from '@/components/common/StatusBadge';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
@@ -22,25 +26,58 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { getAncestors, getLevel } from '@/utils/servicePOHierarchy';
 
 const DetailSkeleton = () => (
-  <div className="space-y-4">
-    <Skeleton className="h-8 w-64" />
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-      {Array.from({ length: 8 }).map((_, i) => (
-        <div key={i} className="space-y-1">
-          <Skeleton className="h-3 w-16" />
-          <Skeleton className="h-5 w-28" />
+  <div className="space-y-5">
+    <Skeleton className="h-10 w-72" />
+    <Card className="border-slate-200">
+      <CardContent className="pt-5">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-3 rounded-lg border border-slate-200 p-3">
+              <Skeleton className="h-9 w-9 shrink-0 rounded-lg" />
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <Skeleton className="h-2.5 w-16" />
+                <Skeleton className="h-4 w-20" />
+              </div>
+            </div>
+          ))}
         </div>
-      ))}
+      </CardContent>
+    </Card>
+  </div>
+);
+
+const TILE_ACCENTS = {
+  blue: 'bg-blue-50 text-blue-600',
+  violet: 'bg-violet-50 text-violet-600',
+  amber: 'bg-amber-50 text-amber-600',
+  emerald: 'bg-emerald-50 text-emerald-600',
+  slate: 'bg-slate-100 text-slate-600',
+};
+
+// Icon-led "stat tile" — the modernised replacement for the old plain label/value InfoRow.
+// border-slate-200 (not -100) — the lighter shade read as no border at all against this tile's
+// own white background, confirmed live.
+const InfoTile = ({ icon: Icon, label, value, accent = 'slate' }) => (
+  <div className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50/60">
+    <div className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-lg', TILE_ACCENTS[accent])}>
+      <Icon className="h-4 w-4" />
+    </div>
+    <div className="min-w-0">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="mt-0.5 truncate text-sm font-semibold text-slate-800" title={typeof value === 'string' ? value : undefined}>
+        {value ?? '—'}
+      </p>
     </div>
   </div>
 );
 
-const InfoRow = ({ label, value }) => (
-  <div>
-    <p className="text-xs text-muted-foreground">{label}</p>
-    <p className="mt-0.5 text-sm font-medium">{value ?? '—'}</p>
-  </div>
-);
+// Green while there's healthy headroom left, amber once it's running close to the expected
+// hours, red once it's met or gone over — same thresholds whether driving the badge or the bar.
+const UTILISATION_TONES = {
+  emerald: { bar: 'bg-emerald-500', badge: 'bg-emerald-100 text-emerald-700' },
+  amber: { bar: 'bg-amber-500', badge: 'bg-amber-100 text-amber-700' },
+  red: { bar: 'bg-red-500', badge: 'bg-red-100 text-red-700' },
+};
 
 const ServicePODetail = () => {
   const navigate = useNavigate();
@@ -83,6 +120,8 @@ const ServicePODetail = () => {
   const loggedHours = Number(utilisation?.total_hours_logged ?? utilisation?.hours_logged ?? 0);
   const expectedHours = Number(po?.expected_man_hours ?? 0);
   const utilisationPct = expectedHours > 0 ? Math.min((loggedHours / expectedHours) * 100, 100) : 0;
+  const rawUtilisationPct = expectedHours > 0 ? (loggedHours / expectedHours) * 100 : 0;
+  const utilisationTone = rawUtilisationPct >= 100 ? 'red' : rawUtilisationPct >= 80 ? 'amber' : 'emerald';
 
   const handleClose = () => {
     closeMutation.mutate(id, {
@@ -163,64 +202,84 @@ const ServicePODetail = () => {
       />
 
       {/* PO Overview card */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center gap-3 flex-wrap">
-            <Badge variant="outline" className="font-mono text-xs">
+      <Card className="overflow-hidden border-slate-200">
+        <div className="border-b border-slate-200 bg-gradient-to-r from-blue-50/80 via-white to-white px-5 py-4 sm:px-6">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline" className="bg-white font-mono text-xs">
               {po.service_po_code}
             </Badge>
             <StatusBadge status={po.status} />
             {po.is_billable && (
-              <Badge variant="secondary" className="text-xs">
-                <CheckCircle2 className="mr-1 h-3 w-3" />
+              <Badge className="gap-1 bg-emerald-100 text-xs text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-400">
+                <CheckCircle2 className="h-3 w-3" />
                 Billable
               </Badge>
             )}
             {po.is_centralised && (
-              <Badge variant="secondary" className="text-xs">
+              <Badge className="gap-1 bg-violet-100 text-xs text-violet-700 hover:bg-violet-100 dark:bg-violet-900/30 dark:text-violet-400">
+                <Building2 className="h-3 w-3" />
                 Centralised
               </Badge>
             )}
-            <Badge variant="outline" className="text-xs">Level {level}</Badge>
+            <Badge variant="outline" className="bg-white text-xs">Level {level}</Badge>
           </div>
           {ancestors.length > 0 && (
-            <p className="mt-2 text-xs text-muted-foreground">
-              {ancestors.map((a) => a.name).join(' › ')} › <span className="font-medium">{po.service_po_name}</span>
-            </p>
+            <div className="mt-2.5 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+              {ancestors.map((a, i) => (
+                <span key={a.id ?? i} className="flex items-center gap-1">
+                  <span>{a.name}</span>
+                  <ChevronRight className="h-3 w-3" />
+                </span>
+              ))}
+              <span className="font-semibold text-slate-700">{po.service_po_name}</span>
+            </div>
           )}
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3 lg:grid-cols-4">
-            <InfoRow label="Client" value={po.client_name ?? po.client?.client_name} />
-            <InfoRow label="Project" value={po.project_name ?? po.project?.project_name} />
-            <InfoRow label="Service Category" value={serviceCategoryName ?? '—'} />
-            <InfoRow label="Service Type" value={serviceTypeName ?? '—'} />
-            <InfoRow label="PO Value" value={po.po_value != null ? formatCurrency(po.po_value) : '—'} />
-            <InfoRow label="Expected Hours" value={po.expected_man_hours != null ? formatHours(po.expected_man_hours) : '—'} />
-            <InfoRow label="Start Date" value={formatDate(po.start_date)} />
-            <InfoRow label="End Date" value={formatDate(po.end_date)} />
+        </div>
+        <CardContent className="pt-5">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            <InfoTile icon={Building2} label="Client" value={po.client_name ?? po.client?.client_name} accent="blue" />
+            <InfoTile icon={FolderKanban} label="Project" value={po.project_name ?? po.project?.project_name} accent="violet" />
+            <InfoTile icon={Tag} label="Service Category" value={serviceCategoryName} accent="amber" />
+            <InfoTile icon={Layers} label="Service Type" value={serviceTypeName} accent="slate" />
+            <InfoTile icon={IndianRupee} label="PO Value" value={po.po_value != null ? formatCurrency(po.po_value) : null} accent="emerald" />
+            <InfoTile icon={Clock} label="Expected Hours" value={po.expected_man_hours != null ? formatHours(po.expected_man_hours) : null} accent="blue" />
+            <InfoTile icon={CalendarDays} label="Start Date" value={formatDate(po.start_date)} accent="slate" />
+            <InfoTile icon={CalendarDays} label="End Date" value={formatDate(po.end_date)} accent="slate" />
           </div>
         </CardContent>
       </Card>
 
       {/* Utilisation card */}
       {(po.expected_man_hours != null || utilisation) && (
-        <Card>
+        <Card className="border-slate-200">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Utilisation</CardTitle>
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <Gauge className="h-4 w-4 text-muted-foreground" />
+              Utilisation
+            </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">
-                {formatHours(loggedHours)} logged
-                {expectedHours > 0 && ` of ${formatHours(expectedHours)} expected`}
-              </span>
+          <CardContent className="space-y-4">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <p className="text-2xl font-bold text-slate-800">
+                {formatHours(loggedHours)}
+                {expectedHours > 0 && (
+                  <span className="ml-1.5 text-sm font-normal text-muted-foreground">
+                    of {formatHours(expectedHours)} expected
+                  </span>
+                )}
+              </p>
               {expectedHours > 0 && (
-                <span className="font-semibold">{formatPercentage(utilisationPct)}</span>
+                <span className={cn('rounded-full px-3 py-1 text-sm font-semibold', UTILISATION_TONES[utilisationTone].badge)}>
+                  {formatPercentage(utilisationPct)}
+                </span>
               )}
             </div>
             {expectedHours > 0 && (
-              <Progress value={utilisationPct} className="h-2" />
+              <Progress
+                value={utilisationPct}
+                className="h-2.5"
+                indicatorClassName={UTILISATION_TONES[utilisationTone].bar}
+              />
             )}
           </CardContent>
         </Card>

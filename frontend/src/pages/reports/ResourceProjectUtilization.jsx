@@ -91,9 +91,24 @@ const isCustomerNonBillable = (p) => p.category?.toLowerCase() === 'customer non
 const isNonBillable = (p) => !isBillable(p) && !isCustomerNonBillable(p);
 
 const exportToExcel = (rows, monthLabel) => {
+  const hasOriginalTotalHours = rows.some((r) => r.originalTotalHours != null);
+  const hasOriginalProjectHours = rows.some((r) => r.projects?.some((p) => p.originalProjectHours != null));
+
   const header = [
-    'Employee', 'Total Hours', 'Billable Hours', 'Non-Billable Hours', 'Customer Non-Billable Hours', 'Billable Amount',
-    'Client', 'Project', 'Project Type', 'Category', 'Project Hours', 'Project Billable Amount',
+    'Employee',
+    'Total Hours',
+    ...(hasOriginalTotalHours ? ['Original Total Hours'] : []),
+    'Billable Hours',
+    'Non-Billable Hours',
+    'Customer Non-Billable Hours',
+    'Billable Amount',
+    'Client',
+    'Project',
+    'Project Type',
+    'Category',
+    'Project Hours',
+    ...(hasOriginalProjectHours ? ['Original Project Hours'] : []),
+    'Project Billable Amount',
   ];
 
   const dataRows = [];
@@ -105,7 +120,22 @@ const exportToExcel = (rows, monthLabel) => {
     const billableAmount = projects.reduce((acc, p) => acc + (Number(p.billableAmount) || 0), 0);
 
     if (projects.length === 0) {
-      dataRows.push([r.employeeName ?? '', r.totalHours ?? '', billableHours, nonBillableHours, customerNonBillableHours, billableAmount, '', '', '', '', '', '']);
+      dataRows.push([
+        r.employeeName ?? '',
+        r.totalHours ?? '',
+        ...(hasOriginalTotalHours ? [r.originalTotalHours ?? ''] : []),
+        billableHours,
+        nonBillableHours,
+        customerNonBillableHours,
+        billableAmount,
+        '',
+        '',
+        '',
+        '',
+        '',
+        ...(hasOriginalProjectHours ? [''] : []),
+        '',
+      ]);
       return;
     }
 
@@ -113,6 +143,7 @@ const exportToExcel = (rows, monthLabel) => {
       dataRows.push([
         i === 0 ? (r.employeeName ?? '') : '',
         i === 0 ? (r.totalHours ?? '') : '',
+        ...(hasOriginalTotalHours ? [i === 0 ? (r.originalTotalHours ?? '') : ''] : []),
         i === 0 ? billableHours : '',
         i === 0 ? nonBillableHours : '',
         i === 0 ? customerNonBillableHours : '',
@@ -122,6 +153,7 @@ const exportToExcel = (rows, monthLabel) => {
         p.projectType ?? '',
         p.category ?? '',
         p.projectHours ?? '',
+        ...(hasOriginalProjectHours ? [p.originalProjectHours ?? ''] : []),
         p.billableAmount ?? '',
       ]);
     });
@@ -260,6 +292,17 @@ const ResourceProjectUtilization = () => {
     };
   });
 
+  const hasOriginalTotalHours = useMemo(
+    () => allRows.some((r) => r.originalTotalHours != null) || (fullRows?.some((r) => r.originalTotalHours != null) ?? false),
+    [allRows, fullRows]
+  );
+  const hasOriginalProjectHours = useMemo(
+    () =>
+      allRows.some((r) => r.projects?.some((p) => p.originalProjectHours != null)) ||
+      (fullRows?.some((r) => r.projects?.some((p) => p.originalProjectHours != null)) ?? false),
+    [allRows, fullRows]
+  );
+
   // Prefer totals over the full filtered dataset; fall back to the current page's
   // totals only until the full-dataset fetch resolves.
   const totalsSource = fullRows
@@ -268,6 +311,7 @@ const ResourceProjectUtilization = () => {
           const projects = r.projects ?? [];
           return {
             totalHours: Number(r.totalHours) || 0,
+            originalTotalHours: r.originalTotalHours != null ? Number(r.originalTotalHours) : null,
             billableHours: sumBy(projects, isBillable),
             nonBillableHours: sumBy(projects, isNonBillable),
             customerNonBillableHours: sumBy(projects, isCustomerNonBillable),
@@ -279,13 +323,16 @@ const ResourceProjectUtilization = () => {
   const pageTotals = totalsSource.reduce(
     (acc, r) => {
       acc.totalHours += Number(r.totalHours) || 0;
+      if (r.originalTotalHours != null) {
+        acc.originalTotalHours = (acc.originalTotalHours ?? 0) + (Number(r.originalTotalHours) || 0);
+      }
       acc.billableHours += r.billableHours;
       acc.nonBillableHours += r.nonBillableHours;
       acc.customerNonBillableHours += r.customerNonBillableHours;
       acc.billableAmount += r.billableAmount;
       return acc;
     },
-    { totalHours: 0, billableHours: 0, nonBillableHours: 0, customerNonBillableHours: 0, billableAmount: 0 }
+    { totalHours: 0, originalTotalHours: null, billableHours: 0, nonBillableHours: 0, customerNonBillableHours: 0, billableAmount: 0 }
   );
 
   // Export pulls every matching record (not just the current page) with one extra request.
@@ -477,6 +524,12 @@ const ResourceProjectUtilization = () => {
               Total Hours&nbsp;
               <span className="font-semibold tabular-nums">{pageTotals.totalHours.toFixed(1)} hrs</span>
             </div>
+            {hasOriginalTotalHours && pageTotals.originalTotalHours != null && (
+              <div className="rounded-md border bg-blue-500/10 px-3 py-1.5 text-xs text-blue-700 dark:text-blue-400">
+                Original Total Hours&nbsp;
+                <span className="font-semibold tabular-nums">{pageTotals.originalTotalHours.toFixed(1)} hrs</span>
+              </div>
+            )}
             <div className="rounded-md border bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-700 dark:text-emerald-400">
               Billable&nbsp;
               <span className="font-semibold tabular-nums">{pageTotals.billableHours.toFixed(1)} hrs</span>
@@ -507,6 +560,7 @@ const ResourceProjectUtilization = () => {
                   <col className="w-9" />
                   <col />
                   <col className="w-[110px]" />
+                  {hasOriginalTotalHours && <col className="w-[125px]" />}
                   <col className="w-[110px]" />
                   <col className="w-[130px]" />
                   <col className="w-[120px]" />
@@ -518,6 +572,9 @@ const ResourceProjectUtilization = () => {
                     <th className="px-2.5 py-2 text-left text-xs font-semibold" />
                     <th className="px-2.5 py-2 text-left text-xs font-semibold">Employee</th>
                     <th className="px-2.5 py-2 text-right text-xs font-semibold">Total Hours</th>
+                    {hasOriginalTotalHours && (
+                      <th className="px-2.5 py-2 text-right text-xs font-semibold">Original Total Hours</th>
+                    )}
                     <th className="px-2.5 py-2 text-right text-xs font-semibold">Billable</th>
                     <th className="px-2.5 py-2 text-right text-xs font-semibold">Non-Billable</th>
                     <th className="px-2.5 py-2 text-right text-xs font-semibold">Customer Non-Billable</th>
@@ -547,6 +604,9 @@ const ResourceProjectUtilization = () => {
                         </div>
                       </td>
                       <td className="px-2.5 py-2 text-right tabular-nums font-medium">{formatHours(row.totalHours)}</td>
+                      {hasOriginalTotalHours && (
+                        <td className="px-2.5 py-2 text-right tabular-nums font-medium">{formatHours(row.originalTotalHours)}</td>
+                      )}
                       <td className="px-2.5 py-2 text-right tabular-nums text-emerald-700 dark:text-emerald-400">{formatHours(row.billableHours)}</td>
                       <td className="px-2.5 py-2 text-right tabular-nums text-orange-700 dark:text-orange-400">{formatHours(row.nonBillableHours)}</td>
                       <td className="px-2.5 py-2 text-right tabular-nums text-sky-700 dark:text-sky-400">{formatHours(row.customerNonBillableHours)}</td>
@@ -576,7 +636,14 @@ const ResourceProjectUtilization = () => {
                   <p className="truncate text-sm font-medium">{row.employeeName || '—'}</p>
                   <p className="text-xs text-muted-foreground">{row.projects?.length ?? 0} project{(row.projects?.length ?? 0) !== 1 ? 's' : ''}</p>
                 </div>
-                <span className="shrink-0 text-sm font-semibold tabular-nums">{formatHours(row.totalHours)}</span>
+                <div className="shrink-0 text-right">
+                  <span className="text-sm font-semibold tabular-nums">{formatHours(row.totalHours)}</span>
+                  {hasOriginalTotalHours && (
+                    <span className="block text-[11px] text-muted-foreground tabular-nums">
+                      Orig: {formatHours(row.originalTotalHours)}
+                    </span>
+                  )}
+                </div>
                 <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
               </button>
             ))}
@@ -656,6 +723,9 @@ const ResourceProjectUtilization = () => {
                   <div className="rounded-md border bg-blue-500/10 px-3 py-2 text-xs text-blue-700 dark:text-blue-400">
                     Total Hours
                     <p className="text-sm font-semibold tabular-nums">{formatHours(selectedRow.totalHours)}</p>
+                    {hasOriginalTotalHours && (
+                      <p className="text-[11px] opacity-75 tabular-nums">Orig: {formatHours(selectedRow.originalTotalHours)}</p>
+                    )}
                   </div>
                   <div className="rounded-md border bg-green-500/10 px-3 py-2 text-xs text-green-700 dark:text-green-400">
                     Billable Amount
@@ -698,6 +768,11 @@ const ResourceProjectUtilization = () => {
                           </div>
                           <div className="shrink-0 text-right">
                             <p className="text-sm font-semibold tabular-nums">{formatHours(p.projectHours)}</p>
+                            {hasOriginalProjectHours && (
+                              <p className="text-xs text-muted-foreground tabular-nums">
+                                Original: {formatHours(p.originalProjectHours)}
+                              </p>
+                            )}
                             <p className="text-xs text-muted-foreground tabular-nums">
                               {p.billableAmount ? formatCurrency(p.billableAmount) : '—'}
                             </p>

@@ -18,11 +18,11 @@ import { BusinessUnitCascadeSelect, SubBusinessUnitSelect, useBuHierarchy } from
 import { useResourceBudgetMappedEmployees, useResourceBudgetsByServicePo, useBulkSaveResourceBudgets } from '@/hooks/useResourceBudgets';
 import { useCanWrite } from '@/hooks/usePermissions';
 import { useNotification } from '@/hooks/useNotification';
+import { useMonthlyCap } from '@/hooks/useSystemSettings';
 import { extractApiError } from '@/services/apiClient';
 import { formatMonthYear, getInitials } from '@/utils/formatters';
 import { fromApiMonth, toApiMonth } from '@/utils/monthApi';
 
-const MONTHLY_HOURS_CAP = 176;
 const RESOURCE_COL_WIDTH = 220;
 const TOTAL_COL_WIDTH = 110;
 
@@ -92,7 +92,7 @@ const AddMonthInputCell = ({ row, table }) => {
     <Input
       type="number"
       min="0"
-      max={MONTHLY_HOURS_CAP}
+      max={m.monthlyCap}
       step="0.5"
       value={m.draftHours[empId] ?? ''}
       onChange={(e) => m.handleDraftChange(empId, e.target.value)}
@@ -213,6 +213,13 @@ const ResourceBudgetPage = () => {
 
   const nextPeriod = useMemo(() => computeNextPeriod(matrixMonths), [matrixMonths]);
 
+  // Monthly hours cap (Admin-configurable, GET /system-settings/monthly-cap) for the one month
+  // currently being budgeted — the draft month once adding has started, else the fixed next
+  // month in sequence. A PO's very first month has neither until one is picked, so it falls back
+  // to the latest cap. Only one month is ever budgeted at a time, so one cap lookup suffices.
+  const budgetPeriod = draftPeriod ?? nextPeriod;
+  const monthlyCap = useMonthlyCap(budgetPeriod ? { month: budgetPeriod.month, year: budgetPeriod.year } : undefined);
+
   // Union of currently-mapped employees and anyone with a historical entry — an employee who
   // was later unmapped from this PO shouldn't make their past months vanish from the matrix.
   const matrixEmployees = useMemo(() => {
@@ -289,7 +296,7 @@ const ResourceBudgetPage = () => {
           const errors = err?.response?.data?.errors;
           if (Array.isArray(errors) && errors.length) {
             setDraftErrors(Object.fromEntries(errors.map((e) => [String(e.emp_id), e.message])));
-            showError('Some employees exceeded the 176-hour monthly cap. See the highlighted cells.');
+            showError(`Some employees exceeded the ${monthlyCap}-hour monthly cap. See the highlighted cells.`);
           } else {
             showError(extractApiError(err));
           }
@@ -363,7 +370,7 @@ const ResourceBudgetPage = () => {
           const errors = err?.response?.data?.errors;
           if (Array.isArray(errors) && errors.length) {
             setDraftErrors(Object.fromEntries(errors.map((e) => [String(e.emp_id), e.message])));
-            showError('Some employees exceeded the 176-hour monthly cap. See the highlighted cells.');
+            showError(`Some employees exceeded the ${monthlyCap}-hour monthly cap. See the highlighted cells.`);
           } else {
             showError(extractApiError(err));
           }
@@ -405,7 +412,7 @@ const ResourceBudgetPage = () => {
         size: TOTAL_COL_WIDTH,
         meta: { sticky: true, left: RESOURCE_COL_WIDTH },
         cell: (info) => (
-          <span className={`tabular-nums text-sm font-semibold whitespace-nowrap ${info.getValue() > MONTHLY_HOURS_CAP ? 'text-destructive' : ''}`}>
+          <span className={`tabular-nums text-sm font-semibold whitespace-nowrap ${info.getValue() > monthlyCap ? 'text-destructive' : ''}`}>
             {info.getValue()}h
           </span>
         ),
@@ -444,7 +451,7 @@ const ResourceBudgetPage = () => {
     }
 
     return cols;
-  }, [matrixMonths, canManage, matrixRows.length]);
+  }, [matrixMonths, canManage, matrixRows.length, monthlyCap]);
 
   const servicePoOptions = servicePos.map((po) => ({
     value: String(po.id),
@@ -549,6 +556,7 @@ const ResourceBudgetPage = () => {
               startAdding,
               cancelAdding,
               isSaving: bulkSaveMutation.isPending,
+              monthlyCap,
             }}
             emptyState={
               <EmptyState
@@ -778,7 +786,7 @@ const ResourceBudgetPage = () => {
                       <Input
                         type="number"
                         min="0"
-                        max={MONTHLY_HOURS_CAP}
+                        max={monthlyCap}
                         step="0.5"
                         value={draftHours[emp.id] ?? ''}
                         onChange={(e) => handleDraftChange(emp.id, e.target.value)}

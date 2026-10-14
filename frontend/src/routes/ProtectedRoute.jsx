@@ -1,7 +1,9 @@
+import { useEffect, useRef } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { ROUTES } from '@/constants/routes';
 import LoadingScreen from '@/components/common/LoadingScreen';
+import { auditLogsApi } from '@/api/auditLogs.api';
 
 // formName: gate direct URL access against the RBAC accessible-forms map (Step 5) —
 // blocks navigation to a page whose form isn't granted to any of the user's roles.
@@ -20,6 +22,26 @@ import LoadingScreen from '@/components/common/LoadingScreen';
 const ProtectedRoute = ({ children, allowedRoles, formName, platformAdminOnly, employeeOnly, allowIfNoFormsMapped }) => {
   const { isAuthenticated, hasRole, isPlatformAdmin, isEmployee, accessibleForms, accessibleFormsLoaded } = useAuth();
   const location = useLocation();
+
+  // Mirrors the formName gate below exactly (same normalize/allForms/allowIfNoFormsMapped logic)
+  // so the two never disagree on what counts as "blocked". Only this gate has a well-defined
+  // form_name to report — the login redirect, the employeeOnly "different home" redirect, and a
+  // bare allowedRoles/platformAdminOnly block (no formName) are all deliberately not reported.
+  const normalize = (s) => (s ?? '').trim().toLowerCase();
+  const allForms = Object.values(accessibleForms ?? {}).flat();
+  const formGateBlocked = isAuthenticated && formName && !isPlatformAdmin && accessibleFormsLoaded
+    && !allForms.some((f) => normalize(f.name) === normalize(formName))
+    && !(allowIfNoFormsMapped && allForms.length === 0);
+
+  // Reports once per navigation to this blocked route, not on every re-render — a ref (not state)
+  // since this must never itself trigger a re-render. The server does its own 2-attempts/15-min
+  // counting, so no client-side debouncing beyond "don't repeat the same pathname" is needed.
+  const reportedPathRef = useRef(null);
+  useEffect(() => {
+    if (!formGateBlocked || reportedPathRef.current === location.pathname) return;
+    reportedPathRef.current = location.pathname;
+    auditLogsApi.reportAccessDenied({ form_name: formName, path: location.pathname }).catch(() => {});
+  }, [formGateBlocked, formName, location.pathname]);
 
   if (!isAuthenticated) {
     return <Navigate to={ROUTES.LOGIN} state={{ from: location }} replace />;
@@ -55,11 +77,8 @@ const ProtectedRoute = ({ children, allowedRoles, formName, platformAdminOnly, e
     // Case-insensitive/trimmed, matching resolveFormRoute's own normalization (rbacForms.js) —
     // otherwise a form whose sidebar item resolves fine (case-insensitive) can still 404 on
     // direct navigation/click-through here if the Form Master row's exact casing/whitespace
-    // differs from the FORM_NAMES constant.
-    const normalize = (s) => (s ?? '').trim().toLowerCase();
-    const allForms = Object.values(accessibleForms ?? {}).flat();
-    const allowed = allForms.some((f) => normalize(f.name) === normalize(formName));
-    if (!allowed && !(allowIfNoFormsMapped && allForms.length === 0)) {
+    // differs from the FORM_NAMES constant. Same check as formGateBlocked above.
+    if (formGateBlocked) {
       return <Navigate to={ROUTES.NOT_AUTHORIZED} replace />;
     }
   }

@@ -9,7 +9,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useForms, useToggleFormStatus, useReorderModules, useReorderForms } from '@/hooks/useForms';
-import { useFormCategories } from '@/hooks/useFormCategories';
+import { useFormCategories, useReorderFormCategories } from '@/hooks/useFormCategories';
 import { useCanWrite } from '@/hooks/usePermissions';
 import { useNotification } from '@/hooks/useNotification';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -115,7 +115,40 @@ const FormRow = ({ form, canWrite, onEdit, onMove, sortable = true, indent = fal
   );
 };
 
-const ModuleBlock = ({ module, canWrite, expanded, onToggleExpand, onEditModule, onEditForm, onFormsReorder, onMoveForm, onAddCategory, categoryLookup, collapsedCategories, onToggleCategory }) => {
+// A category group's own header row, within a module's expanded tree — draggable (via
+// onCategoriesReorder) the same way a module or a form row is, instead of only being reorderable
+// from the separate "Manage Categories" screen (CategoryList.jsx), which required leaving this
+// view entirely just to move a category above/below its siblings.
+const CategoryGroupHeader = ({ categoryKey, group, expanded, onToggle, canWrite }) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: group.id,
+    disabled: !canWrite,
+  });
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
+
+  return (
+    <div ref={setNodeRef} style={style} className="flex items-center border-t bg-slate-50/40 pr-3">
+      <button
+        type="button"
+        title={canWrite ? 'Drag to reorder categories' : undefined}
+        className={cn('flex items-center justify-center pl-4 py-1.5 text-muted-foreground', canWrite ? 'cursor-grab active:cursor-grabbing' : 'cursor-not-allowed opacity-30')}
+        {...(canWrite ? { ...attributes, ...listeners } : {})}
+      >
+        <GripVertical className="h-3.5 w-3.5" />
+      </button>
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex w-full items-center gap-1.5 py-1.5 pl-3 text-left text-[11px] font-semibold text-muted-foreground"
+      >
+        {expanded ? <ChevronDown className="h-3 w-3 shrink-0" /> : <ChevronRight className="h-3 w-3 shrink-0" />}
+        <FolderCog className="h-3 w-3 shrink-0" /> {group.name}
+      </button>
+    </div>
+  );
+};
+
+const ModuleBlock = ({ module, canWrite, expanded, onToggleExpand, onEditModule, onEditForm, onFormsReorder, onMoveForm, onAddCategory, onCategoriesReorder, categoryLookup, collapsedCategories, onToggleCategory }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: module.id,
     disabled: module.isOrphan || !canWrite,
@@ -145,6 +178,17 @@ const ModuleBlock = ({ module, canWrite, expanded, onToggleExpand, onEditModule,
       }))
       .sort((a, b) => a.seq - b.seq);
   }, [module.forms, categoryLookup]);
+
+  const categorySensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+
+  const handleCategoriesDragEnd = (event) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = categorizedGroups.findIndex((g) => g.id === active.id);
+    const newIndex = categorizedGroups.findIndex((g) => g.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    onCategoriesReorder(module.id, arrayMove(categorizedGroups, oldIndex, newIndex));
+  };
 
   const handleFormsDragEnd = (event) => {
     const { active, over } = event;
@@ -203,38 +247,41 @@ const ModuleBlock = ({ module, canWrite, expanded, onToggleExpand, onEditModule,
           <div className="pl-12 pr-3 py-2 text-xs text-muted-foreground bg-white">No forms in this module yet.</div>
         ) : (
           <>
-            {categorizedGroups.map((group) => {
-              const categoryKey = `${module.id}-${group.id}`;
-              const categoryExpanded = !collapsedCategories.has(categoryKey);
-              return (
-                <div key={group.id}>
-                  <button
-                    type="button"
-                    onClick={() => onToggleCategory(categoryKey)}
-                    className="w-full pl-9 pr-3 py-1.5 border-t bg-slate-50/40 text-[11px] font-semibold text-muted-foreground flex items-center gap-1.5 text-left"
-                  >
-                    {categoryExpanded ? <ChevronDown className="h-3 w-3 shrink-0" /> : <ChevronRight className="h-3 w-3 shrink-0" />}
-                    <FolderCog className="h-3 w-3 shrink-0" /> {group.name}
-                  </button>
-                  {categoryExpanded && (
-                    <DndContext sensors={formSensors} collisionDetection={closestCenter} onDragEnd={handleCategoryFormsDragEnd(group.forms)}>
-                      <SortableContext items={group.forms.map((f) => f.id)} strategy={verticalListSortingStrategy}>
-                        {group.forms.map((form) => (
-                          <FormRow
-                            key={form.id}
-                            form={form}
-                            canWrite={canWrite}
-                            indent
-                            onEdit={() => onEditForm(form)}
-                            onMove={onMoveForm}
-                          />
-                        ))}
-                      </SortableContext>
-                    </DndContext>
-                  )}
-                </div>
-              );
-            })}
+            <DndContext sensors={categorySensors} collisionDetection={closestCenter} onDragEnd={handleCategoriesDragEnd}>
+              <SortableContext items={categorizedGroups.map((g) => g.id)} strategy={verticalListSortingStrategy}>
+                {categorizedGroups.map((group) => {
+                  const categoryKey = `${module.id}-${group.id}`;
+                  const categoryExpanded = !collapsedCategories.has(categoryKey);
+                  return (
+                    <div key={group.id}>
+                      <CategoryGroupHeader
+                        categoryKey={categoryKey}
+                        group={group}
+                        expanded={categoryExpanded}
+                        onToggle={() => onToggleCategory(categoryKey)}
+                        canWrite={canWrite}
+                      />
+                      {categoryExpanded && (
+                        <DndContext sensors={formSensors} collisionDetection={closestCenter} onDragEnd={handleCategoryFormsDragEnd(group.forms)}>
+                          <SortableContext items={group.forms.map((f) => f.id)} strategy={verticalListSortingStrategy}>
+                            {group.forms.map((form) => (
+                              <FormRow
+                                key={form.id}
+                                form={form}
+                                canWrite={canWrite}
+                                indent
+                                onEdit={() => onEditForm(form)}
+                                onMove={onMoveForm}
+                              />
+                            ))}
+                          </SortableContext>
+                        </DndContext>
+                      )}
+                    </div>
+                  );
+                })}
+              </SortableContext>
+            </DndContext>
 
             {uncategorizedForms.length > 0 && (
               <DndContext sensors={formSensors} collisionDetection={closestCenter} onDragEnd={handleFormsDragEnd}>
@@ -281,10 +328,24 @@ const FormList = () => {
   const { data, isPending } = useForms(params);
   const reorderModulesMutation = useReorderModules();
   const reorderFormsMutation = useReorderForms();
+  const reorderCategoriesMutation = useReorderFormCategories();
   // Unscoped fetch across all modules — used only to label categorized forms in this tree, not
   // as a dropdown source (those are always fetched module-scoped via useFormCategories elsewhere).
   const { data: allCategories = [] } = useFormCategories({});
-  const categoryLookup = useMemo(() => new Map(allCategories.map((c) => [c.id, c])), [allCategories]);
+  // A dragged category's new seq, stamped here immediately (same "show the in-flight value, not
+  // the stale pre-drag one" reasoning as handleModulesDragEnd below) rather than waiting on
+  // useFormCategories({}) to refetch — that query is unscoped across every module, so the brief
+  // round trip would otherwise show every OTHER module's category list still correct while this
+  // one's just-dropped category snapped back to its old position until the refetch landed.
+  const [categorySeqOverrides, setCategorySeqOverrides] = useState(() => new Map());
+  const categoryLookup = useMemo(() => {
+    const map = new Map(allCategories.map((c) => [c.id, c]));
+    categorySeqOverrides.forEach((seq, id) => {
+      const existing = map.get(id);
+      if (existing) map.set(id, { ...existing, seq });
+    });
+    return map;
+  }, [allCategories, categorySeqOverrides]);
 
   useEffect(() => {
     const nextTree = buildTree(data?.data ?? []);
@@ -354,6 +415,21 @@ const FormList = () => {
     )));
     const items = withSeq.map((f) => ({ id: f.id, seq: f.seq }));
     reorderFormsMutation.mutate({ moduleName, items }, {
+      onError: (err) => showError(extractApiError(err)),
+    });
+  };
+
+  // `reorderedGroups` is the module's own categorizedGroups array (already in its new order) —
+  // only this module's categories are ever included, so the PATCH only ever touches their ids,
+  // same as every other reorder endpoint used on this page.
+  const handleCategoriesReorder = (moduleId, reorderedGroups) => {
+    const items = reorderedGroups.map((g, i) => ({ id: g.id, seq: i + 1 }));
+    setCategorySeqOverrides((prev) => {
+      const next = new Map(prev);
+      items.forEach(({ id, seq }) => next.set(id, seq));
+      return next;
+    });
+    reorderCategoriesMutation.mutate({ moduleId, items }, {
       onError: (err) => showError(extractApiError(err)),
     });
   };
@@ -431,6 +507,9 @@ const FormList = () => {
             <GripVertical className="h-3.5 w-3.5 shrink-0" /> Drag to reorder modules
           </span>
           <span className="flex items-center gap-1.5">
+            <GripVertical className="h-3.5 w-3.5 shrink-0" /> Drag to reorder categories within a module
+          </span>
+          <span className="flex items-center gap-1.5">
             <GripHorizontal className="h-3.5 w-3.5 shrink-0" /> Drag to reorder forms within a module
           </span>
           <span className="text-blue-700/70">— sequence updates automatically.</span>
@@ -466,6 +545,7 @@ const FormList = () => {
                   onToggleExpand={() => toggleExpand(module.id)}
                   onEditModule={() => navigate(buildPath(ROUTES.FORMS + '/' + module.id + '/edit'))}
                   onEditForm={(form) => navigate(buildPath(ROUTES.FORMS + '/' + form.id + '/edit'))}
+                  onCategoriesReorder={handleCategoriesReorder}
                   onFormsReorder={handleFormsReorder}
                   onMoveForm={setMoveDialogForm}
                   onAddCategory={(moduleId) => navigate(`${ROUTES.FORM_CATEGORY_NEW}?module_id=${moduleId}`)}

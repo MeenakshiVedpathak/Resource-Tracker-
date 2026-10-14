@@ -1,11 +1,12 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { createColumnHelper } from '@tanstack/react-table';
 import { AlertCircle, Download } from 'lucide-react';
 import { useClientCostAnalytics } from '@/hooks/useReports';
 import { useCanViewOriginalData } from '@/hooks/usePermissions';
+import { useActiveClients } from '@/hooks/useClients';
 import { extractApiError } from '@/services/apiClient';
-import { formatCurrency, formatHours } from '@/utils/formatters';
+import { formatCurrency, formatHours, formatDate } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
 import EmptyState from '@/components/common/EmptyState';
@@ -15,6 +16,10 @@ import BusinessUnitFilter, { ALL_BUS } from '@/components/common/BusinessUnitFil
 import EntityFilter, { ALL_ENTITIES } from '@/components/common/EntityFilter';
 import SegmentedToggle from '@/components/common/SegmentedToggle';
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { MultiSelect } from '@/components/ui/multi-select';
+import { MonthYearPicker } from '@/components/ui/month-year-picker';
+import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
 const columnHelper = createColumnHelper();
@@ -28,19 +33,34 @@ const columnHelper = createColumnHelper();
 const exportToExcel = ({ topClients, clients, categoryMatrix, categoryNames }) => {
   const wb = XLSX.utils.book_new();
 
-  const topHeader = ['Rank', 'Client', 'Total Hours', 'Total Cost'];
+  const hasOrigTop = topClients.some((c) => c.original_total_hours != null);
+  const topHeader = [
+    'Rank',
+    'Client',
+    'Total Hours',
+    ...(hasOrigTop ? ['Original Total Hours'] : []),
+    'Total Cost',
+  ];
   const topRows = topClients.map((c) => [
     c.rank ?? '',
     c.client_name ?? '',
     c.total_hours != null ? Number(c.total_hours) : '',
+    ...(hasOrigTop ? [c.original_total_hours != null ? Number(c.original_total_hours) : ''] : []),
     c.total_cost != null ? Number(c.total_cost) : '',
   ]);
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([topHeader, ...topRows]), 'Top Clients');
 
-  const allHeader = ['Client', 'Total Hours', 'Total Cost'];
+  const hasOrigAll = clients.some((c) => c.original_total_hours != null);
+  const allHeader = [
+    'Client',
+    'Total Hours',
+    ...(hasOrigAll ? ['Original Total Hours'] : []),
+    'Total Cost',
+  ];
   const allRows = clients.map((c) => [
     c.client_name ?? '',
     c.total_hours != null ? Number(c.total_hours) : '',
+    ...(hasOrigAll ? [c.original_total_hours != null ? Number(c.original_total_hours) : ''] : []),
     c.total_cost != null ? Number(c.total_cost) : '',
   ]);
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([allHeader, ...allRows]), 'All Clients');
@@ -56,47 +76,6 @@ const exportToExcel = ({ topClients, clients, categoryMatrix, categoryNames }) =
   XLSX.writeFile(wb, 'Client_Cost_Analytics.xlsx');
 };
 
-const topClientsColumns = [
-  columnHelper.accessor('rank', {
-    header: 'Rank',
-    size: 90,
-    cell: (info) => <span className="tabular-nums text-muted-foreground">{info.getValue()}</span>,
-  }),
-  columnHelper.accessor('client_name', {
-    header: 'Client',
-    size: 260,
-    cell: (info) => <div className="truncate font-medium max-w-[240px]" title={info.getValue()}>{info.getValue() || '—'}</div>,
-  }),
-  columnHelper.accessor('total_hours', {
-    header: 'Total Hours',
-    size: 150,
-    cell: (info) => <span className="tabular-nums">{formatHours(info.getValue())}</span>,
-  }),
-  columnHelper.accessor('total_cost', {
-    header: 'Total Cost',
-    size: 160,
-    cell: (info) => <span className="tabular-nums">{formatCurrency(info.getValue())}</span>,
-  }),
-];
-
-const allClientsColumns = [
-  columnHelper.accessor('client_name', {
-    header: 'Client',
-    size: 280,
-    cell: (info) => <div className="truncate font-medium max-w-[260px]" title={info.getValue()}>{info.getValue() || '—'}</div>,
-  }),
-  columnHelper.accessor('total_hours', {
-    header: 'Total Hours',
-    size: 150,
-    cell: (info) => <span className="tabular-nums">{formatHours(info.getValue())}</span>,
-  }),
-  columnHelper.accessor('total_cost', {
-    header: 'Total Cost',
-    size: 160,
-    cell: (info) => <span className="tabular-nums">{formatCurrency(info.getValue())}</span>,
-  }),
-];
-
 const ClientCostAnalytics = () => {
   const canViewOriginal = useCanViewOriginalData();
   const [hoursSource, setHoursSource] = useState('M');
@@ -108,6 +87,14 @@ const ClientCostAnalytics = () => {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [entityIds, setEntityIds] = useState([]);
   const [buIds, setBuIds] = useState([]);
+  const [clientIds, setClientIds] = useState([]);
+  // Period is optional here (unlike every month/range-gated report elsewhere) — leaving both
+  // empty means all-time, matching this report's original always-all-time behavior.
+  const [periodMode, setPeriodMode] = useState('month');
+  const [monthYear, setMonthYear] = useState(null);
+  const [dateRange, setDateRange] = useState(null);
+
+  const { data: activeClients = [] } = useActiveClients();
 
   // Role no longer grants Original-data visibility (e.g. role reassigned mid-session) — force
   // back to Modified, same as every other report.
@@ -115,7 +102,8 @@ const ClientCostAnalytics = () => {
     if (!canViewOriginal) setHoursSource('M');
   }, [canViewOriginal]);
 
-  // No period/date filter at all — this report is always all-time.
+  // Period is optional — omit both month/year and startDate/endDate for all-time (the backend's
+  // own default, same as before this filter existed). Never sent together.
   // `buId` is always the 'all' sentinel so explicitBuScope always drops the X-Company-Id
   // header, letting `businessUnitIds` below narrow the full role reach instead.
   const params = {
@@ -123,17 +111,84 @@ const ClientCostAnalytics = () => {
     page,
     limit,
     buId: ALL_BUS,
+    ...(periodMode === 'month'
+      ? (monthYear?.month && monthYear?.year ? { month: monthYear.month, year: monthYear.year } : {})
+      : (dateRange?.startDate && dateRange?.endDate ? { startDate: dateRange.startDate, endDate: dateRange.endDate } : {})),
     ...(entityIds.length > 0 && { entityIds: entityIds.join(',') }),
     ...(buIds.length > 0 && { businessUnitIds: buIds.join(',') }),
+    ...(clientIds.length > 0 && { clientIds: clientIds.join(',') }),
   };
 
   const { data, isPending, isError, error } = useClientCostAnalytics(params);
   const errorMessage = isError ? extractApiError(error) : null;
 
+  const period = data?.data?.period ?? null;
+  const periodLabel = period?.start_date && period?.end_date
+    ? `${formatDate(period.start_date)} - ${formatDate(period.end_date)}`
+    : 'All-time';
+
   const clients = Array.isArray(data?.data?.clients) ? data.data.clients : [];
   const topClients = Array.isArray(data?.data?.top_clients?.data) ? data.data.top_clients.data : [];
   const topClientsPagination = data?.data?.top_clients?.pagination ?? null;
   const categoryMatrix = Array.isArray(data?.data?.category_matrix) ? data.data.category_matrix : [];
+
+  const hasOrigTop = useMemo(() => topClients.some((c) => c.original_total_hours != null), [topClients]);
+  const hasOrigAll = useMemo(() => clients.some((c) => c.original_total_hours != null), [clients]);
+
+  const visibleTopClientsColumns = useMemo(() => [
+    columnHelper.accessor('rank', {
+      header: 'Rank',
+      size: 90,
+      cell: (info) => <span className="tabular-nums text-muted-foreground">{info.getValue()}</span>,
+    }),
+    columnHelper.accessor('client_name', {
+      header: 'Client',
+      size: 260,
+      cell: (info) => <div className="truncate font-medium max-w-[240px]" title={info.getValue()}>{info.getValue() || '—'}</div>,
+    }),
+    columnHelper.accessor('total_hours', {
+      header: 'Total Hours',
+      size: 150,
+      cell: (info) => <span className="tabular-nums">{formatHours(info.getValue())}</span>,
+    }),
+    ...(hasOrigTop ? [
+      columnHelper.accessor('original_total_hours', {
+        header: 'Original Total Hours',
+        size: 150,
+        cell: (info) => <span className="tabular-nums text-muted-foreground">{info.getValue() != null ? formatHours(info.getValue()) : '—'}</span>,
+      }),
+    ] : []),
+    columnHelper.accessor('total_cost', {
+      header: 'Total Cost',
+      size: 160,
+      cell: (info) => <span className="tabular-nums">{formatCurrency(info.getValue())}</span>,
+    }),
+  ], [hasOrigTop]);
+
+  const visibleAllClientsColumns = useMemo(() => [
+    columnHelper.accessor('client_name', {
+      header: 'Client',
+      size: 280,
+      cell: (info) => <div className="truncate font-medium max-w-[260px]" title={info.getValue()}>{info.getValue() || '—'}</div>,
+    }),
+    columnHelper.accessor('total_hours', {
+      header: 'Total Hours',
+      size: 150,
+      cell: (info) => <span className="tabular-nums">{formatHours(info.getValue())}</span>,
+    }),
+    ...(hasOrigAll ? [
+      columnHelper.accessor('original_total_hours', {
+        header: 'Original Total Hours',
+        size: 150,
+        cell: (info) => <span className="tabular-nums text-muted-foreground">{info.getValue() != null ? formatHours(info.getValue()) : '—'}</span>,
+      }),
+    ] : []),
+    columnHelper.accessor('total_cost', {
+      header: 'Total Cost',
+      size: 160,
+      cell: (info) => <span className="tabular-nums">{formatCurrency(info.getValue())}</span>,
+    }),
+  ], [hasOrigAll]);
 
   // Category names aren't a fixed set — derive the union of keys seen across every row's
   // `categories` object at runtime, rather than hardcoding Billable/Non-Billable/etc.
@@ -189,10 +244,30 @@ const ClientCostAnalytics = () => {
     setPage(1);
   };
 
+  const handlePeriodModeChange = (mode) => {
+    setPeriodMode(mode);
+    setPage(1);
+  };
+
+  const activeFilterCount = (entityIds.length > 0 ? 1 : 0)
+    + (buIds.length > 0 ? 1 : 0)
+    + (clientIds.length > 0 ? 1 : 0)
+    + (periodMode === 'month' ? (monthYear ? 1 : 0) : (dateRange ? 1 : 0));
+
+  const clearFilters = () => {
+    setEntityIds([]);
+    setBuIds([]);
+    setClientIds([]);
+    setMonthYear(null);
+    setDateRange(null);
+    setPage(1);
+  };
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
         title="Client Cost Analytics"
+        description={`Showing: ${periodLabel}`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {canViewOriginal && (
@@ -208,7 +283,7 @@ const ClientCostAnalytics = () => {
             <FilterToggleButton
               isOpen={filtersOpen}
               onToggle={() => setFiltersOpen((p) => !p)}
-              activeCount={(entityIds.length > 0 ? 1 : 0) + (buIds.length > 0 ? 1 : 0)}
+              activeCount={activeFilterCount}
             />
             {(clients.length > 0 || topClients.length > 0 || categoryMatrix.length > 0) && (
               <Button
@@ -225,13 +300,54 @@ const ClientCostAnalytics = () => {
 
       <FilterPanel
         isOpen={filtersOpen}
-        maxHeightClass="max-h-[160px]"
-        onClear={() => { setEntityIds([]); handleBuChange([]); }}
-        showClear={entityIds.length > 0 || buIds.length > 0}
+        onClear={clearFilters}
+        showClear={activeFilterCount > 0}
       >
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Period</Label>
+          <Tabs value={periodMode} onValueChange={handlePeriodModeChange}>
+            <TabsList className="grid w-full grid-cols-2 border border-input bg-slate-100">
+              <TabsTrigger value="month" className="text-xs font-semibold data-[state=active]:bg-white">Month</TabsTrigger>
+              <TabsTrigger value="range" className="text-xs font-semibold data-[state=active]:bg-white">Date Range</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">{periodMode === 'month' ? 'Month & Year' : 'Date Range'}</Label>
+          {periodMode === 'month' ? (
+            <MonthYearPicker
+              value={monthYear}
+              onChange={(val) => { setMonthYear(val); setPage(1); }}
+              placeholder="All-time"
+              clearable
+              className="w-full"
+            />
+          ) : (
+            <DateRangePicker
+              value={dateRange}
+              onChange={(val) => { setDateRange(val); setPage(1); }}
+              placeholder="All-time"
+              className="w-full"
+            />
+          )}
+        </div>
+
         <EntityFilter multiple value={entityIds} onChange={handleEntityChange} />
 
         <BusinessUnitFilter multiple value={buIds} entityId={entityIds} onChange={handleBuChange} />
+
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Client</Label>
+          <MultiSelect
+            options={activeClients.map((c) => ({ label: c.client_name, value: String(c.id) }))}
+            value={clientIds}
+            onValueChange={(v) => { setClientIds(v); setPage(1); }}
+            placeholder="All Clients"
+            searchPlaceholder="Search client..."
+            className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)] bg-white"
+          />
+        </div>
       </FilterPanel>
 
       {errorMessage && (
@@ -252,7 +368,7 @@ const ClientCostAnalytics = () => {
           <DataTable
             mobileCards
             tableContainerClassName="max-h-[min(475px,55vh)]"
-            columns={topClientsColumns}
+            columns={visibleTopClientsColumns}
             data={topClients}
             isLoading={isPending}
             pagination={topClientsPagination ? {
@@ -270,7 +386,7 @@ const ClientCostAnalytics = () => {
           <DataTable
             mobileCards
             tableContainerClassName="max-h-[min(475px,55vh)]"
-            columns={allClientsColumns}
+            columns={visibleAllClientsColumns}
             data={clients}
             isLoading={isPending}
             emptyState={<EmptyState title="No client data" description="No clients found." />}

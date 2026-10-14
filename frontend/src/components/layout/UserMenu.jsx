@@ -26,6 +26,7 @@ import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from '@/components/ui/select';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
 import ChangePasswordDialog from '@/components/profile/ChangePasswordDialog';
 import { cn } from '@/utils/cn';
 

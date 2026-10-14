@@ -64,6 +64,13 @@ export const QUERY_KEYS = {
   // Admins (Platform Admin -> Admin)
   ADMINS: (params) => ['admins', params],
 
+  // Audit Logs
+  AUDIT_LOGS: (params) => ['audit-logs', params],
+  AUDIT_LOG: (id) => ['audit-logs', id],
+  AUDIT_LOG_FILTER_OPTIONS: ['audit-logs', 'filter-options'],
+  AUDIT_LOG_SESSIONS: (params) => ['audit-logs', 'sessions', params],
+  AUDIT_LOG_DEVICES: (params) => ['audit-logs', 'devices', params],
+
   // Organization Overview (Platform Admin only — one API, all tabs read from this one cache entry)
   ORGANIZATION_OVERVIEW: ['organization-overview'],
 
@@ -184,6 +191,8 @@ export const QUERY_KEYS = {
   REPORT_EMPLOYEE_BENCH_PERCENTAGE: (params) => ['reports', 'employee-bench-percentage', params],
   REPORT_RESOURCE_UTILIZATION_TREND: (params) => ['reports', 'resource-utilization-trend', params],
   REPORT_SERVICE_PO_HOURS_BUDGET: (params) => ['reports', 'service-po-hours-budget', params],
+  REPORT_BU_WISE_UTILISATION: (params) => ['reports', 'bu-wise-utilisation', params],
+  REPORT_EMPLOYEE_PROJECT_UTILISATION: (params) => ['reports', 'employee-project-utilisation', params],
   REPORT_EMPLOYEE_WORK_LOG_HOURS_SUMMARY: (params) => ['reports', 'employee-work-log-hours-summary', params],
   REPORT_EMPLOYEE_WORK_LOG_HOURS_SUMMARY_DETAILS: (employeeId, params) => ['reports', 'employee-work-log-hours-summary', employeeId, 'details', params],
   REPORT_PM_WISE_UTILIZATION: (params) => ['reports', 'pm-wise-utilization', params],
@@ -192,6 +201,7 @@ export const QUERY_KEYS = {
   REPORT_RESOURCE_WISE_BENCH: (params) => ['reports', 'resource-wise-bench', params],
   REPORT_RESOURCE_COST_UTILIZATION: (params) => ['reports', 'resource-cost-utilization', params],
   REPORT_PROJECT_TIMESHEET: (params) => ['reports', 'project-timesheet', params],
+  REPORT_CROSS_BU_EMPLOYEE_PO_HOURS: (params) => ['reports', 'cross-bu-employee-po-hours', params],
   REPORT_EMPLOYEE_ROLE_BU_MAPPING: (params) => ['reports', 'employee-role-bu-mapping', params],
   REPORT_TEAM_LEAD_EMPLOYEE_PROJECT_HOURS: (params) => ['reports', 'team-lead-employee-project-hours', params],
   REPORT_TEAM_LEAD_EMPLOYEE_PROJECT_HOURS_FILTER_OPTIONS: (params) => ['reports', 'team-lead-employee-project-hours', 'filter-options', params],
@@ -245,4 +255,7 @@ export const QUERY_KEYS = {
   // Off-Day Approval Gate
   OFF_DAY_REQUESTS_MINE: (params) => ['employee-timesheets', 'off-day-requests', params],
   OFF_DAY_REQUESTS_QUEUE: (params) => ['my-team', 'off-day-requests', params],
+
+  // System Settings (Admin / Platform Admin) — month/year optional; both undefined = latest cap
+  MONTHLY_CAP: (month, year) => ['system-settings', 'monthly-cap', month ?? null, year ?? null],
 };

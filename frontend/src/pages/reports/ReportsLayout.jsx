@@ -11,6 +11,8 @@ const NAV = [
   { label: 'Employee Utilization Summary', to: ROUTES.REPORT_EMPLOYEE_UTILIZATION_SUMMARY },
   { label: 'Resource Allocation', to: ROUTES.REPORT_RESOURCE_ALLOCATION },
   { label: 'Resource Project Utilization', to: ROUTES.REPORT_RESOURCE_PROJECT_UTILIZATION },
+  { label: 'BU-wise Utilisation', to: ROUTES.REPORT_BU_WISE_UTILISATION },
+  { label: 'Employee Project Utilisation', to: ROUTES.REPORT_EMPLOYEE_PROJECT_UTILISATION },
   { label: 'Client Service PO Hours', to: ROUTES.REPORT_CLIENT_SERVICE_PO_HOURS },
   { label: 'Service PO Profitability', to: ROUTES.REPORT_SERVICE_PO_PROFITABILITY },
   { label: 'Budgeted Margin Forecast', to: ROUTES.REPORT_BUDGETED_MARGIN_FORECAST },
@@ -32,6 +34,7 @@ const NAV = [
   { label: 'Employee Work Log Hours Summary', to: ROUTES.REPORT_EMPLOYEE_WORK_LOG_HOURS_SUMMARY },
   { label: 'Employee Role & Organization Mapping', to: ROUTES.REPORT_EMPLOYEE_ROLE_BU_MAPPING },
   { label: 'Team Lead Employee Project Hours', to: ROUTES.REPORT_TEAM_LEAD_EMPLOYEE_PROJECT_HOURS },
+  { label: 'Cross-BU Employee & PO Hours', to: ROUTES.REPORT_CROSS_BU_EMPLOYEE_PO_HOURS },
 ];
 
 // Module-level so the context value keeps a stable identity across renders.

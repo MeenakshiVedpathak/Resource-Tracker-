@@ -23,7 +23,6 @@ import EntityFilter from '@/components/common/EntityFilter';
 import MobilePagination from '@/components/common/MobilePagination';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { MonthRangePicker } from '@/components/ui/month-range-picker';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -204,6 +203,13 @@ const ResourceCostUtilizationReport = () => {
   const months = period
     ? buildMonthRange(period.startMonth, period.startYear, period.endMonth, period.endYear)
     : buildMonthRange(fromMonthYear.month, fromMonthYear.year, toMonthYear.month, toMonthYear.year);
+
+  const summaryByKey = new Map(
+    (Array.isArray(data?.data?.summary) ? data.data.summary : []).map((s) => [
+      monthKey(s.monthNumber, s.year),
+      s,
+    ])
+  );
 
   const activeFilterCount = [
     entityIds.length > 0, buIds.length > 0, employeeIds.length > 0, clientIds.length > 0,
@@ -388,7 +394,7 @@ const ResourceCostUtilizationReport = () => {
                     {months.map((m) => (
                       <th
                         key={m.key}
-                        colSpan={5}
+                        colSpan={8}
                         style={monthHeaderStyle(m.month)}
                         className="border-r border-border px-3 py-1.5 text-center text-xs font-semibold"
                       >
@@ -427,9 +433,12 @@ const ResourceCostUtilizationReport = () => {
                       <Fragment key={m.key}>
                         <th style={monthHeaderStyle(m.month)} className={th('w-[75px] text-right')}>Hours</th>
                         <th style={monthHeaderStyle(m.month)} className={th('w-[90px] text-right')}>Logged Hrs</th>
+                        <th style={monthHeaderStyle(m.month)} className={th('w-[90px] text-right text-muted-foreground')}>Original Logged Hrs</th>
                         <th style={monthHeaderStyle(m.month)} className={th('w-[100px] text-right')}>Projection %</th>
                         <th style={monthHeaderStyle(m.month)} className={th('w-[100px] text-right')}>Actual %</th>
+                        <th style={monthHeaderStyle(m.month)} className={th('w-[100px] text-right text-muted-foreground')}>Original Actual %</th>
                         <th style={monthHeaderStyle(m.month)} className={th('w-[110px] text-right')}>Contribution</th>
+                        <th style={monthHeaderStyle(m.month)} className={th('w-[110px] text-right text-muted-foreground')}>Original Contribution</th>
                       </Fragment>
                     ))}
                   </tr>
@@ -484,10 +493,15 @@ const ResourceCostUtilizationReport = () => {
                             <Fragment key={m.key}>
                               <td style={monthBodyStyle(m.month)} className={td('text-right tabular-nums')}>{formatHours2dp(cell?.cappedHours)}</td>
                               <td style={monthBodyStyle(m.month)} className={td('text-right tabular-nums')}>{formatHours2dp(cell?.loggedHours)}</td>
+                              <td style={monthBodyStyle(m.month)} className={td('text-right tabular-nums text-muted-foreground')}>{formatHours2dp(cell?.originalLoggedHours)}</td>
                               <td style={monthBodyStyle(m.month)} className={td('text-right tabular-nums')}>{formatPercent2dp(cell?.projectionPercentage)}</td>
                               <td style={monthBodyStyle(m.month)} className={td('text-right tabular-nums')}>{formatPercent2dp(cell?.actualPercentage)}</td>
+                              <td style={monthBodyStyle(m.month)} className={td('text-right tabular-nums text-muted-foreground')}>{formatPercent2dp(cell?.originalActualPercentage)}</td>
                               <td style={monthBodyStyle(m.month)} className={td('text-right tabular-nums font-medium')}>
                                 {cell?.contribution != null ? formatCurrency(cell.contribution) : <span className="text-muted-foreground">—</span>}
+                              </td>
+                              <td style={monthBodyStyle(m.month)} className={td('text-right tabular-nums text-muted-foreground')}>
+                                {cell?.originalContribution != null ? formatCurrency(cell.originalContribution) : '—'}
                               </td>
                             </Fragment>
                           );
@@ -496,6 +510,35 @@ const ResourceCostUtilizationReport = () => {
                     );
                   })}
                 </tbody>
+                {summaryByKey.size > 0 && (
+                  <tfoot className="sticky bottom-0 z-10 border-t-2 border-border bg-muted/80 font-semibold">
+                    <tr>
+                      <td colSpan={2} className={td('sticky left-0 z-10 bg-muted/90 text-xs font-semibold')} style={{ minWidth: CODE_COL_WIDTH + NAME_COL_WIDTH }}>
+                        Page Totals
+                      </td>
+                      <td colSpan={9} className={td()} />
+                      {months.map((m) => {
+                        const s = summaryByKey.get(m.key);
+                        return (
+                          <Fragment key={m.key}>
+                            <td style={monthBodyStyle(m.month)} className={td('text-right tabular-nums')}>{formatHours2dp(s?.totalCappedHours)}</td>
+                            <td style={monthBodyStyle(m.month)} className={td('text-right tabular-nums')}>{formatHours2dp(s?.totalLoggedHours)}</td>
+                            <td style={monthBodyStyle(m.month)} className={td('text-right tabular-nums text-muted-foreground')}>{formatHours2dp(s?.originalTotalLoggedHours)}</td>
+                            <td style={monthBodyStyle(m.month)} className={td('text-right tabular-nums')}>—</td>
+                            <td style={monthBodyStyle(m.month)} className={td('text-right tabular-nums')}>—</td>
+                            <td style={monthBodyStyle(m.month)} className={td('text-right tabular-nums text-muted-foreground')}>—</td>
+                            <td style={monthBodyStyle(m.month)} className={td('text-right tabular-nums')}>
+                              {s?.totalContribution != null ? formatCurrency(s.totalContribution) : <span className="text-muted-foreground">—</span>}
+                            </td>
+                            <td style={monthBodyStyle(m.month)} className={td('text-right tabular-nums text-muted-foreground')}>
+                              {s?.originalTotalContribution != null ? formatCurrency(s.originalTotalContribution) : '—'}
+                            </td>
+                          </Fragment>
+                        );
+                      })}
+                    </tr>
+                  </tfoot>
+                )}
               </table>
             </div>
           </div>

@@ -7,7 +7,7 @@ import { useEmployeeMappedProjects } from '@/hooks/useEmployeeProjects';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import { QUERY_KEYS } from '@/constants/queryKeys';
-import { STANDARD_MONTHLY_HOURS } from '@/components/employee/MonthlyHoursCard';
+import { getMonthlyHourCap } from '@/components/employee/WorkLogEntryModal';
 import { AutoResizeTextarea } from '@/components/employee/WorkLogEntryTable';
 import { formatHoursMinutes } from '@/utils/formatters';
 import { cn } from '@/utils/cn';
@@ -87,15 +87,25 @@ const ManagerFillWorkLogDrawer = ({ employee, monthYear: initialMonthYear, open,
   // mapped to (the overlap), not every Service PO the Employee happens to be on. The backend has
   // no such intersection endpoint, so it's resolved here against the actor's own mapped projects
   // (same "my mapped Service POs" source WorkLogEntryModal uses for an Employee's own entries).
-  const { data: myProjects = [] } = useEmployeeMappedProjects();
+  //
+  // That overlap only makes sense for an actor who IS individually staffed on at least one
+  // Service PO (a real PM/Team Lead with partial overlap) — an Admin/senior-tier account using
+  // this same screen typically has NO personal Service PO mapping at all, so intersecting against
+  // an empty set silently blocked the feature outright for them (confirmed live: "All mapped
+  // Service POs added" with zero entries, for every Employee, regardless of that Employee's own
+  // mappings). `hasOwnMappings` only engages the overlap once the actor genuinely has some of
+  // their own to narrow against; an actor with none falls back to the Employee's full list, same
+  // as before this overlap restriction existed.
+  const { data: myProjects = [], isPending: isMyProjectsPending } = useEmployeeMappedProjects();
   const myProjectIds = useMemo(() => new Set(myProjects.map((p) => String(p.id))), [myProjects]);
+  const hasOwnMappings = myProjectIds.size > 0;
 
   const availablePOs = useMemo(
     () => (workLog?.service_pos ?? [])
       .filter(isTopLevelServicePO)
       .map(normalizePO)
-      .filter((po) => myProjectIds.has(po.id)),
-    [workLog, myProjectIds],
+      .filter((po) => isMyProjectsPending || !hasOwnMappings || myProjectIds.has(po.id)),
+    [workLog, myProjectIds, hasOwnMappings, isMyProjectsPending],
   );
 
   const hadExistingEntries = availablePOs.some((po) => po.existingHours > 0 || po.existingDescription);
@@ -132,7 +142,8 @@ const ManagerFillWorkLogDrawer = ({ employee, monthYear: initialMonthYear, open,
     .map((po) => ({ value: po.id, label: po.label }));
 
   const totalHours = entries.reduce((sum, e) => sum + Number(e.hours || 0), 0);
-  const overCap = totalHours > STANDARD_MONTHLY_HOURS;
+  const monthlyHourCap = getMonthlyHourCap(monthYear.month, monthYear.year);
+  const overCap = totalHours > monthlyHourCap;
 
   const saveMutation = useSaveEmployeeMonthlyWorkLog();
   const deleteMutation = useDeleteEmployeeMonthlyWorkLog();
@@ -164,7 +175,7 @@ const ManagerFillWorkLogDrawer = ({ employee, monthYear: initialMonthYear, open,
       return;
     }
     if (overCap) {
-      setFormError(`Total hours (${formatHoursMinutes(totalHours)}) exceed the ${STANDARD_MONTHLY_HOURS}-hour monthly cap.`);
+      setFormError(`Total hours (${formatHoursMinutes(totalHours)}) exceed the ${monthlyHourCap}-hour monthly cap.`);
       return;
     }
     try {
@@ -330,13 +341,13 @@ const ManagerFillWorkLogDrawer = ({ employee, monthYear: initialMonthYear, open,
                   overCap ? 'bg-destructive/10 text-destructive' : 'bg-emerald-50 text-emerald-700'
                 )}
               >
-                {formatHoursMinutes(totalHours)} / {formatHoursMinutes(STANDARD_MONTHLY_HOURS)}
+                {formatHoursMinutes(totalHours)} / {formatHoursMinutes(monthlyHourCap)}
               </span>
             </div>
             <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
               <div
                 className={cn('h-full rounded-full transition-all', overCap ? 'bg-destructive' : 'bg-emerald-500')}
-                style={{ width: `${Math.min(100, (totalHours / STANDARD_MONTHLY_HOURS) * 100)}%` }}
+                style={{ width: `${Math.min(100, (totalHours / monthlyHourCap) * 100)}%` }}
               />
             </div>
             <div className="flex flex-col gap-2 pt-1 sm:flex-row sm:items-center sm:justify-between">

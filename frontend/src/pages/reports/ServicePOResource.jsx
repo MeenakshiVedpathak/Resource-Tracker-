@@ -48,6 +48,9 @@ const getField = (row, ...keys) => {
   return null;
 };
 
+const getHours = (row) => getField(row, 'total_hours_logged', 'hours_logged', 'hours', 'time_in_hrs');
+const getOriginalHours = (row) => getField(row, 'original_actual_hours', 'original_total_hours_logged', 'original_hours_logged', 'original_hours', 'original_time_in_hrs');
+
 // The columns worth searching, each as the same key-alias list groupRows/exportToExcel use —
 // the API's field names vary by backend version, so search has to look through exactly the
 // aliases the table renders from or it would miss rows that are plainly visible. Time (hrs) is
@@ -92,16 +95,28 @@ const MONTH_NAMES = ['January','February','March','April','May','June','July','A
 const exportToExcel = (rows, month, year) => {
   const monthLabel = MONTH_NAMES[(month - 1)] ?? month;
 
-  const header = ['Sr. No.', 'Customer Name', 'Service PO Summary', 'Service Type', 'Resource', 'Time in Hrs', 'Remarks'];
+  const hasOriginal = rows.some((r) => getOriginalHours(r) != null);
+
+  const header = [
+    'Sr. No.',
+    'Customer Name',
+    'Service PO Summary',
+    'Service Type',
+    'Resource',
+    'Time in Hrs',
+    ...(hasOriginal ? ['Original Time in Hrs'] : []),
+    'Remarks',
+  ];
   let srNo = 1;
   const dataRows = [];
 
   const groups = groupRows(rows);
   groups.forEach((group) => {
     group.rows.forEach((row, i) => {
-      const employee = getField(row, 'full_name', 'employee_name', 'resource_name');
-      const hours    = getField(row, 'total_hours_logged', 'hours_logged', 'hours', 'time_in_hrs');
-      const remarks  = getField(row, 'remarks') ?? '';
+      const employee  = getField(row, 'full_name', 'employee_name', 'resource_name');
+      const hours     = getHours(row);
+      const origHours = getOriginalHours(row);
+      const remarks   = getField(row, 'remarks') ?? '';
 
       dataRows.push([
         i === 0 ? srNo++ : '',
@@ -110,6 +125,7 @@ const exportToExcel = (rows, month, year) => {
         i === 0 ? (group.service_type ?? '') : '',
         employee ?? '',
         hours != null ? Number(hours) : '',
+        ...(hasOriginal ? [origHours != null ? Number(origHours) : ''] : []),
         remarks,
       ]);
     });
@@ -254,10 +270,19 @@ const ServicePOResource = () => {
   };
 
   const monthLabel  = monthYear ? formatMonthYear(monthYear.month, monthYear.year) : '';
-  const totalHours  = (isSearching ? searchedRows : (fullRows ?? rows)).reduce((sum, r) => {
-    const h = getField(r, 'total_hours_logged', 'hours_logged', 'hours', 'time_in_hrs');
+  const allRecords  = isSearching ? searchedRows : (fullRows ?? rows);
+  const totalHours  = allRecords.reduce((sum, r) => {
+    const h = getHours(r);
     return sum + (h ? Number(h) : 0);
   }, 0);
+  const totalOriginalHours = allRecords.reduce((sum, r) => {
+    const h = getOriginalHours(r);
+    return sum + (h ? Number(h) : 0);
+  }, 0);
+  const hasOriginal = useMemo(
+    () => (fullRows ?? rows).some((r) => getOriginalHours(r) != null),
+    [fullRows, rows]
+  );
 
   const activeFilterCount = [
     entityIds.length > 0 ? 1 : 0,
@@ -477,6 +502,9 @@ const ServicePOResource = () => {
                   <th className="px-3 py-2.5 text-left text-xs font-semibold border-r border-border w-[150px]">Service Type</th>
                   <th className="px-3 py-2.5 text-left text-xs font-semibold border-r border-border min-w-[180px]">Resource</th>
                   <th className="px-3 py-2.5 text-right text-xs font-semibold border-r border-border w-[110px]">Time (hrs)</th>
+                  {hasOriginal && (
+                    <th className="px-3 py-2.5 text-right text-xs font-semibold border-r border-border w-[130px]">Original Time (hrs)</th>
+                  )}
                   <th className="px-3 py-2.5 text-left text-xs font-semibold w-[160px]">Remarks</th>
                 </tr>
               </thead>
@@ -486,7 +514,8 @@ const ServicePOResource = () => {
                     const isFirst    = ri === 0;
                     const rowCount   = group.rows.length;
                     const employee   = getField(row, 'employee_name', 'full_name', 'resource_name');
-                    const hours      = getField(row, 'total_hours_logged', 'hours_logged', 'hours', 'time_in_hrs');
+                    const hours      = getHours(row);
+                    const origHours  = getOriginalHours(row);
                     const remarks    = getField(row, 'remarks');
                     const employeeCode = getField(row, 'employee_code');
 
@@ -564,6 +593,16 @@ const ServicePOResource = () => {
                             <span className="text-xs text-muted-foreground">—</span>
                           )}
                         </td>
+                        {/* Original Hours */}
+                        {hasOriginal && (
+                          <td className="px-3 py-2 text-right border-r border-border">
+                            {origHours != null ? (
+                              <span className="tabular-nums text-xs font-medium text-muted-foreground">{Number(origHours).toFixed(1)}</span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
+                          </td>
+                        )}
                         {/* Remarks */}
                         <td className="px-3 py-2 text-xs text-muted-foreground">
                           {remarks || '—'}
@@ -598,7 +637,8 @@ const ServicePOResource = () => {
                 <div className="divide-y">
                   {group.rows.map((row, ri) => {
                     const employee = getField(row, 'employee_name', 'full_name', 'resource_name');
-                    const hours = getField(row, 'total_hours_logged', 'hours_logged', 'hours', 'time_in_hrs');
+                    const hours = getHours(row);
+                    const origHours = getOriginalHours(row);
                     const remarks = getField(row, 'remarks');
                     const employeeCode = getField(row, 'employee_code');
                     return (
@@ -614,9 +654,16 @@ const ServicePOResource = () => {
                           )}
                           {remarks && <p className="mt-0.5 truncate text-xs text-muted-foreground">{remarks}</p>}
                         </div>
-                        <span className="shrink-0 text-sm font-semibold tabular-nums">
-                          {hours != null ? Number(hours).toFixed(1) : '—'}
-                        </span>
+                        <div className="shrink-0 text-right">
+                          <span className="text-sm font-semibold tabular-nums">
+                            {hours != null ? Number(hours).toFixed(1) : '—'}
+                          </span>
+                          {hasOriginal && (
+                            <div className="text-xs text-muted-foreground tabular-nums">
+                              Orig: {origHours != null ? Number(origHours).toFixed(1) : '—'}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     );
                   })}

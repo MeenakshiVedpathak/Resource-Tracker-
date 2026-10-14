@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import { createColumnHelper } from '@tanstack/react-table';
 import { ChevronDown, ChevronUp, ChevronsUpDown, Download, Info } from 'lucide-react';
@@ -99,7 +99,7 @@ const SortableHeader = ({ label, column, sortBy, sortOrder, onSort, align, help 
 
 // enableSorting is false throughout: sorting is the SERVER's (sortBy/sortOrder), so TanStack must
 // not also reorder the page it was handed — the header buttons drive the request instead.
-const getColumns = (sortBy, sortOrder, onSort) => [
+const getColumns = (sortBy, sortOrder, onSort, { hasOrigTotalHours } = {}) => [
   columnHelper.accessor('month', {
     header: 'Month',
     size: 110,
@@ -141,6 +141,18 @@ const getColumns = (sortBy, sortOrder, onSort) => [
     enableSorting: false,
     cell: (info) => <ZeroableNumber value={info.getValue()} format="hours" />,
   }),
+  ...(hasOrigTotalHours ? [
+    columnHelper.accessor('original_total_hours', {
+      header: 'Original Total PO Hours',
+      size: 180,
+      meta: { align: 'right' },
+      enableSorting: false,
+      cell: (info) => {
+        const val = info.getValue();
+        return val != null ? <span className="text-muted-foreground"><ZeroableNumber value={val} format="hours" /></span> : <span className="text-muted-foreground">—</span>;
+      },
+    }),
+  ] : []),
   columnHelper.accessor('cost_budget', {
     header: () => (
       <SortableHeader
@@ -161,7 +173,16 @@ const getColumns = (sortBy, sortOrder, onSort) => [
 ];
 
 const exportToExcel = (rows) => {
-  const header = ['Month', 'PO Code', 'Service PO', 'Client', 'Total PO Hours', 'Cost Budget'];
+  const hasOrigTotalHours = rows.some((r) => r.original_total_hours != null);
+  const header = [
+    'Month',
+    'PO Code',
+    'Service PO',
+    'Client',
+    'Total PO Hours',
+    ...(hasOrigTotalHours ? ['Original Total PO Hours'] : []),
+    'Cost Budget',
+  ];
   const dataRows = rows.map((r) => [
     r.month ?? '',
     r.service_po_code ?? '',
@@ -169,6 +190,7 @@ const exportToExcel = (rows) => {
     r.client_name ?? '',
     // Zeros are meaningful here (see ZeroableNumber) — exported as 0, never as a blank cell.
     Number(r.total_hours ?? 0),
+    ...(hasOrigTotalHours ? [r.original_total_hours != null ? Number(r.original_total_hours) : ''] : []),
     Number(r.cost_budget ?? 0),
   ]);
   const ws = XLSX.utils.aoa_to_sheet([header, ...dataRows]);
@@ -285,7 +307,11 @@ const ServicePOHoursBudget = () => {
   // set is not in memory.
   const handleExport = () => exportToExcel(records);
 
-  const columns = getColumns(sortBy, sortOrder, handleSort);
+  const hasOrigTotalHours = useMemo(() => records.some((r) => r.original_total_hours != null), [records]);
+
+  const columns = useMemo(() => {
+    return getColumns(sortBy, sortOrder, handleSort, { hasOrigTotalHours });
+  }, [sortBy, sortOrder, hasOrigTotalHours]);
 
   return (
     <div className="flex h-full min-h-0 flex-col">

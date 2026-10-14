@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import { createColumnHelper } from '@tanstack/react-table';
 import { ChevronDown, ChevronUp, ChevronsUpDown, Download } from 'lucide-react';
@@ -9,7 +9,7 @@ import { useActiveEmployees } from '@/hooks/useEmployees';
 import { useActiveClients } from '@/hooks/useClients';
 import { useActiveServicePOs } from '@/hooks/useServicePOs';
 import { useActiveServiceTypes } from '@/hooks/useServiceTypes';
-import { formatHours, formatPercentage } from '@/utils/formatters';
+import { formatHours, formatPercentage, formatNumber } from '@/utils/formatters';
 import DataTable from '@/components/common/DataTable';
 import PageHeader from '@/components/common/PageHeader';
 import EmptyState from '@/components/common/EmptyState';
@@ -83,7 +83,7 @@ const SortableHeader = ({ label, column, sortBy, sortOrder, onSort, align }) => 
 
 // enableSorting is false throughout: sorting is the SERVER's (sortBy/sortOrder), so TanStack must
 // not also reorder the page it was handed — the header buttons drive the request instead.
-const getColumns = (sortBy, sortOrder, onSort) => [
+const getColumns = (sortBy, sortOrder, onSort, { hasOrigTotalHours, hasOrigBillableHours, hasOrigUtilization } = {}) => [
   columnHelper.accessor('month', {
     header: 'Month',
     size: 110,
@@ -119,6 +119,18 @@ const getColumns = (sortBy, sortOrder, onSort) => [
     enableSorting: false,
     cell: (info) => <span className="tabular-nums">{formatHours(info.getValue())}</span>,
   }),
+  ...(hasOrigTotalHours ? [
+    columnHelper.accessor('original_total_hours', {
+      header: 'Original Total Hours',
+      size: 160,
+      meta: { align: 'right' },
+      enableSorting: false,
+      cell: (info) => {
+        const val = info.getValue();
+        return <span className="tabular-nums text-muted-foreground">{val != null ? formatHours(val) : '—'}</span>;
+      },
+    }),
+  ] : []),
   columnHelper.accessor('billable_hours', {
     header: () => (
       <SortableHeader label="Billable Hours" column={SORTABLE.BILLABLE_HOURS} sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} align="right" />
@@ -128,6 +140,18 @@ const getColumns = (sortBy, sortOrder, onSort) => [
     enableSorting: false,
     cell: (info) => <span className="tabular-nums">{formatHours(info.getValue())}</span>,
   }),
+  ...(hasOrigBillableHours ? [
+    columnHelper.accessor('original_billable_hours', {
+      header: 'Original Billable Hours',
+      size: 170,
+      meta: { align: 'right' },
+      enableSorting: false,
+      cell: (info) => {
+        const val = info.getValue();
+        return <span className="tabular-nums text-muted-foreground">{val != null ? formatHours(val) : '—'}</span>;
+      },
+    }),
+  ] : []),
   columnHelper.accessor('utilization_percentage', {
     header: () => (
       <SortableHeader label="Utilization %" column={SORTABLE.UTILIZATION} sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} align="right" />
@@ -145,17 +169,51 @@ const getColumns = (sortBy, sortOrder, onSort) => [
       );
     },
   }),
+  ...(hasOrigUtilization ? [
+    columnHelper.accessor('original_utilization_percentage', {
+      header: 'Original Utilization %',
+      size: 170,
+      meta: { align: 'right' },
+      enableSorting: false,
+      cell: (info) => {
+        const value = info.getValue();
+        if (value == null || value === '') return <span className="text-muted-foreground">—</span>;
+        return (
+          <span className={cn('tabular-nums font-medium', utilizationColorClass(value))}>
+            {formatPercentage(value, 2)}
+          </span>
+        );
+      },
+    }),
+  ] : []),
 ];
 
 const exportToExcel = (rows) => {
-  const header = ['Month', 'Employee Code', 'Resource', 'Total Hours', 'Billable Hours', 'Utilization %'];
+  const hasOrigTotalHours = rows.some((r) => r.original_total_hours != null);
+  const hasOrigBillableHours = rows.some((r) => r.original_billable_hours != null);
+  const hasOrigUtilization = rows.some((r) => r.original_utilization_percentage != null);
+
+  const header = [
+    'Month',
+    'Employee Code',
+    'Resource',
+    'Total Hours',
+    ...(hasOrigTotalHours ? ['Original Total Hours'] : []),
+    'Billable Hours',
+    ...(hasOrigBillableHours ? ['Original Billable Hours'] : []),
+    'Utilization %',
+    ...(hasOrigUtilization ? ['Original Utilization %'] : []),
+  ];
   const dataRows = rows.map((r) => [
     r.month ?? '',
     r.employee_code ?? '',
     r.full_name ?? '',
     r.total_hours != null ? Number(r.total_hours) : '',
+    ...(hasOrigTotalHours ? [r.original_total_hours != null ? Number(r.original_total_hours) : ''] : []),
     r.billable_hours != null ? Number(r.billable_hours) : '',
+    ...(hasOrigBillableHours ? [r.original_billable_hours != null ? Number(r.original_billable_hours) : ''] : []),
     r.utilization_percentage != null ? Number(r.utilization_percentage) : '',
+    ...(hasOrigUtilization ? [r.original_utilization_percentage != null ? Number(r.original_utilization_percentage) : ''] : []),
   ]);
   const ws = XLSX.utils.aoa_to_sheet([header, ...dataRows]);
   const wb = XLSX.utils.book_new();
@@ -273,7 +331,17 @@ const ResourceUtilizationTrend = () => {
   // set is not in memory.
   const handleExport = () => exportToExcel(records);
 
-  const columns = getColumns(sortBy, sortOrder, handleSort);
+  const hasOrigTotalHours = useMemo(() => records.some((r) => r.original_total_hours != null), [records]);
+  const hasOrigBillableHours = useMemo(() => records.some((r) => r.original_billable_hours != null), [records]);
+  const hasOrigUtilization = useMemo(() => records.some((r) => r.original_utilization_percentage != null), [records]);
+
+  const columns = useMemo(() => {
+    return getColumns(sortBy, sortOrder, handleSort, {
+      hasOrigTotalHours,
+      hasOrigBillableHours,
+      hasOrigUtilization,
+    });
+  }, [sortBy, sortOrder, hasOrigTotalHours, hasOrigBillableHours, hasOrigUtilization]);
 
   return (
     <div className="flex h-full min-h-0 flex-col">

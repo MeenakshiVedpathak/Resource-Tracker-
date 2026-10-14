@@ -25,7 +25,7 @@ const MAX_RECORDS_FETCH = 5000;
 
 const exportToExcel = (rows) => {
   const header = [
-    'Employee Code', 'Full Name', 'PO Count', 'Total Hours Delivered',
+    'Employee Code', 'Full Name', 'PO Count', 'Total Hours Delivered', 'Original Total Hours Delivered',
     'Total Invoiced', 'Total Delivery Cost', 'Total Margin', 'At-Risk POs',
   ];
   const dataRows = rows.map((r) => [
@@ -33,6 +33,7 @@ const exportToExcel = (rows) => {
     r.full_name ?? '',
     r.po_count != null ? Number(r.po_count) : '',
     r.total_hours_delivered != null ? Number(r.total_hours_delivered) : '',
+    r.original_total_hours_delivered != null ? Number(r.original_total_hours_delivered) : '',
     r.total_invoiced != null ? Number(r.total_invoiced) : '',
     r.total_delivery_cost != null ? Number(r.total_delivery_cost) : '',
     r.total_margin != null ? Number(r.total_margin) : '',
@@ -81,6 +82,15 @@ const columns = [
     header: 'Total Hours Delivered',
     size: 170,
     cell: (info) => <span className="tabular-nums">{formatHours(info.getValue())}</span>,
+  }),
+  columnHelper.accessor('original_total_hours_delivered', {
+    header: 'Original Total Hours Delivered',
+    size: 190,
+    cell: (info) => {
+      const value = info.getValue();
+      if (value == null || value === '') return null;
+      return <span className="tabular-nums text-muted-foreground">{formatHours(value)}</span>;
+    },
   }),
   columnHelper.accessor('total_invoiced', {
     header: 'Total Invoiced',

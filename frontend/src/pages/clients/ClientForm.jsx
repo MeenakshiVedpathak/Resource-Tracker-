@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
@@ -10,6 +10,7 @@ import { useClient, useCreateClient, useUpdateClient } from '@/hooks/useClients'
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import { useSelectableBusinessUnits } from '@/hooks/useSelectableBusinessUnits';
+import { useSelectableEntities } from '@/hooks/useSelectableEntities';
 import { BusinessUnitCascadeSelect, SubBusinessUnitSelect, useBuHierarchy } from '@/components/common/BusinessUnitCascadeSelect';
 import { ROUTES } from '@/constants/routes';
 import {
@@ -18,6 +19,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { SearchableSelect } from '@/components/ui/searchable-select';
+import { Label } from '@/components/ui/label';
 import { cn } from '@/utils/cn';
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter,
@@ -30,9 +33,9 @@ const clientSchema = z.object({
     .max(100, 'Client name cannot exceed 100 characters'),
   industry: z.string().max(100).optional().or(z.literal('')),
   status: z.enum(['active', 'inactive']).default('active'),
-  // Only relevant for BU-scoped logins mapped to multiple BUs (e.g. BU Head, multi-BU BU Admin).
-  // Admin/Entity Admin/Platform Admin never send this — their clients are always BU-less. Always
-  // the ROOT (top-level) BU's id — a Sub-BU pick lives in sub_business_unit_id instead, so Client
+  // Required for BU-scoped logins mapped to multiple BUs (e.g. BU Head, multi-BU BU Admin);
+  // optional for Admin/Entity Admin/Platform Admin, who only send it after opting into the Entity ->
+  // BU cascade (left untouched, their client stays BU-less). Always the ROOT (top-level) BU's id — a Sub-BU pick lives in sub_business_unit_id instead, so Client
   // list scoping elsewhere that keys off this field never waits on the (possibly still-empty,
   // separately mandatory) Sub-BU choice.
   company_id: z.string().optional(),
@@ -59,17 +62,51 @@ const ClientForm = () => {
   const queryClient = useQueryClient();
 
   // BU selector logic:
-  //   Admin / Entity Admin / Platform Admin  → isCrossBu → NO selector. Their clients are always
-  //       created BU-less: company_id is simply never sent, so the backend saves null.
+  //   Admin / Entity Admin / Platform Admin  → isCrossBu → OPTIONAL Entity → BU → Sub-BU cascade
+  //       (added on request — previously no selector at all for this tier; their clients could
+  //       only ever be created BU-less, company_id simply never sent). Leaving Entity unpicked
+  //       still produces a BU-less client exactly as before; this only adds the ABILITY to assign
+  //       one, it doesn't make it mandatory for this tier.
   //   BU Admin / BU Head with 1 BU           → NO selector — nothing to choose, and the
   //       X-Company-Id header already says which BU.
-  //   BU Admin / BU Head with multiple BUs   → REQUIRED selector, listing only their mapped BUs.
+  //   BU Admin / BU Head with multiple BUs, all under the SAME Entity → REQUIRED selector, listing
+  //       only their mapped BUs (no Entity step — nothing to narrow by, same as before).
+  //   BU Admin / BU Head with multiple BUs spanning MORE THAN ONE Entity → REQUIRED Entity → BU →
+  //       Sub-BU cascade too, same as a cross-BU actor's cascade, just restricted to their own
+  //       mapped BUs' Entities instead of every Entity in the system (see useSelectableEntities).
   //
   // What is picked here is independent of the global BU switcher: the header keeps carrying
   // whatever BU is active app-wide, so a user browsing under BU "A" can still file a client
   // under BU "B".
-  const { units, isCrossBu, canFilter } = useSelectableBusinessUnits();
-  const showBuSelector = !isCrossBu && canFilter;
+  //
+  // `entityId` is local state, not an RHF-managed field — it only ever narrows which root BUs
+  // useSelectableBusinessUnits returns below, never itself submitted (Client has no entity_id of
+  // its own; its Entity is implied by whichever BU/Sub-BU actually gets picked).
+  const [entityId, setEntityId] = useState(undefined);
+  const [entityError, setEntityError] = useState('');
+  // Guards the one-time edit-mode pre-fill effect below so it only resolves/applies the record's
+  // saved company_id ONCE per record, not every time `units` changes reference (which happens
+  // whenever the user picks a different Entity, since `units` depends on `entityId`). Without this,
+  // the effect would re-run on every Entity change and stomp the user's new BU/Sub-BU pick back to
+  // the record's original saved values.
+  const initializedForClientIdRef = useRef(null);
+  const { units, isCrossBu, canFilter } = useSelectableBusinessUnits(entityId);
+  const { entities, canFilter: canFilterEntity } = useSelectableEntities();
+  // `canFilterEntity` already answers "does THIS actor (whichever type) have more than one Entity
+  // to narrow by" — cross-BU actors get it from the whole Entity master, BU-scoped actors get it
+  // from the distinct Entities behind their OWN mapped BUs (see useSelectableEntities). So any
+  // actor whose selectable BUs span more than one Entity sees the Entity step, not just cross-BU
+  // ones: a BU-scoped login (BU Admin/BU Head) mapped to multiple BUs that happen to sit under
+  // different Entities gets it too, same as before for the single-Entity case (flat BU dropdown).
+  // A cross-BU login always gets the Entity step when it can see at least one Entity (even just
+  // one) — the Entity pick is how it opts IN to assigning a BU at all, so it can't be skipped for
+  // them without also forcing a BU field open (and mandatory) they never asked for.
+  const showEntitySelector = isCrossBu ? entities.length > 0 : canFilterEntity;
+  // Cross-BU: BU only once an Entity is picked (optional cascade — no Entity, no BU, BU-less record).
+  // BU-scoped: BU straight away when their BUs share one Entity; otherwise only after the Entity pick.
+  const showBuSelector = isCrossBu
+    ? (canFilter && !!entityId)
+    : (canFilter && (!showEntitySelector || !!entityId));
   const { childrenOf } = useBuHierarchy(units);
 
   const { data: client, isPending: isLoadingClient } = useClient(id);
@@ -79,6 +116,7 @@ const ClientForm = () => {
   // become invisible/unreassignable just because this login type isn't normally asked for one — so
   // the field reappears, pre-filled, whenever the record being edited already has one.
   const showBuField = showBuSelector || (isCrossBu && isEdit && client?.company_id != null);
+  const showEntityField = showEntitySelector || (isCrossBu && isEdit && client?.company_id != null);
   const createMutation = useCreateClient();
   const updateMutation = useUpdateClient(id);
 
@@ -100,13 +138,17 @@ const ClientForm = () => {
   const showSubBuField = subBuOptions.length > 0;
 
   useEffect(() => {
-    if (client && isEdit) {
+    if (client && isEdit && units.length > 0 && initializedForClientIdRef.current !== client.id) {
       // The client's saved company_id can itself be a Sub-BU's id — resolve which root it
       // belongs to so the form reopens with BOTH dropdowns correctly pre-populated (root BU, and
       // that Sub-BU already selected under it) instead of just the flat id sitting in company_id
       // with no root chosen to reveal the Sub-BU dropdown at all.
       const currentUnit = client.company_id ? units.find((u) => String(u.id) === String(client.company_id)) : null;
       const isSubBu = currentUnit?.parentId != null;
+      // Pre-select the Entity too, so a cross-BU login editing a Client that already has a BU sees
+      // the whole Entity -> BU -> Sub-BU chain correctly populated, not just the BU/Sub-BU fields
+      // with no Entity chosen to explain where they came from.
+      setEntityId(currentUnit?.entityId != null ? String(currentUnit.entityId) : undefined);
       form.reset({
         client_name: client.client_name ?? '',
         industry: client.industry ?? '',
@@ -116,12 +158,24 @@ const ClientForm = () => {
           : '',
         sub_business_unit_id: isSubBu ? String(client.company_id) : '',
       });
+      initializedForClientIdRef.current = client.id;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [client, isEdit, form, units]);
 
   const onSubmit = (values) => {
-    // Multi-BU BU Admin/BU Head must pick a BU before saving.
+    // Multi-BU BU Admin/BU Head must pick a BU before saving (required for them, same as before).
+    // For a cross-BU login, the whole Entity/BU cascade is optional — the BU field only even
+    // appears once they've picked an Entity, so by the time it's showing, they've already engaged
+    // the cascade and completing it is expected; leaving Entity unpicked (the default) keeps the
+    // client BU-less exactly as it always did for this tier.
+    // A BU-scoped login whose BUs span several Entities has its (still required) BU field hidden
+    // until an Entity is picked — so the Entity itself is what's missing, and that's where the error
+    // has to show; otherwise they could save with no BU at all.
+    if (!isCrossBu && showEntitySelector && !entityId) {
+      setEntityError('Entity is required.');
+      return;
+    }
     if (showBuField && !values.company_id) {
       form.setError('company_id', { message: 'Business Unit is required.' });
       return;
@@ -204,9 +258,46 @@ const ClientForm = () => {
                   <h3 className="text-xs font-semibold text-foreground border-b pb-1">Client Details</h3>
                   <div className="grid grid-cols-1 gap-4">
 
-                    {/* BU selector — only for BU-scoped logins with more than one BU.
-                        Admin/Entity Admin always create BU-less clients (no field sent);
-                        single-BU logins rely on the X-Company-Id header the interceptor sends. */}
+                    {/* Entity selector — any actor whose selectable BUs span more than one Entity
+                        (a cross-BU login, or a BU-scoped one mapped to BUs under different
+                        Entities), per `canFilterEntity`. Local state, not an RHF field: a Client
+                        has no entity_id of its own, this purely narrows the BU dropdown below to
+                        that Entity's own BUs. Optional for a cross-BU login — leaving it blank
+                        keeps the client BU-less exactly as before this cascade existed; for a
+                        BU-scoped login it's effectively required, since the still-required BU
+                        field below can't be reached without picking an Entity first. */}
+                    {showEntityField && (
+                      <div className="flex flex-col gap-1 space-y-1">
+                        <Label className="text-[11px] text-muted-foreground font-medium">
+                          {!isCrossBu && <span className="text-destructive mr-0.5">*</span>} Entity
+                        </Label>
+                        <SearchableSelect
+                          options={entities.map((e) => ({ value: String(e.id), label: e.name }))}
+                          value={entityId ?? ''}
+                          onValueChange={(val) => {
+                            setEntityId(val || undefined);
+                            setEntityError('');
+                            // A different Entity's BUs are a different set — never leave a BU/
+                            // Sub-BU from the PREVIOUS Entity silently selected.
+                            form.setValue('company_id', '');
+                            form.setValue('sub_business_unit_id', '');
+                            form.clearErrors(['company_id', 'sub_business_unit_id']);
+                          }}
+                          placeholder={isCrossBu ? 'Select entity (optional)' : 'Select entity'}
+                          searchPlaceholder="Search entity..."
+                          className="h-8 text-sm border-gray-200 w-full"
+                        />
+                        {entityError && <p className="text-[10px] font-medium text-destructive">{entityError}</p>}
+                      </div>
+                    )}
+
+                    {/* BU selector — for BU-scoped logins with more than one BU, or any login
+                        (cross-BU or BU-scoped) that has picked an Entity above (or is editing a
+                        Client that already has a BU). Narrowed to whichever Entity is selected
+                        when that step shows. Required once visible either way — a cross-BU login
+                        skips the whole cascade by simply leaving Entity unpicked, which keeps the
+                        client BU-less; a BU-scoped login can't skip it the same way since the BU
+                        field stays required for them once shown. */}
                     {showBuField && (
                       <FormField
                         control={form.control}
@@ -227,7 +318,6 @@ const ClientForm = () => {
                                   form.setValue('sub_business_unit_id', '');
                                   form.clearErrors('sub_business_unit_id');
                                 }}
-                                placeholder="Select business unit"
                                 searchPlaceholder="Search business unit..."
                                 className="h-8 text-sm border-gray-200 w-full"
                               />

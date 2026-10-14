@@ -545,6 +545,12 @@ const TeamLeadAllEmployeesTimesheetView = ({
               onOpenChange={(o) => (o ? confirmApproveRow(row.original) : closeApproveConfirm())}
               description={`Approve ${periodLabel(row.original)} for ${row.original.employeeName}?`}
               onConfirm={() => handleApproveRow(row.original)}
+              // This trigger sits in the Actions column, usually the leftmost column in this
+              // table — the default `align="end"` anchors the popover's RIGHT edge to the
+              // trigger, so a 256px-wide popover opened off a small icon near the left edge
+              // extended leftward past the trigger, reading as "appearing on the wrong side of
+              // the button" instead of growing naturally rightward into the row's own open space.
+              align="start"
               trigger={(
                 <Button
                   size="sm"
@@ -883,6 +889,10 @@ const TeamLeadAllEmployeesTimesheetView = ({
                               onOpenChange={(o) => (o ? confirmApproveEntry(r) : closeApproveConfirm())}
                               description={approveConfirm?.description}
                               onConfirm={() => approveConfirm?.run?.()}
+                              // Same fix as the row action above — this trigger is also a small
+                              // inline button, not a right-edge toolbar button, so it should open
+                              // growing rightward rather than the default's leftward "end" align.
+                              align="start"
                               trigger={(
                                 <Button
                                   size="sm"

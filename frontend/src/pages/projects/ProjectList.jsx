@@ -4,6 +4,7 @@ import { createColumnHelper } from '@tanstack/react-table';
 import { Plus, Pencil, Download, Upload, CheckCircle2, AlertCircle, MoreVertical, ChevronLeft, ChevronRight } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useProjects, useToggleProjectStatus, useImportProjects } from '@/hooks/useProjects';
+import { projectsApi } from '@/api/projects.api';
 import { useCanManageClientProjectPO } from '@/hooks/usePermissions';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
@@ -38,7 +39,39 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/utils/cn';
  
 const columnHelper = createColumnHelper();
- 
+
+// Mirrors every column the table itself shows (minus Actions, which has nothing to export) —
+// "Business Unit"/"Sub BU" resolve the same way the `creator_bu`/`creator_sub_bu` display columns
+// below do, off the row's own `creator` relation, so the two never drift apart.
+const exportProjectsToExcel = (rows) => {
+  const header = [
+    'Project Name', 'Project Code', 'Client', 'Business Unit', 'Sub BU', 'Created By',
+    'Description', 'Status', 'Total Service POs', 'Created Date',
+  ];
+  const dataRows = rows.map((r) => {
+    const creator = r.creator;
+    const buEntry = creator?.business_units?.find((bu) => bu.id === creator.company_id);
+    const rootName = buEntry?.parent_business_unit_name ?? buEntry?.name ?? creator?.company_name ?? '';
+    const subBuName = buEntry?.parent_business_unit_id != null ? buEntry.name : '';
+    return [
+      r.project_name ?? '',
+      r.project_code ?? '',
+      r.client_name ?? r.client?.client_name ?? '',
+      rootName,
+      subBuName,
+      creator?.full_name ?? '',
+      r.project_description ?? '',
+      r.status ?? '',
+      r.total_service_pos ?? 0,
+      r.created_at ? formatDate(r.created_at) : '',
+    ];
+  });
+  const ws = XLSX.utils.aoa_to_sheet([header, ...dataRows]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Projects');
+  XLSX.writeFile(wb, 'Projects.xlsx');
+};
+
 const TruncatedCell = ({ value, maxWidth = '150px', className }) => {
   if (!value) return <span className="text-sm text-muted-foreground">—</span>;
   return (
@@ -122,9 +155,32 @@ const ProjectList = () => {
   };
  
   const { data, isPending } = useProjects(params);
- 
+
   const projects = data?.data ?? [];
   const meta = data?.meta ?? {};
+
+  const [exporting, setExporting] = useState(false);
+
+  // Export pulls every matching record (not just the current page) — paged in EXPORT_PAGE_LIMIT
+  // chunks rather than one `limit: total` request, since the backend hard-caps `limit` at 100 and
+  // silently truncates anything above that (same reasoning as ServicePOList.jsx's own export).
+  const EXPORT_PAGE_LIMIT = 100;
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const first = await projectsApi.getAll({ ...params, page: 1, limit: EXPORT_PAGE_LIMIT });
+      const totalRows = first?.meta?.total ?? 0;
+      const totalPages = Math.max(1, Math.ceil(totalRows / EXPORT_PAGE_LIMIT));
+      const all = Array.isArray(first?.data) ? [...first.data] : [];
+      for (let p = 2; p <= totalPages; p++) {
+        const res = await projectsApi.getAll({ ...params, page: p, limit: EXPORT_PAGE_LIMIT });
+        if (Array.isArray(res?.data)) all.push(...res.data);
+      }
+      exportProjectsToExcel(all);
+    } finally {
+      setExporting(false);
+    }
+  };
  
   const activeFilterCount = (statusFilter !== 'all' ? 1 : 0) + (isEntityFiltered ? 1 : 0) + (isBuFiltered ? 1 : 0);
 
@@ -445,6 +501,11 @@ const ProjectList = () => {
                 onToggle={() => setFiltersOpen((prev) => !prev)}
                 activeCount={activeFilterCount}
               />
+              {projects.length > 0 && (
+                <Button variant="outline" size="toolbar" className="bg-white" onClick={handleExport} disabled={exporting}>
+                  <Download className="h-4 w-4" /> {exporting ? 'Exporting…' : 'Export Excel'}
+                </Button>
+              )}
               {canManage && (
                 <Button variant="outline" size="toolbar" className="bg-white" onClick={handleDownloadSample}>
                   <Download className="h-4 w-4" /> Sample
@@ -511,7 +572,7 @@ const ProjectList = () => {
             onToggle={() => setFiltersOpen((prev) => !prev)}
             activeCount={activeFilterCount}
           />
-          {canManage && (
+          {(projects.length > 0 || canManage) && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="toolbar" className="h-10 bg-white">
@@ -519,16 +580,25 @@ const ProjectList = () => {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={handleDownloadSample} className="cursor-pointer">
-                  <Download className="h-4 w-4" /> Sample
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => fileInputRef.current?.click()}
-                  className="cursor-pointer"
-                  disabled={importMutation.isPending}
-                >
-                  <Upload className="h-4 w-4" /> {importMutation.isPending ? 'Importing…' : 'Import Excel'}
-                </DropdownMenuItem>
+                {projects.length > 0 && (
+                  <DropdownMenuItem onClick={handleExport} disabled={exporting} className="cursor-pointer">
+                    <Download className="h-4 w-4" /> {exporting ? 'Exporting…' : 'Export Excel'}
+                  </DropdownMenuItem>
+                )}
+                {canManage && (
+                  <DropdownMenuItem onClick={handleDownloadSample} className="cursor-pointer">
+                    <Download className="h-4 w-4" /> Sample
+                  </DropdownMenuItem>
+                )}
+                {canManage && (
+                  <DropdownMenuItem
+                    onClick={() => fileInputRef.current?.click()}
+                    className="cursor-pointer"
+                    disabled={importMutation.isPending}
+                  >
+                    <Upload className="h-4 w-4" /> {importMutation.isPending ? 'Importing…' : 'Import Excel'}
+                  </DropdownMenuItem>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           )}

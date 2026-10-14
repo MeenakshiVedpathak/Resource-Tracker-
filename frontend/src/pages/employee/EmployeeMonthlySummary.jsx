@@ -16,7 +16,7 @@ import {
 import MonthNavigator from '@/components/employee/MonthNavigator';
 import SummaryTable from '@/components/employee/SummaryTable';
 import WorkLogEntryTable from '@/components/employee/WorkLogEntryTable';
-import { DAILY_HOURS_CAP, MONTHLY_HOURS_CAP } from '@/components/employee/WorkLogEntryModal';
+import { DAILY_HOURS_CAP, getMonthlyHourCap } from '@/components/employee/WorkLogEntryModal';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -365,7 +365,7 @@ const MonthlySummaryPage = () => {
             isPastOrToday={!isMonthlyIneligible}
             edits={monthlyEdits}
             onCellChange={handleMonthlyCellChange}
-            hoursCap={MONTHLY_HOURS_CAP}
+            hoursCap={getMonthlyHourCap(month, year)}
             emptyMessage="No Service POs mapped."
             descriptions={monthlyDescriptions}
             onDescriptionChange={handleMonthlyDescriptionChange}

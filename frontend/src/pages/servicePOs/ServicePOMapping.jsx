@@ -515,6 +515,17 @@ const ServicePOMapping = () => {
     isFetchingNextPage,
   } = useServicePOEmployeeOptions(shouldLoadEligibleEmployees ? id : null, debouncedSearchLeft, selectedBusinessUnitIds);
   const eligibleEmployees = employeeOptions?.employees ?? [];
+
+  // Multi-BU fan-out: when BU[0] returns 0 eligible employees the scroll sentinel inside
+  // SelectPanel never renders (it lives inside the table, which is replaced by EmptyState
+  // when rows.length === 0). Without this, fetchNextPage is never called and BU[1..n]
+  // employees are silently skipped. Auto-advance as soon as the empty page settles.
+  useEffect(() => {
+    if (hasNextPage && !isFetchingNextPage && !isLoadingEmployees && eligibleEmployees.length === 0 && shouldLoadEligibleEmployees) {
+      fetchNextPage();
+    }
+  }, [hasNextPage, isFetchingNextPage, isLoadingEmployees, eligibleEmployees.length, shouldLoadEligibleEmployees, fetchNextPage]);
+
   const { data: mappings = [], isPending: isLoadingMappings } = useServicePOEmployeeMappings(id);
 
   const createMappingMutation = useCreateEmployeeServicePOMapping();

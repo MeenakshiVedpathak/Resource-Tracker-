@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { ROLE_NAMES, NO_COMPANY_ROLES } from '@/constants/roleHierarchy';
+import { getDeviceId, getDeviceName } from '@/utils/deviceId';
 
 // Runtime config, not a build-time env var: /env-config.js is a static file served
 // alongside the bundle and swapped per environment at deploy time, so one build
@@ -34,6 +35,16 @@ apiClient.interceptors.request.use(
     const token = getAccessToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+    }
+    // Stable per-browser id for the Audit Logs "Device ID" column — sent on every request
+    // (including /auth/login) so the LOGIN audit row carries it too.
+    config.headers['X-Device-Id'] = getDeviceId();
+    // Readable label alongside it (e.g. "Chrome on Windows") — omitted entirely when empty
+    // (no userAgentData and no user-set name) so the backend's own User-Agent-derived fallback
+    // takes over instead of sending a blank header.
+    const deviceName = getDeviceName();
+    if (deviceName) {
+      config.headers['X-Device-Name'] = deviceName;
     }
     // Employee Identity Migration: every employee now carries businessUnits[] (0/1/many) instead
     // of a single `company` — the currently-active BU (auto-selected on login, switchable via
@@ -196,7 +207,12 @@ apiClient.interceptors.response.use(
       }
 
       try {
-        const { data } = await plainAxios.post('/auth/refresh-token', { refresh_token: refreshToken });
+        const refreshDeviceName = getDeviceName();
+        const { data } = await plainAxios.post(
+          '/auth/refresh-token',
+          { refresh_token: refreshToken },
+          { headers: { 'X-Device-Id': getDeviceId(), ...(refreshDeviceName && { 'X-Device-Name': refreshDeviceName }) } }
+        );
         // ⚠️ `roles`/`forms` keys here are a guess — per the "refresh-token has the same
         // roles+forms shape as login" API reference. Guarded with `if (...)` below so a
         // wrong/absent key name is a no-op, not a crash.

@@ -8,6 +8,7 @@ import { useServicePO, useCreateServicePO, useUpdateServicePO } from '@/hooks/us
 import { useAuth } from '@/hooks/useAuth';
 import { NO_COMPANY_ROLES, ROLE_NAMES } from '@/constants/roleHierarchy';
 import { useSelectableBusinessUnits } from '@/hooks/useSelectableBusinessUnits';
+import { useSelectableEntities } from '@/hooks/useSelectableEntities';
 import { BusinessUnitCascadeSelect, SubBusinessUnitSelect, useBuHierarchy } from '@/components/common/BusinessUnitCascadeSelect';
 import { useActiveClients, useClients } from '@/hooks/useClients';
 import { useCompanies } from '@/hooks/useCompanies';
@@ -203,6 +204,15 @@ const ServicePOForm = () => {
   const isCompanyLessActor = hasRole(...NO_COMPANY_ROLES);
   const { units: mappedBusinessUnits, canFilter: hasMultipleMappedBus, isLoading: isLoadingMappedBus } = useSelectableBusinessUnits();
   const showBuScopedPicker = !isCompanyLessActor && hasMultipleMappedBus;
+  // Entity selector for a BU-scoped actor (BU Admin, BU Head, ...) mapped to more than one BU —
+  // useSelectableEntities already computes, for THIS actor type, the distinct Entities behind their
+  // own mapped businessUnits[] (deduplicated), and its own canFilter is already "entities.length > 1"
+  // — true only when those BUs genuinely span more than one Entity. When all their BUs share one
+  // Entity there is nothing to narrow by, and the flat BU dropdown below (today's existing behavior)
+  // stays exactly as-is. For a company-less actor this same hook mirrors useActiveEntities (its
+  // isCrossBu branch), but that actor's Entity step is shown unconditionally regardless of
+  // canFilterEntity (see showEntityField below) — same as before this change.
+  const { entities: selectableEntities, canFilter: canFilterEntity } = useSelectableEntities();
   // "Is Centralised" auto-maps every future Employee to this Service PO and drops its BU
   // requirement — a tenant-wide policy decision, so only Admin (and Platform Admin, above it in
   // the role hierarchy) gets to flip it. Everyone else's is_centralised stays at its `false`
@@ -211,7 +221,8 @@ const ServicePOForm = () => {
   const isAdmin = hasRole(ROLE_NAMES.PLATFORM_ADMIN, ROLE_NAMES.ADMIN);
   const { data: companiesData, isPending: isLoadingCompanies } = useCompanies({ limit: 200 });
   const activeCompanies = companiesData?.data ?? [];
-  // Entity selector — shown only to company-less actors (Admin/Entity Admin/Platform Admin),
+  // Entity options for company-less actors (Admin/Entity Admin/Platform Admin) — a BU-scoped
+  // multi-Entity actor's options come from selectableEntities above instead. This is
   // the exact mirror of the Entity filter that gates BU scoping in the rest of the project
   // (see useEntities.js's comments: GET /entities is already scoped server-side to the actor —
   // an Entity Admin sees only their Entities, Admin/Platform Admin see all). Picking one narrows
@@ -232,7 +243,14 @@ const ServicePOForm = () => {
   const [selectedCategory, setSelectedCategory] = useState('');
 
   const form = useForm({
-    resolver: zodResolver(poSchema(isEdit, isCompanyLessActor || showBuScopedPicker, isCompanyLessActor)),
+    // Entity is also required for a BU-scoped actor whose BUs span several Entities: their (required)
+    // BU field stays hidden until an Entity is picked, so without this the BU error would attach to
+    // a field that isn't rendered and Save would silently do nothing.
+    resolver: zodResolver(poSchema(
+      isEdit,
+      isCompanyLessActor || showBuScopedPicker,
+      isCompanyLessActor || (showBuScopedPicker && canFilterEntity),
+    )),
     defaultValues: {
       service_po_name: '',
       service_po_code: '',
@@ -284,6 +302,12 @@ const ServicePOForm = () => {
   // (new array, same contents), which re-ran form.reset() in a loop for a company-less actor
   // editing a PO (isCrossBu's mappedBusinessUnits branch was already stable via its own useMemo
   // inside useSelectableBusinessUnits — only this branch was the culprit).
+  // BU-scoped branch: when this actor's own mapped BUs span more than one Entity
+  // (canFilterEntity) and an Entity has actually been picked, narrow mappedBusinessUnits down to
+  // just that Entity's units (mappedBusinessUnits items already carry their own `entityId`, per
+  // useSelectableBusinessUnits' normalized shape). Otherwise — no Entity picked yet, or this
+  // actor's BUs are all under one Entity (canFilterEntity false) — fall back to the unfiltered
+  // mappedBusinessUnits exactly as before this change.
   const buUnits = useMemo(() => (
     isCompanyLessActor
       ? activeCompanies
@@ -293,8 +317,10 @@ const ServicePOForm = () => {
               String(c.entity_id ?? c.entity?.id) === String(selectedEntityId)
           )
           .map((c) => ({ id: c.id, name: c.company_name, parentId: c.parent_business_unit_id ?? null }))
-      : mappedBusinessUnits
-  ), [isCompanyLessActor, activeCompanies, selectedEntityId, mappedBusinessUnits]);
+      : (canFilterEntity && selectedEntityId
+          ? mappedBusinessUnits.filter((u) => String(u.entityId) === String(selectedEntityId))
+          : mappedBusinessUnits)
+  ), [isCompanyLessActor, activeCompanies, selectedEntityId, mappedBusinessUnits, canFilterEntity]);
   const { childrenOf } = useBuHierarchy(buUnits);
 
   // The Client list must be scoped to the chosen BU whenever the BU field is shown (company-less
@@ -311,7 +337,18 @@ const ServicePOForm = () => {
   // way to pick a Client at all. Falling back to the unfiltered `activeClients` list instead is
   // correct here: Centralised POs reach across every BU on purpose, so there's no "wrong BU"
   // mismatch for the backend to reject in the first place.
-  const showBuField = (isCompanyLessActor || showBuScopedPicker) && !isCentralised;
+  // Entity step: always shown for a company-less actor (unchanged), and now ALSO shown for a
+  // BU-scoped actor whose own mapped BUs span more than one Entity (canFilterEntity) — see
+  // useSelectableEntities above.
+  const showEntityField = (isCompanyLessActor || canFilterEntity) && !isCentralised;
+  // BU field: unchanged for a company-less actor (never gated on an Entity pick — Entity there is
+  // optional, see poSchema). For a BU-scoped actor, "Entity first, then BU" only when the new
+  // Entity step is actually showing for them (canFilterEntity true) — otherwise (their BUs are all
+  // one Entity) the flat BU dropdown appears exactly as before, with no Entity step to wait on.
+  const showBuField =
+    (isCompanyLessActor || showBuScopedPicker) &&
+    !isCentralised &&
+    (isCompanyLessActor || !canFilterEntity || !!selectedEntityId);
   const selectedBuId = form.watch('company_id');
   // The Client list is scoped to whichever BU is currently the MOST SPECIFIC one picked — once a
   // Sub-BU is selected, that's what actually gets sent as the PO's own company_id (see onSubmit
@@ -698,7 +735,7 @@ const ServicePOForm = () => {
                   every EntityFilter). Picking one narrows the BU Name options just below to that
                   Entity's BUs, so the two fields can never disagree. Entity Admin sees only their
                   own Entities (GET /entities is scoped server-side), Admin/Platform Admin see all. */}
-              {isCompanyLessActor && !isCentralised && (
+              {showEntityField && (
                 <FormField
                   control={form.control}
                   name="entity_id"
@@ -708,10 +745,15 @@ const ServicePOForm = () => {
                         <span className="text-destructive">*</span> Entity Name
                       </FormLabel>
                       <SearchableSelect
-                        options={activeEntities.map((e) => ({
-                          value: String(e.id),
-                          label: e.entity_name,
-                        }))}
+                        options={isCompanyLessActor
+                          ? activeEntities.map((e) => ({
+                              value: String(e.id),
+                              label: e.entity_name,
+                            }))
+                          : selectableEntities.map((e) => ({
+                              value: String(e.id),
+                              label: e.name,
+                            }))}
                         value={field.value ? String(field.value) : ''}
                         onValueChange={(val) => {
                           field.onChange(val ? parseInt(val, 10) : undefined);
@@ -729,7 +771,7 @@ const ServicePOForm = () => {
                           form.setValue('project_id', '');
                           form.clearErrors(['company_id', 'sub_business_unit_id', 'is_my_clients']);
                         }}
-                        disabled={isLoadingEntities}
+                        disabled={isCompanyLessActor ? isLoadingEntities : isLoadingMappedBus}
                         placeholder="Select entity"
                         searchPlaceholder="Search entity..."
                         emptyMessage="No active entities found."
@@ -744,7 +786,7 @@ const ServicePOForm = () => {
               {/* Asked before Client whenever this actor has more than one BU to choose between
                   (or none of their own at all) — the Client list right below is then scoped to
                   whichever BU is picked here, so the two fields can never disagree. */}
-              {(isCompanyLessActor || showBuScopedPicker) && !isCentralised && (
+              {showBuField && (
                 <FormField
                   control={form.control}
                   name="company_id"

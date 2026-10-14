@@ -18,6 +18,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Label } from '@/components/ui/label';
+import { MonthYearPicker } from '@/components/ui/month-year-picker';
 
 const columnHelper = createColumnHelper();
 
@@ -57,11 +58,13 @@ const RiskLevelBadge = ({ value }) => {
 // expected_man_hours column — so restoring them is an uncomment once the backend returns them.
 // Note that risk_level, still shown, is elapsed-time-only until consumed_hours_pct exists.
 // ──────────────────────────────────────────────────────────────────────────────────────────────
-const exportToExcel = (rows) => {
+const exportToExcel = (rows, showMonthColumns) => {
   const header = [
     'PO Code', 'PO Name', 'Client', 'Status', 'Start Date', 'End Date',
     // 'PO Value', 'Expected Man Hours',
-    'Hours Delivered To Date', 'Elapsed Time %',
+    'Hours Delivered To Date', 'Original Hours Delivered To Date',
+    ...(showMonthColumns ? ['Hours In Month', 'Original Hours In Month'] : []),
+    'Elapsed Time %',
     // 'Consumed Hours %',
     'Risk Level',
     // 'Projected Exhaustion Date',
@@ -76,6 +79,11 @@ const exportToExcel = (rows) => {
     // r.po_value != null ? Number(r.po_value) : '',
     // r.expected_man_hours != null ? Number(r.expected_man_hours) : '',
     r.hours_delivered_to_date != null ? Number(r.hours_delivered_to_date) : '',
+    r.original_hours_delivered_to_date != null ? Number(r.original_hours_delivered_to_date) : '',
+    ...(showMonthColumns ? [
+      r.hours_in_month != null ? Number(r.hours_in_month) : '',
+      r.original_hours_in_month != null ? Number(r.original_hours_in_month) : '',
+    ] : []),
     r.elapsed_time_pct != null ? Number(r.elapsed_time_pct) : '',
     // r.consumed_hours_pct != null ? Number(r.consumed_hours_pct) : '',
     RISK_LEVEL_CONFIG[r.risk_level]?.label ?? r.risk_level ?? '',
@@ -87,7 +95,7 @@ const exportToExcel = (rows) => {
   XLSX.writeFile(wb, `Service_PO_Timeline_Risk.xlsx`);
 };
 
-const columns = [
+const getColumns = (showMonthColumns) => [
   columnHelper.accessor('service_po_code', {
     header: 'PO Code',
     size: 160,
@@ -140,6 +148,32 @@ const columns = [
     size: 190,
     cell: (info) => <span className="tabular-nums">{formatHours(info.getValue())}</span>,
   }),
+  columnHelper.accessor('original_hours_delivered_to_date', {
+    header: 'Original Hours Delivered To Date',
+    size: 210,
+    cell: (info) => {
+      const value = info.getValue();
+      if (value == null || value === '') return null;
+      return <span className="tabular-nums text-muted-foreground">{formatHours(value)}</span>;
+    },
+  }),
+  // Only meaningful once a month is actually selected (see `period` in the response) — a plain
+  // "as of today"/"as of an explicit date" query has no single month to total hours within.
+  ...(showMonthColumns ? [
+    columnHelper.accessor('hours_in_month', {
+      header: 'Hours In Month',
+      size: 150,
+      cell: (info) => <span className="tabular-nums">{formatHours(info.getValue())}</span>,
+    }),
+    columnHelper.accessor('original_hours_in_month', {
+      header: 'Original Hrs In Month',
+      size: 170,
+      cell: (info) => {
+        const value = info.getValue();
+        return <span className="tabular-nums text-muted-foreground">{value != null ? formatHours(value) : '—'}</span>;
+      },
+    }),
+  ] : []),
   columnHelper.accessor('elapsed_time_pct', {
     header: 'Elapsed Time %',
     size: 140,
@@ -176,6 +210,7 @@ const SummaryItem = ({ label, value }) => (
 
 const ServicePOTimelineRisk = () => {
   const [asOfDate, setAsOfDate] = useState('');
+  const [monthYear, setMonthYear] = useState(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [buIds, setBuIds] = useState([]);
   const [entityIds, setEntityIds] = useState([]);
@@ -183,8 +218,12 @@ const ServicePOTimelineRisk = () => {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
 
+  // An explicit As Of Date always wins over Month & Year when both happen to be set — never sent
+  // together. With neither, the backend defaults to "as of today".
   const params = {
-    ...(asOfDate && { asOfDate }),
+    ...(asOfDate
+      ? { asOfDate }
+      : (monthYear?.month && monthYear?.year ? { month: monthYear.month, year: monthYear.year } : {})),
     page: 1,
     limit: MAX_RECORDS_FETCH,
     buId: ALL_BUS,
@@ -195,6 +234,8 @@ const ServicePOTimelineRisk = () => {
   const { data, isPending } = useServicePOTimelineRisk(params);
 
   const records = data?.data?.records ?? [];
+  const showMonthColumns = !!data?.period;
+  const columns = useMemo(() => getColumns(showMonthColumns), [showMonthColumns]);
 
   // Applied in memory — the whole matching set is already here, so there is nothing to gain from
   // a round-trip. Covers the identifying columns only; the numeric/metric columns are left out,
@@ -207,17 +248,18 @@ const ServicePOTimelineRisk = () => {
   }, [records, search]);
   const pagedRecords = filteredRecords.slice((page - 1) * limit, page * limit);
 
-  const activeFilterCount = (asOfDate ? 1 : 0) + (buIds.length > 0 ? 1 : 0) + (entityIds.length > 0 ? 1 : 0);
+  const activeFilterCount = (asOfDate ? 1 : 0) + (monthYear ? 1 : 0) + (buIds.length > 0 ? 1 : 0) + (entityIds.length > 0 ? 1 : 0);
 
   const clearFilters = () => {
     setEntityIds([]);
     setBuIds([]);
     setAsOfDate('');
+    setMonthYear(null);
     setPage(1);
   };
 
   // Already have the full matching set in memory — no need for a second network round-trip.
-  const handleExport = () => exportToExcel(filteredRecords);
+  const handleExport = () => exportToExcel(filteredRecords, showMonthColumns);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -259,6 +301,17 @@ const ServicePOTimelineRisk = () => {
           <DatePicker
             value={asOfDate}
             onChange={(d) => { setAsOfDate(d); setPage(1); }}
+            className="w-full"
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Month &amp; Year</Label>
+          <MonthYearPicker
+            value={monthYear}
+            onChange={(val) => { setMonthYear(val); setPage(1); }}
+            placeholder="As of end of month"
+            clearable
             className="w-full"
           />
         </div>

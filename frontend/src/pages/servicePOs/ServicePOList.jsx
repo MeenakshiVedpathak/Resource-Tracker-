@@ -162,13 +162,27 @@ const ServicePOList = () => {
     });
     return map;
   }, [companiesData]);
+  // `[searchParams]` here (not the `[searchParams, setSearchParams]` pair used lower down) is
+  // deliberately read once, synchronously, for every filter's `useState` initializer below — so
+  // that navigating here with a filter-carrying URL (either a deep link like
+  // `?service_category_id=` from the compliance report, or coming BACK from Map Employees/the PO
+  // detail page, whose own Back buttons return to `location.pathname + location.search` captured
+  // when the user left) reopens with every filter exactly as it was, not reset to defaults. See
+  // the "keep the URL in sync" effect further down, which is what makes that captured
+  // `location.search` carry anything in the first place.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const categoryIdParam = searchParams.get('service_category_id');
+  const servicePoIdParam = searchParams.get('service_po_id');
+  const entityIdsParam = searchParams.get('entityIds');
+  const businessUnitIdsParam = searchParams.get('businessUnitIds');
+
   // Admin's own Entity step, paired with the Admin-only "Business Unit" select below — narrows
   // which BUs that dropdown offers, AND (unlike the old company_id-only mechanism) rides into the
   // query directly as `entityIds` on its own, so picking just an Entity actually filters the list
   // across every BU under it instead of requiring a BU pick too. companiesData already carries
   // entity_id/entity per BU (same company master every other Entity+BU filter pair derives entity
-  // info from), so no extra fetch.
-  const [adminEntityFilters, setAdminEntityFilters] = useState([]);
+  // info from), so no extra fetch. Seeded from the URL the same way as every other filter below.
+  const [adminEntityFilters, setAdminEntityFilters] = useState(() => (entityIdsParam ? entityIdsParam.split(',') : []));
   // Deactivated Entities must not be offered here. The company master carries `entity.entity_name`
   // but NOT the Entity's own status, so the names derived below can't be status-checked on their
   // own — GET /entities?status=active is the only source of that, and an Admin can read it.
@@ -200,19 +214,15 @@ const ServicePOList = () => {
     () => toHierarchicalBuOptions(companiesForAdminEntity),
     [companiesForAdminEntity]
   );
-  const [searchParams] = useSearchParams();
-  const categoryIdParam = searchParams.get('service_category_id');
-  const servicePoIdParam = searchParams.get('service_po_id');
-
-  const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(10);
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [clientFilter, setClientFilter] = useState('all');
+  const [page, setPage] = useState(() => Number(searchParams.get('page')) || 1);
+  const [limit, setLimit] = useState(() => Number(searchParams.get('limit')) || 10);
+  const [search, setSearch] = useState(() => searchParams.get('search') || '');
+  const [statusFilter, setStatusFilter] = useState(() => searchParams.get('status') || 'all');
+  const [clientFilter, setClientFilter] = useState(() => searchParams.get('client_id') || 'all');
   const [categoryFilter, setCategoryFilter] = useState(categoryIdParam || 'all');
-  const [typeFilter, setTypeFilter] = useState('all');
+  const [typeFilter, setTypeFilter] = useState(() => searchParams.get('service_type_id') || 'all');
   const [poFilter, setPoFilter] = useState(servicePoIdParam || 'all');
-  const [buFilters, setBuFilters] = useState([]);
+  const [buFilters, setBuFilters] = useState(() => (businessUnitIdsParam ? businessUnitIdsParam.split(',') : []));
   // Sending a Parent BU id together with one of its own Sub-BU ids makes the backend resolve the
   // Parent back to "itself + every child", silently re-widening the result right back to the whole
   // Parent (confirmed live: checking "DATA + AI" + its "DASS" Sub-BU still returned other Sub-BUs
@@ -234,7 +244,10 @@ const ServicePOList = () => {
 
   const canManage = useCanManageClientProjectPO();
 
-  const [sorting, setSorting] = useState([]);
+  const [sorting, setSorting] = useState(() => {
+    const sortBy = searchParams.get('sortBy');
+    return sortBy ? [{ id: sortBy, desc: searchParams.get('sortOrder') === 'desc' }] : [];
+  });
 
   // Every non-Admin role reaches Service POs through the X-Company-Id header, so a login mapped
   // to more than one BU gets the standard master BU filter here. An Admin is excluded: their list
@@ -250,6 +263,52 @@ const ServicePOList = () => {
     entityId, setEntityId, showEntityFilter, isEntityFiltered, resetEntityId,
     buId, setBuId, showBuFilter, isBuFiltered, resetBuId, buParams,
   } = useMasterBuFilter({ enabled: !isAdminActor, multiple: true });
+
+  // useMasterBuFilter has no concept of an initial value of its own (every other Master screen
+  // using it always opens on "All Business Units") — seeded here, once, straight from the same
+  // `entityIds`/`businessUnitIds` URL params every other filter above restores itself from.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (isAdminActor) return;
+    if (entityIdsParam) setEntityId(entityIdsParam.split(','));
+    if (businessUnitIdsParam) setBuId(businessUnitIdsParam.split(','));
+    // Mount-only — this is a one-time restore, not a live sync, so it must not re-fire (and wipe
+    // a since-made selection) if the role check or the hook's own setters ever change identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Keeps the address bar in sync with every filter below so that leaving this screen (Map
+  // Employees, a PO's own detail page, both of which capture `location.pathname + location.search`
+  // as their own Back target) and coming back restores the exact same search/filters/page/sort
+  // instead of resetting to defaults. `replace: true` updates the current history entry in place
+  // rather than pushing a new one on every keystroke/filter change.
+  useEffect(() => {
+    const next = new URLSearchParams();
+    if (page > 1) next.set('page', String(page));
+    if (limit !== 10) next.set('limit', String(limit));
+    if (debouncedSearch) next.set('search', debouncedSearch);
+    if (statusFilter !== 'all') next.set('status', statusFilter);
+    if (clientFilter !== 'all') next.set('client_id', clientFilter);
+    if (categoryFilter !== 'all') next.set('service_category_id', categoryFilter);
+    if (typeFilter !== 'all') next.set('service_type_id', typeFilter);
+    if (poFilter !== 'all') next.set('service_po_id', poFilter);
+    if (sorting[0]) {
+      next.set('sortBy', sorting[0].id);
+      next.set('sortOrder', sorting[0].desc ? 'desc' : 'asc');
+    }
+    if (isAdminActor) {
+      if (adminEntityFilters.length > 0) next.set('entityIds', adminEntityFilters.join(','));
+      if (dedupedBuFilters.length > 0) next.set('businessUnitIds', dedupedBuFilters.join(','));
+    } else {
+      if (entityId.length > 0) next.set('entityIds', entityId.join(','));
+      if (buId.length > 0) next.set('businessUnitIds', buId.join(','));
+    }
+    setSearchParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    page, limit, debouncedSearch, statusFilter, clientFilter, categoryFilter, typeFilter, poFilter,
+    sorting, isAdminActor, adminEntityFilters, dedupedBuFilters, entityId, buId,
+  ]);
 
   const params = {
     page,

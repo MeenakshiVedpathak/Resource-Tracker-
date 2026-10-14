@@ -20,17 +20,19 @@ const columnHelper = createColumnHelper();
 
 const exportToExcel = (rows) => {
   const header = [
-    'Service Category', 'Service Type', 'Hours Delivered', 'Delivery Cost',
-    'Invoiced Amount', 'Margin', 'Margin/Hour', 'Revenue Growth %',
+    'Service Category', 'Service Type', 'Hours Delivered', 'Original Hours Delivered', 'Delivery Cost',
+    'Invoiced Amount', 'Margin', 'Margin/Hour', 'Original Margin/Hour', 'Revenue Growth %',
   ];
   const dataRows = rows.map((r) => [
     r.service_category_name ?? '',
     r.service_type_name ?? '',
     r.hours_delivered != null ? Number(r.hours_delivered) : '',
+    r.original_hours_delivered != null ? Number(r.original_hours_delivered) : '',
     r.delivery_cost != null ? Number(r.delivery_cost) : '',
     r.invoiced_amount != null ? Number(r.invoiced_amount) : '',
     r.margin != null ? Number(r.margin) : '',
     r.margin_per_hour != null ? Number(r.margin_per_hour) : '',
+    r.original_margin_per_hour != null ? Number(r.original_margin_per_hour) : '',
     r.revenue_growth_pct != null ? Number(r.revenue_growth_pct) : '',
   ]);
   const ws = XLSX.utils.aoa_to_sheet([header, ...dataRows]);
@@ -83,6 +85,15 @@ const columns = [
     size: 150,
     cell: (info) => <span className="tabular-nums">{formatHours(info.getValue())}</span>,
   }),
+  columnHelper.accessor('original_hours_delivered', {
+    header: 'Original Hours Delivered',
+    size: 170,
+    cell: (info) => {
+      const value = info.getValue();
+      if (value == null || value === '') return null;
+      return <span className="tabular-nums text-muted-foreground">{formatHours(value)}</span>;
+    },
+  }),
   columnHelper.accessor('delivery_cost', {
     header: 'Delivery Cost',
     size: 160,
@@ -101,6 +112,11 @@ const columns = [
   columnHelper.accessor('margin_per_hour', {
     header: 'Margin/Hour',
     size: 150,
+    cell: (info) => <MoneyCell value={info.getValue()} />,
+  }),
+  columnHelper.accessor('original_margin_per_hour', {
+    header: 'Original Margin/Hour',
+    size: 170,
     cell: (info) => <MoneyCell value={info.getValue()} />,
   }),
   columnHelper.accessor('revenue_growth_pct', {

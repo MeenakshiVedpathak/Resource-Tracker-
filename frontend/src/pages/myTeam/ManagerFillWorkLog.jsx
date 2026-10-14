@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import dayjs from 'dayjs';
 import { createColumnHelper } from '@tanstack/react-table';
-import { ArrowLeft, ChevronRight, Download, Upload } from 'lucide-react';
+import { ArrowLeft, CalendarPlus, Download, Upload } from 'lucide-react';
 import {
   useMyTeamEmployees,
   useMyTeamEmployeesAcrossBus,
@@ -233,9 +233,26 @@ const ManagerFillWorkLog = () => {
   const monthLabel = monthYear ? `${MONTH_FULL[monthYear.month - 1]} ${monthYear.year}` : 'this month';
 
   const columns = [
+    columnHelper.display({
+      id: 'actions',
+      header: 'Actions',
+      size: 90,
+      meta: { sticky: true, left: 0 },
+      cell: ({ row }) => (
+        <Button
+          size="sm"
+          title="Fill Work Log"
+          onClick={(e) => { e.stopPropagation(); handleRowClick(row.original); }}
+          className="h-6 w-6 p-0 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
+        >
+          <CalendarPlus className="h-3.5 w-3.5" />
+        </Button>
+      ),
+    }),
     columnHelper.accessor('full_name', {
       header: 'Employee',
       size: employeeNameColumnWidth,
+      meta: { sticky: true, left: 90 },
       cell: ({ row }) => (
         <span className="block truncate text-sm font-medium" title={row.original.full_name}>{row.original.full_name}</span>
       ),
@@ -297,12 +314,6 @@ const ManagerFillWorkLog = () => {
           </span>
         );
       },
-    }),
-    columnHelper.display({
-      id: 'chevron',
-      header: '',
-      size: 40,
-      cell: () => <ChevronRight className="h-4 w-4 text-muted-foreground" />,
     }),
   ];
 

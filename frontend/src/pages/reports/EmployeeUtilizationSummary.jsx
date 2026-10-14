@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import { createColumnHelper } from '@tanstack/react-table';
 import { Download, Info } from 'lucide-react';
@@ -20,10 +20,26 @@ import { MonthYearPicker } from '@/components/ui/month-year-picker';
 const columnHelper = createColumnHelper();
 
 const exportToExcel = (rows) => {
+  const hasOriginal = rows.some((r) => r.original_billable_total != null);
   const header = [
     'Employee', 'Designation', 'Total Experience (yrs)', 'Company Experience (yrs)', 'Clients',
-    'Billable Hours', 'Non-Billable Hours', 'Internal Support Hours', 'Team Management Hours',
-    'Leaves Hours', 'L&D Hours', 'Others Hours', 'Monthly Capacity', 'Total Hours (Excl. Leaves)',
+    'Billable Hours',
+    ...(hasOriginal ? ['Original Billable Hours'] : []),
+    'Non-Billable Hours',
+    ...(hasOriginal ? ['Original Non-Billable Hours'] : []),
+    'Internal Support Hours',
+    ...(hasOriginal ? ['Original Internal Support Hours'] : []),
+    'Team Management Hours',
+    ...(hasOriginal ? ['Original Team Management Hours'] : []),
+    'Leaves Hours',
+    ...(hasOriginal ? ['Original Leaves Hours'] : []),
+    'L&D Hours',
+    ...(hasOriginal ? ['Original L&D Hours'] : []),
+    'Others Hours',
+    ...(hasOriginal ? ['Original Others Hours'] : []),
+    'Monthly Capacity',
+    'Total Hours (Excl. Leaves)',
+    ...(hasOriginal ? ['Original Total Hours (Excl. Leaves)'] : []),
   ];
   const dataRows = rows.map((r) => [
     r.full_name ?? '',
@@ -32,14 +48,22 @@ const exportToExcel = (rows) => {
     r.company_experience ?? '',
     r.clients ?? '',
     r.billable_total != null ? Number(r.billable_total) : '',
+    ...(hasOriginal ? [r.original_billable_total != null ? Number(r.original_billable_total) : ''] : []),
     r.non_billable_total != null ? Number(r.non_billable_total) : '',
+    ...(hasOriginal ? [r.original_non_billable_total != null ? Number(r.original_non_billable_total) : ''] : []),
     r.internal_support_hours != null ? Number(r.internal_support_hours) : '',
+    ...(hasOriginal ? [r.original_internal_support_hours != null ? Number(r.original_internal_support_hours) : ''] : []),
     r.team_management_hours != null ? Number(r.team_management_hours) : '',
+    ...(hasOriginal ? [r.original_team_management_hours != null ? Number(r.original_team_management_hours) : ''] : []),
     r.leaves_hours != null ? Number(r.leaves_hours) : '',
+    ...(hasOriginal ? [r.original_leaves_hours != null ? Number(r.original_leaves_hours) : ''] : []),
     r.lnd_hours != null ? Number(r.lnd_hours) : '',
+    ...(hasOriginal ? [r.original_lnd_hours != null ? Number(r.original_lnd_hours) : ''] : []),
     r.others_hours != null ? Number(r.others_hours) : '',
+    ...(hasOriginal ? [r.original_others_hours != null ? Number(r.original_others_hours) : ''] : []),
     r.monthly_capacity != null ? Number(r.monthly_capacity) : '',
     r.total_utilization_excl_leaves_pct != null ? Number(r.total_utilization_excl_leaves_pct) : '',
+    ...(hasOriginal ? [r.original_total_utilization_excl_leaves_pct != null ? Number(r.original_total_utilization_excl_leaves_pct) : ''] : []),
   ]);
   const ws = XLSX.utils.aoa_to_sheet([header, ...dataRows]);
   const wb = XLSX.utils.book_new();
@@ -89,9 +113,19 @@ const columns = [
     size: 140,
     cell: (info) => <HoursCell value={info.getValue()} />,
   }),
+  columnHelper.accessor('original_billable_total', {
+    header: 'Original Billable Hours',
+    size: 180,
+    cell: (info) => <HoursCell value={info.getValue()} />,
+  }),
   columnHelper.accessor('non_billable_total', {
     header: 'Non-Billable Hours',
     size: 160,
+    cell: (info) => <HoursCell value={info.getValue()} />,
+  }),
+  columnHelper.accessor('original_non_billable_total', {
+    header: 'Original Non-Billable Hours',
+    size: 200,
     cell: (info) => <HoursCell value={info.getValue()} />,
   }),
   columnHelper.accessor('internal_support_hours', {
@@ -99,9 +133,19 @@ const columns = [
     size: 150,
     cell: (info) => <HoursCell value={info.getValue()} />,
   }),
+  columnHelper.accessor('original_internal_support_hours', {
+    header: 'Original Internal Support',
+    size: 190,
+    cell: (info) => <HoursCell value={info.getValue()} />,
+  }),
   columnHelper.accessor('team_management_hours', {
     header: 'Team Management',
     size: 160,
+    cell: (info) => <HoursCell value={info.getValue()} />,
+  }),
+  columnHelper.accessor('original_team_management_hours', {
+    header: 'Original Team Management',
+    size: 200,
     cell: (info) => <HoursCell value={info.getValue()} />,
   }),
   columnHelper.accessor('leaves_hours', {
@@ -109,14 +153,29 @@ const columns = [
     size: 110,
     cell: (info) => <HoursCell value={info.getValue()} />,
   }),
+  columnHelper.accessor('original_leaves_hours', {
+    header: 'Original Leaves',
+    size: 140,
+    cell: (info) => <HoursCell value={info.getValue()} />,
+  }),
   columnHelper.accessor('lnd_hours', {
     header: 'L&D',
     size: 100,
     cell: (info) => <HoursCell value={info.getValue()} />,
   }),
+  columnHelper.accessor('original_lnd_hours', {
+    header: 'Original L&D',
+    size: 140,
+    cell: (info) => <HoursCell value={info.getValue()} />,
+  }),
   columnHelper.accessor('others_hours', {
     header: 'Others',
     size: 110,
+    cell: (info) => <HoursCell value={info.getValue()} />,
+  }),
+  columnHelper.accessor('original_others_hours', {
+    header: 'Original Others',
+    size: 150,
     cell: (info) => <HoursCell value={info.getValue()} />,
   }),
   columnHelper.accessor('monthly_capacity', {
@@ -127,6 +186,11 @@ const columns = [
   columnHelper.accessor('total_utilization_excl_leaves_pct', {
     header: 'Total Hours (Excl. Leaves)',
     size: 190,
+    cell: (info) => <HoursCell value={info.getValue()} />,
+  }),
+  columnHelper.accessor('original_total_utilization_excl_leaves_pct', {
+    header: 'Original Total Hours (Excl. Leaves)',
+    size: 240,
     cell: (info) => <HoursCell value={info.getValue()} />,
   }),
 ];
@@ -177,6 +241,26 @@ const EmployeeUtilizationSummary = () => {
   const records = Array.isArray(data?.data?.records) ? data.data.records : [];
   const summary = totalsSummary ?? data?.data?.summary ?? null;
   const meta = data?.meta ?? {};
+
+  const hasOriginalData = records.some((r) =>
+    r.original_billable_total != null ||
+    r.original_non_billable_total != null ||
+    r.original_internal_support_hours != null ||
+    r.original_team_management_hours != null ||
+    r.original_leaves_hours != null ||
+    r.original_lnd_hours != null ||
+    r.original_others_hours != null ||
+    r.original_total_utilization_excl_leaves_pct != null
+  );
+  const visibleColumns = useMemo(() => {
+    if (hasOriginalData) return columns;
+    return columns.filter((col) => {
+      const key = col.accessorKey || col.id;
+      const isOriginal = (typeof key === 'string' && key.startsWith('original_')) ||
+        (typeof col.header === 'string' && col.header.startsWith('Original'));
+      return !isOriginal;
+    });
+  }, [hasOriginalData]);
 
   const activeFilterCount = [
     entityIds.length > 0,
@@ -258,7 +342,7 @@ const EmployeeUtilizationSummary = () => {
       </FilterPanel>
 
       <DataTable
-        columns={columns}
+        columns={visibleColumns}
         data={records}
         mobileCards
         isLoading={isPending}
@@ -282,6 +366,16 @@ const EmployeeUtilizationSummary = () => {
             <SummaryItem label="Leaves" value={formatHours(summary.leaves_hours)} />
             <SummaryItem label="L&D" value={formatHours(summary.lnd_hours)} />
             <SummaryItem label="Others" value={formatHours(summary.others_hours)} />
+            {hasOriginalData && (
+              <>
+                <SummaryItem label="Original Billable Hours" value={formatHours(summary.original_billable_total)} />
+                <SummaryItem label="Original Non-Billable Hours" value={formatHours(summary.original_non_billable_total)} />
+                <SummaryItem label="Original Internal Support" value={formatHours(summary.original_internal_support_hours)} />
+                <SummaryItem label="Original Team Management" value={formatHours(summary.original_team_management_hours)} />
+                <SummaryItem label="Original L&D" value={formatHours(summary.original_lnd_hours)} />
+                <SummaryItem label="Original Others" value={formatHours(summary.original_others_hours)} />
+              </>
+            )}
           </div>
         </div>
       )}
