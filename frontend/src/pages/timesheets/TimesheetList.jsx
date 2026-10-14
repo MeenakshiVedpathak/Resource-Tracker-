@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useMemo, useCallback } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { createColumnHelper } from '@tanstack/react-table';
 import { Upload, Info, Download, Trash2, Loader2, RefreshCw, FileSpreadsheet, MoreVertical } from 'lucide-react';
@@ -22,7 +22,9 @@ import FilterPanel from '@/components/common/FilterPanel';
 import EntityFilter from '@/components/common/EntityFilter';
 import BusinessUnitFilter from '@/components/common/BusinessUnitFilter';
 import SyncWorkLogsDialog from '@/components/timesheets/SyncWorkLogsDialog';
+import ImportFailureDialog from '@/components/timesheets/ImportFailureDialog';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
@@ -215,8 +217,40 @@ const TimesheetList = () => {
       ? activeBusinessUnits.filter((bu) => String(bu.entity_id ?? bu.entityId) === String(entityId))
       : activeBusinessUnits;
 
-  const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(10);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Filters persisted in the URL so they survive navigation to detail pages and back.
+  const page  = Number(searchParams.get('page')  ?? 1);
+  const limit = Number(searchParams.get('limit') ?? 10);
+
+  const setPage  = useCallback((v) => setSearchParams((p) => { const n = new URLSearchParams(p); n.set('page', v); return n; }, { replace: true }), [setSearchParams]);
+  const setLimit = useCallback((v) => setSearchParams((p) => { const n = new URLSearchParams(p); n.set('limit', v); n.set('page', 1); return n; }, { replace: true }), [setSearchParams]);
+
+  const rawMonth = searchParams.get('month');
+  const rawYear  = searchParams.get('year');
+  const monthYearFilter = rawMonth && rawYear ? { month: Number(rawMonth), year: Number(rawYear) } : null;
+  const setMonthYearFilter = useCallback((v) => setSearchParams((p) => {
+    const n = new URLSearchParams(p);
+    if (v) { n.set('month', v.month); n.set('year', v.year); } else { n.delete('month'); n.delete('year'); }
+    n.set('page', 1);
+    return n;
+  }, { replace: true }), [setSearchParams]);
+
+  const entityIds = useMemo(() => searchParams.get('entityIds') ? searchParams.get('entityIds').split(',').filter(Boolean) : [], [searchParams]);
+  const setEntityIds = useCallback((v) => setSearchParams((p) => {
+    const n = new URLSearchParams(p);
+    if (v.length) n.set('entityIds', v.join(',')); else n.delete('entityIds');
+    n.set('page', 1);
+    return n;
+  }, { replace: true }), [setSearchParams]);
+
+  const buIds = useMemo(() => searchParams.get('buIds') ? searchParams.get('buIds').split(',').filter(Boolean) : [], [searchParams]);
+  const setBuIds = useCallback((v) => setSearchParams((p) => {
+    const n = new URLSearchParams(p);
+    if (v.length) n.set('buIds', v.join(',')); else n.delete('buIds');
+    n.set('page', 1);
+    return n;
+  }, { replace: true }), [setSearchParams]);
 
   const currentDate = new Date();
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
@@ -227,18 +261,12 @@ const TimesheetList = () => {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [selectedIds, setSelectedIds] = useState([]);
   const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
-  const [monthYearFilter, setMonthYearFilter] = useState(null);
-  // Multi-select — backend support for entityIds/businessUnitIds has landed on GET
-  // /timesheets/import/history (see BACKEND_MULTI_SELECT_ENTITY_BU_PROMPT.md). This REPLACES the
-  // previous client-side "fan out one request per BU under the selected Entity, merge, re-sort"
-  // workaround entirely — the backend now narrows and sorts the full set itself, so there's
-  // nothing left to fan out or merge here.
-  const [entityIds, setEntityIds] = useState([]);
-  const [buIds, setBuIds] = useState([]);
+  // Multi-select — entityIds/buIds are now URL-backed (see useSearchParams block above).
   const [openingId, setOpeningId] = useState(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const [sorting, setSorting] = useState([]);
+  const [failureDialog, setFailureDialog] = useState({ open: false, importId: null, status: null });
 
   // `buId` is always the 'all' sentinel (never a bare single id) so the request drops the
   // X-Company-Id header unconditionally — the backend's "no header -> full role reach" fallback
@@ -248,6 +276,7 @@ const TimesheetList = () => {
     page,
     limit,
     buId: 'all',
+    status: 'completed,partial,failed',
     ...(entityIds.length > 0 && { entityIds: entityIds.join(',') }),
     ...(buIds.length > 0 && { businessUnitIds: buIds.join(',') }),
     ...(monthYearFilter && { month: monthYearFilter.month, year: monthYearFilter.year }),
@@ -263,15 +292,18 @@ const TimesheetList = () => {
     (monthYearFilter ? 1 : 0) + (entityIds.length > 0 ? 1 : 0) + (buIds.length > 0 ? 1 : 0);
 
   const clearFilters = () => {
-    setMonthYearFilter(null);
-    setEntityIds([]);
-    setBuIds([]);
-    setPage(1);
+    setSearchParams((p) => {
+      const n = new URLSearchParams(p);
+      n.delete('month'); n.delete('year');
+      n.delete('entityIds'); n.delete('buIds');
+      n.set('page', 1);
+      return n;
+    }, { replace: true });
     setSelectedIds([]);
   };
 
   const allRecords = Array.isArray(data?.data) ? data.data : [];
-  const records = allRecords.filter((r) => r.status === 'completed');
+  const records = allRecords;
   const meta    = data?.meta ?? {};
 
   // Backend only attaches `company` per row when the list spans more than one Business
@@ -594,6 +626,54 @@ const TimesheetList = () => {
         );
       },
     }),
+    columnHelper.display({
+      id: 'import_status',
+      header: 'Import Status',
+      size: 160,
+      cell: ({ row }) => {
+        const r = row.original;
+        if (r.status === 'partial' || r.status === 'failed') {
+          const isPartial = r.status === 'partial';
+          return (
+            <button
+              type="button"
+              className={cn(
+                'group flex flex-col gap-0.5 text-left rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                isPartial ? 'cursor-pointer' : 'cursor-pointer',
+              )}
+              onClick={(e) => {
+                e.stopPropagation();
+                setFailureDialog({ open: true, importId: r.id, status: r.status });
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.stopPropagation();
+                  setFailureDialog({ open: true, importId: r.id, status: r.status });
+                }
+              }}
+              title="Click to see why rows failed"
+            >
+              <Badge className={cn(
+                'w-fit text-[10px] font-semibold group-hover:opacity-80 transition-opacity',
+                isPartial
+                  ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 border-amber-200 dark:border-amber-700'
+                  : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 border-red-200 dark:border-red-700',
+              )}>
+                {isPartial ? `Partial · ${r.error_rows ?? 0} failed` : 'Failed'}
+              </Badge>
+              <span className="text-[10px] text-muted-foreground group-hover:text-primary transition-colors">
+                View details →
+              </span>
+            </button>
+          );
+        }
+        return (
+          <Badge className="w-fit bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 border-emerald-200 dark:border-emerald-700 text-[10px] font-semibold">
+            Completed
+          </Badge>
+        );
+      },
+    }),
     ...(canViewOriginal ? [columnHelper.accessor('is_publish', {
       header: 'Status',
       size: 100,
@@ -676,19 +756,44 @@ const TimesheetList = () => {
         <EntityFilter
           multiple
           value={entityIds}
-          onChange={(v) => { setEntityIds(v); setBuIds([]); setPage(1); setSelectedIds([]); }}
+          onChange={(v) => {
+            setSearchParams((p) => {
+              const n = new URLSearchParams(p);
+              if (v.length) n.set('entityIds', v.join(',')); else n.delete('entityIds');
+              n.delete('buIds');
+              n.set('page', 1);
+              return n;
+            }, { replace: true });
+            setSelectedIds([]);
+          }}
         />
         <BusinessUnitFilter
           multiple
           value={buIds}
           entityId={entityIds}
-          onChange={(v) => { setBuIds(v); setPage(1); setSelectedIds([]); }}
+          onChange={(v) => {
+            setSearchParams((p) => {
+              const n = new URLSearchParams(p);
+              if (v.length) n.set('buIds', v.join(',')); else n.delete('buIds');
+              n.set('page', 1);
+              return n;
+            }, { replace: true });
+            setSelectedIds([]);
+          }}
         />
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Month &amp; Year</Label>
           <MonthYearPicker
             value={monthYearFilter}
-            onChange={(val) => { setMonthYearFilter(val); setPage(1); setSelectedIds([]); }}
+            onChange={(val) => {
+              setSearchParams((p) => {
+                const n = new URLSearchParams(p);
+                if (val) { n.set('month', val.month); n.set('year', val.year); } else { n.delete('month'); n.delete('year'); }
+                n.set('page', 1);
+                return n;
+              }, { replace: true });
+              setSelectedIds([]);
+            }}
             placeholder="All months"
             className="w-44"
           />
@@ -728,18 +833,18 @@ const TimesheetList = () => {
         mobileCards
         mobileCardRenderer={mobileCardRenderer}
         pagination={
-          records.length > 0
+          meta.total != null
             ? {
-                page:  1,
-                limit: records.length,
-                total: records.length,
+                page:  meta.page ?? page,
+                limit: meta.limit ?? limit,
+                total: meta.total,
               }
             : undefined
         }
         sorting={sorting}
-        onSortingChange={(s) => { setSorting(s); setPage(1); }}
-        onPageChange={(p) => { setPage(p); setSelectedIds([]); }}
-        onPageSizeChange={(s) => { setLimit(s); setPage(1); setSelectedIds([]); }}
+        onSortingChange={(s) => { setSorting(s); setSearchParams((p) => { const n = new URLSearchParams(p); n.set('page', 1); return n; }, { replace: true }); }}
+        onPageChange={(p) => { setSearchParams((prev) => { const n = new URLSearchParams(prev); n.set('page', p); return n; }, { replace: true }); setSelectedIds([]); }}
+        onPageSizeChange={(s) => { setSearchParams((p) => { const n = new URLSearchParams(p); n.set('limit', s); n.set('page', 1); return n; }, { replace: true }); setSelectedIds([]); }}
         rowClassName={(row) => (openingId && openingId !== row.id ? 'opacity-50 pointer-events-none' : '')}
         onRowClick={openImport}
       />
@@ -820,6 +925,13 @@ const TimesheetList = () => {
         open={isSyncDialogOpen}
         onOpenChange={setIsSyncDialogOpen}
         activeBusinessUnits={activeBusinessUnits}
+      />
+
+      <ImportFailureDialog
+        open={failureDialog.open}
+        onOpenChange={(o) => !o && setFailureDialog((prev) => ({ ...prev, open: false }))}
+        importId={failureDialog.importId}
+        status={failureDialog.status}
       />
 
       <ConfirmDialog

@@ -100,12 +100,7 @@ const columns = [
     meta: { sticky: true, left: 120 },
     size: 220,
     cell: (info) => (
-      <div>
-        <p className="font-medium text-xs">{info.getValue() || '—'}</p>
-        {info.row.original.designation && (
-          <p className="text-[10px] text-muted-foreground">{info.row.original.designation}</p>
-        )}
-      </div>
+      <span className="block truncate font-medium text-xs">{info.getValue() || '—'}</span>
     ),
   }),
   columnHelper.accessor('client_name', {
@@ -117,14 +112,7 @@ const columns = [
     header: 'Service PO',
     size: 220,
     cell: (info) => (
-      <div>
-        <p className="text-xs">{info.getValue() || '—'}</p>
-        {info.row.original.service_po_code && (
-          <p className="text-[10px] font-mono text-muted-foreground">
-            {info.row.original.service_po_code}
-          </p>
-        )}
-      </div>
+      <span className="block truncate text-xs">{info.getValue() || '—'}</span>
     ),
   }),
   columnHelper.accessor('service_type_name', {

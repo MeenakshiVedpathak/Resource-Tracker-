@@ -5,7 +5,7 @@ import {
   Clock, DollarSign, TrendingUp, TrendingDown, Users, Building2, Briefcase,
   BarChart2, RefreshCw, X, ChevronLeft, ChevronRight, CalendarDays, AlertCircle,
   Activity, Zap, Award, Calendar, IndianRupee, CalendarOff, Sparkles, ShieldAlert,
-  Landmark,
+  Landmark, CalendarRange,
 } from 'lucide-react';
 import { ROUTES } from '@/constants/routes';
 import { ROLE_NAMES } from '@/constants/roleHierarchy';
@@ -43,6 +43,10 @@ import { HierarchicalBuSelector, dedupeBusinessUnitIds } from '@/components/comm
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { formatCurrency, formatHours, formatDate } from '@/utils/formatters';
+import { DatePicker } from '@/components/ui/date-picker';
+import { DateRangePicker } from '@/components/ui/date-range-picker';
+import { extractApiError } from '@/services/apiClient';
+import toast from 'react-hot-toast';
 
 /* ─── constants ──────────────────────────────────────────────────────────── */
 const now = new Date();
@@ -65,6 +69,20 @@ const MONTH_ABBR = { Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6, Jul: 7, Aug
 const QUARTER_STYLES = {
   active:   'bg-primary text-primary-foreground font-semibold shadow-sm',
   inactive: 'bg-background text-muted-foreground hover:text-foreground font-medium',
+};
+
+const FILTER_MODES = [
+  { mode: 'quarter',       icon: BarChart2,    label: 'Quarter',       active: 'bg-card shadow-sm text-blue-600 dark:text-blue-400' },
+  { mode: 'month',         icon: Calendar,     label: 'Month',         active: 'bg-card shadow-sm text-purple-600 dark:text-purple-400' },
+  { mode: 'date_range',    icon: CalendarRange,label: 'Date Range',    active: 'bg-card shadow-sm text-rose-600 dark:text-rose-400' },
+];
+
+/* Format YYYY-MM-DD → "01 Apr 2026" */
+const fmtDate = (d) => {
+  if (!d) return '';
+  const [y, m, day] = d.split('-');
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${String(day).padStart(2,'0')} ${months[Number(m)-1]} ${y}`;
 };
 
 /* plain number with grouping: 1234 → "1,234" */
@@ -257,14 +275,14 @@ const InsightCard = ({ icon: Icon, label, sub, type, isLoading, onClick }) => {
         <motion.div
           variants={itemVariants}
           onClick={onClick}
-          className={`flex items-center gap-[clamp(0.5rem,0.8vw,0.75rem)] rounded-2xl border px-[clamp(0.75rem,1.1vw,1rem)] py-[clamp(0.5rem,0.85vw,0.75rem)] flex-1 min-w-[200px] ${onClick ? 'cursor-pointer hover:brightness-95 active:scale-[0.98] transition-all duration-150' : 'cursor-default'} ${s.card}`}
+          className={`flex items-center gap-[clamp(0.375rem,0.6vw,0.625rem)] rounded-2xl border px-[clamp(0.5rem,0.85vw,0.875rem)] py-[clamp(0.375rem,0.65vw,0.625rem)] flex-1 min-w-[clamp(8rem,16vw,13rem)] ${onClick ? 'cursor-pointer hover:brightness-95 active:scale-[0.98] transition-all duration-150' : 'cursor-default'} ${s.card}`}
         >
-          <div className={`p-[clamp(0.375rem,0.55vw,0.5rem)] rounded-xl shrink-0 ${s.icon}`}>
-            <Icon className="h-[clamp(0.75rem,1vw,1rem)] w-[clamp(0.75rem,1vw,1rem)]" />
+          <div className={`p-[clamp(0.25rem,0.4vw,0.375rem)] rounded-lg shrink-0 ${s.icon}`}>
+            <Icon className="h-[clamp(0.625rem,0.85vw,0.875rem)] w-[clamp(0.625rem,0.85vw,0.875rem)]" />
           </div>
           <div className="min-w-0">
-            <p className={`text-[clamp(0.75rem,0.9vw,0.875rem)] font-bold leading-tight truncate ${s.text}`}>{label}</p>
-            <p className={`text-[clamp(0.6875rem,0.8vw,0.75rem)] mt-0.5 leading-tight truncate ${s.sub}`}>{sub}</p>
+            <p className={`text-[clamp(0.6875rem,0.8vw,0.8125rem)] font-bold leading-tight truncate ${s.text}`}>{label}</p>
+            <p className={`text-[clamp(0.5625rem,0.65vw,0.6875rem)] mt-0.5 leading-tight truncate ${s.sub}`}>{sub}</p>
           </div>
         </motion.div>
       </TooltipTrigger>
@@ -338,12 +356,29 @@ const Dashboard = () => {
     if (!canViewOriginal) setHoursSource('M');
   }, [canViewOriginal]);
   const [billablePage, setBillablePage]       = useState(1);
-  const [billablePageQ, setBillablePageQ]     = useState(1); // quarterly view pagination
-  const [billableSortBy, setBillableSortBy]   = useState('nonBillable');  // 'nonBillable' | 'billable'
-  const [billableSortByQ, setBillableSortByQ] = useState('nonBillable'); // quarterly view sort
+  const [billablePageQ, setBillablePageQ]     = useState(1);
+  const [billableSortBy, setBillableSortBy]   = useState('nonBillable');
+  const [billableSortByQ, setBillableSortByQ] = useState('nonBillable');
   const [topPOFilter, setTopPOFilter]         = useState('billable');
   const [filtersOpen, setFiltersOpen]         = useState(false);
-  const [viewMode, setViewMode]               = useState('quarterly');
+  // Filter mode: 'quarter' | 'month' | 'quarter_range' | 'month_range' | 'date_range'
+  const [filterMode, setFilterMode]           = useState('quarter');
+  // Quarter range
+  const [fromQuarter, setFromQuarter]         = useState(null);
+  const [toQuarter, setToQuarter]             = useState(null);
+  // Month range (each is { month, year } same shape as bottomMonthYear)
+  const [fromMonthYear, setFromMonthYear]     = useState(null);
+  const [toMonthYear, setToMonthYear]         = useState(null);
+  // Date range ({ startDate, endDate } as 'YYYY-MM-DD' strings) — default to today
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const [dateRangeValue, setDateRangeValue]   = useState({ startDate: todayStr, endDate: todayStr });
+
+  const switchFilterMode = (mode) => {
+    setFilterMode(mode);
+    if (mode !== 'quarter_range') { setFromQuarter(null); setToQuarter(null); }
+    if (mode !== 'month_range')   { setFromMonthYear(null); setToMonthYear(null); }
+    if (mode !== 'date_range')    { setDateRangeValue({ startDate: todayStr, endDate: todayStr }); }
+  };
 
   const headerRef       = useRef(null);
   const outerRef        = useRef(null);
@@ -450,51 +485,71 @@ const Dashboard = () => {
   const month = String(bottomMonthYear.month);
   const year  = String(bottomMonthYear.year);
 
-  const analyticsParams = {
-    fiscalYear,
-    hoursSource,
-    roleId: roleObjects[0]?.id,
-    // 'all' must still ride along explicitly, not be dropped — omitting the key entirely leaves
-    // dashboard.api's withBuScope with nothing to act on, so it falls back to whatever BU is
-    // globally active instead of truly scoping across every BU this login can reach (the same
-    // stale-header pitfall already fixed for the Client dropdown in clients.api.js).
-    buId: 'all',
-    ...(entityIds.length > 0 && { entityIds: entityIds.join(',') }),
-    ...(dedupedBuIds.length > 0 && { businessUnitIds: dedupedBuIds.join(',') }),
-    ...(quarter     && { quarter }),
-    ...(employeeId  && { employeeId }),
-    ...(clientId    && { clientId }),
-    ...(servicePOId && { poId: servicePOId }),
-  };
+  // Validate month-range: to >= from
+  const monthRangeValid = useMemo(() => {
+    if (!fromMonthYear || !toMonthYear) return false;
+    return (toMonthYear.year * 12 + toMonthYear.month) >= (fromMonthYear.year * 12 + fromMonthYear.month);
+  }, [fromMonthYear, toMonthYear]);
 
-  const { data: analyticsData, isPending: isAnalyticsPending, refetch, isFetching, dataUpdatedAt } =
-    useDashboardAnalytics(analyticsParams, { enabled: viewMode === 'quarterly' });
+  // Quarter-range: to >= from
+  const quarterRangeValid = !!(fromQuarter && toQuarter && toQuarter >= fromQuarter);
 
-  /* monthly analytics — same API, filtered by selected month */
-  const monthFiscalYear = useMemo(
-    () => (bottomMonthYear.month >= 4 ? bottomMonthYear.year : bottomMonthYear.year - 1),
-    [bottomMonthYear],
-  );
-  const monthlyAnalyticsParams = {
-    month: bottomMonthYear.month,
-    year:  bottomMonthYear.year,
-    hoursSource,
-    roleId: roleObjects[0]?.id,
-    buId: 'all',
-    ...(entityIds.length > 0 && { entityIds: entityIds.join(',') }),
-    ...(dedupedBuIds.length > 0 && { businessUnitIds: dedupedBuIds.join(',') }),
-    ...(employeeId  && { employeeId }),
-    ...(clientId    && { clientId }),
-    ...(servicePOId && { poId: servicePOId }),
-  };
-  const { data: monthlyAnalyticsRaw, isPending: isMonthlyAnalyticsPending } =
-    useDashboardAnalytics(monthlyAnalyticsParams, { enabled: viewMode === 'monthly' });
+  // Compute the period-specific query params for the active mode
+  const periodParams = useMemo(() => {
+    switch (filterMode) {
+      case 'quarter':
+        return { fiscalYear, ...(quarter && { quarter }) };
+      case 'month':
+        return { month: bottomMonthYear.month, year: bottomMonthYear.year };
+      case 'quarter_range':
+        return quarterRangeValid ? { fiscalYear, fromQuarter, toQuarter } : null;
+      case 'month_range':
+        return monthRangeValid
+          ? { fromMonth: fromMonthYear.month, fromYear: fromMonthYear.year, toMonth: toMonthYear.month, toYear: toMonthYear.year }
+          : null;
+      case 'date_range':
+        return (dateRangeValue?.startDate && dateRangeValue?.endDate && dateRangeValue.endDate >= dateRangeValue.startDate)
+          ? { startDate: dateRangeValue.startDate, endDate: dateRangeValue.endDate }
+          : null;
+      default: return null;
+    }
+  }, [filterMode, fiscalYear, quarter, bottomMonthYear, fromQuarter, toQuarter, quarterRangeValid, fromMonthYear, toMonthYear, monthRangeValid, dateRangeValue]);
 
-  /* dashboard/analytics2 — same filters as above (utilization trend + cost trend by type) */
+  const analyticsParams = useMemo(() => {
+    if (!periodParams) return null;
+    return {
+      ...periodParams,
+      hoursSource,
+      groupBy: 'hierarchy',
+      roleId: roleObjects[0]?.id,
+      buId: 'all',
+      ...(entityIds.length > 0 && { entityIds: entityIds.join(',') }),
+      ...(dedupedBuIds.length > 0 && { businessUnitIds: dedupedBuIds.join(',') }),
+      ...(employeeId  && { employeeId }),
+      ...(clientId    && { clientId }),
+      ...(servicePOId && { poId: servicePOId }),
+    };
+  }, [periodParams, hoursSource, roleObjects, entityIds, dedupedBuIds, employeeId, clientId, servicePOId]);
+
+  const { data: analyticsData, isPending: isAnalyticsPending, refetch, isFetching, dataUpdatedAt, isError: isAnalyticsError, error: analyticsError } =
+    useDashboardAnalytics(analyticsParams ?? {}, { enabled: !!analyticsParams });
+
   const { data: analytics2Data } =
-    useDashboardAnalytics2(analyticsParams, { enabled: viewMode === 'quarterly' });
-  const { data: monthlyAnalytics2Raw } =
-    useDashboardAnalytics2(monthlyAnalyticsParams, { enabled: viewMode === 'monthly' });
+    useDashboardAnalytics2(analyticsParams ?? {}, { enabled: !!analyticsParams });
+
+  // Show toast on 400/validation errors from the backend
+  useEffect(() => {
+    if (isAnalyticsError && analyticsError) {
+      toast.error(extractApiError(analyticsError) || 'An error occurred loading analytics.');
+    }
+  }, [isAnalyticsError, analyticsError]);
+
+  // Period label from response: "Showing: 01 Apr 2026 – 30 Jun 2026"
+  const periodLabel = useMemo(() => {
+    const period = analyticsData?.filters_applied?.period;
+    if (!period?.start_date || !period?.end_date) return null;
+    return `Showing: ${fmtDate(period.start_date)} – ${fmtDate(period.end_date)}`;
+  }, [analyticsData]);
 
   // Same source and availability rule as every other Entity filter in the app (see
   // hooks/useSelectableEntities) — narrows the BU dropdown right below, same as
@@ -516,18 +571,7 @@ const Dashboard = () => {
   const tiles  = analyticsData?.tiles  ?? {};
   const charts = analyticsData?.charts ?? {};
 
-  const monthlyAnalyticsTiles  = monthlyAnalyticsRaw?.tiles  ?? {};
-  const monthlyAnalyticsCharts = monthlyAnalyticsRaw?.charts ?? {};
-
-  // The KPI row's Employees/Clients/Service POs tiles are meant to read as
-  // plain totals ("how many do I have"), not "how many had activity in the
-  // selected period" — tiles.active_employees/active_clients/active_service_pos
-  // are the latter (period-scoped, via the timesheet-joined Analytics query)
-  // and can legitimately be much smaller than the real count. workforce.*/
-  // portfolio.* are the all-time headcounts, unaffected by the period filter
-  // — override the same tile keys with those instead, same pattern already
-  // used below for total_po_value_current_year (sourced from financials.*,
-  // a different section of the same response).
+  // KPI tiles override — workforce/portfolio totals are all-time, not period-scoped
   const mergedTiles = useMemo(() => ({
     ...tiles,
     active_employees: Number(analyticsData?.workforce?.total_employees ?? 0),
@@ -536,19 +580,15 @@ const Dashboard = () => {
     total_po_value_current_year: Number(analyticsData?.financials?.total_po_value_fiscal_year ?? 0),
   }), [tiles, analyticsData]);
 
-  const mergedMonthlyTiles = useMemo(() => ({
-    ...monthlyAnalyticsTiles,
-    active_employees: Number(monthlyAnalyticsRaw?.workforce?.total_employees ?? 0),
-    active_clients: Number(monthlyAnalyticsRaw?.portfolio?.total_clients ?? 0),
-    active_service_pos: Number(monthlyAnalyticsRaw?.portfolio?.active_pos ?? 0),
-    total_po_value_current_year: Number(monthlyAnalyticsRaw?.financials?.total_po_value_fiscal_year ?? 0),
-  }), [monthlyAnalyticsTiles, monthlyAnalyticsRaw]);
-
+  // For quarter mode, client-side filter to the selected quarter; for all other modes the backend
+  // already returns only the months in the requested range so we use the data directly.
   const trendData = useMemo(() => {
     const raw = charts.monthly_hours_trend ?? [];
-    if (!quarter) return raw;
-    return raw.filter((d) => (QUARTER_MONTHS[quarter] ?? []).includes(d.month));
-  }, [charts.monthly_hours_trend, quarter]);
+    if (filterMode === 'quarter' && quarter) {
+      return raw.filter((d) => (QUARTER_MONTHS[quarter] ?? []).includes(d.month));
+    }
+    return raw;
+  }, [charts.monthly_hours_trend, filterMode, quarter]);
 
   /* cost_trend_by_type / leave_hours_trend / no_work_trend entries only carry a "Mon-YY" label
      (no numeric month) — parse it for quarter filtering */
@@ -558,19 +598,17 @@ const Dashboard = () => {
   };
 
   const costTrendData = useMemo(
-    () => filterByQuarterLabel(analytics2Data?.cost_trend_by_type ?? [], quarter),
-    [analytics2Data?.cost_trend_by_type, quarter],
+    () => filterMode === 'quarter' ? filterByQuarterLabel(analytics2Data?.cost_trend_by_type ?? [], quarter) : (analytics2Data?.cost_trend_by_type ?? []),
+    [analytics2Data?.cost_trend_by_type, filterMode, quarter],
   );
   const costTrendLeaveData = useMemo(
-    () => filterByQuarterLabel(analytics2Data?.leave_hours_trend ?? [], quarter),
-    [analytics2Data?.leave_hours_trend, quarter],
+    () => filterMode === 'quarter' ? filterByQuarterLabel(analytics2Data?.leave_hours_trend ?? [], quarter) : (analytics2Data?.leave_hours_trend ?? []),
+    [analytics2Data?.leave_hours_trend, filterMode, quarter],
   );
   const costTrendNoWorkData = useMemo(
-    () => filterByQuarterLabel(analytics2Data?.no_work_trend ?? [], quarter),
-    [analytics2Data?.no_work_trend, quarter],
+    () => filterMode === 'quarter' ? filterByQuarterLabel(analytics2Data?.no_work_trend ?? [], quarter) : (analytics2Data?.no_work_trend ?? []),
+    [analytics2Data?.no_work_trend, filterMode, quarter],
   );
-
-  const monthlyCostTrendData = monthlyAnalytics2Raw?.cost_trend_by_type ?? [];
 
   /* map hours_by_employee → BillableAnalyticsPanel format
      Cross-references employees_by_po (category_name) to split non-billable hours into
@@ -658,18 +696,16 @@ const Dashboard = () => {
     () => toBillableRows(charts.hours_by_employee, charts.employees_by_po),
     [charts.hours_by_employee, charts.employees_by_po],
   );
-  const billableRowsM = useMemo(
-    () => toBillableRows(monthlyAnalyticsCharts.hours_by_employee, monthlyAnalyticsCharts.employees_by_po),
-    [monthlyAnalyticsCharts.hours_by_employee, monthlyAnalyticsCharts.employees_by_po],
-  );
 
   const sortedBillableRowsQ = useMemo(
     () => sortBillableRows(billableRowsQ, billableSortByQ),
     [billableRowsQ, billableSortByQ],
   );
+
+  // In month mode we reuse the same query; billablePage/billableSortBy drive the monthly view's panel
   const sortedBillableRowsM = useMemo(
-    () => sortBillableRows(billableRowsM, billableSortBy),
-    [billableRowsM, billableSortBy],
+    () => sortBillableRows(billableRowsQ, billableSortBy),
+    [billableRowsQ, billableSortBy],
   );
 
   const mkMeta = (rows, page) => ({
@@ -682,12 +718,27 @@ const Dashboard = () => {
   const clientOptions    = (clientsData?.data    ?? clientsData    ?? []).map((c) => ({ value: String(c.client_id  ?? c.id),    label: c.client_name  ?? c.name }));
   const servicePOOptions = (servicePOsData?.data ?? servicePOsData ?? []).map((p) => ({ value: String(p.service_po_id ?? p.id), label: p.service_po_name ?? p.name }));
 
-  // Business Unit is deliberately excluded from both: it lives in the page header, not the
-  // Filters panel, so counting it would badge "Filters" for something that isn't in there.
-  const hasFilters = !!(quarter || employeeId || clientId || servicePOId);
-  const activeFilterCount = [quarter, employeeId, clientId, servicePOId].filter(Boolean).length;
+  // Business Unit is deliberately excluded: it lives in the page header, not the Filters panel.
+  // Period mode controls also live outside the Filters panel badge count.
+  const hasFilters = !!(employeeId || clientId || servicePOId || (filterMode === 'quarter' && quarter));
+  const activeFilterCount = [filterMode === 'quarter' && quarter, employeeId, clientId, servicePOId].filter(Boolean).length;
 
-  const clearFilters = () => { setQuarter(null); setEmployeeId(''); setClientId(''); setServicePOId(''); };
+  const clearFilters = () => {
+    setQuarter(null);
+    setEmployeeId('');
+    setClientId('');
+    setServicePOId('');
+  };
+
+  const resetToDefault = () => {
+    switchFilterMode('quarter');
+    setFiscalYear(currentFY);
+    setQuarter(null);
+    setBottomMonthYear({ month: prevMonth.getMonth() + 1, year: prevMonth.getFullYear() });
+    setEmployeeId('');
+    setClientId('');
+    setServicePOId('');
+  };
 
   /* ── insights ── */
   const insights = useMemo(() => {
@@ -725,43 +776,12 @@ const Dashboard = () => {
     return list.slice(0, 4);
   }, [isAnalyticsPending, tiles, charts, scrollToBench, scrollToEmployeeChart, scrollToClientChart]);
 
-  const monthlyInsights = useMemo(() => {
-    if (isMonthlyAnalyticsPending) return [];
-    const list = [];
-    const util = Number(monthlyAnalyticsTiles.utilization_pct ?? 0);
-    if (util > 0) {
-      list.push(util >= 80
-        ? { type: 'success', icon: Zap,          label: `${util.toFixed(1)}% Utilization`,   sub: 'On track · Above 80% target', onClick: scrollToClientChart }
-        : util >= 60
-          ? { type: 'warning', icon: TrendingDown, label: `${util.toFixed(1)}% Utilization`, sub: 'Below 80% target · Improve allocation', onClick: scrollToClientChart }
-          : { type: 'danger',  icon: TrendingDown, label: `${util.toFixed(1)}% Utilization`, sub: 'Critical · Well below 80% target', onClick: scrollToClientChart }
-      );
-    }
-    const benchData = monthlyAnalyticsCharts.employee_bench_pct ?? [];
-    const critical  = benchData.filter((e) => e.bench_pct >= 75).length;
-    const onBench   = benchData.filter((e) => e.bench_pct >= 25).length;
-    if (critical > 0) list.push({ type: 'danger',  icon: AlertCircle, label: `${critical} Critical Bench`,                             sub: 'Bench ≥75% · Needs immediate action',  onClick: scrollToBench });
-    else if (onBench > 0) list.push({ type: 'warning', icon: Users,   label: `${onBench} Employee${onBench > 1 ? 's' : ''} on Bench`, sub: 'Bench >25% · Monitor allocation',      onClick: scrollToBench });
-    else if (benchData.length > 0) list.push({ type: 'success', icon: Award, label: 'Bench Below Threshold',                             sub: 'All employees under 25% bench',        onClick: scrollToBench });
-    const topClient = (monthlyAnalyticsCharts.hours_by_client ?? [])[0];
-    if (topClient) list.push({ type: 'info', icon: Building2, label: topClient.client_name, sub: `Top client · ${topClient.hours.toLocaleString('en-IN')} hrs logged`, onClick: scrollToClientChart });
-    const sortedEmps = [...(monthlyAnalyticsCharts.hours_by_employee ?? [])].sort((a, b) => (b.billable_hours ?? 0) - (a.billable_hours ?? 0));
-    if (sortedEmps.length > 0) {
-      const topHrs = sortedEmps[0].billable_hours ?? 0;
-      const tied = sortedEmps.filter((e) => (e.billable_hours ?? 0) === topHrs);
-      if (tied.length === 1) {
-        list.push({ type: 'info', icon: Users, label: tied[0].full_name, sub: `Top contributor · ${topHrs.toLocaleString('en-IN')} billable hrs`, onClick: scrollToEmployeeChart });
-      } else if (tied.length === 2) {
-        list.push({ type: 'info', icon: Users, label: `${tied[0].full_name} & ${tied[1].full_name}`, sub: `Tied · ${topHrs.toLocaleString('en-IN')} billable hrs each`, onClick: scrollToEmployeeChart });
-      } else {
-        list.push({ type: 'info', icon: Users, label: `${tied.length} employees tied`, sub: `${topHrs.toLocaleString('en-IN')} billable hrs each`, onClick: scrollToEmployeeChart });
-      }
-    }
-    return list.slice(0, 4);
-  }, [isMonthlyAnalyticsPending, monthlyAnalyticsTiles, monthlyAnalyticsCharts, scrollToBench, scrollToEmployeeChart, scrollToClientChart]);
 
   const lastUpdated = dataUpdatedAt ? formatDate(new Date(dataUpdatedAt), 'DD MMM YYYY, hh:mm A') : null;
   const fyLabel = `FY ${fiscalYear}–${String(fiscalYear + 1).slice(-2)}`;
+  const monthFiscalYear = bottomMonthYear.month >= 4 ? bottomMonthYear.year : bottomMonthYear.year - 1;
+  const isMonthlyView = filterMode === 'month';
+  const isQuarterlyView = !isMonthlyView;
 
   // The Dashboard route has no formName gate (it's always the landing page for any
   // authenticated user — see routes/index.jsx), so a role with zero forms mapped would
@@ -837,13 +857,13 @@ const Dashboard = () => {
             overflowed the viewport instead of wrapping — the Filter button got pushed off-screen
             behind a horizontal scrollbar rather than dropping to its own line. `min-w-0` lets
             this item actually shrink, which is what lets its own `flex-wrap` kick in. */}
-        <div className="flex min-w-0 flex-wrap items-center justify-start gap-[clamp(0.2rem,0.6vw,0.5rem)]">
+        <div className="flex min-w-0 flex-wrap items-center justify-start gap-[clamp(0.15rem,0.4vw,0.375rem)]">
           {/* Entity — narrows the Business Unit select right beside it, same pairing as every
               FilterPanel-based BU filter elsewhere (components/common/EntityFilter). Rendered
               inline for the same reason as the BU control below: this row uses the header's own
               styling, not that component's stacked label+field cell. */}
           {showEntityFilter && (
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1">
               <FilterIconBadge icon={Building2} color="emerald" />
               <MultiSelect
                 options={entityOptions}
@@ -851,19 +871,14 @@ const Dashboard = () => {
                 onValueChange={handleEntityChange}
                 placeholder="All Entities"
                 searchPlaceholder="Search entity…"
-                className="w-[clamp(6rem,9vw,11rem)] h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.6875rem,0.8vw,0.875rem)]"
+                className="w-[clamp(5rem,7.5vw,9rem)] h-[clamp(1.625rem,1.7vw,1.875rem)] text-[clamp(0.625rem,0.7vw,0.75rem)]"
               />
             </div>
           )}
 
-          {/* Business Unit — a page-level scope control, deliberately ahead of the date picker
-              and OUTSIDE the Filters panel: it decides which BU's data the whole dashboard is
-              about (tiles, KPIs, every chart), where everything in Filters narrows within that.
-              Rendered inline rather than via components/common/BusinessUnitFilter because this
-              row uses the header's own control styling, not that component's stacked
-              label+field cell. Hidden below two selectable BUs, same rule as everywhere else. */}
+          {/* Business Unit */}
           {showBuFilter && (
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1">
               <FilterIconBadge icon={Landmark} color="primary" />
               <HierarchicalBuSelector
                 options={buOptions}
@@ -871,51 +886,57 @@ const Dashboard = () => {
                 onValueChange={setBuIds}
                 placeholder="All Business Units"
                 searchPlaceholder="Search business unit…"
-                className="w-[clamp(6.5rem,9.5vw,12rem)] h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.6875rem,0.8vw,0.875rem)]"
+                className="w-[clamp(5.5rem,8vw,10rem)] h-[clamp(1.625rem,1.7vw,1.875rem)] text-[clamp(0.625rem,0.7vw,0.75rem)]"
                 showChips={false}
               />
             </div>
           )}
 
           {/* Contextual date picker */}
-          {viewMode === 'quarterly' ? (
+          {(filterMode === 'quarter' || filterMode === 'quarter_range') && (
             <FiscalYearPicker
               value={fiscalYear}
               onChange={setFiscalYear}
-              className="w-[clamp(5rem,7vw,9rem)] h-[clamp(1.875rem,2vw,2.25rem)] rounded-xl text-[clamp(0.6875rem,0.8vw,0.875rem)]"
+              className="w-[clamp(4.5rem,6vw,7.5rem)] h-[clamp(1.625rem,1.7vw,1.875rem)] rounded-xl text-[clamp(0.625rem,0.7vw,0.75rem)]"
             />
-          ) : (
+          )}
+          {filterMode === 'month' && (
             <MonthYearPicker
               value={bottomMonthYear}
               onChange={(v) => { if (v) { setBottomMonthYear(v); setBillablePage(1); } }}
               clearable={false}
-              className="w-[clamp(6rem,8.5vw,11rem)] h-[clamp(1.875rem,2vw,2.25rem)] rounded-xl text-[clamp(0.6875rem,0.8vw,0.875rem)]"
+              className="w-[clamp(5rem,7vw,9rem)] h-[clamp(1.625rem,1.7vw,1.875rem)] rounded-xl text-[clamp(0.625rem,0.7vw,0.75rem)]"
             />
           )}
-          {/* View mode toggle — sizing uses `clamp(min, vw, max)`, tuned so the max is only
-              reached near a full-width desktop viewport (~1800px+) and the min floor sits around
-              a half-width laptop window (~1300px) — the shrink is visible across ordinary window
-              resizing, not just once the window drops below typical widths entirely. */}
-          <div className="flex items-center gap-0.5 p-0.5 rounded-xl bg-muted border">
-            {[
-              { mode: 'quarterly', icon: BarChart2, label: 'Quarterly', active: 'bg-card shadow-sm text-blue-600 dark:text-blue-400' },
-              { mode: 'monthly',   icon: Calendar,  label: 'Monthly',   active: 'bg-card shadow-sm text-purple-600 dark:text-purple-400' },
-            ].map(({ mode, icon: Icon, label, active }) => (
+          {filterMode === 'date_range' && (
+            <DateRangePicker
+              value={dateRangeValue}
+              onChange={setDateRangeValue}
+              clearable={false}
+              maxDate={todayStr}
+              placeholder="Select date range"
+              className="w-[clamp(7rem,9.5vw,11rem)] h-[clamp(1.625rem,1.7vw,1.875rem)] rounded-xl text-[clamp(0.625rem,0.7vw,0.75rem)]"
+            />
+          )}
+
+          {/* Filter mode toggle */}
+          <div className="flex items-center gap-0 p-0.5 rounded-xl bg-muted border overflow-x-auto [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
+            {FILTER_MODES.map(({ mode, icon: Icon, label, active }) => (
               <button
                 key={mode}
-                onClick={() => setViewMode(mode)}
-                className={`flex items-center gap-1.5 rounded-lg font-semibold transition-all duration-150 whitespace-nowrap px-[clamp(0.3rem,0.6vw,0.75rem)] py-[clamp(0.15rem,0.35vw,0.375rem)] text-[clamp(0.5625rem,0.7vw,0.75rem)] ${
-                  viewMode === mode ? active : 'text-muted-foreground hover:text-foreground'
+                onClick={() => switchFilterMode(mode)}
+                className={`flex items-center gap-1 rounded-lg font-semibold transition-all duration-150 whitespace-nowrap px-[clamp(0.25rem,0.5vw,0.5rem)] py-[clamp(0.1rem,0.25vw,0.25rem)] text-[clamp(0.5rem,0.6vw,0.6875rem)] ${
+                  filterMode === mode ? active : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
-                <Icon className="shrink-0 h-[clamp(0.625rem,0.8vw,0.875rem)] w-[clamp(0.625rem,0.8vw,0.875rem)]" /> {label}
+                <Icon className="shrink-0 h-[clamp(0.5625rem,0.7vw,0.75rem)] w-[clamp(0.5625rem,0.7vw,0.75rem)]" /> {label}
               </button>
             ))}
           </div>
 
-          {/* Hours source toggle — same fluid clamp() sizing as the view mode toggle above. */}
+          {/* Hours source toggle */}
           {canViewOriginal && (
-            <div className="flex items-center gap-0.5 p-0.5 rounded-xl bg-muted border">
+            <div className="flex items-center gap-0 p-0.5 rounded-xl bg-muted border">
               {[
                 { value: 'O', label: 'Original' },
                 { value: 'M', label: 'Published' },
@@ -923,7 +944,7 @@ const Dashboard = () => {
                 <button
                   key={value}
                   onClick={() => setHoursSource(value)}
-                  className={`flex items-center gap-1.5 rounded-lg font-semibold transition-all duration-150 whitespace-nowrap px-[clamp(0.3rem,0.6vw,0.75rem)] py-[clamp(0.15rem,0.35vw,0.375rem)] text-[clamp(0.5625rem,0.7vw,0.75rem)] ${
+                  className={`flex items-center gap-1 rounded-lg font-semibold transition-all duration-150 whitespace-nowrap px-[clamp(0.25rem,0.5vw,0.5rem)] py-[clamp(0.1rem,0.25vw,0.25rem)] text-[clamp(0.5rem,0.6vw,0.6875rem)] ${
                     hoursSource === value ? 'bg-card shadow-sm text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
@@ -933,61 +954,62 @@ const Dashboard = () => {
             </div>
           )}
 
-          <FilterToggleButton
-            isOpen={filtersOpen}
-            onToggle={() => setFiltersOpen((p) => !p)}
-            activeCount={hasFilters ? activeFilterCount : 0}
-            className="h-[clamp(1.875rem,2vw,2.25rem)] px-[clamp(0.5rem,0.7vw,0.75rem)] text-[clamp(0.6875rem,0.8vw,0.875rem)]"
-          />
+          {/* Filters + AI Insights + Refresh — grouped so they never split across lines */}
+          <div className="flex shrink-0 items-center gap-[clamp(0.15rem,0.4vw,0.375rem)]">
+            <FilterToggleButton
+              isOpen={filtersOpen}
+              onToggle={() => setFiltersOpen((p) => !p)}
+              activeCount={hasFilters ? activeFilterCount : 0}
+              className="h-[clamp(1.625rem,1.7vw,1.875rem)] px-[clamp(0.375rem,0.55vw,0.625rem)] text-[clamp(0.625rem,0.7vw,0.75rem)]"
+            />
 
-          {canViewAIInsights && (
-            <motion.button
-              onClick={() => navigate(ROUTES.AI_INSIGHTS)}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.96 }}
-              animate={{
-                boxShadow: [
-                  '0 2px 10px 0 rgba(124,58,237,0.25)',
-                  '0 4px 20px 2px rgba(37,99,235,0.35)',
-                  '0 2px 10px 0 rgba(124,58,237,0.25)',
-                ],
-              }}
-              transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
-              className="group h-[clamp(1.875rem,2vw,2.25rem)] pl-[clamp(0.25rem,0.5vw,0.375rem)] pr-[clamp(0.25rem,0.5vw,0.375rem)] hover:pr-3.5 rounded-xl inline-flex items-center gap-0 hover:gap-2 text-[clamp(0.5625rem,0.7vw,0.75rem)] font-extrabold text-white border border-white/20 transition-all duration-300"
-              style={{ background: 'linear-gradient(135deg, #8b5cf6, #6d28d9 45%, #2563eb)' }}
-            >
-              {/* spinning gradient ring + pulsing sparkle — same mark as the AI Insights page */}
-              <span className="relative h-[clamp(1.125rem,1.6vw,1.5rem)] w-[clamp(1.125rem,1.6vw,1.5rem)] shrink-0">
-                <motion.span
-                  className="absolute inset-0 rounded-lg"
-                  style={{ background: 'conic-gradient(from 0deg, #fff 0deg, transparent 100deg, transparent 260deg, #fff 360deg)' }}
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 4, repeat: Infinity, ease: 'linear' }}
-                />
-                <span className="absolute inset-[1.5px] rounded-[7px] bg-white flex items-center justify-center">
+            {canViewAIInsights && (
+              <motion.button
+                onClick={() => navigate(ROUTES.AI_INSIGHTS)}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.96 }}
+                animate={{
+                  boxShadow: [
+                    '0 2px 10px 0 rgba(124,58,237,0.25)',
+                    '0 4px 20px 2px rgba(37,99,235,0.35)',
+                    '0 2px 10px 0 rgba(124,58,237,0.25)',
+                  ],
+                }}
+                transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
+                className="group h-[clamp(1.625rem,1.7vw,1.875rem)] pl-[clamp(0.2rem,0.4vw,0.3rem)] pr-[clamp(0.2rem,0.4vw,0.3rem)] hover:pr-3 rounded-xl inline-flex items-center gap-0 hover:gap-1.5 text-[clamp(0.5rem,0.6vw,0.6875rem)] font-extrabold text-white border border-white/20 transition-all duration-300"
+                style={{ background: 'linear-gradient(135deg, #8b5cf6, #6d28d9 45%, #2563eb)' }}
+              >
+                <span className="relative h-[clamp(1rem,1.3vw,1.25rem)] w-[clamp(1rem,1.3vw,1.25rem)] shrink-0">
                   <motion.span
-                    className="inline-flex"
-                    animate={{ scale: [1, 1.18, 1] }}
-                    transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
-                  >
-                    <Sparkles className="h-[clamp(0.625rem,0.8vw,0.875rem)] w-[clamp(0.625rem,0.8vw,0.875rem)] text-violet-600" />
-                  </motion.span>
+                    className="absolute inset-0 rounded-lg"
+                    style={{ background: 'conic-gradient(from 0deg, #fff 0deg, transparent 100deg, transparent 260deg, #fff 360deg)' }}
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 4, repeat: Infinity, ease: 'linear' }}
+                  />
+                  <span className="absolute inset-[1.5px] rounded-[7px] bg-white flex items-center justify-center">
+                    <motion.span
+                      className="inline-flex"
+                      animate={{ scale: [1, 1.18, 1] }}
+                      transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
+                    >
+                      <Sparkles className="h-[clamp(0.625rem,0.8vw,0.875rem)] w-[clamp(0.625rem,0.8vw,0.875rem)] text-violet-600" />
+                    </motion.span>
+                  </span>
                 </span>
-              </span>
-              <span className="max-w-0 group-hover:max-w-[90px] overflow-hidden whitespace-nowrap opacity-0 group-hover:opacity-100 transition-all duration-300">AI Insights</span>
-            </motion.button>
-          )}
+                <span className="max-w-0 group-hover:max-w-[90px] overflow-hidden whitespace-nowrap opacity-0 group-hover:opacity-100 transition-all duration-300">AI Insights</span>
+              </motion.button>
+            )}
 
-          <Button
-            variant="outline"
-            size="toolbar"
-            onClick={() => refetch()}
-            disabled={isFetching}
-            className="rounded-xl h-[clamp(1.875rem,2vw,2.25rem)] px-[clamp(0.5rem,0.7vw,0.75rem)]"
-          >
-            <RefreshCw className={`h-[clamp(0.625rem,0.8vw,0.875rem)] w-[clamp(0.625rem,0.8vw,0.875rem)] ${isFetching ? 'animate-spin' : ''}`} />
-            {/* <span className="hidden sm:inline">Refresh</span> */}
-          </Button>
+            <Button
+              variant="outline"
+              size="toolbar"
+              onClick={() => refetch()}
+              disabled={isFetching}
+              className="rounded-xl h-[clamp(1.625rem,1.7vw,1.875rem)] px-[clamp(0.375rem,0.55vw,0.625rem)]"
+            >
+              <RefreshCw className={`h-[clamp(0.5625rem,0.7vw,0.75rem)] w-[clamp(0.5625rem,0.7vw,0.75rem)] ${isFetching ? 'animate-spin' : ''}`} />
+            </Button>
+          </div>
         </div>
       </div>{/* end page header */}
 
@@ -996,9 +1018,14 @@ const Dashboard = () => {
         <FilterPanel isOpen={filtersOpen} maxHeightClass="max-h-[640px]" gridClassName="block rounded-lg border bg-muted/30 p-[clamp(0.5rem,0.8vw,0.75rem)]">
           <div className="flex flex-col gap-2.5">
 
+            {/* Period label from response */}
+            {periodLabel && (
+              <div className="text-[clamp(0.6875rem,0.8vw,0.75rem)] text-muted-foreground font-medium px-1">{periodLabel}</div>
+            )}
+
             <div className="flex flex-wrap items-center gap-2">
-              {/* Quarter toggle — quarterly view only */}
-              {viewMode === 'quarterly' && (<>
+              {/* Quarter filter — quarter mode only */}
+              {filterMode === 'quarter' && (<>
                 <div className="flex items-center gap-1.5 shrink-0">
                   <FilterIconBadge icon={CalendarDays} color="primary" />
                   <div className="flex items-center bg-background border border-primary/20 shadow-sm rounded-xl p-1 gap-0.5">
@@ -1019,6 +1046,62 @@ const Dashboard = () => {
                 <div className="h-6 w-px bg-border hidden sm:block" />
               </>)}
 
+              {/* Quarter Range — from/to quarter selectors */}
+              {filterMode === 'quarter_range' && (
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  <FilterIconBadge icon={CalendarDays} color="primary" />
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[clamp(0.625rem,0.75vw,0.75rem)] text-muted-foreground">From</span>
+                    <div className="flex items-center bg-background border border-primary/20 shadow-sm rounded-xl p-1 gap-0.5">
+                      {QUARTERS.map((q) => (
+                        <button key={q.value} onClick={() => { setFromQuarter(q.value); if (toQuarter && toQuarter < q.value) setToQuarter(null); }}
+                          className={`px-[clamp(0.35rem,0.55vw,0.65rem)] py-[clamp(0.12rem,0.25vw,0.22rem)] rounded-lg text-[clamp(0.5rem,0.65vw,0.7rem)] transition-all duration-150 whitespace-nowrap ${fromQuarter === q.value ? QUARTER_STYLES.active : QUARTER_STYLES.inactive}`}>
+                          {q.label} <span className="opacity-50 ml-0.5 text-[0.55em]">{q.sub}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[clamp(0.625rem,0.75vw,0.75rem)] text-muted-foreground">To</span>
+                    <div className="flex items-center bg-background border border-primary/20 shadow-sm rounded-xl p-1 gap-0.5">
+                      {QUARTERS.map((q) => (
+                        <button key={q.value} disabled={fromQuarter != null && q.value < fromQuarter} onClick={() => setToQuarter(q.value)}
+                          className={`px-[clamp(0.35rem,0.55vw,0.65rem)] py-[clamp(0.12rem,0.25vw,0.22rem)] rounded-lg text-[clamp(0.5rem,0.65vw,0.7rem)] transition-all duration-150 whitespace-nowrap disabled:opacity-30 disabled:cursor-not-allowed ${toQuarter === q.value ? QUARTER_STYLES.active : QUARTER_STYLES.inactive}`}>
+                          {q.label} <span className="opacity-50 ml-0.5 text-[0.55em]">{q.sub}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {(!fromQuarter || !toQuarter) && (
+                    <span className="text-[clamp(0.5625rem,0.7vw,0.6875rem)] text-muted-foreground italic">Select both quarters to apply</span>
+                  )}
+                  <div className="h-6 w-px bg-border hidden sm:block" />
+                </div>
+              )}
+
+              {/* Month Range — from/to MonthYear pickers */}
+              {filterMode === 'month_range' && (
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  <FilterIconBadge icon={CalendarDays} color="primary" />
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[clamp(0.625rem,0.75vw,0.75rem)] text-muted-foreground">From</span>
+                    <MonthYearPicker value={fromMonthYear} onChange={(v) => { setFromMonthYear(v); if (toMonthYear && v && (toMonthYear.year * 12 + toMonthYear.month) < (v.year * 12 + v.month)) setToMonthYear(null); }} clearable={false} placeholder="From month" className="w-[clamp(6rem,8.5vw,10rem)] h-[clamp(1.75rem,2vw,2rem)] rounded-xl text-[clamp(0.6875rem,0.8vw,0.875rem)]" />
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[clamp(0.625rem,0.75vw,0.75rem)] text-muted-foreground">To</span>
+                    <MonthYearPicker value={toMonthYear} onChange={setToMonthYear} clearable={false} placeholder="To month" className="w-[clamp(6rem,8.5vw,10rem)] h-[clamp(1.75rem,2vw,2rem)] rounded-xl text-[clamp(0.6875rem,0.8vw,0.875rem)]" />
+                  </div>
+                  {fromMonthYear && toMonthYear && !monthRangeValid && (
+                    <span className="text-[clamp(0.5625rem,0.7vw,0.6875rem)] text-destructive">"To" must be on or after "From"</span>
+                  )}
+                  {(!fromMonthYear || !toMonthYear) && (
+                    <span className="text-[clamp(0.5625rem,0.7vw,0.6875rem)] text-muted-foreground italic">Select both months to apply</span>
+                  )}
+                  <div className="h-6 w-px bg-border hidden sm:block" />
+                </div>
+              )}
+
+
               <div className="flex items-center gap-1.5 min-w-[150px] flex-1">
                 <FilterIconBadge icon={Users} color="violet" />
                 <SearchableSelect options={employeeOptions} value={employeeId} onValueChange={setEmployeeId} placeholder="Employee" searchPlaceholder="Search employee…" className={`h-[clamp(1.75rem,2vw,2rem)] text-[clamp(0.75rem,0.85vw,0.875rem)] ${FILTER_FIELD_STYLES.violet}`} />
@@ -1036,7 +1119,7 @@ const Dashboard = () => {
             <AnimatePresence>
               {hasFilters && (
                 <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="flex items-center gap-1.5 flex-wrap pt-2 border-t">
-                  {quarter && viewMode === 'quarterly' && <Chip color="primary" icon={CalendarDays} label={`${QUARTERS.find((q) => q.value === quarter)?.label} · ${QUARTERS.find((q) => q.value === quarter)?.sub}`} onRemove={() => setQuarter(null)} />}
+                  {filterMode === 'quarter' && quarter && <Chip color="primary" icon={CalendarDays} label={`${QUARTERS.find((q) => q.value === quarter)?.label} · ${QUARTERS.find((q) => q.value === quarter)?.sub}`} onRemove={() => setQuarter(null)} />}
                   {employeeId && <Chip color="violet" icon={Users} label={employeeOptions.find((e) => e.value === employeeId)?.label ?? 'Employee'} onRemove={() => setEmployeeId('')} />}
                   {clientId && <Chip color="sky" icon={Building2} label={clientOptions.find((c) => c.value === clientId)?.label ?? 'Client'} onRemove={() => setClientId('')} />}
                   {servicePOId && <Chip color="amber" icon={Briefcase} label={servicePOOptions.find((p) => p.value === servicePOId)?.label ?? 'Service PO'} onRemove={() => setServicePOId('')} />}
@@ -1046,12 +1129,18 @@ const Dashboard = () => {
                 </motion.div>
               )}
             </AnimatePresence>
+
+            <div className="flex items-center justify-end pt-1">
+              <button onClick={resetToDefault} className="inline-flex items-center gap-1 rounded-full border px-[clamp(0.5rem,0.7vw,0.625rem)] py-[clamp(0.15rem,0.3vw,0.25rem)] text-[clamp(0.625rem,0.75vw,0.75rem)] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+                <RefreshCw className="h-[clamp(0.5rem,0.6vw,0.625rem)] w-[clamp(0.5rem,0.6vw,0.625rem)]" /> Reset to Default
+              </button>
+            </div>
           </div>
 
           {/* Insights */}
           {(() => {
-            const pending  = viewMode === 'quarterly' ? isAnalyticsPending        : isMonthlyAnalyticsPending;
-            const list     = viewMode === 'quarterly' ? insights                  : monthlyInsights;
+            const pending  = isAnalyticsPending;
+            const list     = insights;
             if (!pending && list.length === 0) return null;
             return (
               <div className="mt-3 pt-3 border-t">
@@ -1072,8 +1161,8 @@ const Dashboard = () => {
       {/* ══ SCROLLABLE CONTENT ═══════════════════════════════════════════════ */}
       <div className="space-y-5 pt-6">
 
-      {/* ══ QUARTERLY VIEW ═══════════════════════════════════════════════════ */}
-      {viewMode === 'quarterly' && (<>
+      {/* ══ QUARTERLY / RANGE VIEW ═══════════════════════════════════════════ */}
+      {isQuarterlyView && (<>
 
       {/* ══ KPI TILES ════════════════════════════════════════════════════════ */}
       <section>
@@ -1099,7 +1188,7 @@ const Dashboard = () => {
               data={analytics2Data?.bu_wise_utilization?.records ?? []}
               summary={analytics2Data?.bu_wise_utilization?.summary}
               isLoading={isAnalyticsPending}
-              periodLabel={quarter ? `Q${quarter} · FY ${fiscalYear}` : fyLabel}
+              periodLabel={periodLabel ?? (filterMode === 'quarter' && quarter ? `Q${quarter} · FY ${fiscalYear}` : fyLabel)}
             />
           </motion.div>
         </section>
@@ -1126,7 +1215,7 @@ const Dashboard = () => {
           billableRows={billableRowsQ}
           employeesByPO={charts.employees_by_po ?? []}
           isLoading={isAnalyticsPending}
-          periodLabel={quarter ? `Q${quarter} · FY ${fiscalYear}` : `FY ${fiscalYear}`}
+          periodLabel={periodLabel ?? (filterMode === 'quarter' && quarter ? `Q${quarter} · FY ${fiscalYear}` : `FY ${fiscalYear}`)}
         />
       </section>
 
@@ -1152,10 +1241,10 @@ const Dashboard = () => {
         <SectionLabel icon={CalendarOff} title="Leave & No-Work Trend" />
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
-            <LeaveHoursTrendChart data={costTrendLeaveData} isLoading={isAnalyticsPending} periodLabel={quarter ? `Q${quarter} · FY ${fiscalYear}` : `FY ${fiscalYear}`} />
+            <LeaveHoursTrendChart data={costTrendLeaveData} isLoading={isAnalyticsPending} periodLabel={periodLabel ?? (filterMode === 'quarter' && quarter ? `Q${quarter} · FY ${fiscalYear}` : `FY ${fiscalYear}`)} />
           </motion.div>
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.15 }}>
-            <NoWorkTrendChart data={costTrendNoWorkData} isLoading={isAnalyticsPending} periodLabel={quarter ? `Q${quarter} · FY ${fiscalYear}` : `FY ${fiscalYear}`} />
+            <NoWorkTrendChart data={costTrendNoWorkData} isLoading={isAnalyticsPending} periodLabel={periodLabel ?? (filterMode === 'quarter' && quarter ? `Q${quarter} · FY ${fiscalYear}` : `FY ${fiscalYear}`)} />
           </motion.div>
         </div>
       </section>
@@ -1266,7 +1355,7 @@ const Dashboard = () => {
       </>)}
 
       {/* ══ MONTHLY VIEW ═════════════════════════════════════════════════════ */}
-      {viewMode === 'monthly' && (
+      {isMonthlyView && (
         <motion.div key="monthly-view" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }} className="space-y-5">
 
           {/* ── KPI Tiles ────────────────────────────────────────────────── */}
@@ -1279,7 +1368,7 @@ const Dashboard = () => {
               className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2"
             >
               {KPI_CONFIG.map((cfg) => (
-                <KpiCard key={cfg.key} cfg={cfg} value={mergedMonthlyTiles[cfg.key]} isLoading={isMonthlyAnalyticsPending} />
+                <KpiCard key={cfg.key} cfg={cfg} value={mergedTiles[cfg.key]} isLoading={isAnalyticsPending} />
               ))}
             </motion.div>
           </section>
@@ -1290,10 +1379,10 @@ const Dashboard = () => {
               <SectionLabel icon={Landmark} title="BU-wise Utilization" />
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
                 <BuWiseUtilizationChart
-                  data={monthlyAnalytics2Raw?.bu_wise_utilization?.records ?? []}
-                  summary={monthlyAnalytics2Raw?.bu_wise_utilization?.summary}
-                  isLoading={isMonthlyAnalyticsPending}
-                  periodLabel={new Date(bottomMonthYear.year, bottomMonthYear.month - 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' })}
+                  data={analytics2Data?.bu_wise_utilization?.records ?? []}
+                  summary={analytics2Data?.bu_wise_utilization?.summary}
+                  isLoading={isAnalyticsPending}
+                  periodLabel={periodLabel ?? new Date(bottomMonthYear.year, bottomMonthYear.month - 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' })}
                 />
               </motion.div>
             </section>
@@ -1304,10 +1393,10 @@ const Dashboard = () => {
             <SectionLabel icon={TrendingUp} title="Monthly Hours Trend" />
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
-                <MonthlyHoursTrendChart data={monthlyAnalyticsCharts.monthly_hours_trend ?? []} isLoading={isMonthlyAnalyticsPending} fiscalYear={monthFiscalYear} quarter={null} />
+                <MonthlyHoursTrendChart data={charts.monthly_hours_trend ?? []} isLoading={isAnalyticsPending} fiscalYear={monthFiscalYear} quarter={null} />
               </motion.div>
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.15 }}>
-                <MonthlyUtilizationTrendChart data={monthlyAnalytics2Raw?.monthly_resource_utilization ?? []} isLoading={isMonthlyAnalyticsPending} />
+                <MonthlyUtilizationTrendChart data={analytics2Data?.monthly_resource_utilization ?? []} isLoading={isAnalyticsPending} />
               </motion.div>
             </div>
           </section>
@@ -1317,10 +1406,10 @@ const Dashboard = () => {
             <SectionLabel icon={IndianRupee} title="Cost Trend by Service Category" />
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
-                <CostTrendChart data={monthlyCostTrendData} isLoading={isMonthlyAnalyticsPending} periodLabel={new Date(bottomMonthYear.year, bottomMonthYear.month - 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' })} />
+                <CostTrendChart data={costTrendData} isLoading={isAnalyticsPending} periodLabel={periodLabel ?? new Date(bottomMonthYear.year, bottomMonthYear.month - 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' })} />
               </motion.div>
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.15 }}>
-                <CostByTypeDonut data={monthlyCostTrendData} isLoading={isMonthlyAnalyticsPending} periodLabel={new Date(bottomMonthYear.year, bottomMonthYear.month - 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' })} />
+                <CostByTypeDonut data={costTrendData} isLoading={isAnalyticsPending} periodLabel={periodLabel ?? new Date(bottomMonthYear.year, bottomMonthYear.month - 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' })} />
               </motion.div>
             </div>
           </section>
@@ -1329,11 +1418,11 @@ const Dashboard = () => {
           <section ref={benchSectionRef}>
             <SectionLabel icon={Users} title="Resource Insights" />
             <ResourceInsightPanel
-              benchData={monthlyAnalyticsCharts.employee_bench_pct ?? []}
-              billableRows={billableRowsM}
-              employeesByPO={monthlyAnalyticsCharts.employees_by_po ?? []}
-              isLoading={isMonthlyAnalyticsPending}
-              periodLabel={new Date(bottomMonthYear.year, bottomMonthYear.month - 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' })}
+              benchData={charts.employee_bench_pct ?? []}
+              billableRows={billableRowsQ}
+              employeesByPO={charts.employees_by_po ?? []}
+              isLoading={isAnalyticsPending}
+              periodLabel={periodLabel ?? new Date(bottomMonthYear.year, bottomMonthYear.month - 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' })}
             />
           </section>
 
@@ -1344,7 +1433,7 @@ const Dashboard = () => {
               data={sortedBillableRowsM.slice((billablePage - 1) * BILLABLE_PAGE_SIZE, billablePage * BILLABLE_PAGE_SIZE)}
               allData={sortedBillableRowsM}
               meta={mkMeta(sortedBillableRowsM, billablePage)}
-              isLoading={isMonthlyAnalyticsPending}
+              isLoading={isAnalyticsPending}
               month={Number(month)}
               year={Number(year)}
               page={billablePage}
@@ -1359,10 +1448,10 @@ const Dashboard = () => {
             <SectionLabel icon={CalendarOff} title="Leave & No-Work Trend" />
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
-                <LeaveHoursTrendChart data={monthlyAnalytics2Raw?.leave_hours_trend ?? []} isLoading={isMonthlyAnalyticsPending} periodLabel={new Date(bottomMonthYear.year, bottomMonthYear.month - 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' })} />
+                <LeaveHoursTrendChart data={analytics2Data?.leave_hours_trend ?? []} isLoading={isAnalyticsPending} periodLabel={periodLabel ?? new Date(bottomMonthYear.year, bottomMonthYear.month - 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' })} />
               </motion.div>
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.15 }}>
-                <NoWorkTrendChart data={monthlyAnalytics2Raw?.no_work_trend ?? []} isLoading={isMonthlyAnalyticsPending} periodLabel={new Date(bottomMonthYear.year, bottomMonthYear.month - 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' })} />
+                <NoWorkTrendChart data={analytics2Data?.no_work_trend ?? []} isLoading={isAnalyticsPending} periodLabel={periodLabel ?? new Date(bottomMonthYear.year, bottomMonthYear.month - 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' })} />
               </motion.div>
             </div>
           </section>
@@ -1380,13 +1469,13 @@ const Dashboard = () => {
             <SectionLabel icon={BarChart2} title="Hours Breakdown" />
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
               <motion.div ref={clientChartRef} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
-                <HoursByClientChart data={monthlyAnalyticsCharts.hours_by_client ?? []} isLoading={isMonthlyAnalyticsPending} fiscalYear={monthFiscalYear} />
+                <HoursByClientChart data={charts.hours_by_client ?? []} isLoading={isAnalyticsPending} fiscalYear={monthFiscalYear} />
               </motion.div>
               <motion.div ref={employeeChartRef} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.15 }}>
-                <HoursByEmployeeChart data={monthlyAnalyticsCharts.hours_by_employee ?? []} isLoading={isMonthlyAnalyticsPending} fiscalYear={monthFiscalYear} />
+                <HoursByEmployeeChart data={charts.hours_by_employee ?? []} isLoading={isAnalyticsPending} fiscalYear={monthFiscalYear} />
               </motion.div>
               <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3, delay: 0.2 }}>
-                <ClientPOMatrixChart data={monthlyAnalyticsCharts.client_x_service_po ?? []} isLoading={isMonthlyAnalyticsPending} fiscalYear={monthFiscalYear} />
+                <ClientPOMatrixChart data={charts.client_x_service_po ?? []} isLoading={isAnalyticsPending} fiscalYear={monthFiscalYear} />
               </motion.div>
             </div>
           </section>
@@ -1395,8 +1484,8 @@ const Dashboard = () => {
           <section>
             <SectionLabel icon={Briefcase} title="Employees by Service PO" />
             <TopEmployeesByPOPanel
-              data={monthlyAnalyticsCharts.employees_by_po ?? []}
-              isLoading={isMonthlyAnalyticsPending}
+              data={charts.employees_by_po ?? []}
+              isLoading={isAnalyticsPending}
               month={Number(month)}
               year={Number(year)}
             />
@@ -1408,9 +1497,9 @@ const Dashboard = () => {
               { key: 'billable',             label: 'Billable',              style: { active: 'bg-emerald-500 text-white', dot: 'bg-emerald-500', bar: 'bg-emerald-500' } },
               { key: 'non_billable',         label: 'Non-Billable',          style: { active: 'bg-orange-500 text-white',  dot: 'bg-orange-500',  bar: 'bg-orange-500'  } },
               { key: 'customer_non_billable',label: 'Customer Non-Billable', style: { active: 'bg-sky-500 text-white',     dot: 'bg-sky-500',     bar: 'bg-sky-500'     } },
-            ].filter(f => ((monthlyAnalyticsCharts.top_pos_by_hours ?? {})[f.key]?.length ?? 0) > 0 || f.key === 'billable');
+            ].filter(f => ((charts.top_pos_by_hours ?? {})[f.key]?.length ?? 0) > 0 || f.key === 'billable');
             const activeFilter = PO_FILTERS.find(f => f.key === topPOFilter) ?? PO_FILTERS[0];
-            const topPOsM = monthlyAnalyticsCharts.top_pos_by_hours ?? {};
+            const topPOsM = charts.top_pos_by_hours ?? {};
             const poList  = topPOsM[topPOFilter] ?? [];
             return (
               <section className="rounded-2xl border bg-card shadow-sm overflow-hidden">
@@ -1445,7 +1534,7 @@ const Dashboard = () => {
                   </div>
                 </div>
                 <div className="divide-y">
-                  {isMonthlyAnalyticsPending
+                  {isAnalyticsPending
                     ? Array.from({ length: 5 }).map((_, i) => (
                         <div key={i} className="flex items-center gap-3 px-4 py-3">
                           <Skeleton className="h-4 w-4 rounded-full shrink-0" />

@@ -43,7 +43,7 @@ TableRow.displayName = 'TableRow';
 const TableHead = forwardRef(({ className, ...props }, ref) => (
   <th
     ref={ref}
-    className={cn('h-[clamp(1.875rem,2vw,2.25rem)] px-[clamp(0.75rem,1vw,1rem)] text-left align-middle text-[clamp(0.6875rem,0.75vw,0.75rem)] font-semibold uppercase tracking-wider text-muted-foreground [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]', className)} {...props}
+    className={cn('h-[clamp(1.875rem,2vw,2.25rem)] px-[clamp(0.75rem,1vw,1rem)] text-left align-middle text-[clamp(0.6875rem,0.75vw,0.75rem)] font-semibold tracking-wider text-muted-foreground [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]', className)} {...props}
   />
 ));
 TableHead.displayName = 'TableHead';

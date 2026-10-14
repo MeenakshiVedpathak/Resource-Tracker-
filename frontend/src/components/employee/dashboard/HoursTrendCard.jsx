@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BarChart3, Calculator, CalendarOff } from 'lucide-react';
-import { formatHourMinuteValue } from '@/utils/formatters';
+import { formatHourMinuteValue, sumHours } from '@/utils/formatters';
 import { isNonWorkingDay } from '@/utils/workDayStatus';
 
 const CustomTooltip = ({ active, payload, label }) => {
@@ -94,7 +94,7 @@ const HoursTrendCard = ({ dailyData = [], weeklyData = [], isLoading }) => {
   // with no log isn't a missed working day, so it must not drag the average down, while a logged
   // weekend already counts (its `workingDays` is 1, set alongside `status: 'logged'`).
   const { total, avg } = useMemo(() => {
-    const sum = data.reduce((s, d) => s + (Number(d.hours) || 0), 0);
+    const sum = sumHours(data.map((d) => d.hours));
     const workingDays = data.reduce((s, d) => s + (Number(d.workingDays) || 0), 0);
     return { total: sum, avg: workingDays ? sum / workingDays : 0 };
   }, [data]);

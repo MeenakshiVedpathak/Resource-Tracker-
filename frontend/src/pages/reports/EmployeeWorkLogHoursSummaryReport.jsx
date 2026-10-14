@@ -103,6 +103,12 @@ const exportToExcel = (records, periodLabel) => {
   XLSX.writeFile(wb, `Employee_Work_Log_Hours_Summary_${periodLabel.replace(/\s+/g, '_')}.xlsx`);
 };
 
+const CrossBuBadge = () => (
+  <span className="inline-flex items-center whitespace-nowrap rounded-full border border-teal-300 bg-teal-50 px-2 py-0.5 text-[10px] font-semibold text-teal-700 dark:border-teal-700 dark:bg-teal-900/40 dark:text-teal-300">
+    Cross BU
+  </span>
+);
+
 // Employee Work Log Details Modal
 const EmployeeDetailModal = ({
   open,
@@ -148,7 +154,7 @@ const EmployeeDetailModal = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col overflow-hidden p-6">
+      <DialogContent className="max-w-5xl max-h-[90vh] flex flex-col overflow-hidden p-6">
         <DialogHeader className="pb-3 border-b shrink-0">
           <DialogTitle className="text-lg font-bold flex items-center justify-between gap-4">
             <div className="flex items-center gap-2">
@@ -159,6 +165,7 @@ const EmployeeDetailModal = ({
                   {employeeInfo.employee_code}
                 </Badge>
               )}
+              {employeeInfo.is_cross_bu && <CrossBuBadge />}
             </div>
           </DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground pt-1">
@@ -202,6 +209,7 @@ const EmployeeDetailModal = ({
             <>
               {(() => {
                 const hasOriginalEntry = entries.some((e) => e.original_hours != null || e.original_hours_logged != null);
+                const hasCrossBu = entries.some((e) => e.is_cross_bu);
                 return (
                   <>
                     <Table className="hidden md:table">
@@ -218,6 +226,9 @@ const EmployeeDetailModal = ({
                           )}
                           <TableHead className="text-xs font-semibold uppercase tracking-wider">Type</TableHead>
                           <TableHead className="text-xs font-semibold uppercase tracking-wider">Status</TableHead>
+                          {hasCrossBu && (
+                            <TableHead className="text-xs font-semibold uppercase tracking-wider">BU</TableHead>
+                          )}
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -239,7 +250,7 @@ const EmployeeDetailModal = ({
                               <TableCell className="text-xs max-w-[140px] truncate" title={poLabel}>
                                 {poLabel || '—'}
                               </TableCell>
-                              <TableCell className="text-xs max-w-[140px] truncate" title={projLabel}>
+                              <TableCell className="text-xs max-w-[160px] truncate" title={projLabel}>
                                 {projLabel || '—'}
                               </TableCell>
                               <TableCell className="text-xs max-w-[130px] truncate" title={hierarchy}>
@@ -270,6 +281,11 @@ const EmployeeDetailModal = ({
                                   '—'
                                 )}
                               </TableCell>
+                              {hasCrossBu && (
+                                <TableCell className="text-xs">
+                                  {entry.is_cross_bu ? <CrossBuBadge /> : null}
+                                </TableCell>
+                              )}
                             </TableRow>
                           );
                         })}
@@ -305,7 +321,7 @@ const EmployeeDetailModal = ({
                             <p className="truncate text-xs text-muted-foreground" title={projLabel}>{projLabel || '—'}</p>
                             {hierarchy && <p className="truncate text-xs text-muted-foreground" title={hierarchy}>{hierarchy}</p>}
                             <p className="text-xs text-muted-foreground">{timeSlot}</p>
-                            <div className="mt-1.5 flex items-center gap-1.5">
+                            <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
                               <Badge variant="outline" className="text-[10px] uppercase tracking-wider">
                                 {entry.entry_type || 'HOURLY'}
                               </Badge>
@@ -314,6 +330,7 @@ const EmployeeDetailModal = ({
                                   {entry.status}
                                 </Badge>
                               )}
+                              {entry.is_cross_bu && <CrossBuBadge />}
                             </div>
                           </div>
                         );

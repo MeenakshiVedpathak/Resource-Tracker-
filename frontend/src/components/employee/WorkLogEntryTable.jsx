@@ -9,7 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import EmptyState from '@/components/common/EmptyState';
 import { cn } from '@/utils/cn';
-import { formatHoursMinutes, parseHourMinuteInput, formatHourMinuteValue } from '@/utils/formatters';
+import { formatHoursMinutes, parseHourMinuteInput, formatHourMinuteValue, sumHours } from '@/utils/formatters';
 import { DAILY_HOURS_CAP } from './WorkLogEntryModal';
 
 const STEP = 0.5;
@@ -151,7 +151,7 @@ const ProjectGroup = ({
     const edited = edits?.[r.rowKey]?.[day];
     return edited !== undefined ? Number(edited || 0) : Number(r.hoursByDay?.[day] ?? 0);
   };
-  const groupTotal = nodeRows.reduce((sum, r) => sum + cellValueOf(r), 0);
+  const groupTotal = sumHours(nodeRows.map(cellValueOf));
 
   const descriptionValueOf = (r) => {
     const edited = descriptions?.[r.rowKey]?.[day];
@@ -163,9 +163,11 @@ const ProjectGroup = ({
   // its hours sit hidden underneath (a Parent/PO can carry its own hours *and* have a breakdown
   // at the same time, so its own figure is genuinely 0 in that case).
   const subtreeValueOf = (r) =>
-    nodeRows
-      .filter((n) => n.rowKey === r.rowKey || (n.ancestorKeys ?? []).includes(r.rowKey))
-      .reduce((sum, n) => sum + cellValueOf(n), 0);
+    sumHours(
+      nodeRows
+        .filter((n) => n.rowKey === r.rowKey || (n.ancestorKeys ?? []).includes(r.rowKey))
+        .map(cellValueOf)
+    );
 
   return (
     <Card className="overflow-hidden">
@@ -177,7 +179,7 @@ const ProjectGroup = ({
         <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400">
           <Folder className="h-3 w-3" />
         </span>
-        <span className="flex-1 truncate text-xs font-semibold">{poRow.label}</span>
+        <span className="flex-1 truncate text-xs font-semibold" title={poRow.label}>{poRow.label}</span>
         <span className="text-xs font-semibold text-primary">{formatHoursMinutes(groupTotal)}</span>
         {isOpen ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
       </button>
@@ -245,7 +247,7 @@ const ProjectGroup = ({
                           {isRowCollapsed ? <ChevronDown className="h-3.5 w-3.5 sm:h-3 sm:w-3" /> : <ChevronUp className="h-3.5 w-3.5 sm:h-3 sm:w-3" />}
                         </button>
                       )}
-                      <span className="truncate">{row.label}</span>
+                      <span className="truncate" title={row.label}>{row.label}</span>
                       {isDirty && <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" title="Unsaved change" />}
                     </span>
                   </div>

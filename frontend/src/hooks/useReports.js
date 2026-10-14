@@ -91,7 +91,6 @@ export const useInvoicePOSummary = (params) =>
     queryFn: () => reportsApi.getInvoicePOSummary(params),
     enabled: !!(params?.month && params?.year),
     staleTime: 0,
-    placeholderData: (prev) => prev,
   });
 
 /*
@@ -124,7 +123,6 @@ export const useInvoicePOSummaryTotals = (filterParams) => {
     },
     enabled: !!(baseParams?.month && baseParams?.year),
     staleTime: 0,
-    placeholderData: (prev) => prev,
   });
 };
 

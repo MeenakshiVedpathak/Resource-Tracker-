@@ -21,7 +21,7 @@ import QuickActionsPanel from '@/components/employee/dashboard/QuickActionsPanel
 import RecentActivityCard from '@/components/employee/dashboard/RecentActivityCard';
 import { ROUTES } from '@/constants/routes';
 import { cn } from '@/utils/cn';
-import { formatHoursMinutes, formatHourMinuteValue } from '@/utils/formatters';
+import { formatHoursMinutes, formatHourMinuteValue, sumHours } from '@/utils/formatters';
 import { classifyWorkDay, isNonWorkingDay } from '@/utils/workDayStatus';
 
 const WORK_LOG_STATUS_DAYS = 5;
@@ -130,12 +130,13 @@ const EmployeeDashboard = () => {
   const weeklyTrend = Array.from({ length: TREND_WEEK_BUCKETS }, (_, i) => {
     const bucketEnd = today.subtract((TREND_WEEK_BUCKETS - 1 - i) * 7, 'day');
     const bucketStart = bucketEnd.subtract(6, 'day');
-    let sum = 0;
-    let workingDays = 0;
-    for (let d = 0; d < 7; d += 1) {
+    const dayClassifications = Array.from({ length: 7 }, (__, d) => {
       const date = bucketStart.add(d, 'day');
-      const classification = classifyWorkDay(date, findDay(date.format('YYYY-MM-DD')), { saturdayOffRule });
-      sum += classification.loggedHours;
+      return classifyWorkDay(date, findDay(date.format('YYYY-MM-DD')), { saturdayOffRule });
+    });
+    const sum = sumHours(dayClassifications.map((c) => c.loggedHours));
+    let workingDays = 0;
+    for (const classification of dayClassifications) {
       if (!isNonWorkingDay(classification.status)) workingDays += 1;
     }
     return {
@@ -149,7 +150,7 @@ const EmployeeDashboard = () => {
 
   // For a past month this is always the full month (it's already over); for the current month
   // it's "so far", same as before.
-  const monthHours = selectedMonthDays.reduce((sum, d) => sum + Number(d.totalHours || 0), 0);
+  const monthHours = sumHours(selectedMonthDays.map((d) => d.totalHours));
   const daysElapsedInSelectedMonth = isCurrentMonthSelected ? today.date() : selectedMonthStart.daysInMonth();
   const daysLogged = selectedMonthDays
     .filter((d) => (!isCurrentMonthSelected || d.date <= todayKey) && d.hasEntries).length;

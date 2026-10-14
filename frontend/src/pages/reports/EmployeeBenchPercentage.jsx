@@ -98,9 +98,21 @@ const getColumns = (sortBy, sortOrder, onSort, { hasOrigBenchHours, hasOrigTotal
   }),
   columnHelper.accessor('full_name', {
     header: 'Full Name',
-    size: 220,
+    size: 240,
     enableSorting: false,
-    cell: (info) => <div className="truncate font-medium max-w-[200px]" title={info.getValue()}>{info.getValue() || '—'}</div>,
+    cell: (info) => {
+      const noHours = info.row.original.no_hours_logged;
+      return (
+        <div className="flex items-center gap-1.5 min-w-0">
+          <div className="truncate font-medium max-w-[200px]" title={info.getValue()}>{info.getValue() || '—'}</div>
+          {noHours && (
+            <Badge variant="muted" className="shrink-0 text-[10px] px-1.5 py-0 leading-4 whitespace-nowrap">
+              No hours logged
+            </Badge>
+          )}
+        </div>
+      );
+    },
   }),
   columnHelper.accessor('bench_hours', {
     header: () => (
@@ -175,6 +187,7 @@ const exportToExcel = (rows) => {
   const hasOrigTotalHours = rows.some((r) => r.original_total_hours != null);
   const hasOrigBenchPct = rows.some((r) => r.original_bench_pct != null);
 
+  const hasNoHoursLogged = rows.some((r) => r.no_hours_logged);
   const header = [
     'Employee Code',
     'Full Name',
@@ -184,6 +197,7 @@ const exportToExcel = (rows) => {
     ...(hasOrigTotalHours ? ['Original Total Hours'] : []),
     'Bench %',
     ...(hasOrigBenchPct ? ['Original Bench %'] : []),
+    ...(hasNoHoursLogged ? ['No Hours Logged'] : []),
   ];
   const dataRows = rows.map((r) => [
     r.employee_code ?? '',
@@ -194,6 +208,7 @@ const exportToExcel = (rows) => {
     ...(hasOrigTotalHours ? [r.original_total_hours != null ? Number(r.original_total_hours) : ''] : []),
     r.bench_pct != null ? Number(r.bench_pct) : '',
     ...(hasOrigBenchPct ? [r.original_bench_pct != null ? Number(r.original_bench_pct) : ''] : []),
+    ...(hasNoHoursLogged ? [r.no_hours_logged ? 'Yes' : ''] : []),
   ]);
   const ws = XLSX.utils.aoa_to_sheet([header, ...dataRows]);
   const wb = XLSX.utils.book_new();

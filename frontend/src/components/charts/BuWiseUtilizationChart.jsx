@@ -1,15 +1,15 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import EmptyState from '@/components/common/EmptyState';
 import {
-  Landmark, ChevronLeft, ChevronRight,
-  AlertTriangle, BarChart2, Users, Building2,
+  Landmark, ChevronLeft, ChevronRight, ChevronDown,
+  AlertTriangle, BarChart2, Users, Building2, Info,
 } from 'lucide-react';
 import { formatHours, formatPercentage } from '@/utils/formatters';
-
+ 
 const PAGE_SIZE = 10;
-
+ 
 const TIERS = [
   { min: 80,  color: '#22c55e', label: 'Healthy',     dot: 'bg-emerald-500', badge: 'bg-emerald-50  text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800' },
   { min: 60,  color: '#3b82f6', label: 'Moderate',    dot: 'bg-blue-500',    badge: 'bg-blue-50     text-blue-700    border-blue-200    dark:bg-blue-900/30    dark:text-blue-400    dark:border-blue-800'    },
@@ -17,43 +17,79 @@ const TIERS = [
   { min: 0.1, color: '#ef4444', label: 'Critical',    dot: 'bg-red-500',     badge: 'bg-red-50      text-red-700     border-red-200     dark:bg-red-900/30     dark:text-red-400     dark:border-red-800'     },
   { min: 0,   color: '#94a3b8', label: 'No Activity', dot: 'bg-slate-400',   badge: 'bg-slate-50    text-slate-500   border-slate-200   dark:bg-slate-800      dark:text-slate-400   dark:border-slate-700'   },
 ];
-
+ 
+// The API nests a BU's Sub-BUs under `sub_bus` (dashboard, snake_case) / `subBus` (report, camelCase).
+const getSubBus = (bu) => bu.sub_bus ?? bu.subBus ?? [];
+ 
+// A row with no employees and no expected hours has nothing to report — show dashes, not 0s.
+const isEmptyRow = (row) => !(row.total_employees ?? 0) && !(row.expected_hours ?? 0);
+ 
 const getTier = (pct) => TIERS.find((t) => pct >= t.min) ?? TIERS[TIERS.length - 1];
-
+ 
 // Mini KPI card used in the summary strip
 const KpiCard = ({ icon: Icon, iconBg, label, value, valueColor }) => (
-  <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 min-w-[100px]">
+  <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-2.5 py-1.5 whitespace-nowrap">
     <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${iconBg}`}>
       <Icon className="h-3 w-3 text-white" />
     </span>
-    <div className="min-w-0">
+    <div>
       <p className="text-[9px] font-medium text-muted-foreground leading-tight">{label}</p>
       <p className={`text-sm font-bold leading-tight tabular-nums ${valueColor ?? 'text-foreground'}`}>{value}</p>
     </div>
   </div>
 );
-
+ 
 const BuWiseUtilizationChart = ({ data = [], summary, isLoading, periodLabel }) => {
   const [page, setPage] = useState(1);
-
+  const [expandedBuIds, setExpandedBuIds] = useState(() => new Set());
+ 
+  // Reset pagination and collapse all when the data set changes (period change or refetch).
+  useEffect(() => { setPage(1); setExpandedBuIds(new Set()); }, [data]);
+ 
+  const toggleExpand = (buId) => setExpandedBuIds((prev) => {
+    const next = new Set(prev);
+    next.has(buId) ? next.delete(buId) : next.add(buId);
+    return next;
+  });
+ 
+  // Sort BU rows only — children come from `sub_bus` already in the data.
   const sorted = useMemo(
     () => [...data].sort((a, b) => (b.utilization_percentage ?? 0) - (a.utilization_percentage ?? 0)),
     [data],
   );
   const totalPages = Math.ceil(sorted.length / PAGE_SIZE);
   const pageData = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-
+ 
+  // Flat display list: BU rows plus injected Sub-BU children when expanded.
+  const displayData = useMemo(() => {
+    const rows = [];
+    pageData.forEach((bu) => {
+      const subBuses = getSubBus(bu);
+      const hasChildren = subBuses.length > 0 || !!(bu.has_sub_bus ?? bu.hasSubBus);
+      rows.push({ ...bu, _isChild: false, _hasChildren: hasChildren });
+      if (hasChildren && expandedBuIds.has(bu.bu_id ?? bu.buId)) {
+        subBuses.forEach((sub, i) => {
+          const isDirect = sub.is_direct ?? sub.isDirect ?? false;
+          const label = isDirect ? '(BU level)' : (sub.sub_bu_name ?? sub.subBuName ?? sub.bu_name ?? '—');
+          rows.push({ ...sub, _isChild: true, _label: label, _isLastChild: i === subBuses.length - 1 });
+        });
+      }
+    });
+    return rows;
+  }, [pageData, expandedBuIds]);
+ 
+  // Critical = top-level BU rows only (rolled-up utilisation < 30% and has employees).
   const criticalCount = useMemo(
     () => data.filter((bu) => (bu.total_employees ?? 0) > 0 && (bu.utilization_percentage ?? 0) < 30).length,
     [data],
   );
-  const totalEmployees = useMemo(
-    () => data.reduce((sum, bu) => sum + (bu.total_employees ?? 0), 0),
-    [data],
-  );
-  const overallUtil  = summary?.utilization_percentage ?? summary?.utilizationPercentage;
-  const totalBuCount = summary?.bu_count ?? data.length;
-
+  const overallUtil     = summary?.utilization_percentage ?? summary?.utilizationPercentage;
+  const totalBuCount    = summary?.bu_count ?? data.length;
+  const totalSubBuCount = summary?.sub_bu_count ?? null;
+  // Use summary for employee count — BU rows have employees rolled up, so summing rows would
+  // double-count employees who appear in both a BU and its Sub-BU.
+  const totalEmployees  = summary?.total_employees ?? summary?.totalEmployees ?? 0;
+ 
   // ── Loading skeleton ──────────────────────────────────────────────────────
   if (isLoading) {
     return (
@@ -75,62 +111,45 @@ const BuWiseUtilizationChart = ({ data = [], summary, isLoading, periodLabel }) 
       </Card>
     );
   }
-
+ 
   // ── Main render ───────────────────────────────────────────────────────────
   return (
     <Card className="flex flex-col h-full overflow-hidden">
       <CardContent className="flex-1 flex flex-col p-5 gap-4 min-h-0">
-
-        {/* ── Top: title + legend  ⟷  KPI strip ── */}
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          {/* Left: title + subtitle + legend */}
-          <div>
-            <h2 className="text-lg font-bold leading-tight text-foreground">BU-wise Utilization</h2>
-            <p className="text-[11px] text-muted-foreground mt-0.5">
-              Expected vs Logged hours &nbsp;·&nbsp; {periodLabel}
-            </p>
-            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
-              {TIERS.map(({ dot, label }) => (
-                <span key={label} className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
-                  <span className={`h-2 w-2 rounded-full ${dot}`} />
-                  {label}
-                </span>
-              ))}
+ 
+        {/* ── Top: heading row + KPI cards ── */}
+        <div className="flex flex-col gap-1.5">
+          {/* Row 1: title left, KPI cards right */}
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold leading-tight text-foreground whitespace-nowrap">BU-wise Utilization</h2>
+              <p className="text-[10px] text-muted-foreground mt-0.5 whitespace-nowrap">
+                Expected vs Logged hours &nbsp;·&nbsp; {periodLabel}
+              </p>
             </div>
+            {data.length > 0 && (
+              <div className="flex items-center gap-2 flex-wrap justify-end">
+                <KpiCard icon={Building2} iconBg="bg-blue-500" label="Total BUs" value={totalBuCount} />
+                {totalSubBuCount != null && (
+                  <KpiCard icon={Building2} iconBg="bg-indigo-500" label="Total Sub BUs" value={totalSubBuCount} />
+                )}
+                <KpiCard icon={AlertTriangle} iconBg="bg-red-500" label="Critical BUs" value={criticalCount} valueColor={criticalCount > 0 ? 'text-red-600 dark:text-red-400' : undefined} />
+                <KpiCard icon={BarChart2} iconBg="bg-emerald-500" label="Average Utilization" value={overallUtil != null ? formatPercentage(overallUtil, 1) : '—'} />
+                <KpiCard icon={Users} iconBg="bg-violet-500" label="Total Employees" value={totalEmployees} />
+              </div>
+            )}
           </div>
-
-          {/* Right: KPI cards */}
-          {data.length > 0 && (
-            <div className="flex flex-wrap gap-2 shrink-0">
-              <KpiCard
-                icon={Building2}
-                iconBg="bg-blue-500"
-                label="Total BUs"
-                value={totalBuCount}
-              />
-              <KpiCard
-                icon={AlertTriangle}
-                iconBg="bg-red-500"
-                label="Critical BUs"
-                value={criticalCount}
-                valueColor={criticalCount > 0 ? 'text-red-600 dark:text-red-400' : undefined}
-              />
-              <KpiCard
-                icon={BarChart2}
-                iconBg="bg-emerald-500"
-                label="Average Utilization"
-                value={overallUtil != null ? formatPercentage(overallUtil, 1) : '—'}
-              />
-              <KpiCard
-                icon={Users}
-                iconBg="bg-violet-500"
-                label="Total Employees"
-                value={totalEmployees}
-              />
-            </div>
-          )}
+          {/* Row 2: legend below heading */}
+          <div className="flex flex-wrap gap-x-3 gap-y-1">
+            {TIERS.map(({ dot, label }) => (
+              <span key={label} className="inline-flex items-center gap-1 text-[10px] text-muted-foreground whitespace-nowrap">
+                <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />
+                {label}
+              </span>
+            ))}
+          </div>
         </div>
-
+ 
         {/* ── Table ── */}
         {data.length === 0 ? (
           <EmptyState
@@ -141,19 +160,25 @@ const BuWiseUtilizationChart = ({ data = [], summary, isLoading, periodLabel }) 
           />
         ) : (
           <div className="flex-1 flex flex-col min-h-0 overflow-auto">
-            <table className="w-full border-collapse text-sm">
+            <table className="w-full border-collapse text-[clamp(0.6875rem,0.8vw,0.875rem)]">
               <thead>
                 <tr className="border-b border-border bg-muted/40">
                   <th className="py-2 pl-3 pr-4 text-left text-[11px] font-semibold text-muted-foreground whitespace-nowrap">
                     Business Unit
                   </th>
-                  <th className="py-2 px-4 text-left text-[11px] font-semibold text-muted-foreground w-[260px]">
+                  <th
+                    className="py-2 px-4 text-left text-[11px] font-semibold text-muted-foreground w-[260px]"
+                    title="Logged hours ÷ expected hours of that row (employees × monthly cap). A BU that has Sub-BUs is the total of its Sub-BUs (all their logged hours ÷ all their expected hours), so its % is the weighted average of the Sub-BU rows below it — not the sum of their percentages."
+                  >
                     Utilization
                   </th>
                   <th className="py-2 px-3 text-left text-[11px] font-semibold text-muted-foreground whitespace-nowrap">
                     Status
                   </th>
-                  <th className="py-2 px-3 text-right text-[11px] font-semibold text-muted-foreground whitespace-nowrap">
+                  <th
+                    className="py-2 px-3 text-right text-[11px] font-semibold text-muted-foreground whitespace-nowrap"
+                    title="Logged hours ÷ expected hours of that row (employees × monthly cap). A BU row covers all its employees together — its BU level and every Sub-BU — so its % is the weighted average of the rows below it, not their sum."
+                  >
                     Utilization %
                   </th>
                   <th className="py-2 px-3 text-right text-[11px] font-semibold text-muted-foreground">
@@ -167,31 +192,105 @@ const BuWiseUtilizationChart = ({ data = [], summary, isLoading, periodLabel }) 
                   </th>
                 </tr>
               </thead>
-
+ 
               <tbody className="divide-y divide-border/50">
-                {pageData.map((bu) => {
-                  const rawPct = bu.utilization_percentage ?? 0;
+                {displayData.map((row, idx) => {
+                  const rawPct = row.utilization_percentage ?? 0;
                   const barPct = Math.min(rawPct, 100);
                   const tier   = getTier(rawPct);
-                  const name   = bu.sub_bu_name ? `${bu.bu_name} › ${bu.sub_bu_name}` : bu.bu_name;
-
+ 
+                  if (row._isChild) {
+                    const empty = isEmptyRow(row);
+                    return (
+                      <tr key={`child-${idx}`} className="bg-muted/30 hover:bg-muted/50 transition-colors">
+                        {/* Tree connector: a vertical line down the BU's children, a short tick into each one */}
+                        <td className="relative py-3 pl-14 pr-4">
+                          <span
+                            aria-hidden
+                            className={`absolute left-[24px] top-0 w-px bg-border ${row._isLastChild ? 'h-1/2' : 'h-full'}`}
+                          />
+                          <span aria-hidden className="absolute left-[24px] top-1/2 h-px w-[26px] bg-border" />
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${tier.dot}`} />
+                            <span className="text-foreground truncate max-w-[200px]" title={row._label}>
+                              {row._label}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 w-[260px]">
+                          <div className="flex items-center gap-2.5">
+                            <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+                              <div className="h-full rounded-full" style={{ width: `${barPct}%`, background: tier.color }} />
+                            </div>
+                            <span className="w-10 shrink-0 text-right text-xs font-semibold tabular-nums" style={{ color: tier.color }}>
+                              {formatPercentage(rawPct, 1)}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="py-3 px-3">
+                          <span className={`inline-flex items-center justify-center rounded border w-24 py-0.5 text-[10px] font-semibold ${tier.badge}`}>
+                            {tier.label}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-right tabular-nums text-muted-foreground whitespace-nowrap">{formatPercentage(rawPct, 1)}</td>
+                        <td className="py-3 px-3 text-right tabular-nums text-muted-foreground whitespace-nowrap">{empty ? '–' : (row.total_employees ?? 0)}</td>
+                        <td className="py-3 px-3 text-right tabular-nums text-muted-foreground whitespace-nowrap">{empty ? '–' : <>{formatHours(row.total_logged_hours)}&thinsp;h</>}</td>
+                        <td className="py-3 px-3 text-right tabular-nums text-muted-foreground whitespace-nowrap">{empty ? '–' : <>{formatHours(row.expected_hours)}&thinsp;h</>}</td>
+                      </tr>
+                    );
+                  }
+ 
+                  const buId = row.bu_id ?? row.buId;
+                  const name = row.bu_name ?? row.buName;
+                  const isExpanded = expandedBuIds.has(buId);
+                  const hasChildren = row._hasChildren;
+                  const subBuses = getSubBus(row);
+                  const namedSubBuCount = subBuses.filter((s) => !(s.is_direct ?? s.isDirect)).length;
+ 
                   return (
                     <tr
-                      key={bu.bu_id ?? name}
-                      className="hover:bg-muted/40 transition-colors"
+                      key={buId ?? name}
+                      onClick={hasChildren ? () => toggleExpand(buId) : undefined}
+                      className={`transition-colors hover:bg-muted/40 ${hasChildren ? 'cursor-pointer' : ''}`}
                     >
                       {/* Business Unit name */}
                       <td className="py-2.5 pl-3 pr-4">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span
-                            className={`h-2.5 w-2.5 rounded-full shrink-0 ${tier.dot}`}
-                          />
-                          <span className="font-medium text-foreground truncate max-w-[180px]" title={name}>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          {/* Fixed-width slot so BU names line up whether or not a BU has Sub-BUs */}
+                          {hasChildren ? (
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); toggleExpand(buId); }}
+                              aria-expanded={isExpanded}
+                              aria-label={isExpanded ? `Collapse ${name}` : `Expand ${name}`}
+                              className="flex h-6 w-6 shrink-0 items-center justify-center rounded transition-colors hover:bg-muted"
+                            >
+                              {isExpanded
+                                ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                                : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                            </button>
+                          ) : <span className="h-6 w-6 shrink-0" />}
+                          <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${tier.dot}`} />
+                          <span className="font-semibold text-foreground truncate max-w-[160px]" title={name}>
                             {name}
                           </span>
+                          {(row.unassigned_employees ?? 0) > 0 && (
+                            <span
+                              className="inline-flex shrink-0 items-center gap-0.5 rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-400"
+                              title={`${row.unassigned_employees} employee(s) (${formatHours(row.unassigned_logged_hours)} h) are mapped to ${name} but to none of its Sub BUs, so they are not counted in this BU's numbers. Map them to a Sub BU to include them.`}
+                            >
+                              <Info className="h-3 w-3" />
+                              {row.unassigned_employees} not in a Sub BU
+                            </span>
+                          )}
+                          {namedSubBuCount > 0 && (
+                            <span className="shrink-0 rounded-md border border-border bg-muted/60 px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground whitespace-nowrap">
+                              {namedSubBuCount} Sub BU{namedSubBuCount !== 1 ? 's' : ''}
+                            </span>
+                          )}
                         </div>
                       </td>
-
+ 
                       {/* Progress bar + inline % */}
                       <td className="py-2.5 px-4 w-[260px]">
                         <div className="flex items-center gap-2.5">
@@ -209,34 +308,34 @@ const BuWiseUtilizationChart = ({ data = [], summary, isLoading, periodLabel }) 
                           </span>
                         </div>
                       </td>
-
+ 
                       {/* Status badge */}
                       <td className="py-2.5 px-3">
                         <span className={`inline-flex items-center justify-center rounded border w-24 py-0.5 text-[10px] font-semibold ${tier.badge}`}>
                           {tier.label}
                         </span>
                       </td>
-
+ 
                       {/* Utilization % (numeric) */}
-                      <td className="py-2.5 px-3 text-right tabular-nums text-sm font-medium text-muted-foreground">
+                      <td className="py-2.5 px-3 text-right tabular-nums font-medium text-muted-foreground whitespace-nowrap">
                         {formatPercentage(rawPct, 1)}
                       </td>
-
+ 
                       {/* Employees */}
-                      <td className="py-2.5 px-3 text-right tabular-nums text-sm text-muted-foreground">
-                        {bu.total_employees ?? 0}
+                      <td className="py-2.5 px-3 text-right tabular-nums text-muted-foreground whitespace-nowrap">
+                        {row.total_employees ?? 0}
                       </td>
-
+ 
                       {/* Logged Hours */}
-                      <td className="py-2.5 px-3 text-right tabular-nums text-sm text-muted-foreground">
-                        {formatHours(bu.total_logged_hours)}&thinsp;h
+                      <td className="py-2.5 px-3 text-right tabular-nums text-muted-foreground whitespace-nowrap">
+                        {formatHours(row.total_logged_hours)}&thinsp;h
                       </td>
-
+ 
                       {/* Expected Hours */}
-                      <td className="py-2.5 px-3 text-right tabular-nums text-sm text-muted-foreground">
-                        {formatHours(bu.expected_hours)}&thinsp;h
+                      <td className="py-2.5 px-3 text-right tabular-nums text-muted-foreground whitespace-nowrap">
+                        {formatHours(row.expected_hours)}&thinsp;h
                       </td>
-
+ 
                     </tr>
                   );
                 })}
@@ -244,7 +343,7 @@ const BuWiseUtilizationChart = ({ data = [], summary, isLoading, periodLabel }) 
             </table>
           </div>
         )}
-
+ 
         {/* ── Pagination ── */}
         {totalPages > 1 && (
           <div className="pt-2 border-t border-border/50 flex items-center justify-between text-[11px] text-muted-foreground shrink-0">
@@ -270,10 +369,12 @@ const BuWiseUtilizationChart = ({ data = [], summary, isLoading, periodLabel }) 
             </div>
           </div>
         )}
-
+ 
       </CardContent>
     </Card>
   );
 };
-
+ 
 export default BuWiseUtilizationChart;
+ 
+ 

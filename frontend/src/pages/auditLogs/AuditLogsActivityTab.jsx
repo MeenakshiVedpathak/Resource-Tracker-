@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { createColumnHelper } from '@tanstack/react-table';
-import { ChevronDown, ChevronUp, AlertCircle, Download, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, AlertCircle, Download, X, RefreshCw } from 'lucide-react';
 import { auditLogsApi } from '@/api/auditLogs.api';
 import { downloadBlob } from '@/utils/download';
 import { useNotification } from '@/hooks/useNotification';
@@ -112,7 +112,7 @@ const AuditLogsActivityTab = ({ preset, toolbarSlot }) => {
     buId: ALL_BUS,
   };
 
-  const { data, isPending, isError, error } = useAuditLogs(params);
+  const { data, isPending, isFetching, isError, error, refetch } = useAuditLogs(params);
   const errorMessage = isError ? extractApiError(error) : null;
 
   const records = Array.isArray(data?.data?.records) ? data.data.records : [];
@@ -414,6 +414,10 @@ const AuditLogsActivityTab = ({ preset, toolbarSlot }) => {
           </button>
         </span>
       )}
+      <Button variant="outline" size="toolbar" onClick={() => refetch()} disabled={isFetching}>
+        <RefreshCw className={cn('h-4 w-4', isFetching && 'animate-spin')} />
+        Refresh
+      </Button>
       {records.length > 0 && (
         <Button variant="outline" size="toolbar" onClick={handleExport} disabled={isExporting}>
           <Download className="h-4 w-4" />

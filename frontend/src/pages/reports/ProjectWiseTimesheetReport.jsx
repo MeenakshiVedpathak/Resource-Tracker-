@@ -397,13 +397,13 @@ const ProjectWiseTimesheetReport = () => {
     columnHelper.accessor('project_managers', { header: 'Project Manager', size: 160, cell: (i) => <span className="block max-w-[150px] truncate text-xs" title={i.getValue() || ''}>{i.getValue() || '—'}</span> }),
     columnHelper.accessor('approval_status', {
       header: 'Approval Status',
-      size: 130,
+      size: 170,
       cell: (i) => {
         const row = i.row.original;
         return (
           <Badge
             variant={getStatusColor(row.approval_status)}
-            className="text-[10px]"
+            className="text-[10px] whitespace-nowrap"
             title={row.approval_status === 'rejected' ? (row.rejection_remark ?? '') : undefined}
           >
             {row.approval_status_label || row.approval_status}

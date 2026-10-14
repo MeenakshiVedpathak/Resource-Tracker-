@@ -518,7 +518,6 @@ const RoleBuMappingDialog = ({ employee, actorRoleName, allRoles, businessUnits,
           <div className="space-y-1.5 min-w-0 rounded-lg border p-3">
             <div className="flex items-center gap-2">
               <h4 className="text-sm font-semibold">Business Units</h4>
-              <Badge variant="secondary" className="text-[10px] font-normal">{selectedBuIds.length} selected</Badge>
             </div>
             <p className="text-xs text-muted-foreground">Select one or more business units</p>
             {buEntities.length > 0 && (

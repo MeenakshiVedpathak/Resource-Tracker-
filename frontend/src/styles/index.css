@@ -248,7 +248,7 @@
 
   /* ── Table styles ── */
   .data-table th {
-    @apply text-xs font-semibold text-muted-foreground uppercase tracking-wider;
+    @apply text-xs font-semibold text-muted-foreground tracking-wider;
   }
 
   .data-table tr:hover td {

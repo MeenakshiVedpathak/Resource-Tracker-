@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { formatHoursMinutes } from '@/utils/formatters';
+import { formatHoursMinutes, sumHours } from '@/utils/formatters';
 import { useEmployeeMonthlyCap } from '@/hooks/useSystemSettings';
 
 const RADIUS = 22;
@@ -11,7 +11,7 @@ const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 // Admin-set cap if nothing has synced for them yet for that month).
 const MonthlyHoursCard = ({ month, year, calendarDays }) => {
   const workedHours = useMemo(
-    () => calendarDays.reduce((sum, d) => sum + Number(d.totalHours || 0), 0),
+    () => sumHours(calendarDays.map((d) => d.totalHours)),
     [calendarDays]
   );
 

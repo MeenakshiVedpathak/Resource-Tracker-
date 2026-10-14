@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { createColumnHelper } from '@tanstack/react-table';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, RefreshCw } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { useAuditSessions } from '@/hooks/useAuditLogs';
 import { useSelectableBusinessUnits } from '@/hooks/useSelectableBusinessUnits';
 import { useActiveEmployees } from '@/hooks/useEmployees';
@@ -61,7 +62,7 @@ const AuditLogsSessionsTab = ({ onOpenSession, toolbarSlot }) => {
     buId: ALL_BUS,
   };
 
-  const { data, isPending, isError, error } = useAuditSessions(params);
+  const { data, isPending, isFetching, isError, error, refetch } = useAuditSessions(params);
   const errorMessage = isError ? extractApiError(error) : null;
   const records = Array.isArray(data?.data?.records) ? data.data.records : [];
   const meta = data?.meta ?? {};
@@ -176,6 +177,10 @@ const AuditLogsSessionsTab = ({ onOpenSession, toolbarSlot }) => {
         <Switch checked={newDeviceOnly} onCheckedChange={(v) => { setNewDeviceOnly(v); setPage(1); }} />
         New device logins only
       </label>
+      <Button variant="outline" size="toolbar" onClick={() => refetch()} disabled={isFetching}>
+        <RefreshCw className={`h-4 w-4${isFetching ? ' animate-spin' : ''}`} />
+        Refresh
+      </Button>
       <FilterToggleButton isOpen={filtersOpen} onToggle={() => setFiltersOpen((p) => !p)} activeCount={activeFilterCount} />
     </div>
   );

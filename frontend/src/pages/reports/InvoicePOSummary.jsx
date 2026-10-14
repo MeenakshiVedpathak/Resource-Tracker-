@@ -376,6 +376,7 @@ const InvoicePOSummary = () => {
             value={monthYear}
             onChange={(val) => { setMonthYear(val); setPage(1); }}
             placeholder="Select month"
+            clearable={false}
             className="w-full"
           />
         </div>

@@ -24,6 +24,9 @@ import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import MobilePagination from '@/components/common/MobilePagination';
+import {
+  Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
+} from '@/components/ui/table';
 import { cn } from '@/utils/cn';
 import useAuth from '@/hooks/useAuth';
 
@@ -486,134 +489,108 @@ const ServicePOResource = () => {
             </div>
           </div>
 
-          {/* ── Table — no `flex-1`: that used to make this always stretch to fill whatever
-              room was left on the page, even for a handful of rows, leaving a big blank gap
-              inside the bordered box. `min-h-0` (kept) is what still lets it shrink and let its
-              own body scroll internally when there genuinely isn't enough room — same fix
-              already applied to the shared DataTable component. ── */}
+          {/* Desktop — same shared Table primitives (and the same no-vertical-borders,
+              fluid-clamp() sizing, sticky header) every other report table in this app uses,
+              rather than a hand-rolled `<table>` with its own one-off styling. rowSpan-merged
+              Customer/Service PO Summary/Service Type cells (one Service PO can have several
+              Resource rows under it) are the one thing DataTable's flat row model can't do, so
+              this stays a direct `Table`/`TableRow`/`TableCell` composition instead of going
+              through DataTable itself. */}
           <div className="hidden md:flex min-h-0 flex-col rounded-lg border overflow-hidden">
-            <div className="flex-1 min-h-0 overflow-auto">
-              <table className="w-full border-collapse text-sm">
-                <thead className="sticky top-0 z-20 bg-background shadow-sm">
-                  <tr className="border-b bg-muted/60">
-                  <th className="w-[48px] px-3 py-2.5 text-left text-xs font-semibold border-r border-border">#</th>
-                  <th className="px-3 py-2.5 text-left text-xs font-semibold border-r border-border min-w-[160px]">Customer Name</th>
-                  <th className="px-3 py-2.5 text-left text-xs font-semibold border-r border-border min-w-[200px]">Service PO Summary</th>
-                  <th className="px-3 py-2.5 text-left text-xs font-semibold border-r border-border w-[150px]">Service Type</th>
-                  <th className="px-3 py-2.5 text-left text-xs font-semibold border-r border-border min-w-[180px]">Resource</th>
-                  <th className="px-3 py-2.5 text-right text-xs font-semibold border-r border-border w-[110px]">Time (hrs)</th>
-                  {hasOriginal && (
-                    <th className="px-3 py-2.5 text-right text-xs font-semibold border-r border-border w-[130px]">Original Time (hrs)</th>
-                  )}
-                  <th className="px-3 py-2.5 text-left text-xs font-semibold w-[160px]">Remarks</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {groups.map((group, gi) =>
-                  group.rows.map((row, ri) => {
-                    const isFirst    = ri === 0;
-                    const rowCount   = group.rows.length;
-                    const employee   = getField(row, 'employee_name', 'full_name', 'resource_name');
-                    const hours      = getHours(row);
-                    const origHours  = getOriginalHours(row);
-                    const remarks    = getField(row, 'remarks');
-                    const employeeCode = getField(row, 'employee_code');
+          <Table containerClassName="flex-1 min-h-0">
+            <TableHeader className="sticky top-0 z-20 bg-background shadow-sm">
+              <TableRow className="bg-muted/60 hover:bg-muted/60">
+                <TableHead className="w-[48px]">#</TableHead>
+                <TableHead className="min-w-[160px]">Customer Name</TableHead>
+                <TableHead className="min-w-[200px]">Service PO Summary</TableHead>
+                <TableHead className="w-[150px]">Service Type</TableHead>
+                <TableHead className="min-w-[180px]">Resource</TableHead>
+                <TableHead className="w-[110px] text-right">Time (hrs)</TableHead>
+                {hasOriginal && <TableHead className="w-[160px] text-right whitespace-nowrap">Original Time (hrs)</TableHead>}
+                <TableHead className="w-[160px]">Remarks</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {groups.map((group, gi) =>
+                group.rows.map((row, ri) => {
+                  const isFirst    = ri === 0;
+                  const rowCount   = group.rows.length;
+                  const employee   = getField(row, 'employee_name', 'full_name', 'resource_name');
+                  const hours      = getHours(row);
+                  const origHours  = getOriginalHours(row);
+                  const remarks    = getField(row, 'remarks');
 
-                    return (
-                      <tr
-                        key={`${gi}-${ri}`}
-                        className={cn(
-                          'hover:bg-muted/30 transition-colors',
-                          isFirst && gi > 0 && 'border-t-2 border-border/60'
-                        )}
-                      >
-                        {/* Sr No — only on first row of group, rowSpan */}
-                        {isFirst && (
-                          <td
-                            rowSpan={rowCount}
-                            className="px-3 py-2 text-xs text-muted-foreground text-center border-r border-border align-top pt-3"
-                          >
-                            {gi + 1}
-                          </td>
-                        )}
-                        {/* Customer — only on first row */}
-                        {isFirst && (
-                          <td
-                            rowSpan={rowCount}
-                            className="px-3 py-2 text-xs font-medium border-r border-border align-top pt-3"
-                          >
-                            {group.customer}
-                          </td>
-                        )}
-                        {/* PO — only on first row */}
-                        {isFirst && (
-                          <td
-                            rowSpan={rowCount}
-                            className="px-3 py-2 text-xs border-r border-border align-top pt-3"
-                          >
-                            {group.po}
-                          </td>
-                        )}
-                        {/* Service Type — only on first row */}
-                        {isFirst && (
-                          <td
-                            rowSpan={rowCount}
-                            className="px-3 py-2 border-r border-border align-top pt-3"
-                          >
-                            {group.service_type ? (
-                              <span className={cn(
-                                'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium',
-                                serviceTypeBadgeClass(group.service_type)
-                              )}>
-                                {group.service_type}
-                              </span>
-                            ) : (
-                              <span className="text-muted-foreground text-xs">—</span>
-                            )}
-                          </td>
-                        )}
-                        {/* Resource */}
-                        <td className="px-3 py-2 border-r border-border">
-                          {employee ? (
-                            <div>
-                              <p className="text-xs font-medium">{employee}</p>
-                              {employeeCode && (
-                                <p className="text-[10px] text-muted-foreground font-mono">{employeeCode}</p>
-                              )}
-                            </div>
+                  return (
+                    <TableRow key={`${gi}-${ri}`} className={cn(isFirst && gi > 0 && 'border-t-2 border-border/60')}>
+                      {/* Sr No — only on first row of group, rowSpan */}
+                      {isFirst && (
+                        <TableCell rowSpan={rowCount} className="text-center align-top text-muted-foreground">
+                          {gi + 1}
+                        </TableCell>
+                      )}
+                      {/* Customer — only on first row */}
+                      {isFirst && (
+                        <TableCell rowSpan={rowCount} className="align-top font-medium">
+                          {group.customer}
+                        </TableCell>
+                      )}
+                      {/* PO — only on first row */}
+                      {isFirst && (
+                        <TableCell rowSpan={rowCount} className="align-top">
+                          {group.po}
+                        </TableCell>
+                      )}
+                      {/* Service Type — only on first row */}
+                      {isFirst && (
+                        <TableCell rowSpan={rowCount} className="align-top">
+                          {group.service_type ? (
+                            <span className={cn(
+                              'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium',
+                              serviceTypeBadgeClass(group.service_type)
+                            )}>
+                              {group.service_type}
+                            </span>
                           ) : (
-                            <span className="text-xs text-muted-foreground italic">Unassigned</span>
+                            <span className="text-muted-foreground">—</span>
                           )}
-                        </td>
-                        {/* Hours */}
-                        <td className="px-3 py-2 text-right border-r border-border">
-                          {hours != null ? (
-                            <span className="tabular-nums text-xs font-medium">{Number(hours).toFixed(1)}</span>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">—</span>
-                          )}
-                        </td>
-                        {/* Original Hours */}
-                        {hasOriginal && (
-                          <td className="px-3 py-2 text-right border-r border-border">
-                            {origHours != null ? (
-                              <span className="tabular-nums text-xs font-medium text-muted-foreground">{Number(origHours).toFixed(1)}</span>
-                            ) : (
-                              <span className="text-xs text-muted-foreground">—</span>
-                            )}
-                          </td>
+                        </TableCell>
+                      )}
+                      {/* Resource — name only, no employee code/id */}
+                      <TableCell>
+                        {employee ? (
+                          <span className="font-medium">{employee}</span>
+                        ) : (
+                          <span className="text-muted-foreground italic">Unassigned</span>
                         )}
-                        {/* Remarks */}
-                        <td className="px-3 py-2 text-xs text-muted-foreground">
-                          {remarks || '—'}
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-            </div>
+                      </TableCell>
+                      {/* Hours */}
+                      <TableCell className="text-right">
+                        {hours != null ? (
+                          <span className="tabular-nums font-medium">{Number(hours).toFixed(1)}</span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      {/* Original Hours */}
+                      {hasOriginal && (
+                        <TableCell className="text-right">
+                          {origHours != null ? (
+                            <span className="tabular-nums font-medium text-muted-foreground">{Number(origHours).toFixed(1)}</span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                      )}
+                      {/* Remarks */}
+                      <TableCell className="text-muted-foreground">
+                        {remarks || '—'}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
+            </TableBody>
+          </Table>
           </div>
 
           {/* Mobile: same `groups` data (customer -> Service PO -> resource rows), as nested
@@ -640,15 +617,11 @@ const ServicePOResource = () => {
                     const hours = getHours(row);
                     const origHours = getOriginalHours(row);
                     const remarks = getField(row, 'remarks');
-                    const employeeCode = getField(row, 'employee_code');
                     return (
                       <div key={ri} className="flex items-center justify-between gap-2 p-3.5">
                         <div className="min-w-0">
                           {employee ? (
-                            <>
-                              <p className="truncate text-sm font-medium">{employee}</p>
-                              {employeeCode && <p className="truncate text-xs font-mono text-muted-foreground">{employeeCode}</p>}
-                            </>
+                            <p className="truncate text-sm font-medium">{employee}</p>
                           ) : (
                             <p className="text-sm italic text-muted-foreground">Unassigned</p>
                           )}

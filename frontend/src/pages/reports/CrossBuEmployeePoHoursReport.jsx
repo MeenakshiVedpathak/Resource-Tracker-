@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { createColumnHelper } from '@tanstack/react-table';
 import { ChevronDown, ChevronUp, ChevronsUpDown, Download, AlertCircle } from 'lucide-react';
 import { useCrossBuEmployeePoHours } from '@/hooks/useReports';
+import { useCanViewOriginalData } from '@/hooks/usePermissions';
 import { reportsApi } from '@/api/reports.api';
 import { useActiveEmployees } from '@/hooks/useEmployees';
 import { useActiveClients } from '@/hooks/useClients';
@@ -27,6 +28,7 @@ import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { cn } from '@/utils/cn';
 
 const columnHelper = createColumnHelper();
@@ -128,6 +130,12 @@ const CrossBuEmployeePoHoursReport = () => {
   const [sortBy, setSortBy] = useState(SORTABLE.HOURS);
   const [sortOrder, setSortOrder] = useState('desc');
   const [isExporting, setIsExporting] = useState(false);
+  const [hoursSource, setHoursSource] = useState('M');
+  const canViewOriginal = useCanViewOriginalData();
+
+  useEffect(() => {
+    if (!canViewOriginal) setHoursSource('M');
+  }, [canViewOriginal]);
 
   const { data: activeEmployees = [] } = useActiveEmployees();
   const { data: activeClients = [] } = useActiveClients();
@@ -191,6 +199,7 @@ const CrossBuEmployeePoHoursReport = () => {
       // below narrow the result as real query params instead (see explicitBuScope).
       buId: ALL_BUS,
     };
+    if (hoursSource === 'O') p.hoursSource = 'O';
     if (periodMode === 'month') {
       p.month = monthYear.month;
       p.year = monthYear.year;
@@ -209,7 +218,7 @@ const CrossBuEmployeePoHoursReport = () => {
     return p;
   }, [
     page, limit, sortBy, sortOrder, workType, approvalStatus, periodMode, monthYear, dateRange,
-    employeeIds, employeeBuIds, employeeSubBuIds, clientIds, projectIds, servicePoIds, poBuValue,
+    hoursSource, employeeIds, employeeBuIds, employeeSubBuIds, clientIds, projectIds, servicePoIds, poBuValue,
     debouncedSearch,
   ]);
 
@@ -285,10 +294,7 @@ const CrossBuEmployeePoHoursReport = () => {
       meta: { sticky: true, left: 0 },
       enableSorting: false,
       cell: ({ row }) => (
-        <div className="min-w-0">
-          <p className="truncate text-sm font-medium" title={row.original.employee_name}>{row.original.employee_name || '—'}</p>
-          <p className="font-mono text-[10px] text-muted-foreground">{row.original.employee_code ?? '—'}</p>
-        </div>
+        <span className="block truncate text-sm font-medium" title={row.original.employee_name}>{row.original.employee_name || '—'}</span>
       ),
     }),
     columnHelper.accessor('employee_bu', {
@@ -325,10 +331,7 @@ const CrossBuEmployeePoHoursReport = () => {
       cell: ({ row }) => {
         const r = row.original;
         return (
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium" title={r.service_po_name}>{r.service_po_name || '—'}</p>
-            <p className="font-mono text-[10px] text-muted-foreground">{r.service_po_code ?? '—'}</p>
-          </div>
+          <span className="block truncate text-sm font-medium" title={r.service_po_name}>{r.service_po_name || '—'}</span>
         );
       },
     }),
@@ -338,20 +341,58 @@ const CrossBuEmployeePoHoursReport = () => {
       enableSorting: false,
       cell: ({ row }) => {
         const r = row.original;
-        return (
-          <div className="min-w-0">
-            <p className="truncate text-sm" title={r.po_bu}>{r.po_bu || '—'}</p>
-            {r.po_sub_bu && <p className="truncate text-[11px] text-muted-foreground" title={r.po_sub_bu}>{r.po_sub_bu}</p>}
-          </div>
-        );
+        return <span className="block truncate text-sm" title={r.po_bu}>{r.po_bu || '—'}</span>;
       },
     }),
-    columnHelper.accessor('logged_hours', {
-      header: () => <SortableHeader label="Hours" column={SORTABLE.HOURS} sortBy={sortBy} sortOrder={sortOrder} onSort={handleSort} align="right" />,
+    columnHelper.display({
+      id: 'hours',
+      header: () => (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span><SortableHeader label="Original Hours" column={SORTABLE.HOURS} sortBy={sortBy} sortOrder={sortOrder} onSort={handleSort} align="right" /></span>
+          </TooltipTrigger>
+          <TooltipContent>Original hours as entered by the employee (before any adjustment)</TooltipContent>
+        </Tooltip>
+      ),
       size: 110,
       meta: { align: 'right' },
       enableSorting: false,
-      cell: (info) => <span className="tabular-nums">{formatHours(info.getValue())}</span>,
+      cell: ({ row }) => (
+        <span className="tabular-nums">{formatHours(row.original.logged_hours)}</span>
+      ),
+    }),
+    // Always-visible, never toggled by the Adjusted/Original source switch above (hoursSource) —
+    // that switch changes which figure the "Hours" column itself shows; this is a separate,
+    // dedicated column for the new adjusted_hours field, null (not yet synced) rendered as an
+    // em dash rather than falling back to logged_hours, so "not synced" stays visibly distinct
+    // from "synced with 0 adjusted hours".
+    columnHelper.display({
+      id: 'adjusted_hours',
+      header: () => (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="block text-right font-medium">Adjusted Hours</span>
+          </TooltipTrigger>
+          <TooltipContent>Hours after monthly-cap adjustment (synced work only)</TooltipContent>
+        </Tooltip>
+      ),
+      size: 130,
+      meta: { align: 'right' },
+      enableSorting: false,
+      cell: ({ row }) => {
+        const val = row.original.adjusted_hours;
+        if (val == null) {
+          return (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="tabular-nums text-muted-foreground cursor-default">—</span>
+              </TooltipTrigger>
+              <TooltipContent>Not synced yet - adjusted hours are available after sync</TooltipContent>
+            </Tooltip>
+          );
+        }
+        return <span className="tabular-nums">{formatHours(val)}</span>;
+      },
     }),
     columnHelper.display({
       id: 'work_type',
@@ -413,6 +454,23 @@ const CrossBuEmployeePoHoursReport = () => {
             ))}
           </TabsList>
         </Tabs>
+        {canViewOriginal && (
+          <div className="flex items-center gap-1 rounded-lg border bg-muted/40 p-0.5 text-xs">
+            {['M', 'O'].map((val) => (
+              <button
+                key={val}
+                type="button"
+                onClick={() => setHoursSource(val)}
+                className={cn(
+                  'rounded-md px-3 py-1 font-semibold transition-colors',
+                  hoursSource === val ? 'bg-card shadow-sm text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                {val === 'O' ? 'Original' : 'Adjusted'}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <FilterPanel isOpen={filtersOpen} onClear={clearFilters} showClear={activeFilterCount > 0}>
@@ -523,6 +581,7 @@ const CrossBuEmployeePoHoursReport = () => {
                 : (totals.total_employees ?? 0)}
             />
             <StatPill tone="violet" label="Total Hours" value={formatHours(totals.total_hours)} />
+            <StatPill tone="blue" label="Adjusted Hours" value={formatHours(totals.adjusted_total_hours ?? 0)} />
             <StatPill
               tone="emerald"
               label="Own BU"

@@ -77,7 +77,16 @@ export function MultiSelect({
     [options, selected]
   )
 
-  const allSelected = options.length > 0 && selected.size === options.length
+  // Options that match the current search string — used by Select all / Clear all so they
+  // only act on what's currently visible rather than the full unfiltered list.
+  const filteredForActions = React.useMemo(
+    () => search.trim()
+      ? options.filter((opt) => opt.label.toLowerCase().includes(search.trim().toLowerCase()))
+      : options,
+    [options, search]
+  )
+
+  const allSelected = filteredForActions.length > 0 && filteredForActions.every((opt) => selected.has(String(opt.value)))
   const clearableCount = [...selected].filter((v) => !locked.has(v)).length
 
   const toggle = (optValue) => {
@@ -89,8 +98,26 @@ export function MultiSelect({
     onValueChange(next)
   }
 
-  const selectAll = () => onValueChange(options.map((opt) => String(opt.value)))
-  const clearAll = () => onValueChange([...locked])
+  const selectAll = () => {
+    if (search.trim()) {
+      // Merge matching items into the existing selection (don't wipe unrelated selections).
+      const toAdd = filteredForActions.map((opt) => String(opt.value))
+      const merged = Array.from(new Set([...value.map(String), ...toAdd]))
+      onValueChange(merged)
+    } else {
+      onValueChange(options.map((opt) => String(opt.value)))
+    }
+  }
+
+  const clearAll = () => {
+    if (search.trim()) {
+      // Only deselect matching items; keep everything outside the current search.
+      const filteredValues = new Set(filteredForActions.map((opt) => String(opt.value)))
+      onValueChange(value.filter((v) => !filteredValues.has(String(v)) || locked.has(String(v))))
+    } else {
+      onValueChange([...locked])
+    }
+  }
 
   return (
     <div className="relative">
@@ -120,7 +147,7 @@ export function MultiSelect({
             <ChevronDown className="h-[1em] w-[1em] shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+        <PopoverContent className="min-w-[var(--radix-popover-trigger-width)] w-max max-w-xs p-0" align="start">
           <Command>
             <CommandInput placeholder={searchPlaceholder} value={search} onValueChange={setSearch} />
             <div className="flex items-center justify-between border-b px-2 py-1.5">
@@ -176,7 +203,7 @@ export function MultiSelect({
                         </span>
                       )}
                       <Checkbox checked={isSelected} disabled={isLocked} className="pointer-events-none" />
-                      <span className="truncate">
+                      <span className="truncate" title={option.label}>
                         {option.depth ? <span className="mr-1 text-muted-foreground">↳</span> : null}
                         {option.label}
                       </span>

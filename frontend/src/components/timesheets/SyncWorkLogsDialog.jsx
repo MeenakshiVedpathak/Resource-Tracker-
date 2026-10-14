@@ -1,10 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import {
+  Loader2, CheckCircle2, AlertCircle, AlertTriangle,
+  ChevronDown, ChevronUp, Calendar, RefreshCw,
+} from 'lucide-react';
 import { useSyncEmployeeWorkLogs, useConfirmImport } from '@/hooks/useTimesheets';
 import { useNotification } from '@/hooks/useNotification';
 import { extractApiError } from '@/services/apiClient';
 import { useIsMobile } from '@/hooks/useMediaQuery';
-import { formatDate, formatMonthYear } from '@/utils/formatters';
+import { formatDate, formatMonthYear, getInitials } from '@/utils/formatters';
+import { QUERY_KEYS } from '@/constants/queryKeys';
 import ImportPreviewPanel from './ImportPreviewPanel';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
@@ -13,35 +18,216 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFo
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import { BusinessUnitCascadeSelect, SubBusinessUnitSelect, useBuHierarchy } from '@/components/common/BusinessUnitCascadeSelect';
+import { cn } from '@/utils/cn';
 
 const now = new Date();
 const currentMonthYear = { month: now.getMonth() + 1, year: now.getFullYear() };
 
-// One dialog, one step of choices (Entity -> Business Unit -> Month/Year), then Sync -> Preview ->
-// Confirm — previously Entity/BU lived in a separate dialog TimesheetList opened first, which read
-// as two popups for one action. `activeBusinessUnits` is the login's own active BU mappings (each
-// possibly carrying entity_id/entity_name); Entity only renders when they actually span more than
-// one, same "nothing to narrow" rule as every other Entity/BU filter pair in the app.
+const DIALOG_DESCRIPTION =
+  'Syncs each mapped employee\'s full month (all Service POs). Employees already synced from another BU are skipped.';
+
+// SYNC = blue, RESYNC = amber
+const ModeBadge = ({ mode }) => {
+  if (!mode) return null;
+  const isResync = mode === 'RESYNC';
+  return (
+    <span className={cn(
+      'inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-semibold',
+      isResync
+        ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300'
+        : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+    )}>
+      {mode}
+    </span>
+  );
+};
+
+// Table of failed rows from the confirm response
+const ErrorRowsTable = ({ errors }) => {
+  if (!errors?.length) return null;
+  return (
+    <table className="w-full text-xs">
+      <thead className="bg-slate-50 dark:bg-slate-800 sticky top-0">
+        <tr>
+          <th className="px-3 py-2 text-left font-semibold text-muted-foreground whitespace-nowrap">Row #</th>
+          <th className="px-3 py-2 text-left font-semibold text-muted-foreground">Employee</th>
+          <th className="px-3 py-2 text-left font-semibold text-muted-foreground">Service PO</th>
+          <th className="px-3 py-2 text-left font-semibold text-muted-foreground whitespace-nowrap">Date</th>
+          <th className="px-3 py-2 text-left font-semibold text-muted-foreground">Reason</th>
+        </tr>
+      </thead>
+      <tbody className="divide-y">
+        {errors.map((e, i) => (
+          <tr key={i} className="hover:bg-muted/30">
+            <td className="px-3 py-2 tabular-nums font-mono">{e.rowNumber ?? i + 1}</td>
+            <td className="px-3 py-2 max-w-[120px] truncate" title={e.row?.resourceName}>{e.row?.resourceName ?? '—'}</td>
+            <td className="px-3 py-2 max-w-[140px] truncate" title={e.row?.servicePOName}>{e.row?.servicePOName ?? '—'}</td>
+            <td className="px-3 py-2 whitespace-nowrap">{e.row?.date ? formatDate(e.row.date) : '—'}</td>
+            <td className="px-3 py-2 text-destructive">{e.errors?.join(', ') ?? '—'}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+};
+
+// Expandable skipped-employees list used in the "all already synced" state and in the mobile
+// empty step.
+const SkippedEmployeesMobileList = ({ employees }) => {
+  const [open, setOpen] = useState(false);
+  if (!employees?.length) return null;
+  return (
+    <div className="mt-2 text-left">
+      <button
+        type="button"
+        className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:underline"
+        onClick={() => setOpen((o) => !o)}
+      >
+        {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+        {open ? 'Hide' : 'Show'} {employees.length} employee{employees.length !== 1 ? 's' : ''}
+      </button>
+      {open && (
+        <ul className="mt-1.5 space-y-0.5 pl-1">
+          {employees.map((e) => (
+            <li key={e.employeeId ?? e.employeeCode} className="text-xs text-muted-foreground">
+              <span className="font-medium text-foreground">{e.employeeName}</span>
+              {e.employeeCode ? ` (${e.employeeCode})` : ''}
+              {e.syncedBusinessUnitName ? (
+                <span> — synced from <span className="font-medium">{e.syncedBusinessUnitName}</span></span>
+              ) : null}
+              {e.message && !e.syncedBusinessUnitName ? (
+                <span> — {e.message}</span>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+};
+
+// Expandable skipped-employees list for the desktop "all already synced" state.
+const SkippedEmployeesDesktopList = ({ employees }) => {
+  const [open, setOpen] = useState(true);
+  if (!employees?.length) return null;
+  return (
+    <div className="rounded-xl border overflow-hidden">
+      <button
+        type="button"
+        className="flex w-full items-center gap-2 px-4 py-3 text-sm font-medium hover:bg-muted/30 transition-colors"
+        onClick={() => setOpen((o) => !o)}
+      >
+        {open ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+        {employees.length} employee{employees.length !== 1 ? 's' : ''} already synced
+      </button>
+      {open && (
+        <div className="border-t divide-y">
+          {employees.map((e) => (
+            <div key={e.employeeId ?? e.employeeCode} className="flex items-center gap-3 px-4 py-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                {getInitials(e.employeeName)}
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold">
+                  {e.employeeName}
+                  {e.employeeCode ? <span className="font-normal text-muted-foreground"> ({e.employeeCode})</span> : ''}
+                </p>
+                {(e.syncedBusinessUnitName || e.message) && (
+                  <p className="text-xs text-muted-foreground">
+                    {e.syncedBusinessUnitName ? `Synced from ${e.syncedBusinessUnitName}` : e.message}
+                  </p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Desktop result view shown after confirm when there are errors or skipped employees.
+const ConfirmResultView = ({ result, onClose }) => {
+  const { insertedRows = 0, errorRows = 0, errors = [], skippedEmployees = [], syncContext } = result;
+  const hasErrors = errorRows > 0;
+  const mode = syncContext?.mode;
+  const buLabel = syncContext?.businessUnitName;
+  const replacedRows = syncContext?.replacedRows ?? 0;
+
+  return (
+    <div className="space-y-4 pt-2 pb-1">
+      {/* Status banner */}
+      <div className={cn(
+        'flex items-center gap-4 rounded-xl border px-5 py-4',
+        hasErrors
+          ? 'border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30'
+          : 'border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/30',
+      )}>
+        <div className={cn(
+          'flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-2 bg-white dark:bg-transparent',
+          hasErrors
+            ? 'border-amber-400 dark:bg-amber-900/50'
+            : 'border-emerald-400 dark:bg-emerald-900/50',
+        )}>
+          {hasErrors
+            ? <AlertTriangle className="h-6 w-6 text-amber-600 dark:text-amber-400" />
+            : <CheckCircle2 className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />}
+        </div>
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className={cn('font-semibold', hasErrors ? 'text-amber-800 dark:text-amber-200' : 'text-emerald-800 dark:text-emerald-200')}>
+              {hasErrors ? 'Sync partially completed' : 'Sync completed'}
+            </p>
+            {mode && <ModeBadge mode={mode} />}
+          </div>
+          <p className={cn('mt-0.5 text-sm', hasErrors ? 'text-amber-700 dark:text-amber-400' : 'text-emerald-700 dark:text-emerald-400')}>
+            {insertedRows} synced{errorRows > 0 ? `, ${errorRows} failed` : ''}{buLabel ? ` • ${buLabel}` : ''}
+          </p>
+          {mode === 'RESYNC' && replacedRows > 0 && (
+            <p className={cn('text-xs mt-0.5', hasErrors ? 'text-amber-600 dark:text-amber-500' : 'text-emerald-600 dark:text-emerald-500')}>
+              Replaced {replacedRows} existing row{replacedRows !== 1 ? 's' : ''}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Failed rows table */}
+      {errors.length > 0 && (
+        <div className="space-y-1.5">
+          <p className="text-sm font-semibold">Failed Rows</p>
+          <div className="max-h-[260px] overflow-y-auto rounded-lg border">
+            <ErrorRowsTable errors={errors} />
+          </div>
+        </div>
+      )}
+
+      {/* Skipped employees */}
+      {skippedEmployees.length > 0 && (
+        <SkippedEmployeesDesktopList employees={skippedEmployees} />
+      )}
+
+      <div className="flex justify-end pt-1">
+        <Button onClick={onClose}>Close</Button>
+      </div>
+    </div>
+  );
+};
+
 const SyncWorkLogsDialog = ({ open, onOpenChange, activeBusinessUnits = [] }) => {
   const isMobile = useIsMobile();
+  const queryClient = useQueryClient();
   const [entityId, setEntityId] = useState('all');
-  // Two-step BU pick: `buRootId` is whatever's chosen in the Business Unit dropdown (always a
-  // top-level BU, or a Sub-BU this login is mapped to with no reachable Parent of its own — see
-  // cascadeUnits below); `buSubId` is the separate Sub BU dropdown that appears only once the
-  // chosen root actually has Sub-BUs. The backend rejects a sync scoped to a BU that has Sub-BUs
-  // (it must target one specific Sub-BU instead), so requiring this second pick whenever it
-  // applies is what keeps that request from ever being sent in the first place — see canSync.
   const [buRootId, setBuRootId] = useState('');
   const [buSubId, setBuSubId] = useState('');
   const [monthYear, setMonthYear] = useState(currentMonthYear);
   const [preview, setPreview] = useState(null);
-  // Mobile-only: drives the standalone "Work logs synced successfully!" screen (mockup's Success
-  // State) shown after the sheet itself closes on confirm — mirrors ResourceBudgetPage's mobile
-  // success Dialog pattern. Desktop keeps its existing toast-and-close behavior untouched.
-  const [mobileSuccess, setMobileSuccess] = useState(null);
+  // Unified result state for both mobile and desktop after confirm — replaces old `mobileSuccess`.
+  // null = no result yet; set = show result view (success or partial).
+  const [confirmResult, setConfirmResult] = useState(null);
 
   const { success, error: showError } = useNotification();
   const syncMutation = useSyncEmployeeWorkLogs();
@@ -62,13 +248,6 @@ const SyncWorkLogsDialog = ({ open, onOpenChange, activeBusinessUnits = [] }) =>
       ? activeBusinessUnits.filter((bu) => String(bu.entity_id ?? bu.entityId) === String(id))
       : activeBusinessUnits;
 
-  // components/common/BusinessUnitCascadeSelect's useBuHierarchy expects `{ id, name, parentId }`,
-  // and groups strictly by whatever's IN the list it's given — this login's own mapped BUs, unlike
-  // the full company master that component was originally built against. A Sub-BU this login is
-  // mapped to without also being mapped to its own Parent (a real, if rare, mapping shape) would
-  // otherwise vanish entirely — filtered into childrenByParent under a Parent id no root row ever
-  // reaches. Normalized to `parentId: null` in that case instead, so it surfaces as its own
-  // directly-selectable top-level entry, same as it did in the old flat list.
   const currentBuScope = buOptionsForEntity(entityId);
   const cascadeUnits = useMemo(() => {
     const idsInScope = new Set(currentBuScope.map((bu) => String(bu.id)));
@@ -88,9 +267,6 @@ const SyncWorkLogsDialog = ({ open, onOpenChange, activeBusinessUnits = [] }) =>
   );
   const needsSubBuChoice = subBuOptions.length > 0;
 
-  // Re-seed on every open (not just mount) — a single-BU login gets it pre-selected, a multi-BU
-  // one starts blank so they must choose, and a stale choice from the last time this dialog was
-  // open never survives into a new one.
   useEffect(() => {
     if (!open) return;
     setEntityId('all');
@@ -98,33 +274,27 @@ const SyncWorkLogsDialog = ({ open, onOpenChange, activeBusinessUnits = [] }) =>
     setBuSubId('');
     setMonthYear(currentMonthYear);
     setPreview(null);
+    setConfirmResult(null);
     syncMutation.reset();
     confirmMutation.reset();
   }, [open, activeBusinessUnits]);
 
-  // The Sub-BU pick (once offered) always wins over its own Parent — the Parent alone is only
-  // ever the actual sync target when it has no Sub-BUs to choose between in the first place.
   const buId = needsSubBuChoice ? buSubId : buRootId;
   const buName = activeBusinessUnits.find((bu) => String(bu.id) === buId)?.name ?? null;
   const needsBuChoice = activeBusinessUnits.length > 1;
-  // A BU pick is only required when there's actually more than one to choose from — same rule
-  // as the Upload dialog's Continue button just below in TimesheetList.jsx. A login with zero
-  // mapped BUs (a cross-BU role like Admin/Entity Admin/Platform Admin with no explicit BU
-  // mapping — confirmed live: rut_business_units comes back `[]` for one) never gets `buRootId`
-  // set at all, since the effect above only auto-fills it for the exactly-one case; requiring it
-  // unconditionally here left Sync permanently disabled with no dropdown ever rendering to fix
-  // it from (needsBuChoice is also false for 0, same as for 1).
   const canSync = (!needsBuChoice || (!!buRootId && (!needsSubBuChoice || !!buSubId))) && !!monthYear;
-  // '' (no BU to send) must become null, not Number('') === 0 — sendEmployeeWorkLogs/confirm
-  // already treat a null buId as "let the backend infer scope from role reach", the same
-  // contract explicitBuScope relies on elsewhere.
   const buIdForRequest = buId ? Number(buId) : null;
 
   const resetAndClose = (nextOpen) => onOpenChange(nextOpen);
 
+  // Called from result-view Close — invalidates history so the list refreshes.
+  const closeAfterResult = () => {
+    queryClient.invalidateQueries({ queryKey: ['timesheets', 'import', 'history'] });
+    setConfirmResult(null);
+    resetAndClose(false);
+  };
+
   const handleSync = () => {
-    // Belt-and-braces alongside the disabled button above — canSync already blocks this, but the
-    // request must never fire for a BU with Sub-BUs regardless of how this got triggered.
     if (!canSync) return;
     syncMutation.mutate({ month: monthYear.month, year: monthYear.year, buId: buIdForRequest }, {
       onSuccess: (result) => {
@@ -136,10 +306,12 @@ const SyncWorkLogsDialog = ({ open, onOpenChange, activeBusinessUnits = [] }) =>
           valid_rows: result?.preview ?? [],
           error_rows: result?.errors ?? [],
           canConfirm: result?.canConfirm ?? false,
+          skippedCount: result?.skippedCount ?? 0,
+          skippedEmployees: result?.skippedEmployees ?? [],
+          serverMessage: result?.message ?? null,
+          syncContext: result?.syncContext ?? result?.data?.syncContext ?? null,
         });
       },
-      // Mobile shows a dedicated full-screen error state (driven by syncMutation.isError) instead
-      // of a toast — see the mobile branch below.
       onError: (err) => { if (!isMobile) showError(extractApiError(err)); },
     });
   };
@@ -147,26 +319,44 @@ const SyncWorkLogsDialog = ({ open, onOpenChange, activeBusinessUnits = [] }) =>
   const handleConfirm = () => {
     confirmMutation.mutate({ importId: preview.importId, buId: buIdForRequest }, {
       onSuccess: (res) => {
-        const inserted = res?.data?.insertedRows ?? res?.insertedRows ?? preview.validCount;
+        const d = res?.data ?? res ?? {};
+        const insertedRows = d.insertedRows ?? preview.validCount;
+        const errorRows    = d.errorRows ?? 0;
+        const errors       = d.errors ?? [];
+        const skippedEmployees = d.skippedEmployees ?? [];
+        const syncContext  = d.syncContext ?? null;
+
+        const hasPartial = errorRows > 0 || skippedEmployees.length > 0;
+
         if (isMobile) {
-          // Sheet closes; the standalone success screen (mobileSuccess) takes over next render.
           onOpenChange(false);
-          setMobileSuccess({ inserted });
+          setConfirmResult({ insertedRows, errorRows, errors, skippedEmployees, syncContext });
         } else {
-          success(`${inserted} row(s) synced to the Timesheet.`);
-          resetAndClose(false);
+          if (hasPartial) {
+            // Stay open and show the result view.
+            setConfirmResult({ insertedRows, errorRows, errors, skippedEmployees, syncContext });
+          } else {
+            const mode = syncContext?.mode;
+            const buLabel = syncContext?.businessUnitName ?? buName;
+            const label = mode ? `${mode}: ` : '';
+            success(`${label}${insertedRows} row${insertedRows !== 1 ? 's' : ''} synced to the Timesheet${buLabel ? ` for ${buLabel}` : ''}.`);
+            queryClient.invalidateQueries({ queryKey: ['timesheets', 'import', 'history'] });
+            resetAndClose(false);
+          }
         }
       },
       onError: (err) => { if (!isMobile) showError(extractApiError(err)); },
     });
   };
 
-  // Mobile: the same state/handlers above drive a bottom-sheet flow (select → syncing → preview →
-  // confirming) plus two standalone full-bleed screens for success/error, matching the app's
-  // established mobile pattern (FilterPanel's bottom sheet, ResourceBudgetPage's success Dialog).
-  // Desktop's Dialog below is completely untouched and only reached when this returns early.
+  const allAlreadySynced = preview && !preview.canConfirm && (preview.skippedCount ?? 0) > 0 && (preview.errorCount ?? 0) === 0;
+  const previewHasErrors = preview && !preview.canConfirm && (preview.errorCount ?? 0) > 0;
+
+  // ── MOBILE BRANCH ────────────────────────────────────────────────────────────
   if (isMobile) {
-    const mobileStep = syncMutation.isError && !preview
+    const mobileStep = confirmResult
+      ? 'result'
+      : syncMutation.isError && !preview
       ? 'sync-error'
       : syncMutation.isPending
       ? 'syncing'
@@ -181,19 +371,21 @@ const SyncWorkLogsDialog = ({ open, onOpenChange, activeBusinessUnits = [] }) =>
       : 'preview';
 
     const isLoadingStep = mobileStep === 'syncing' || mobileStep === 'confirming';
-    const isErrorStep = mobileStep === 'sync-error' || mobileStep === 'confirm-error';
+    const isErrorStep   = mobileStep === 'sync-error' || mobileStep === 'confirm-error';
+    const mode = preview?.syncContext?.mode ?? confirmResult?.syncContext?.mode;
 
     return (
       <>
         <Sheet open={open} onOpenChange={resetAndClose}>
           <SheetContent side="bottom" className="flex max-h-[90vh] flex-col gap-0 rounded-t-2xl p-0">
-            {!isLoadingStep && !isErrorStep && (
+            {!isLoadingStep && !isErrorStep && mobileStep !== 'result' && (
               <SheetHeader className="shrink-0 border-b px-4 py-3 text-left">
-                <SheetTitle>Sync Employee Work Logs</SheetTitle>
+                <div className="flex items-center gap-2">
+                  <SheetTitle>Sync Employee Work Logs</SheetTitle>
+                  {mode && <ModeBadge mode={mode} />}
+                </div>
                 <SheetDescription>
-                  {buName
-                    ? `Pull pending ${buName} work logs into the official Timesheet for a given month.`
-                    : 'Pull pending employee-entered work logs into the official Timesheet for a given month.'}
+                  {buName ? `${buName} — ${DIALOG_DESCRIPTION}` : DIALOG_DESCRIPTION}
                 </SheetDescription>
               </SheetHeader>
             )}
@@ -249,12 +441,8 @@ const SyncWorkLogsDialog = ({ open, onOpenChange, activeBusinessUnits = [] }) =>
                   </div>
                 </div>
                 <SheetFooter className="shrink-0 flex-row gap-2 border-t p-3">
-                  <Button variant="outline" className="h-11 flex-1" onClick={() => resetAndClose(false)}>
-                    Cancel
-                  </Button>
-                  <Button className="h-11 flex-1" onClick={handleSync} disabled={!canSync}>
-                    Sync
-                  </Button>
+                  <Button variant="outline" className="h-11 flex-1" onClick={() => resetAndClose(false)}>Cancel</Button>
+                  <Button className="h-11 flex-1" onClick={handleSync} disabled={!canSync}>Sync</Button>
                 </SheetFooter>
               </>
             )}
@@ -272,13 +460,42 @@ const SyncWorkLogsDialog = ({ open, onOpenChange, activeBusinessUnits = [] }) =>
             )}
 
             {mobileStep === 'empty' && (
-              <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
-                <p className="text-sm text-muted-foreground">
-                  No pending employee work log entries found for this month.
-                </p>
-                <Button variant="outline" size="sm" onClick={() => setPreview(null)}>
-                  Try a different month
-                </Button>
+              <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-5">
+                {previewHasErrors ? (
+                  <>
+                    <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800 dark:bg-amber-950/30">
+                      <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+                      <div>
+                        <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">No rows could be synced</p>
+                        <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-400">Fix the issues below and try again.</p>
+                      </div>
+                    </div>
+                    <div className="overflow-x-auto rounded-lg border">
+                      <ErrorRowsTable errors={preview.error_rows} />
+                    </div>
+                  </>
+                ) : allAlreadySynced ? (
+                  <>
+                    <div className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/30 mx-auto">
+                      <CheckCircle2 className="h-7 w-7 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <p className="text-sm font-semibold text-center">All employees already synced</p>
+                    <p className="text-sm text-muted-foreground text-center">
+                      All employees of this BU are already synced for{' '}
+                      {formatMonthYear(monthYear.month, monthYear.year)} from another Business Unit.
+                    </p>
+                    <SkippedEmployeesMobileList employees={preview.skippedEmployees} />
+                  </>
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center mt-8">
+                    No pending employee work log entries found for this month.
+                  </p>
+                )}
+                <div className="mt-auto pt-2">
+                  <Button variant="outline" size="sm" className="w-full" onClick={() => setPreview(null)}>
+                    <Calendar className="h-4 w-4" /> Try a different month
+                  </Button>
+                </div>
               </div>
             )}
 
@@ -294,13 +511,8 @@ const SyncWorkLogsDialog = ({ open, onOpenChange, activeBusinessUnits = [] }) =>
                   </p>
                 </div>
                 <SheetFooter className="shrink-0 flex-row gap-2 border-t p-3">
-                  <Button variant="outline" className="h-11 flex-1" onClick={() => resetAndClose(false)}>
-                    Cancel
-                  </Button>
-                  <Button
-                    className="h-11 flex-1"
-                    onClick={() => (mobileStep === 'sync-error' ? syncMutation.reset() : confirmMutation.reset())}
-                  >
+                  <Button variant="outline" className="h-11 flex-1" onClick={() => resetAndClose(false)}>Cancel</Button>
+                  <Button className="h-11 flex-1" onClick={() => (mobileStep === 'sync-error' ? syncMutation.reset() : confirmMutation.reset())}>
                     Try Again
                   </Button>
                 </SheetFooter>
@@ -327,7 +539,18 @@ const SyncWorkLogsDialog = ({ open, onOpenChange, activeBusinessUnits = [] }) =>
                 </div>
 
                 <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-3">
+                  {(preview.skippedCount ?? 0) > 0 && (
+                    <Alert className="border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30">
+                      <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                      <AlertDescription className="text-amber-800 dark:text-amber-300 text-xs">
+                        {preview.serverMessage ?? `${preview.skippedCount} employee${preview.skippedCount !== 1 ? 's' : ''} already synced — skipped.`}
+                        <SkippedEmployeesMobileList employees={preview.skippedEmployees} />
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
                   <div className="flex flex-wrap items-center gap-2">
+                    {preview.syncContext?.mode && <ModeBadge mode={preview.syncContext.mode} />}
                     <Badge className="gap-1.5 bg-green-100 text-green-700 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400">
                       <CheckCircle2 className="h-3.5 w-3.5" />
                       {preview.validCount} valid
@@ -357,80 +580,152 @@ const SyncWorkLogsDialog = ({ open, onOpenChange, activeBusinessUnits = [] }) =>
 
                   {preview.error_rows.map((row, idx) => (
                     <div key={idx} className="rounded-lg border border-destructive/40 bg-destructive/5 p-3">
-                      <p className="font-mono text-xs text-muted-foreground">
-                        Row {row.rowNumber ?? row.row_number ?? idx + 1}
-                      </p>
+                      <p className="font-mono text-xs text-muted-foreground">Row {row.rowNumber ?? row.row_number ?? idx + 1}</p>
                       <p className="mt-1 text-sm text-destructive">
-                        {row.errors?.length > 0
-                          ? row.errors.join(', ')
-                          : row.message ?? row.error_message ?? row.error ?? '—'}
+                        {row.errors?.length > 0 ? row.errors.join(', ') : row.message ?? row.error_message ?? row.error ?? '—'}
                       </p>
                     </div>
                   ))}
                 </div>
 
                 <SheetFooter className="shrink-0 flex-row gap-2 border-t p-3">
-                  <Button variant="outline" className="h-11 flex-1" onClick={() => setPreview(null)}>
-                    Cancel
-                  </Button>
+                  <Button variant="outline" className="h-11 flex-1" onClick={() => setPreview(null)}>Cancel</Button>
                   <Button
                     className="h-11 flex-1"
                     onClick={handleConfirm}
-                    disabled={!preview.canConfirm || preview.validCount === 0}
+                    disabled={!preview.canConfirm || preview.validCount === 0 || confirmMutation.isPending}
                   >
-                    Confirm Import
+                    {confirmMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Confirm Import'}
+                  </Button>
+                </SheetFooter>
+              </>
+            )}
+
+            {/* Result step — shown in-sheet after confirm completes on mobile */}
+            {mobileStep === 'result' && confirmResult && (
+              <>
+                <SheetHeader className="shrink-0 border-b px-4 py-3 text-left">
+                  <div className="flex items-center gap-2">
+                    <SheetTitle>
+                      {confirmResult.errorRows > 0 ? 'Sync partially completed' : 'Work logs synced!'}
+                    </SheetTitle>
+                    {confirmResult.syncContext?.mode && <ModeBadge mode={confirmResult.syncContext.mode} />}
+                  </div>
+                </SheetHeader>
+                <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-4">
+                  {confirmResult.errorRows > 0 ? (
+                    <>
+                      <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800 dark:bg-amber-950/30">
+                        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+                        <div>
+                          <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+                            {confirmResult.insertedRows} synced, {confirmResult.errorRows} failed
+                          </p>
+                          {confirmResult.syncContext?.businessUnitName && (
+                            <p className="text-xs text-amber-700 dark:text-amber-400">{confirmResult.syncContext.businessUnitName}</p>
+                          )}
+                          {confirmResult.syncContext?.mode === 'RESYNC' && (confirmResult.syncContext?.replacedRows ?? 0) > 0 && (
+                            <p className="text-xs text-amber-600 dark:text-amber-500 mt-0.5">
+                              Replaced {confirmResult.syncContext.replacedRows} existing row{confirmResult.syncContext.replacedRows !== 1 ? 's' : ''}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      {confirmResult.errors?.length > 0 && (
+                        <div className="overflow-x-auto rounded-lg border">
+                          <ErrorRowsTable errors={confirmResult.errors} />
+                        </div>
+                      )}
+                      {confirmResult.skippedEmployees?.length > 0 && (
+                        <div>
+                          <p className="text-sm font-medium mb-1.5">{confirmResult.skippedEmployees.length} employees skipped</p>
+                          <SkippedEmployeesMobileList employees={confirmResult.skippedEmployees} />
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100">
+                        <CheckCircle2 className="h-8 w-8 text-emerald-600" />
+                      </div>
+                      <p className="text-center text-base font-semibold">
+                        {confirmResult.insertedRows} row{confirmResult.insertedRows === 1 ? '' : 's'} synced successfully!
+                      </p>
+                      {confirmResult.syncContext?.businessUnitName && (
+                        <p className="text-center text-sm text-muted-foreground">{confirmResult.syncContext.businessUnitName}</p>
+                      )}
+                      {confirmResult.syncContext?.mode === 'RESYNC' && (confirmResult.syncContext?.replacedRows ?? 0) > 0 && (
+                        <p className="text-center text-xs text-muted-foreground">
+                          Replaced {confirmResult.syncContext.replacedRows} existing row{confirmResult.syncContext.replacedRows !== 1 ? 's' : ''}
+                        </p>
+                      )}
+                    </>
+                  )}
+                </div>
+                <SheetFooter className="shrink-0 flex-row gap-2 border-t p-3">
+                  <Button
+                    variant="outline"
+                    className="h-11 flex-1"
+                    onClick={() => {
+                      closeAfterResult();
+                      setPreview(null);
+                      onOpenChange(true);
+                    }}
+                  >
+                    Sync Another Month
+                  </Button>
+                  <Button className="h-11 flex-1" onClick={closeAfterResult}>
+                    Done
                   </Button>
                 </SheetFooter>
               </>
             )}
           </SheetContent>
         </Sheet>
-
-        <Dialog open={!!mobileSuccess} onOpenChange={(o) => !o && setMobileSuccess(null)}>
-          <DialogContent className="text-center">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100">
-              <CheckCircle2 className="h-8 w-8 text-emerald-600" />
-            </div>
-            <p className="mt-4 text-base font-semibold">Work logs synced successfully!</p>
-            <p className="mt-1.5 text-sm text-muted-foreground">
-              {mobileSuccess?.inserted} row{mobileSuccess?.inserted === 1 ? '' : 's'} have been imported into the
-              official Timesheet for {formatMonthYear(monthYear.month, monthYear.year)}.
-            </p>
-            <div className="mt-5 flex flex-col gap-2">
-              <Button className="h-11 w-full" onClick={() => setMobileSuccess(null)}>
-                View Timesheet Imports
-              </Button>
-              <Button
-                variant="outline"
-                className="h-11 w-full"
-                onClick={() => {
-                  setMobileSuccess(null);
-                  setPreview(null);
-                  onOpenChange(true);
-                }}
-              >
-                Sync Another Month
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
       </>
     );
   }
 
+  // ── DESKTOP BRANCH ───────────────────────────────────────────────────────────
+  const dialogWidth = confirmResult
+    ? 'sm:max-w-2xl'
+    : !preview
+    ? 'sm:max-w-[600px]'
+    : preview.canConfirm
+    ? 'sm:max-w-3xl'
+    : previewHasErrors
+    ? 'sm:max-w-2xl'
+    : 'sm:max-w-[640px]';
+
+  const mode = preview?.syncContext?.mode;
+
   return (
     <Dialog open={open} onOpenChange={resetAndClose}>
-      <DialogContent className={preview ? 'sm:max-w-3xl' : 'sm:max-w-[420px]'}>
-        <DialogHeader>
-          <DialogTitle>Sync Employee Work Logs</DialogTitle>
-          <DialogDescription>
-            {buName
-              ? `Pull pending ${buName} work logs into the official Timesheet for a given month.`
-              : 'Pull pending employee-entered work logs into the official Timesheet for a given month.'}
-          </DialogDescription>
+      <DialogContent className={dialogWidth}>
+        <DialogHeader className="pb-4 border-b">
+          <div className="flex items-start gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+              <RefreshCw className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <DialogTitle className="text-lg leading-tight">Sync Employee Work Logs</DialogTitle>
+                {(mode || confirmResult?.syncContext?.mode) && (
+                  <ModeBadge mode={mode ?? confirmResult?.syncContext?.mode} />
+                )}
+              </div>
+              <DialogDescription className="mt-1">
+                {buName ? `${buName} • ` : ''}{DIALOG_DESCRIPTION}
+              </DialogDescription>
+            </div>
+          </div>
         </DialogHeader>
 
-        {!preview ? (
+        {/* Step: confirm result view */}
+        {confirmResult ? (
+          <ConfirmResultView result={confirmResult} onClose={closeAfterResult} />
+        ) : !preview ? (
+          /* Step: form */
           <>
             <div className="grid gap-4 py-4">
               {needsBuChoice && buEntityOptions.length > 1 && (
@@ -476,30 +771,67 @@ const SyncWorkLogsDialog = ({ open, onOpenChange, activeBusinessUnits = [] }) =>
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => resetAndClose(false)} disabled={syncMutation.isPending}>
-                Cancel
-              </Button>
+              <Button variant="outline" onClick={() => resetAndClose(false)} disabled={syncMutation.isPending}>Cancel</Button>
               <Button onClick={handleSync} disabled={!canSync || syncMutation.isPending}>
                 {syncMutation.isPending ? (
-                  <span className="flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin" /> Syncing…
-                  </span>
-                ) : (
-                  'Sync'
-                )}
+                  <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Syncing…</span>
+                ) : 'Sync'}
               </Button>
             </DialogFooter>
           </>
         ) : !preview.canConfirm ? (
-          <div className="py-8 text-center">
-            <p className="text-sm text-muted-foreground">
-              No pending employee work log entries found for this month.
-            </p>
-            <Button variant="outline" size="sm" className="mt-4" onClick={() => setPreview(null)}>
-              Try a different month
-            </Button>
+          /* Step: preview returned no confirmable rows */
+          <div className="space-y-3 pt-2 pb-1">
+            {previewHasErrors ? (
+              <>
+                <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 dark:border-amber-800 dark:bg-amber-950/30">
+                  <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+                  <div>
+                    <p className="font-semibold text-amber-800 dark:text-amber-200">No rows could be synced</p>
+                    <p className="mt-0.5 text-sm text-amber-700 dark:text-amber-400">Fix the issues below and try again.</p>
+                  </div>
+                </div>
+                <div className="max-h-[280px] overflow-y-auto rounded-lg border">
+                  <ErrorRowsTable errors={preview.error_rows} />
+                </div>
+              </>
+            ) : allAlreadySynced ? (
+              <>
+                <div className="flex items-center gap-4 rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-4 dark:border-emerald-800 dark:bg-emerald-950/30">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-2 border-emerald-400 bg-white dark:bg-emerald-900/50">
+                    <CheckCircle2 className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-emerald-800 dark:text-emerald-200">All employees already synced</p>
+                    <p className="mt-0.5 text-sm text-emerald-700 dark:text-emerald-400">
+                      All employees of this BU are already synced for{' '}
+                      <span className="font-semibold">{formatMonthYear(monthYear.month, monthYear.year)}</span>{' '}
+                      from another Business Unit.
+                    </p>
+                  </div>
+                </div>
+                {preview.skippedEmployees?.length > 0 && (
+                  <SkippedEmployeesDesktopList employees={preview.skippedEmployees} />
+                )}
+              </>
+            ) : (
+              <div className="flex items-center gap-4 rounded-xl border bg-muted/30 px-5 py-4">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-2 border-muted-foreground/30 bg-background">
+                  <CheckCircle2 className="h-6 w-6 text-muted-foreground" />
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  No pending employee work log entries found for this month.
+                </p>
+              </div>
+            )}
+            <div className="flex justify-end pt-1">
+              <Button variant="outline" onClick={() => setPreview(null)}>
+                <Calendar className="h-4 w-4" /> Try a different month
+              </Button>
+            </div>
           </div>
         ) : (
+          /* Step: preview table with valid rows — confirm import */
           <ImportPreviewPanel
             preview={preview}
             onConfirm={handleConfirm}

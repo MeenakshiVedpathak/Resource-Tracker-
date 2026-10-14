@@ -10,6 +10,7 @@ import { isOffDay } from '@/utils/weekOffPolicy';
 import SummaryRow from './SummaryRow';
 import SummaryFooter from './SummaryFooter';
 import { FIRST_COL_WIDTH, DAY_COL_WIDTH, TOTAL_COL_WIDTH } from './summaryTableLayout';
+import { sumHours } from '@/utils/formatters';
 
 // Responsive freeze-pane table for the Monthly Summary tab: sticky header, sticky first
 // column (Service/Project), sticky last column (Total), sticky bottom TOTAL row. A single
@@ -110,15 +111,14 @@ const SummaryTable = ({
           ...row,
           isRolledUp: false,
           displayHoursByDay: row.hoursByDay,
-          total: days.reduce((sum, day) => sum + cellValue(row, day), 0),
+          total: sumHours(days.map((day) => cellValue(row, day))),
         };
       }
 
       const descendants = descendantsByKey.get(row.rowKey) ?? [];
       const displayHoursByDay = {};
       days.forEach((day) => {
-        displayHoursByDay[day] = cellValue(row, day)
-          + descendants.reduce((sum, d) => sum + cellValue(d, day), 0);
+        displayHoursByDay[day] = sumHours([cellValue(row, day), ...descendants.map((d) => cellValue(d, day))]);
       });
 
       return {
@@ -126,7 +126,7 @@ const SummaryTable = ({
         isRolledUp: true,
         subtreeCount: descendants.length,
         displayHoursByDay,
-        total: days.reduce((sum, day) => sum + displayHoursByDay[day], 0),
+        total: sumHours(days.map((day) => displayHoursByDay[day])),
       };
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -140,14 +140,14 @@ const SummaryTable = ({
   const columnTotals = useMemo(() => {
     const totals = {};
     days.forEach((day) => {
-      totals[day] = rows.reduce((sum, row) => sum + cellValue(row, day), 0);
+      totals[day] = sumHours(rows.map((row) => cellValue(row, day)));
     });
     return totals;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [days, rows, edits]);
 
   const grandTotal = useMemo(
-    () => Object.values(columnTotals).reduce((sum, v) => sum + v, 0),
+    () => sumHours(Object.values(columnTotals)),
     [columnTotals]
   );
 

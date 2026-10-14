@@ -16,7 +16,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { WeekPicker } from '@/components/ui/week-picker';
-import { SearchableSelect } from '@/components/ui/searchable-select';
+import { MultiSelect } from '@/components/ui/multi-select';
 import PageHeader from '@/components/common/PageHeader';
 import EmptyState from '@/components/common/EmptyState';
 import FilterToggleButton from '@/components/common/FilterToggleButton';
@@ -187,7 +187,7 @@ const TimesheetApprovalStatusReport = () => {
   const [monthYear, setMonthYear] = useState({ month: dayjs().month() + 1, year: dayjs().year() });
   const [range, setRange] = useState(null);
   const [aggregateMonthly, setAggregateMonthly] = useState(false);
-  const [employeeId, setEmployeeId] = useState('all');
+  const [employeeIds, setEmployeeIds] = useState([]);
   const [expandedKeys, setExpandedKeys] = useState(() => new Set());
   // Guards the single reminder button: disabled from the click until the response lands, so a
   // double-click can't fire two POSTs (the backend rate-limits as a backstop).
@@ -195,10 +195,7 @@ const TimesheetApprovalStatusReport = () => {
 
   const { data: myTeam = [] } = useMyTeamEmployees();
   const employeeOptions = useMemo(
-    () => [
-      { label: 'My Whole Team', value: 'all' },
-      ...myTeam.map((e) => ({ label: e.full_name, value: String(e.id) })),
-    ],
+    () => myTeam.map((e) => ({ label: e.full_name, value: String(e.id) })),
     [myTeam]
   );
   const isTeamLead = myTeam.length > 0;
@@ -223,13 +220,13 @@ const TimesheetApprovalStatusReport = () => {
 
   const params = {
     ...periodParams,
-    ...(isTeamLead && employeeId !== 'all' ? { employee_id: employeeId } : {}),
+    ...(isTeamLead && employeeIds.length > 0 ? { employee_ids: employeeIds.join(',') } : {}),
   };
 
   const { data, isLoading, isError, error } = useTimesheetApprovalStatusReport(params, hasSelection);
 
   const buckets = data ?? [];
-  const showEmployeeName = isTeamLead && (employeeId === 'all' || buckets.length > 1);
+  const showEmployeeName = isTeamLead && (employeeIds.length === 0 || buckets.length > 1);
   const errorMessage = isError ? extractApiError(error) : null;
   const showLoading = hasSelection && isLoading;
 
@@ -242,10 +239,10 @@ const TimesheetApprovalStatusReport = () => {
     });
   };
 
-  const activeFilterCount = (isTeamLead && employeeId !== 'all' ? 1 : 0) + (reportType === 'range' && aggregateMonthly ? 1 : 0);
+  const activeFilterCount = (isTeamLead && employeeIds.length > 0 ? 1 : 0) + (reportType === 'range' && aggregateMonthly ? 1 : 0);
 
   const clearFilters = () => {
-    setEmployeeId('all');
+    setEmployeeIds([]);
     setAggregateMonthly(false);
   };
 
@@ -257,7 +254,7 @@ const TimesheetApprovalStatusReport = () => {
   // Not a permission gate: `employeeId === 'all'` is true for (a) every non-team-lead Employee,
   // who only ever sees their own data, and (b) a Team Lead on the default "My Whole Team" filter,
   // which surfaces their own buckets too. So anyone who can see their own timesheet can use it.
-  const showRemindButton = employeeId === 'all';
+  const showRemindButton = employeeIds.length === 0;
 
   // Purely a notification: no query invalidation and no refetch, so nothing on screen shifts and
   // the reminder can't be mistaken for a status change. The request carries no body — the backend
@@ -389,11 +386,11 @@ const TimesheetApprovalStatusReport = () => {
         {isTeamLead && (
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs">Employee</Label>
-            <SearchableSelect
+            <MultiSelect
               options={employeeOptions}
-              value={employeeId}
-              onValueChange={(v) => v && setEmployeeId(v)}
-              placeholder="My Whole Team"
+              value={employeeIds}
+              onValueChange={setEmployeeIds}
+              placeholder="All Employees"
               searchPlaceholder="Search employee..."
               className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)] bg-white"
             />

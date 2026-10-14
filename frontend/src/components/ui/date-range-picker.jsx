@@ -73,6 +73,7 @@ export function DateRangePicker({
   placeholder = 'Select date range',
   className,
   clearable = true,
+  maxDate = null,
 }) {
   const [open, setOpen] = useState(false);
   const [selecting, setSelecting] = useState('start');
@@ -104,7 +105,10 @@ export function DateRangePicker({
     );
   }
 
+  const isDisabled = (dateStr) => maxDate && dateStr > maxDate;
+
   function handleDayClick(dateStr) {
+    if (isDisabled(dateStr)) return;
     if (selecting === 'start') {
       onChange({ startDate: dateStr, endDate: null });
       setSelecting('end');
@@ -147,11 +151,20 @@ export function DateRangePicker({
     }),
   ];
 
+  // Compact trigger: omit year when both dates share the same year to save space.
+  function fmtShort(dateStr) {
+    if (!dateStr) return '';
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return `${String(day).padStart(2, '0')} ${MONTH_NAMES[month - 1].slice(0, 3)}`;
+  }
+  const sameYear = startDate && endDate && startDate.slice(0, 4) === endDate.slice(0, 4);
   const triggerLabel =
     startDate && endDate
-      ? `${formatDate(startDate)} → ${formatDate(endDate)}`
+      ? sameYear
+        ? `${fmtShort(startDate)} → ${fmtShort(endDate)} ${endDate.slice(0, 4)}`
+        : `${formatDate(startDate)} → ${formatDate(endDate)}`
       : startDate
-      ? `${formatDate(startDate)} → ...`
+      ? `${fmtShort(startDate)} → ...`
       : null;
 
   return (
@@ -186,7 +199,7 @@ export function DateRangePicker({
 
       {/* Fixed w-64 (not w-auto) so this doesn't visibly resize between the day grid and the year
           grid — same fix and same reasoning as DatePicker's identical PopoverContent. */}
-      <PopoverContent className="w-64 p-3" align="start">
+      <PopoverContent className="w-52 p-2" align="start">
         {view === 'days' ? (
           <>
             {/* Month navigation */}
@@ -212,7 +225,8 @@ export function DateRangePicker({
               <button
                 type="button"
                 onClick={nextMonth}
-                className="rounded p-1 hover:bg-accent transition-colors"
+                disabled={maxDate && (navDate.year > new Date().getFullYear() || (navDate.year === new Date().getFullYear() && navDate.month >= new Date().getMonth() + 1))}
+                className="rounded p-1 hover:bg-accent transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 <ChevronRight className="h-4 w-4" />
               </button>
@@ -232,8 +246,8 @@ export function DateRangePicker({
               ))}
             </div>
 
-            {/* Day grid — justify-items-center: see DatePicker's identical fix, same reason
-                (grid-cols-7 splits w-64 into columns wider than the 2rem day buttons need). */}
+            {/* Day grid — justify-items-center: grid-cols-7 splits the fixed width into columns
+                wider than the 2rem day buttons need, so center them to avoid gaps. */}
             <div className="grid grid-cols-7 justify-items-center">
               {days.map((dateStr, i) => {
                 if (!dateStr) return <div key={`e-${i}`} className="h-8 w-8" />;
@@ -241,20 +255,23 @@ export function DateRangePicker({
                 const start = isStart(dateStr);
                 const end = isEnd(dateStr);
                 const inRange = isInRange(dateStr);
+                const disabled = isDisabled(dateStr);
                 const day = parseInt(dateStr.split('-')[2]);
 
                 return (
                   <button
                     key={dateStr}
                     type="button"
+                    disabled={disabled}
                     onClick={() => handleDayClick(dateStr)}
-                    onMouseEnter={() => selecting === 'end' && setHoverDate(dateStr)}
+                    onMouseEnter={() => !disabled && selecting === 'end' && setHoverDate(dateStr)}
                     onMouseLeave={() => selecting === 'end' && setHoverDate(null)}
                     className={cn(
                       'h-8 w-8 text-xs flex items-center justify-center transition-colors relative',
-                      (start || end) && 'bg-primary text-primary-foreground font-semibold rounded-full z-10',
-                      inRange && 'bg-primary/15 text-foreground rounded-none',
-                      !start && !end && !inRange && 'hover:bg-accent rounded-full'
+                      disabled && 'opacity-30 cursor-not-allowed',
+                      !disabled && (start || end) && 'bg-primary text-primary-foreground font-semibold rounded-full z-10',
+                      !disabled && inRange && 'bg-primary/15 text-foreground rounded-none',
+                      !disabled && !start && !end && !inRange && 'hover:bg-accent rounded-full'
                     )}
                   >
                     {day}

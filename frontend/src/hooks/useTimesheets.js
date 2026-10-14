@@ -62,6 +62,14 @@ export const useDeleteTimesheet = () => {
 // actually belongs to. Rides in the query key so picking a different BU (or resolving it lazily,
 // see TimesheetImportDetail.jsx) refetches under the right header instead of serving a
 // wrong-BU-scoped cache entry.
+export const useTimesheetImportById = (id, options = {}) =>
+  useQuery({
+    queryKey: QUERY_KEYS.TIMESHEET_IMPORT(id),
+    queryFn: () => timesheetsApi.getImportById(id),
+    enabled: !!id,
+    ...options,
+  });
+
 export const useTimesheetImportRows = (id, buId = null, options = {}) =>
   useQuery({
     queryKey: [...QUERY_KEYS.TIMESHEET_IMPORT_ROWS(id), buId ?? 'active'],

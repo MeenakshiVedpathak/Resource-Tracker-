@@ -22,6 +22,7 @@ import SearchInput from '@/components/common/SearchInput';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { SearchableSelect } from '@/components/ui/searchable-select';
+import { MultiSelect } from '@/components/ui/multi-select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { WeekPicker } from '@/components/ui/week-picker';
@@ -137,7 +138,7 @@ const TeamLeadTimesheetApproval = () => {
     generationRef.current += 1;
     setGeneration(generationRef.current);
     setFilterValue(v);
-    setSelectedEmployeeId('');
+    setSelectedEmployeeIds([]);
   };
 
   // Picking a different Entity can strand a BU (and the selected Employee chained off it) that no
@@ -199,24 +200,18 @@ const TeamLeadTimesheetApproval = () => {
   const isLoading = needsBuFanOut ? fannedOutQuery.isLoading : singleBuQuery.isLoading;
   const hasError = needsBuFanOut ? fannedOutQuery.isError : singleBuQuery.isError;
 
-  // ── Deep-link Employee narrowing ────────────────────────────────────────────────────────────
-  // No visible "Employee" filter control any more — the header Search box covers manual narrowing
-  // by name/code — but `?employee_id=` still needs somewhere to land, so this stays purely internal
-  // state driven only by the effect below.
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
-  const selectedEmployee = employeeList.find((e) => String(e.id) === selectedEmployeeId);
+  // ── Employee filter (multiselect) + deep-link narrowing ────────────────────────────────────
+  // `selectedEmployeeIds` drives both the visible MultiSelect filter and the legacy
+  // `?employee_id=` deep-link (applied once on mount, sets exactly that one employee).
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState([]);
 
   // Apply the deep-link param exactly once — after the team list has loaded and the param id
-  // is confirmed to be one of the Team Lead's mapped employees. Fires on every `employeeList`
-  // change but the `deepLinkEmployeeId` ref is cleared after first application so subsequent
-  // re-renders (e.g. from BU filter changes) don't override the Team Lead's own selection.
+  // is confirmed to be one of the Team Lead's mapped employees.
   useEffect(() => {
     if (!deepLinkEmployeeId.current || isLoading || employeeList.length === 0) return;
     const target = String(deepLinkEmployeeId.current);
     const isMapped = employeeList.some((e) => String(e.id) === target);
-    if (isMapped) setSelectedEmployeeId(target);
-    // Clear regardless — if the employee isn't in the list the link is stale and we don't
-    // want to retry on every subsequent list update.
+    if (isMapped) setSelectedEmployeeIds([target]);
     deepLinkEmployeeId.current = '';
   }, [employeeList, isLoading]);
 
@@ -247,13 +242,10 @@ const TeamLeadTimesheetApproval = () => {
   // week instead of two free clicks), so only Monthly needs a distinct branch here.
   const effectiveDateRange = logType === 'monthly' ? monthYearToRange(monthYear) : dateRange;
 
-  // Deep-link narrowing to one specific Employee only — `search` is now a real backend filter
-  // (matches employee name, employee code, or Service PO name server-side), so it no longer needs
-  // to pre-narrow which Employees get fetched the way it used to.
-  const employeesInScope = useMemo(
-    () => (selectedEmployee ? [selectedEmployee] : employeeList),
-    [selectedEmployee, employeeList],
-  );
+  const employeesInScope = useMemo(() => {
+    if (selectedEmployeeIds.length === 0) return employeeList;
+    return employeeList.filter((e) => selectedEmployeeIds.includes(String(e.id)));
+  }, [selectedEmployeeIds, employeeList]);
   const employeeIds = useMemo(() => employeesInScope.map((e) => e.id), [employeesInScope]);
 
   // Same filters the table itself is showing, minus page/limit/sortBy/sortOrder (export always
@@ -317,7 +309,7 @@ const TeamLeadTimesheetApproval = () => {
   const timesheetActiveFilterCount =
     (entityId !== ALL_ENTITIES ? 1 : 0)
     + (selectedBuId != null ? 1 : 0)
-    + (selectedEmployeeId ? 1 : 0)
+    + (selectedEmployeeIds.length > 0 ? 1 : 0)
     + (logType !== 'daily' ? 1 : 0)
     + (logType !== 'monthly' && dateRange?.startDate ? 1 : 0)
     + (statusFilter !== 'all' ? 1 : 0)
@@ -332,6 +324,7 @@ const TeamLeadTimesheetApproval = () => {
   const clearTimesheetFilters = () => {
     setEntityId(ALL_ENTITIES);
     handleBuChange(ALL_BUS);
+    setSelectedEmployeeIds([]);
     setLogType('daily');
     setDateRange(null);
     setMonthYear(currentMonthYear());
@@ -353,6 +346,20 @@ const TeamLeadTimesheetApproval = () => {
       <EntityFilter value={entityId} onChange={handleEntityChange} />
 
       <BusinessUnitFilter value={filterValue} entityId={entityId} onChange={handleBuChange} />
+
+      {employeeList.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Employee</Label>
+          <MultiSelect
+            options={employeeList.map((e) => ({ label: e.full_name, value: String(e.id) }))}
+            value={selectedEmployeeIds}
+            onValueChange={setSelectedEmployeeIds}
+            placeholder="All Employees"
+            searchPlaceholder="Search employee..."
+            className="h-[clamp(1.875rem,2vw,2.25rem)] w-full text-[clamp(0.75rem,0.85vw,0.875rem)] bg-white"
+          />
+        </div>
+      )}
 
       <div className="flex flex-col gap-1.5">
         <Label className="text-xs">Log Type</Label>

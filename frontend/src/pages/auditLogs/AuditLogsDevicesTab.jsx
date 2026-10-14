@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { createColumnHelper } from '@tanstack/react-table';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, RefreshCw } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { useAuditDevices } from '@/hooks/useAuditLogs';
 import { useSelectableBusinessUnits } from '@/hooks/useSelectableBusinessUnits';
 import { useActiveEmployees } from '@/hooks/useEmployees';
@@ -62,7 +63,7 @@ const AuditLogsDevicesTab = ({ onOpenDevice, toolbarSlot }) => {
     buId: ALL_BUS,
   };
 
-  const { data, isPending, isError, error } = useAuditDevices(params);
+  const { data, isPending, isFetching, isError, error, refetch } = useAuditDevices(params);
   const errorMessage = isError ? extractApiError(error) : null;
   const records = Array.isArray(data?.data?.records) ? data.data.records : [];
   const meta = data?.meta ?? {};
@@ -188,6 +189,10 @@ const AuditLogsDevicesTab = ({ onOpenDevice, toolbarSlot }) => {
         placeholder="Search user name or code…"
         className="w-full sm:w-60"
       />
+      <Button variant="outline" size="toolbar" onClick={() => refetch()} disabled={isFetching}>
+        <RefreshCw className={`h-4 w-4${isFetching ? ' animate-spin' : ''}`} />
+        Refresh
+      </Button>
       <FilterToggleButton isOpen={filtersOpen} onToggle={() => setFiltersOpen((p) => !p)} activeCount={activeFilterCount} />
     </div>
   );

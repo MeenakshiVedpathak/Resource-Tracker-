@@ -150,7 +150,7 @@ export function HierarchicalBuSelector({
             <ChevronDown className="h-[1em] w-[1em] shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+        <PopoverContent className="min-w-[var(--radix-popover-trigger-width)] w-max max-w-xs p-0" align="start">
           <Command shouldFilter={false}>
             <CommandInput placeholder={searchPlaceholder} value={search} onValueChange={setSearch} />
             <div className="flex items-center justify-between border-b px-2 py-1.5">
@@ -199,7 +199,7 @@ export function HierarchicalBuSelector({
                           <span className="w-4 shrink-0" />
                         )}
                         <Checkbox checked={isChecked(root.id)} className="pointer-events-none" />
-                        <span className="truncate font-medium">{root.label}</span>
+                        <span className="truncate font-medium" title={root.label}>{root.label}</span>
                       </CommandItem>
                       {hasChildren && expanded && children.map((child) => (
                         <CommandItem
@@ -209,7 +209,7 @@ export function HierarchicalBuSelector({
                           className="gap-1.5 pl-9"
                         >
                           <Checkbox checked={isChecked(child.id)} className="pointer-events-none" />
-                          <span className="truncate">{child.label}</span>
+                          <span className="truncate" title={child.label}>{child.label}</span>
                         </CommandItem>
                       ))}
                     </div>

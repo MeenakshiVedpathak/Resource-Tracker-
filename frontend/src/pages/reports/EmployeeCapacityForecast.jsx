@@ -1,4 +1,4 @@
-﻿import { useState, useMemo } from 'react';
+﻿import { useState, useMemo, useEffect, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { createColumnHelper } from '@tanstack/react-table';
 import { Download, Info } from 'lucide-react';
@@ -131,8 +131,17 @@ const EmployeeCapacityForecast = () => {
   const [buIds, setBuIds] = useState([]);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
+  const [isRecomputing, setIsRecomputing] = useState(false);
+  const recomputeTimer = useRef(null);
 
   const debouncedBenchThresholdHours = useDebounce(benchThresholdHours, 400);
+
+  useEffect(() => {
+    setIsRecomputing(true);
+    clearTimeout(recomputeTimer.current);
+    recomputeTimer.current = setTimeout(() => setIsRecomputing(false), 500);
+    return () => clearTimeout(recomputeTimer.current);
+  }, [benchThresholdHours]);
 
   const params = {
     ...(monthYear && { month: monthYear.month, year: monthYear.year }),
@@ -266,7 +275,7 @@ const EmployeeCapacityForecast = () => {
       <DataTable
         columns={columns}
         data={pagedRecords}
-        isLoading={isPending}
+        isLoading={isPending || isRecomputing}
         pagination={{ page, limit, total: filteredRecords.length }}
         onPageChange={setPage}
         onPageSizeChange={(s) => { setLimit(s); setPage(1); }}

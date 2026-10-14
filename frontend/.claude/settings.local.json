@@ -13,7 +13,7 @@
       "Bash(npx --yes playwright screenshot --help)",
       "Bash(npx --yes -p playwright node authshot.js)",
       "Bash(NODE_PATH=\"C:\\\\Users\\\\Admin\\\\AppData\\\\Local\\\\npm-cache\\\\_npx\\\\e41f203b7505f1fb\\\\node_modules\" node authshot.js)",
-      "Bash(curl -sS -m 8 -o /dev/null -w \"HTTP %{http_code}\\\\n\" https://24d9qpd0-5555.inc1.devtunnels.ms/api/v1)",
+      "Bash(curl -sS -m 8 -o /dev/null -w \"HTTP %{http_code}\\\\n\" https://24d9qpd0-5050.inc1.devtunnels.ms/api/v1)",
       "Bash(NODE_PATH=\"C:\\\\Users\\\\Admin\\\\AppData\\\\Local\\\\npm-cache\\\\_npx\\\\e41f203b7505f1fb\\\\node_modules\" node diag.js)",
       "Bash(NODE_PATH=\"C:\\\\Users\\\\Admin\\\\AppData\\\\Local\\\\npm-cache\\\\_npx\\\\e41f203b7505f1fb\\\\node_modules\" node dialogshot.js)",
       "Bash(lsof -ti:5173 -sTCP:LISTEN)",

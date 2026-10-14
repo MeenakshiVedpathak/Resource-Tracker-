@@ -20,6 +20,9 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import MobilePagination from '@/components/common/MobilePagination';
+import {
+  Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
+} from '@/components/ui/table';
 import { cn } from '@/utils/cn';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -186,10 +189,12 @@ const exportToExcel = (records, columns, month, year, mode = 'M') => {
 };
 
 // ─── column helpers ──────────────────────────────────────────────────────────
-const th = (...cls) =>
-  cn('px-2.5 py-2 text-left text-xs font-semibold border-r border-border whitespace-nowrap last:border-r-0', ...cls);
-const td = (...cls) =>
-  cn('px-2.5 py-2 text-xs border-r border-border last:border-r-0', ...cls);
+// No vertical border-r between columns and no fixed text-xs/padding here — matches every other
+// table's own TableHead/TableCell defaults (fluid clamp() sizing, horizontal row-dividers only,
+// no per-cell vertical rules) instead of this page's former one-off bordered-grid look. Callers
+// of th()/td() only ever need to add width/alignment/sticky/background utilities on top.
+const th = (...cls) => cn('whitespace-nowrap', ...cls);
+const td = (...cls) => cn(...cls);
 
 // ─── component ───────────────────────────────────────────────────────────────
 const MonthlyResourceUtilization = () => {
@@ -624,16 +629,10 @@ const MonthlyResourceUtilization = () => {
                 <span className="font-semibold tabular-nums">{Number(summary.total_utilization).toFixed(1)} hrs</span>
               </div>
             )}
-            {summary.total_hours != null && hoursSource === 'O' && (
+            {summary.total_hours != null && hoursSource !== 'O' && (
               <div className="rounded-md border bg-slate-500/10 px-[clamp(0.5rem,0.7vw,0.75rem)] py-[clamp(0.25rem,0.4vw,0.375rem)] text-[clamp(0.6875rem,0.75vw,0.75rem)] text-slate-700 dark:text-slate-400 whitespace-nowrap">
                 Total Hours&nbsp;
                 <span className="font-semibold tabular-nums">{Number(summary.total_hours).toFixed(1)} hrs</span>
-              </div>
-            )}
-            {summary.original_total_hours != null && hoursSource === 'O' && (
-              <div className="rounded-md border bg-blue-500/10 px-[clamp(0.5rem,0.7vw,0.75rem)] py-[clamp(0.25rem,0.4vw,0.375rem)] text-[clamp(0.6875rem,0.75vw,0.75rem)] text-blue-700 dark:text-blue-400 whitespace-nowrap">
-                Total Original Hours&nbsp;
-                <span className="font-semibold tabular-nums">{Number(summary.original_total_hours).toFixed(1)} hrs</span>
               </div>
             )}
             {summary.leaves_hours != null && (
@@ -676,16 +675,10 @@ const MonthlyResourceUtilization = () => {
                 <p className="text-sm font-semibold tabular-nums">{Number(summary.customer_non_billable_total).toFixed(1)} hrs</p>
               </div>
             )}
-            {summary.total_hours != null && hoursSource === 'O' && (
+            {summary.total_hours != null && hoursSource !== 'O' && (
               <div className="rounded-lg border bg-slate-500/10 px-3 py-2 text-slate-700 dark:text-slate-400">
                 <p className="text-xs">Total Hours</p>
                 <p className="text-sm font-semibold tabular-nums">{Number(summary.total_hours).toFixed(1)} hrs</p>
-              </div>
-            )}
-            {summary.original_total_hours != null && hoursSource === 'O' && (
-              <div className="rounded-lg border bg-blue-500/10 px-3 py-2 text-blue-700 dark:text-blue-400">
-                <p className="text-xs">Total Original Hours</p>
-                <p className="text-sm font-semibold tabular-nums">{Number(summary.original_total_hours).toFixed(1)} hrs</p>
               </div>
             )}
             {summary.leaves_hours != null && (
@@ -719,106 +712,103 @@ const MonthlyResourceUtilization = () => {
               leaving a big blank gap inside the bordered box. `min-h-0` (kept) is what still
               lets it shrink and let its own body scroll internally when there genuinely isn't
               enough room — same fix already applied to the shared DataTable component. ── */}
+          {/* Same shared Table primitives (no vertical borders, fluid clamp() sizing, sticky
+              header) every other report table in this app uses, instead of this page's former
+              hand-rolled `<table>` with its own one-off bordered-grid styling. The sticky #/Name
+              columns and the two-row grouped header (category colSpans over per-type columns)
+              are the one thing DataTable's flat row/column model can't do, so this stays a direct
+              Table/TableRow/TableCell composition rather than going through DataTable itself. */}
           <div className="hidden md:flex min-h-0 flex-col rounded-lg border overflow-hidden">
-            <div className="flex-1 min-h-0 overflow-auto">
-              <table className="min-w-max w-full border-collapse text-sm">
-                <thead className="sticky top-0 z-20 bg-background">
-                  <tr className="border-b bg-muted/60">
-                    <th colSpan={2} className="sticky left-0 z-30 bg-muted" />
-                    <th colSpan={7} className="border-r border-border" />
-                    {filteredColumns.map(cat => (
-                      <th
-                        key={cat.category_id}
-                        colSpan={cat.service_types.length}
-                        className={cn('px-3 py-1.5 text-center text-xs font-semibold border-r border-border', getCategoryColorClass(cat.colorRank))}
-                      >
-                        {cat.category_name}
-                      </th>
-                    ))}
-                    <th colSpan={5} className="px-3 py-1.5 text-center text-xs font-semibold bg-primary/10 text-primary">
-                      Summary
-                      <span className="ml-1.5 text-[10px] font-normal opacity-70">
-                        ({hoursSource === 'O' ? 'Original' : 'Adjusted'})
-                      </span>
-                    </th>
-                  </tr>
+          <Table containerClassName="flex-1 min-h-0" className="min-w-max">
+            <TableHeader className="sticky top-0 z-20 bg-background">
+              <TableRow className="bg-muted/60 hover:bg-muted/60">
+                <TableHead colSpan={2} className="sticky left-0 z-30 bg-muted" />
+                <TableHead colSpan={7} />
+                {filteredColumns.map(cat => (
+                  <TableHead
+                    key={cat.category_id}
+                    colSpan={cat.service_types.length}
+                    className={cn('text-center', getCategoryColorClass(cat.colorRank))}
+                  >
+                    {cat.category_name}
+                  </TableHead>
+                ))}
+                <TableHead colSpan={5} className="bg-primary/10 text-center text-primary">
+                  Summary
+                </TableHead>
+              </TableRow>
 
-                  <tr className="border-b bg-muted/40">
-                    <th className={th('sticky left-0 z-30 bg-muted w-[50px] text-center')}>#</th>
-                    <th className={th('sticky left-[50px] z-30 bg-muted border-r border-border shadow-[1px_0_0_0_var(--border)] w-[220px] min-w-[220px] max-w-[220px] overflow-hidden text-ellipsis whitespace-nowrap')}>Name</th>
-                    <th className={th('min-w-[160px]')}>Designation</th>
-                    <th className={th('w-[90px] text-right')}>Total Exp</th>
-                    <th className={th('w-[90px] text-right')}>Co. Exp</th>
-                    <th className={th('min-w-[150px]')}>Resource Description</th>
-                    <th className={th('w-[100px] text-right')}>Cap. (hrs)</th>
-                    <th className={th('w-[100px] text-right')}>Bill. Cap.</th>
-                    <th className={th('min-w-[180px]')}>Client(s)</th>
-                    
-                    {filteredColumns.map(cat =>
-                      cat.service_types.map(st => (
-                        <th key={st.id} className={th('w-[110px] text-right', getCellColorClass(cat.colorRank))}>
-                          {st.name}
-                        </th>
-                      ))
-                    )}
-                    
-                    <th className={th('w-[120px] text-right bg-primary/[0.04] font-bold')}>Billable (hrs)</th>
-                    <th className={th('w-[120px] text-right bg-primary/[0.04] font-bold')}>Non-Bill. (hrs)</th>
-                    <th className={th('w-[150px] text-right bg-primary/[0.04] font-bold')}>Total Utilization</th>
-                    <th className={th('w-[110px] text-right bg-primary/[0.04] font-bold')}>Utilization %</th>
-                    <th className={th('w-[130px] text-right bg-primary/[0.04] font-bold border-r-0')}>Contributed %</th>
-                  </tr>
-                </thead>
+              <TableRow className="bg-muted/40 hover:bg-muted/40">
+                <TableHead className={th('sticky left-0 z-30 bg-muted w-[50px] text-center')}>#</TableHead>
+                <TableHead className={th('sticky left-[50px] z-30 bg-muted shadow-[1px_0_0_0_var(--border)] w-[220px] min-w-[220px] max-w-[220px] overflow-hidden text-ellipsis')}>Name</TableHead>
+                <TableHead className={th('min-w-[160px]')}>Designation</TableHead>
+                <TableHead className={th('w-[90px] text-right')}>Total Exp</TableHead>
+                <TableHead className={th('w-[90px] text-right')}>Co. Exp</TableHead>
+                <TableHead className={th('min-w-[150px]')}>Resource Description</TableHead>
+                <TableHead className={th('w-[100px] text-right')}>Cap. (hrs)</TableHead>
+                <TableHead className={th('w-[100px] text-right')}>Bill. Cap.</TableHead>
+                <TableHead className={th('min-w-[180px]')}>Client(s)</TableHead>
 
-                <tbody className="divide-y divide-border">
-                  {records.map((row, i) => (
-                    <tr key={row.employee_id ?? i} className="group hover:bg-muted/30 transition-colors">
-                      <td className={td('sticky left-0 z-10 bg-background group-hover:bg-slate-50 dark:group-hover:bg-slate-800/80 w-[50px] text-center text-muted-foreground transition-colors')}>
-                        {((meta.page ?? page) - 1) * (meta.limit ?? limit) + i + 1}
-                      </td>
-                      <td className={td('sticky left-[50px] z-10 bg-background border-r border-border shadow-[1px_0_0_0_var(--border)] group-hover:bg-slate-50 dark:group-hover:bg-slate-800/80 transition-colors w-[220px] min-w-[220px] max-w-[220px] overflow-hidden text-ellipsis whitespace-nowrap')}>
-                        <p className="font-medium">{row.full_name ?? '—'}</p>
-                        {row.employee_code && (
-                          <p className="text-[10px] text-muted-foreground font-mono">{row.employee_code}</p>
-                        )}
-                      </td>
-                      <td className={td()}>{row.designation || <span className="text-muted-foreground">—</span>}</td>
-                      <td className={td('text-right tabular-nums')}>{row.total_experience ?? '—'}</td>
-                      <td className={td('text-right tabular-nums')}>{row.company_experience ?? '—'}</td>
-                      <td className={td('truncate max-w-[150px]')} title={row.resource_description}>{row.resource_description || <span className="text-muted-foreground">—</span>}</td>
-                      <td className={td('text-right tabular-nums')}>{row.monthly_capacity ?? '—'}</td>
-                      <td className={td('text-right tabular-nums')}>{row.monthly_billing_capacity ?? '—'}</td>
-                      <td className={td('max-w-[200px] truncate')} title={row.clients}>{row.clients || <span className="text-muted-foreground">—</span>}</td>
-                      
-                      {filteredColumns.map(cat =>
-                        cat.service_types.map(st => (
-                          <td key={st.id} className={td('text-right', getCellColorClass(cat.colorRank))}>
-                            <HoursCell value={row.hours?.[st.id]} />
-                          </td>
-                        ))
-                      )}
+                {filteredColumns.map(cat =>
+                  cat.service_types.map(st => (
+                    <TableHead key={st.id} className={th('w-[110px] text-right', getCellColorClass(cat.colorRank))}>
+                      {st.name}
+                    </TableHead>
+                  ))
+                )}
 
-                      <td className={td('text-right font-semibold bg-primary/[0.02]')}>
-                        <HoursCell value={row.billable_total} />
-                      </td>
-                      <td className={td('text-right font-semibold bg-primary/[0.02]')}>
-                        <HoursCell value={row.non_billable_total} />
-                      </td>
-                      <td className={td('text-right font-semibold bg-primary/[0.02]')}>
-                        <HoursCell value={row.total_utilization} />
-                      </td>
-                      <td className={td('text-right font-semibold bg-primary/[0.02]')}>
-                        <UtilizationPercentCell value={row.utilization_percentage} />
-                      </td>
-                      <td className={td('text-right font-semibold bg-primary/[0.02] border-r-0')}>
-                        <ContributedPercentCell value={row.contributed_percentage} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
+                <TableHead className={th('w-[120px] text-right bg-primary/[0.04] font-bold')}>Billable (hrs)</TableHead>
+                <TableHead className={th('w-[120px] text-right bg-primary/[0.04] font-bold')}>Non-Bill. (hrs)</TableHead>
+                <TableHead className={th('w-[150px] text-right bg-primary/[0.04] font-bold')}>Total Utilization</TableHead>
+                <TableHead className={th('w-[110px] text-right bg-primary/[0.04] font-bold')}>Utilization %</TableHead>
+                <TableHead className={th('w-[130px] text-right bg-primary/[0.04] font-bold')}>Contributed %</TableHead>
+              </TableRow>
+            </TableHeader>
 
-              </table>
-            </div>
+            <TableBody>
+              {records.map((row, i) => (
+                <TableRow key={row.employee_id ?? i} className="group">
+                  <TableCell className={td('sticky left-0 z-10 bg-background group-hover:bg-slate-50 dark:group-hover:bg-slate-800/80 w-[50px] text-center text-muted-foreground transition-colors')}>
+                    {((meta.page ?? page) - 1) * (meta.limit ?? limit) + i + 1}
+                  </TableCell>
+                  <TableCell className={td('sticky left-[50px] z-10 bg-background shadow-[1px_0_0_0_var(--border)] group-hover:bg-slate-50 dark:group-hover:bg-slate-800/80 transition-colors w-[220px] min-w-[220px] max-w-[220px] overflow-hidden text-ellipsis whitespace-nowrap')}>
+                    <span className="font-medium">{row.full_name ?? '—'}</span>
+                  </TableCell>
+                  <TableCell className={td()}>{row.designation || <span className="text-muted-foreground">—</span>}</TableCell>
+                  <TableCell className={td('text-right tabular-nums')}>{row.total_experience ?? '—'}</TableCell>
+                  <TableCell className={td('text-right tabular-nums')}>{row.company_experience ?? '—'}</TableCell>
+                  <TableCell className={td('truncate max-w-[150px]')} title={row.resource_description}>{row.resource_description || <span className="text-muted-foreground">—</span>}</TableCell>
+                  <TableCell className={td('text-right tabular-nums')}>{row.monthly_capacity ?? '—'}</TableCell>
+                  <TableCell className={td('text-right tabular-nums')}>{row.monthly_billing_capacity ?? '—'}</TableCell>
+                  <TableCell className={td('max-w-[200px] truncate')} title={row.clients}>{row.clients || <span className="text-muted-foreground">—</span>}</TableCell>
+
+                  {filteredColumns.map(cat =>
+                    cat.service_types.map(st => (
+                      <TableCell key={st.id} className={td('text-right', getCellColorClass(cat.colorRank))}>
+                        <HoursCell value={row.hours?.[st.id]} />
+                      </TableCell>
+                    ))
+                  )}
+
+                  <TableCell className={td('text-right font-semibold bg-primary/[0.02]')}>
+                    <HoursCell value={row.billable_total} />
+                  </TableCell>
+                  <TableCell className={td('text-right font-semibold bg-primary/[0.02]')}>
+                    <HoursCell value={row.non_billable_total} />
+                  </TableCell>
+                  <TableCell className={td('text-right font-semibold bg-primary/[0.02]')}>
+                    <HoursCell value={row.total_utilization} />
+                  </TableCell>
+                  <TableCell className={td('text-right font-semibold bg-primary/[0.02]')}>
+                    <UtilizationPercentCell value={row.utilization_percentage} />
+                  </TableCell>
+                  <TableCell className={td('text-right font-semibold bg-primary/[0.02]')}>
+                    <ContributedPercentCell value={row.contributed_percentage} />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
           </div>
 
           {/* ── Mobile: expandable employee cards — one card per record, grouping that
@@ -842,12 +832,7 @@ const MonthlyResourceUtilization = () => {
                       ) : (
                         <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                       )}
-                      <span className="min-w-0">
-                        <span className="block truncate font-semibold">{row.full_name ?? '—'}</span>
-                        {row.employee_code && (
-                          <span className="block truncate text-xs font-mono text-muted-foreground">{row.employee_code}</span>
-                        )}
-                      </span>
+                      <span className="min-w-0 truncate font-semibold">{row.full_name ?? '—'}</span>
                     </span>
                     <span className="shrink-0 text-sm font-semibold tabular-nums">
                       {isExpanded ? 'Total ' : ''}<HoursCell value={row.total_utilization} />h

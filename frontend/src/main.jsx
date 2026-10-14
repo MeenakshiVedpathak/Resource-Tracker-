@@ -12,6 +12,7 @@ import { registerLogoutCallback, registerRefreshDataCallback } from '@/services/
 import { logout, setRoles, setAccessibleForms } from '@/store/slices/authSlice';
 import { msalInstance } from '@/config/msalConfig';
 import App from './App';
+import OfflineOverlay from '@/components/common/OfflineOverlay';
 import '@/styles/index.css';
 
 // Wire up the logout callback after store is created
@@ -39,6 +40,7 @@ msalInstance.initialize().then(() => {
               <TooltipProvider delayDuration={300}>
               <App />
               </TooltipProvider>
+              <OfflineOverlay />
               <Toaster
                 position="top-right"
                 gutter={8}

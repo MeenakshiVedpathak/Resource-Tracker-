@@ -123,6 +123,11 @@ export const formatHourMinuteValue = (decimalHours) => {
   return m % 10 === 0 ? `${h}.${m / 10}` : `${h}.${String(m).padStart(2, '0')}`;
 };
 
+// Sum decimal-hour values the way they are displayed: each value rounded to whole minutes first,
+// so sub-minute rounding errors don't accumulate across many entries.
+export const sumHours = (values) =>
+  values.reduce((minutes, v) => minutes + Math.round((Number(v) || 0) * 60), 0) / 60;
+
 export const formatPercentage = (value, decimals = 1) => {
   if (value == null) return '—';
   return `${Number(value).toFixed(decimals)}%`;

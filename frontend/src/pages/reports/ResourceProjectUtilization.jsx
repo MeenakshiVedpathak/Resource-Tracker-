@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import * as XLSX from 'xlsx';
-import { Download, ChevronRight } from 'lucide-react';
+import { Download, ChevronRight, Clock, IndianRupee, TrendingUp, FileX, Users, ArrowUpDown } from 'lucide-react';
 import { useResourceProjectUtilization } from '@/hooks/useReports';
 import { useCanViewOriginalData } from '@/hooks/usePermissions';
 import { reportsApi } from '@/api/reports.api';
@@ -57,6 +57,12 @@ const ProjectTypeBadge = ({ value }) => (
     PROJECT_TYPE_COLORS[value?.toLowerCase()] ?? 'bg-muted text-muted-foreground'
   )}>
     {value || '—'}
+  </span>
+);
+
+const CrossBuBadge = () => (
+  <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-teal-500/10 text-teal-700 dark:text-teal-400">
+    Cross BU
   </span>
 );
 
@@ -163,6 +169,172 @@ const exportToExcel = (rows, monthLabel) => {
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Resource Project Utilization');
   XLSX.writeFile(wb, `Resource_Project_Utilization_${monthLabel.replace(' ', '_')}.xlsx`);
+};
+
+const STAT_CARDS = [
+  { key: 'totalHours',            label: 'Total Hours',            icon: Clock,        color: 'blue'    },
+  { key: 'billableAmount',        label: 'Billable Amount',        icon: IndianRupee,  color: 'green'   },
+  { key: 'billableHours',         label: 'Billable Hours',         icon: TrendingUp,   color: 'emerald' },
+  { key: 'nonBillableHours',      label: 'Non-Billable Hours',     icon: FileX,        color: 'orange'  },
+  { key: 'customerNonBillableHours', label: 'Customer Non-Billable', icon: Users,      color: 'sky'     },
+];
+
+const STAT_COLORS = {
+  blue:    { bg: 'bg-blue-500/10',    icon: 'bg-blue-500/20 text-blue-600 dark:text-blue-400',    val: 'text-blue-700 dark:text-blue-400'    },
+  green:   { bg: 'bg-green-500/10',   icon: 'bg-green-500/20 text-green-600 dark:text-green-400',  val: 'text-green-700 dark:text-green-400'   },
+  emerald: { bg: 'bg-emerald-500/10', icon: 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400', val: 'text-emerald-700 dark:text-emerald-400' },
+  orange:  { bg: 'bg-orange-500/10',  icon: 'bg-orange-500/20 text-orange-600 dark:text-orange-400', val: 'text-orange-700 dark:text-orange-400'  },
+  sky:     { bg: 'bg-sky-500/10',     icon: 'bg-sky-500/20 text-sky-600 dark:text-sky-400',      val: 'text-sky-700 dark:text-sky-400'       },
+};
+
+const PROJECT_SORT_OPTIONS = [
+  { label: 'Hours (High to Low)', fn: (a, b) => (Number(b.projectHours) || 0) - (Number(a.projectHours) || 0) },
+  { label: 'Hours (Low to High)', fn: (a, b) => (Number(a.projectHours) || 0) - (Number(b.projectHours) || 0) },
+  { label: 'Client (A–Z)',        fn: (a, b) => (a.client ?? '').localeCompare(b.client ?? '')               },
+  { label: 'Project (A–Z)',       fn: (a, b) => (a.projectName ?? '').localeCompare(b.projectName ?? '')     },
+];
+
+const DrawerContent = ({ selectedRow, monthLabel, hasOriginalTotalHours, hasOriginalProjectHours }) => {
+  const [sortIdx, setSortIdx] = useState(0);
+
+  const sortedProjects = useMemo(() => {
+    const fn = PROJECT_SORT_OPTIONS[sortIdx]?.fn;
+    return fn ? [...selectedRow.filteredProjects].sort(fn) : selectedRow.filteredProjects;
+  }, [selectedRow.filteredProjects, sortIdx]);
+
+  return (
+    <>
+      <SheetHeader className="px-5 py-4 border-b shrink-0">
+        <div className="flex items-center gap-3">
+          <EmployeeAvatar name={selectedRow.employeeName} />
+          <div>
+            <SheetTitle className="text-left text-base">{selectedRow.employeeName || '—'}</SheetTitle>
+            <p className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+              <Clock className="h-3 w-3" />{monthLabel}
+            </p>
+          </div>
+        </div>
+      </SheetHeader>
+
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+        {/* Stat cards — row 1: Total Hours + [Original Hours] + Billable Amount */}
+        <div className={cn('grid gap-2.5', hasOriginalTotalHours ? 'grid-cols-3' : 'grid-cols-2')}>
+          {STAT_CARDS.slice(0, 2).map(({ key, label, icon: Icon, color }, idx) => {
+            const c = STAT_COLORS[color];
+            const isMoney = key === 'billableAmount';
+            const value = isMoney ? formatCurrency(selectedRow[key]) : formatHours(selectedRow[key]);
+            return (
+              <>
+                <div key={key} className={cn('rounded-xl border px-2.5 py-2.5 flex items-center gap-2', c.bg)}>
+                  <div className={cn('flex h-7 w-7 shrink-0 items-center justify-center rounded-full', c.icon)}>
+                    <Icon className="h-3.5 w-3.5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] text-muted-foreground leading-tight">{label}</p>
+                    <p className={cn('text-sm font-bold tabular-nums leading-tight', c.val)}>{value}</p>
+                  </div>
+                </div>
+                {idx === 0 && hasOriginalTotalHours && (
+                  <div key="originalTotalHours" className={cn('rounded-xl border px-2.5 py-2.5 flex items-center gap-2', STAT_COLORS.blue.bg)}>
+                    <div className={cn('flex h-7 w-7 shrink-0 items-center justify-center rounded-full', STAT_COLORS.blue.icon)}>
+                      <Clock className="h-3.5 w-3.5" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] text-muted-foreground leading-tight">Original Hours</p>
+                      <p className={cn('text-sm font-bold tabular-nums leading-tight', STAT_COLORS.blue.val)}>
+                        {formatHours(selectedRow.originalTotalHours)}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </>
+            );
+          })}
+        </div>
+        {/* Row 2: Billable Hours + Non-Billable Hours + Customer Non-Billable */}
+        <div className="grid grid-cols-3 gap-2">
+          {STAT_CARDS.slice(2).map(({ key, label, icon: Icon, color }) => {
+            const c = STAT_COLORS[color];
+            return (
+              <div key={key} className={cn('rounded-xl border px-2.5 py-2.5 flex items-center gap-2', c.bg)}>
+                <div className={cn('flex h-7 w-7 shrink-0 items-center justify-center rounded-full', c.icon)}>
+                  <Icon className="h-3.5 w-3.5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] text-muted-foreground leading-tight">{label}</p>
+                  <p className={cn('text-sm font-bold tabular-nums leading-tight', c.val)}>{formatHours(selectedRow[key])}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {selectedRow.remarks && (
+          <p className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">Remarks: </span>{selectedRow.remarks}
+          </p>
+        )}
+
+        {/* Projects header with sort */}
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+            Projects ({selectedRow.filteredProjects.length})
+          </p>
+          {selectedRow.filteredProjects.length > 1 && (
+            <Select value={String(sortIdx)} onValueChange={(v) => setSortIdx(Number(v))}>
+              <SelectTrigger className="h-7 text-xs w-auto gap-1.5 border-none bg-muted/60 px-2.5 hover:bg-muted">
+                <ArrowUpDown className="h-3 w-3 shrink-0" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PROJECT_SORT_OPTIONS.map((o, i) => (
+                  <SelectItem key={i} value={String(i)} className="text-xs">{o.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+
+        {/* Project list */}
+        {selectedRow.filteredProjects.length === 0 ? (
+          <p className="text-xs text-muted-foreground">No projects match the current filter.</p>
+        ) : (
+          <div className="space-y-2">
+            {sortedProjects.map((p, pi) => (
+              <div key={pi} className="rounded-xl border bg-card flex overflow-hidden">
+                {/* Left: name + badges */}
+                <div className="flex-1 min-w-0 px-4 py-3">
+                  <p className="truncate text-sm font-semibold" title={p.client}>{p.client || '—'}</p>
+                  <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                    <p className="truncate text-xs text-muted-foreground" title={p.projectName}>{p.projectName || '—'}</p>
+                    <ProjectTypeBadge value={p.projectType} />
+                    <CategoryBadge value={p.category} />
+                    {(p.isCrossBu ?? p.crossBu ?? p.is_cross_bu) && <CrossBuBadge />}
+                  </div>
+                </div>
+                {/* Right — pseudo-element divider guaranteed full height */}
+                <div className="relative shrink-0 flex items-center px-3 py-3 text-right min-w-[120px] before:absolute before:inset-y-0 before:left-0 before:w-px before:bg-border before:content-['']">
+                  <div>
+                    <p className="flex items-center justify-end gap-1 text-sm font-bold tabular-nums text-foreground">
+                      <Clock className="h-3.5 w-3.5 text-muted-foreground" />{formatHours(p.projectHours)}
+                    </p>
+                    {hasOriginalProjectHours && (
+                      <p className="text-[11px] text-muted-foreground tabular-nums">
+                        Original: {formatHours(p.originalProjectHours)}
+                      </p>
+                    )}
+                    {p.billableAmount ? (
+                      <p className="text-[11px] text-muted-foreground tabular-nums">{formatCurrency(p.billableAmount)}</p>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </>
+  );
 };
 
 const now = new Date();
@@ -560,10 +732,10 @@ const ResourceProjectUtilization = () => {
                   <col className="w-9" />
                   <col />
                   <col className="w-[110px]" />
-                  {hasOriginalTotalHours && <col className="w-[125px]" />}
+                  {hasOriginalTotalHours && <col className="w-[165px]" />}
                   <col className="w-[110px]" />
                   <col className="w-[130px]" />
-                  <col className="w-[120px]" />
+                  <col className="w-[165px]" />
                   <col className="w-[140px]" />
                   <col className="w-[140px]" />
                 </colgroup>
@@ -704,90 +876,14 @@ const ResourceProjectUtilization = () => {
       )}
 
       <Sheet open={!!selectedRow} onOpenChange={(open) => !open && setSelectedEmployeeId(null)}>
-        <SheetContent side="right" className="w-full sm:max-w-lg p-0 flex flex-col bg-white overflow-hidden">
+        <SheetContent side="right" className="w-full sm:max-w-lg p-0 flex flex-col bg-background overflow-hidden">
           {selectedRow && (
-            <>
-              <SheetHeader className="px-5 py-4 border-b">
-                <div className="flex items-center gap-3">
-                  <EmployeeAvatar name={selectedRow.employeeName} />
-                  <div>
-                    <SheetTitle className="text-left">{selectedRow.employeeName || '—'}</SheetTitle>
-                    <p className="text-xs text-muted-foreground">{monthLabel}</p>
-                  </div>
-                </div>
-              </SheetHeader>
-
-              <div className="flex-1 overflow-y-auto px-5 py-4">
-                {/* Summary stats */}
-                <div className="mb-5 grid grid-cols-2 gap-2.5">
-                  <div className="rounded-md border bg-blue-500/10 px-3 py-2 text-xs text-blue-700 dark:text-blue-400">
-                    Total Hours
-                    <p className="text-sm font-semibold tabular-nums">{formatHours(selectedRow.totalHours)}</p>
-                    {hasOriginalTotalHours && (
-                      <p className="text-[11px] opacity-75 tabular-nums">Orig: {formatHours(selectedRow.originalTotalHours)}</p>
-                    )}
-                  </div>
-                  <div className="rounded-md border bg-green-500/10 px-3 py-2 text-xs text-green-700 dark:text-green-400">
-                    Billable Amount
-                    <p className="text-sm font-semibold tabular-nums">{formatCurrency(selectedRow.billableAmount)}</p>
-                  </div>
-                  <div className="rounded-md border bg-emerald-500/10 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-400">
-                    Billable
-                    <p className="text-sm font-semibold tabular-nums">{formatHours(selectedRow.billableHours)}</p>
-                  </div>
-                  <div className="rounded-md border bg-orange-500/10 px-3 py-2 text-xs text-orange-700 dark:text-orange-400">
-                    Non-Billable
-                    <p className="text-sm font-semibold tabular-nums">{formatHours(selectedRow.nonBillableHours)}</p>
-                  </div>
-                  <div className="rounded-md border bg-sky-500/10 px-3 py-2 text-xs text-sky-700 dark:text-sky-400">
-                    Customer Non-Billable
-                    <p className="text-sm font-semibold tabular-nums">{formatHours(selectedRow.customerNonBillableHours)}</p>
-                  </div>
-                </div>
-
-                {selectedRow.remarks && (
-                  <p className="mb-5 rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-                    <span className="font-medium text-foreground">Remarks: </span>{selectedRow.remarks}
-                  </p>
-                )}
-
-                {/* Project list */}
-                <p className="mb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Projects ({selectedRow.filteredProjects.length})
-                </p>
-                {selectedRow.filteredProjects.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">No projects match the current filter.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {selectedRow.filteredProjects.map((p, pi) => (
-                      <div key={pi} className="rounded-md border px-3 py-2.5">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-medium" title={p.client}>{p.client || '—'}</p>
-                            <p className="truncate text-xs text-muted-foreground" title={p.projectName}>{p.projectName || '—'}</p>
-                          </div>
-                          <div className="shrink-0 text-right">
-                            <p className="text-sm font-semibold tabular-nums">{formatHours(p.projectHours)}</p>
-                            {hasOriginalProjectHours && (
-                              <p className="text-xs text-muted-foreground tabular-nums">
-                                Original: {formatHours(p.originalProjectHours)}
-                              </p>
-                            )}
-                            <p className="text-xs text-muted-foreground tabular-nums">
-                              {p.billableAmount ? formatCurrency(p.billableAmount) : '—'}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="mt-2 flex items-center gap-1.5">
-                          <ProjectTypeBadge value={p.projectType} />
-                          <CategoryBadge value={p.category} />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </>
+            <DrawerContent
+              selectedRow={selectedRow}
+              monthLabel={monthLabel}
+              hasOriginalTotalHours={hasOriginalTotalHours}
+              hasOriginalProjectHours={hasOriginalProjectHours}
+            />
           )}
         </SheetContent>
       </Sheet>

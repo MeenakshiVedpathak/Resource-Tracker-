@@ -62,7 +62,7 @@ const exportToExcel = (rows, showMonthColumns) => {
   const header = [
     'PO Code', 'PO Name', 'Client', 'Status', 'Start Date', 'End Date',
     // 'PO Value', 'Expected Man Hours',
-    'Hours Delivered To Date', 'Original Hours Delivered To Date',
+    'Adjusted Hours Delivered To Date', 'Original Hours Delivered To Date',
     ...(showMonthColumns ? ['Hours In Month', 'Original Hours In Month'] : []),
     'Elapsed Time %',
     // 'Consumed Hours %',
@@ -144,7 +144,7 @@ const getColumns = (showMonthColumns) => [
   //   cell: (info) => <span className="tabular-nums">{formatHours(info.getValue())}</span>,
   // }),
   columnHelper.accessor('hours_delivered_to_date', {
-    header: 'Hours Delivered To Date',
+    header: 'Adjusted Hours Delivered To Date',
     size: 190,
     cell: (info) => <span className="tabular-nums">{formatHours(info.getValue())}</span>,
   }),
@@ -209,6 +209,7 @@ const SummaryItem = ({ label, value }) => (
 );
 
 const ServicePOTimelineRisk = () => {
+  const [periodMode, setPeriodMode] = useState('month'); // 'date' | 'month'
   const [asOfDate, setAsOfDate] = useState('');
   const [monthYear, setMonthYear] = useState(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -255,6 +256,7 @@ const ServicePOTimelineRisk = () => {
     setBuIds([]);
     setAsOfDate('');
     setMonthYear(null);
+    setPeriodMode('month');
     setPage(1);
   };
 
@@ -297,23 +299,48 @@ const ServicePOTimelineRisk = () => {
         <BusinessUnitFilter multiple value={buIds} entityId={entityIds} onChange={(v) => { setBuIds(v); setPage(1); }} />
 
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">As Of Date</Label>
-          <DatePicker
-            value={asOfDate}
-            onChange={(d) => { setAsOfDate(d); setPage(1); }}
-            className="w-full"
-          />
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">Month &amp; Year</Label>
-          <MonthYearPicker
-            value={monthYear}
-            onChange={(val) => { setMonthYear(val); setPage(1); }}
-            placeholder="As of end of month"
-            clearable
-            className="w-full"
-          />
+          <Label className="text-xs font-medium">Period</Label>
+          <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-muted border shrink-0">
+              {[
+                { value: 'month', label: 'Month' },
+                { value: 'date',  label: 'As Of Date' },
+              ].map(({ value, label }) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => {
+                    setPeriodMode(value);
+                    if (value === 'month') setAsOfDate('');
+                    else setMonthYear(null);
+                    setPage(1);
+                  }}
+                  className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all duration-150 whitespace-nowrap ${
+                    periodMode === value
+                      ? 'bg-card shadow-sm text-primary'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {periodMode === 'month' ? (
+              <MonthYearPicker
+                value={monthYear}
+                onChange={(val) => { setMonthYear(val); setPage(1); }}
+                placeholder="As of end of month"
+                clearable
+                className="flex-1 min-w-0"
+              />
+            ) : (
+              <DatePicker
+                value={asOfDate}
+                onChange={(d) => { setAsOfDate(d); setPage(1); }}
+                className="flex-1 min-w-0"
+              />
+            )}
+          </div>
         </div>
       </FilterPanel>
 

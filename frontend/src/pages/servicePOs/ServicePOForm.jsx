@@ -1021,42 +1021,19 @@ const ServicePOForm = () => {
                 )}
               />
 
-              <FormField
-                control={form.control}
-                name="start_date"
-                render={({ field }) => (
-                  <FormItem className="space-y-1">
-                    <FormLabel className="text-[13px]">
-                      <span className="text-destructive">*</span> Start Date
-                    </FormLabel>
-                    <FormControl>
-                      <DatePicker
-                        value={field.value || ''}
-                        onChange={field.onChange}
-                        className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)]"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {!isCentralised && (
+              <div className="sm:col-span-2 grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <FormField
                   control={form.control}
-                  name="end_date"
+                  name="start_date"
                   render={({ field }) => (
                     <FormItem className="space-y-1">
                       <FormLabel className="text-[13px]">
-                        <span className="text-destructive">*</span> End Date
+                        <span className="text-destructive">*</span> Start Date
                       </FormLabel>
                       <FormControl>
                         <DatePicker
                           value={field.value || ''}
                           onChange={field.onChange}
-                          min={watchedStartDate || undefined}
-                          placeholder="Select date"
-                          clearable
                           className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)]"
                         />
                       </FormControl>
@@ -1064,32 +1041,56 @@ const ServicePOForm = () => {
                     </FormItem>
                   )}
                 />
-              )}
 
-              <FormField
-                control={form.control}
-                name="invoice_frequency"
-                render={({ field }) => (
-                  <FormItem className="space-y-1">
-                    <FormLabel className="text-[13px]"><span className="text-destructive">*</span> Invoice Frequency</FormLabel>
-                    <SearchableSelect showSearch={false}
-                      options={[
-                        { label: "Monthly", value: "monthly" },
-                        { label: "Milestone based", value: "milestone-based" },
-                        { label: "Yearly AMC", value: "yearly-amc" },
-                        { label: "Internal - No Invoice", value: "internal-no-invoice" },
-                        { label: "POC", value: "poc" }
-                      ]}
-                      value={field.value}
-                      onValueChange={field.onChange}
-                      placeholder="Select frequency"
-                      searchPlaceholder="Search frequency..."
-                      className="h-8 text-sm w-full"
-                    />
-                    <FormMessage />
-                  </FormItem>
+                {!isCentralised && (
+                  <FormField
+                    control={form.control}
+                    name="end_date"
+                    render={({ field }) => (
+                      <FormItem className="space-y-1">
+                        <FormLabel className="text-[13px]">
+                          <span className="text-destructive">*</span> End Date
+                        </FormLabel>
+                        <FormControl>
+                          <DatePicker
+                            value={field.value || ''}
+                            onChange={field.onChange}
+                            min={watchedStartDate || undefined}
+                            placeholder="Select date"
+                            clearable
+                            className="h-[clamp(1.875rem,2vw,2.25rem)] text-[clamp(0.75rem,0.85vw,0.875rem)]"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 )}
-              />
+
+                <FormField
+                  control={form.control}
+                  name="invoice_frequency"
+                  render={({ field }) => (
+                    <FormItem className="space-y-1">
+                      <FormLabel className="text-[13px]"><span className="text-destructive">*</span> Invoice Frequency</FormLabel>
+                      <SearchableSelect showSearch={false}
+                        options={[
+                          { label: "Monthly", value: "monthly" },
+                          { label: "Milestone based", value: "milestone-based" },
+                          { label: "Yearly AMC", value: "yearly-amc" },
+                          { label: "Internal - No Invoice", value: "internal-no-invoice" },
+                        ]}
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        placeholder="Select frequency"
+                        searchPlaceholder="Search frequency..."
+                        className="h-8 text-sm w-full"
+                      />
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
                   </div>
                 </div>
               </form>

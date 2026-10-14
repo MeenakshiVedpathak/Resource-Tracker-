@@ -388,7 +388,14 @@ const Sidebar = () => {
     if (isPlatformAdmin) return SUPER_ADMIN_NAV_GROUPS;
     const isEntityAdmin = hasRole(ROLE_NAMES.ENTITY_ADMIN);
     const groups = buildNavGroups(accessibleForms, { isSuperAdmin, isAdmin, isEntityAdmin, canWrite, canManageBus, canManageEmployees, canManageClientProjectPO, moduleRank, formRank, categoryOf, categoryInfo });
-    return isAdmin ? [...groups, ADMIN_SETTINGS_NAV_GROUP] : groups;
+    if (isAdmin) {
+      const adminGroup = groups.find((g) => normalizeName(g.label) === 'administration');
+      const otherGroups = groups.filter((g) => normalizeName(g.label) !== 'administration');
+      return adminGroup
+        ? [...otherGroups, adminGroup, ADMIN_SETTINGS_NAV_GROUP]
+        : [...groups, ADMIN_SETTINGS_NAV_GROUP];
+    }
+    return groups;
   }, [accessibleForms, isSuperAdmin, isAdmin, canWrite, canManageBus, canManageEmployees, canManageClientProjectPO, isPlatformAdmin, moduleRank, formRank, categoryOf, categoryInfo, hasRole]);
 
   // Guards navigation away from a page with unsaved changes (e.g. Timesheet

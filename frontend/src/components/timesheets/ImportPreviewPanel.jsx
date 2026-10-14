@@ -1,11 +1,43 @@
 import { useMemo, useState } from 'react';
-import { CheckCircle2, AlertCircle } from 'lucide-react';
+import { CheckCircle2, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import { formatDate } from '@/utils/formatters';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import SearchInput from '@/components/common/SearchInput';
+
+// Expandable list of skipped employees shown inside the skipped-employees Alert.
+const SkippedEmployeesList = ({ employees }) => {
+  const [open, setOpen] = useState(false);
+  if (!employees?.length) return null;
+  return (
+    <div className="mt-2">
+      <button
+        type="button"
+        className="flex items-center gap-1 text-xs font-medium text-amber-800 dark:text-amber-300 hover:underline"
+        onClick={() => setOpen((o) => !o)}
+      >
+        {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+        {open ? 'Hide' : 'Show'} {employees.length} skipped employee{employees.length !== 1 ? 's' : ''}
+      </button>
+      {open && (
+        <ul className="mt-1.5 space-y-0.5 pl-1">
+          {employees.map((e) => (
+            <li key={e.employeeId ?? e.employeeCode} className="text-xs text-amber-800 dark:text-amber-300">
+              <span className="font-medium">{e.employeeName}</span>
+              {e.employeeCode ? ` (${e.employeeCode})` : ''}
+              {e.syncedBusinessUnitName ? (
+                <span className="text-amber-700 dark:text-amber-400"> — synced from <span className="font-medium">{e.syncedBusinessUnitName}</span></span>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+};
 
 // Shared between the Excel-upload flow (TimesheetUpload.jsx) and the "Sync Employee Work
 // Logs" flow (SyncWorkLogsDialog.jsx) — both produce the exact same preview response shape
@@ -14,6 +46,9 @@ const ImportPreviewPanel = ({ preview, onConfirm, onCancel, isConfirming }) => {
   // Client-side only — the whole preview is already in memory, so there's no need to round-trip
   // to the backend just to narrow which rows are visible before Confirm Import.
   const [search, setSearch] = useState('');
+
+  const skippedCount = preview.skippedCount ?? 0;
+  const skippedEmployees = preview.skippedEmployees ?? [];
 
   const filteredValidRows = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -29,6 +64,17 @@ const ImportPreviewPanel = ({ preview, onConfirm, onCancel, isConfirming }) => {
 
   return (
   <div className="space-y-5">
+    {/* Skipped-employees warning — non-blocking, shown when at least one employee was skipped */}
+    {skippedCount > 0 && (
+      <Alert className="border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30">
+        <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+        <AlertDescription className="text-amber-800 dark:text-amber-300">
+          {preview.serverMessage ?? `${skippedCount} employee${skippedCount !== 1 ? 's' : ''} already synced for this month from another Business Unit — skipped.`}
+          <SkippedEmployeesList employees={skippedEmployees} />
+        </AlertDescription>
+      </Alert>
+    )}
+
     {/* Summary and Actions */}
     <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
       <div className="flex flex-wrap items-center gap-3">

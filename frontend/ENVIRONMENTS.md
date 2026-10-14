@@ -52,7 +52,7 @@ window.APP_CONFIG = { apiUrl: "https://rut.gttdata.ai:7456/api/v1" };
 The Vite dev server serves `public/` as-is, so there is no substitution step and
 `npm run dev` is unchanged:
 ```js
-window.APP_CONFIG = { apiUrl: "https://24d9qpd0-5555.inc1.devtunnels.ms/api/v1" };
+window.APP_CONFIG = { apiUrl: "https://24d9qpd0-5050.inc1.devtunnels.ms/api/v1" };
 ```
  
 ### Generating the file at deploy time
